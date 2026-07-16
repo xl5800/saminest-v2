@@ -1,18 +1,38 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { listActiveCategories, listApprovedPosts } = vi.hoisted(() => ({
+  listActiveCategories: vi.fn(),
+  listApprovedPosts: vi.fn()
+}));
+
+vi.mock("../repositories/categories-repository", () => ({
+  listActiveCategories
+}));
+vi.mock("../repositories/posts-repository", () => ({
+  listApprovedPosts
+}));
+
+import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
+import { PostDetailPage } from "../pages/post/post-detail-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 
 function renderAt(path: string) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
   const router = createMemoryRouter(
     [
       { path: "/", element: <HomePage /> },
+      { path: "/category/:slug", element: <CategoryPage /> },
+      { path: "/post/:id", element: <PostDetailPage /> },
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       { path: "/forgot-password", element: <ForgotPasswordPage /> },
@@ -21,14 +41,42 @@ function renderAt(path: string) {
     ],
     { initialEntries: [path] }
   );
-  return render(<RouterProvider router={router} />);
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
+  );
 }
 
 describe("app routes", () => {
+  beforeEach(() => {
+    listActiveCategories.mockReset();
+    listApprovedPosts.mockReset();
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" }
+    ]);
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+  });
+
   it("renders the home page at /", () => {
     renderAt("/");
 
     expect(screen.getByRole("heading", { name: "Saminest" })).toBeInTheDocument();
+  });
+
+  it("renders the category page at /category/:slug", async () => {
+    renderAt("/category/rent");
+
+    expect(
+      await screen.findByRole("heading", { name: "租房" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the post detail placeholder at /post/:id", () => {
+    renderAt("/post/post-1");
+
+    expect(screen.getByRole("heading", { name: "帖子详情" })).toBeInTheDocument();
+    expect(screen.getByText("帖子 ID：post-1")).toBeInTheDocument();
   });
 
   it("renders the login page at /login", () => {
