@@ -3,6 +3,7 @@ import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
 import { HomePage } from "../pages/home/home-page";
+import { LoginPage } from "../pages/login/login-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { RegisterPage } from "../pages/register/register-page";
 
@@ -10,6 +11,7 @@ function renderAt(path: string) {
   const router = createMemoryRouter(
     [
       { path: "/", element: <HomePage /> },
+      { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       { path: "*", element: <NotFoundPage /> }
     ],
@@ -23,6 +25,14 @@ describe("app routes", () => {
     renderAt("/");
 
     expect(screen.getByRole("heading", { name: "Saminest" })).toBeInTheDocument();
+  });
+
+  it("renders the login page at /login", () => {
+    renderAt("/login");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
   });
 
   it("renders the register page at /register", () => {

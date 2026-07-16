@@ -40,5 +40,7 @@ Vite + React + TypeScript + React Router(History 模式) + TanStack Query + Zust
 
 \- 数据库改动必须走 migration
 
-\- 禁止的高危 Git 命令(见文档第 14 节)
+ 禁止的高危 Git 命令(见文档第 14 节)
+\-如果这次改动中,你发现和现有代码有相似逻辑但选择了重新实现(而不是复用),必须在报告里说明原因。
+\-本项目文件命名统一使用 kebab-case(如 auth-service.ts),组件文件用 PascalCase 组件名 + kebab-case 文件名(如 register-page.tsx 导出 RegisterPage)。新建文件前检查是否符合这个约定。
 
