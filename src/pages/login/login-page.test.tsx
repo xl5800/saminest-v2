@@ -67,6 +67,10 @@ describe("LoginPage", () => {
       "href",
       "/register"
     );
+    expect(screen.getByRole("link", { name: "忘记密码？" })).toHaveAttribute(
+      "href",
+      "/forgot-password"
+    );
   });
 
   it("blocks submission and shows a friendly message when fields are empty", async () => {

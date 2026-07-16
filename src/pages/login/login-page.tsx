@@ -86,6 +86,9 @@ export function LoginPage() {
         </button>
       </form>
       <p>
+        <Link to="/forgot-password">忘记密码？</Link>
+      </p>
+      <p>
         还没有账号？<Link to="/register">去注册</Link>
       </p>
     </main>
