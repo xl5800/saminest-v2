@@ -1,20 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, overrideTypesMock } = vi.hoisted(() => {
+const { queryBuilder, overrideTypesMock, singleMock } = vi.hoisted(() => {
   const overrideTypesMock = vi.fn();
+  const singleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   const chain = [
     "select",
     "eq",
     "is",
     "order",
-    "range"
+    "range",
+    "insert"
   ] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
   }
   builder.overrideTypes = overrideTypesMock;
-  return { queryBuilder: builder, overrideTypesMock };
+  builder.single = singleMock;
+  return { queryBuilder: builder, overrideTypesMock, singleMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -23,7 +26,7 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { listApprovedPosts } from "./posts-repository";
+import { createPost, listApprovedPosts } from "./posts-repository";
 
 describe("listApprovedPosts", () => {
   beforeEach(() => {
@@ -32,6 +35,7 @@ describe("listApprovedPosts", () => {
       queryBuilder[key].mockClear();
     }
     overrideTypesMock.mockReset();
+    singleMock.mockReset();
   });
 
   it("filters to approved, non-deleted posts ordered by published_at desc", async () => {
@@ -148,5 +152,101 @@ describe("listApprovedPosts", () => {
     await expect(listApprovedPosts({ page: 0, pageSize: 20 })).rejects.toMatchObject({
       code: "POSTS_LIST_FAILED"
     });
+  });
+});
+
+describe("createPost", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+  });
+
+  it("inserts a post with status hardcoded to pending and returns the new id", async () => {
+    singleMock.mockResolvedValue({ data: { id: "post-123" }, error: null });
+
+    const result = await createPost({
+      authorId: "user-1",
+      categoryId: "cat-1",
+      locationId: "loc-1",
+      title: "Sunny room",
+      description: "A description long enough.",
+      priceAmount: 1200,
+      contactMethod: "email",
+      contactValue: "a@b.com"
+    });
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.insert).toHaveBeenCalledWith({
+      author_id: "user-1",
+      category_id: "cat-1",
+      location_id: "loc-1",
+      title: "Sunny room",
+      description: "A description long enough.",
+      price_amount: 1200,
+      contact_method: "email",
+      contact_value: "a@b.com",
+      status: "pending"
+    });
+    expect(queryBuilder.select).toHaveBeenCalledWith("id");
+    expect(result).toEqual({ id: "post-123" });
+  });
+
+  it("hardcodes status to pending even conceptually if a caller tried to influence it", async () => {
+    singleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await createPost({
+      authorId: "user-1",
+      categoryId: "cat-1",
+      locationId: null,
+      title: "Title long enough",
+      description: "Description long enough.",
+      priceAmount: null,
+      contactMethod: null,
+      contactValue: null
+    });
+
+    const insertedPayload = queryBuilder.insert.mock.calls[0][0];
+    expect(insertedPayload.status).toBe("pending");
+  });
+
+  it("throws an AppError when the insert fails", async () => {
+    singleMock.mockResolvedValue({
+      data: null,
+      error: { message: "insert failed", code: "500" }
+    });
+
+    await expect(
+      createPost({
+        authorId: "user-1",
+        categoryId: "cat-1",
+        locationId: null,
+        title: "Title long enough",
+        description: "Description long enough.",
+        priceAmount: null,
+        contactMethod: null,
+        contactValue: null
+      })
+    ).rejects.toMatchObject({ code: "POST_CREATE_FAILED" });
+  });
+
+  it("throws an AppError when insert succeeds but no row id is returned", async () => {
+    singleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(
+      createPost({
+        authorId: "user-1",
+        categoryId: "cat-1",
+        locationId: null,
+        title: "Title long enough",
+        description: "Description long enough.",
+        priceAmount: null,
+        contactMethod: null,
+        contactValue: null
+      })
+    ).rejects.toMatchObject({ code: "POST_CREATE_ID_MISSING" });
   });
 });

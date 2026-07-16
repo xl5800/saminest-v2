@@ -1,4 +1,5 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
+import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 
 export interface PostListItem {
@@ -80,4 +81,53 @@ export async function listApprovedPosts(
     })),
     hasNextPage
   };
+}
+
+export interface CreatePostInput {
+  authorId: string;
+  categoryId: string;
+  locationId: string | null;
+  title: string;
+  description: string;
+  priceAmount: number | null;
+  contactMethod: string | null;
+  contactValue: string | null;
+}
+
+export interface CreatePostResult {
+  id: string;
+}
+
+/**
+ * 发布表单提交时用这个方法创建帖子。`status` 在这里硬编码为 'pending'，
+ * 不接受调用方传入，防止普通用户绕过审核直接把帖子设为 approved
+ * （见 Tables.md 9.8 权限原则："不能把状态直接改为 approved"）。
+ */
+export async function createPost(input: CreatePostInput): Promise<CreatePostResult> {
+  const payload: TablesInsert<"posts"> = {
+    author_id: input.authorId,
+    category_id: input.categoryId,
+    location_id: input.locationId,
+    title: input.title,
+    description: input.description,
+    price_amount: input.priceAmount,
+    contact_method: input.contactMethod,
+    contact_value: input.contactValue,
+    status: "pending"
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (error) {
+    throw new AppError(error.message, "POST_CREATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError("创建帖子后无法读取帖子 ID。", "POST_CREATE_ID_MISSING");
+  }
+
+  return { id: data.id };
 }

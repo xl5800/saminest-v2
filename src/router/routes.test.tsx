@@ -1,18 +1,25 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActiveCategories, listApprovedPosts } = vi.hoisted(() => ({
-  listActiveCategories: vi.fn(),
-  listApprovedPosts: vi.fn()
-}));
+const { listActiveCategories, listActiveLocations, listApprovedPosts, createPost } =
+  vi.hoisted(() => ({
+    listActiveCategories: vi.fn(),
+    listActiveLocations: vi.fn(),
+    listApprovedPosts: vi.fn(),
+    createPost: vi.fn()
+  }));
 
 vi.mock("../repositories/categories-repository", () => ({
   listActiveCategories
 }));
+vi.mock("../repositories/locations-repository", () => ({
+  listActiveLocations
+}));
 vi.mock("../repositories/posts-repository", () => ({
-  listApprovedPosts
+  listApprovedPosts,
+  createPost
 }));
 
 import { CategoryPage } from "../pages/category/category-page";
@@ -21,8 +28,13 @@ import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
+import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { RequireAuth } from "./require-auth";
+import { useAuthStore } from "../store/auth-store";
+
+const initialAuthState = useAuthStore.getState();
 
 function renderAt(path: string) {
   const queryClient = new QueryClient({
@@ -33,6 +45,14 @@ function renderAt(path: string) {
       { path: "/", element: <HomePage /> },
       { path: "/category/:slug", element: <CategoryPage /> },
       { path: "/post/:id", element: <PostDetailPage /> },
+      {
+        path: "/publish",
+        element: (
+          <RequireAuth>
+            <PublishPage />
+          </RequireAuth>
+        )
+      },
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       { path: "/forgot-password", element: <ForgotPasswordPage /> },
@@ -49,12 +69,20 @@ function renderAt(path: string) {
 }
 
 describe("app routes", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   beforeEach(() => {
+    useAuthStore.setState(initialAuthState, true);
     listActiveCategories.mockReset();
+    listActiveLocations.mockReset();
     listApprovedPosts.mockReset();
+    createPost.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
+    listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
   });
 
@@ -115,5 +143,24 @@ describe("app routes", () => {
     renderAt("/does-not-exist");
 
     expect(screen.getByRole("heading", { name: "页面未找到" })).toBeInTheDocument();
+  });
+
+  it("redirects /publish to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/publish");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the publish form at /publish when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/publish");
+
+    expect(screen.getByRole("heading", { name: "发布帖子" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "租房" })
+    ).toBeInTheDocument();
   });
 });

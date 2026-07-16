@@ -6,8 +6,10 @@ import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
+import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { RequireAuth } from "./require-auth";
 
 export const router = createBrowserRouter([
   {
@@ -21,6 +23,14 @@ export const router = createBrowserRouter([
   {
     path: "/post/:id",
     element: <PostDetailPage />
+  },
+  {
+    path: "/publish",
+    element: (
+      <RequireAuth>
+        <PublishPage />
+      </RequireAuth>
+    )
   },
   {
     path: "/login",
