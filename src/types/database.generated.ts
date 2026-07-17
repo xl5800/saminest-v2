@@ -377,9 +377,6 @@ export type Database = {
           },
         ]
       }
-      // 手写占位：迁移 20260716000300_create_reports_table.sql 尚未 apply，
-      // 无法用 `supabase gen types` 生成，这里手动对齐迁移文件的列/约束/外键
-      // 补上这个表的类型。迁移 apply 后应重新跑 codegen 用生成结果替换本节。
       reports: {
         Row: {
           created_at: string
