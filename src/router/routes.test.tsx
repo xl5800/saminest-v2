@@ -9,14 +9,16 @@ const {
   listApprovedPosts,
   createPost,
   listMessages,
-  sendMessage
+  sendMessage,
+  listMyConversations
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listActiveLocations: vi.fn(),
   listApprovedPosts: vi.fn(),
   createPost: vi.fn(),
   listMessages: vi.fn(),
-  sendMessage: vi.fn()
+  sendMessage: vi.fn(),
+  listMyConversations: vi.fn()
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
@@ -33,11 +35,15 @@ vi.mock("../repositories/messages-repository", () => ({
   listMessages,
   sendMessage
 }));
+vi.mock("../repositories/conversations-repository", () => ({
+  listMyConversations
+}));
 
 import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
+import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
@@ -72,6 +78,14 @@ function renderAt(path: string) {
         element: (
           <RequireAuth>
             <ReportPostPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "/messages",
+        element: (
+          <RequireAuth>
+            <ConversationListPage />
           </RequireAuth>
         )
       },
@@ -111,12 +125,14 @@ describe("app routes", () => {
     createPost.mockReset();
     listMessages.mockReset();
     sendMessage.mockReset();
+    listMyConversations.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
     listMessages.mockResolvedValue([]);
+    listMyConversations.mockResolvedValue([]);
   });
 
   it("renders the home page at /", () => {
@@ -211,6 +227,22 @@ describe("app routes", () => {
     renderAt("/post/post-1/report");
 
     expect(screen.getByRole("heading", { name: "举报帖子" })).toBeInTheDocument();
+  });
+
+  it("redirects /messages to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/messages");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the conversation list page at /messages when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/messages");
+
+    expect(await screen.findByRole("heading", { name: "消息" })).toBeInTheDocument();
   });
 
   it("redirects /messages/:conversationId to /login when there is no session (reuses RequireAuth)", () => {
