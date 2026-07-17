@@ -44,3 +44,4 @@ Vite + React + TypeScript + React Router(History 模式) + TanStack Query + Zust
 \-如果这次改动中,你发现和现有代码有相似逻辑但选择了重新实现(而不是复用),必须在报告里说明原因。
 \-本项目文件命名统一使用 kebab-case(如 auth-service.ts),组件文件用 PascalCase 组件名 + kebab-case 文件名(如 register-page.tsx 导出 RegisterPage)。新建文件前检查是否符合这个约定。
 
+-需要登录才能访问的页面，一律用 RequireAuth 包裹路由实现鉴权，不在页面组件内部单独判断登录状态并跳转。

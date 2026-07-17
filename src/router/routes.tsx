@@ -8,6 +8,7 @@ import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
+import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { RequireAuth } from "./require-auth";
 
@@ -29,6 +30,14 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <PublishPage />
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/post/:id/report",
+    element: (
+      <RequireAuth>
+        <ReportPostPage />
       </RequireAuth>
     )
   },

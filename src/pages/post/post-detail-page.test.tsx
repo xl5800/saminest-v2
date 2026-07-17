@@ -55,6 +55,10 @@ describe("PostDetailPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent(
       "详情页正在建设中，敬请期待。"
     );
+    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
+      "href",
+      "/post/post-1/report"
+    );
   });
 
   it("shows the publish success message from navigation state instead of the placeholder", () => {

@@ -1,4 +1,4 @@
-import { useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
 
@@ -27,6 +27,7 @@ export function PostDetailPage() {
       <p>帖子 ID：{id}</p>
       <p role="status">{statusMessage}</p>
       {id ? <FavoriteButton postId={id} /> : null}
+      {id ? <Link to={`/post/${id}/report`}>举报</Link> : null}
     </main>
   );
 }

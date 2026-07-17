@@ -377,6 +377,69 @@ export type Database = {
           },
         ]
       }
+      // 手写占位：迁移 20260716000300_create_reports_table.sql 尚未 apply，
+      // 无法用 `supabase gen types` 生成，这里手动对齐迁移文件的列/约束/外键
+      // 补上这个表的类型。迁移 apply 后应重新跑 codegen 用生成结果替换本节。
+      reports: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          reason_code: string
+          reporter_id: string
+          resolution_note: string | null
+          reviewed_at: string | null
+          reviewer_id: string | null
+          status: string
+          target_id: string
+          target_type: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          reason_code: string
+          reporter_id: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          status?: string
+          target_id: string
+          target_type?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          reason_code?: string
+          reporter_id?: string
+          resolution_note?: string | null
+          reviewed_at?: string | null
+          reviewer_id?: string | null
+          status?: string
+          target_id?: string
+          target_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

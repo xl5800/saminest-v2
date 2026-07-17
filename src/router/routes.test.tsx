@@ -30,6 +30,7 @@ import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
+import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { RequireAuth } from "./require-auth";
 import { useAuthStore } from "../store/auth-store";
@@ -50,6 +51,14 @@ function renderAt(path: string) {
         element: (
           <RequireAuth>
             <PublishPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "/post/:id/report",
+        element: (
+          <RequireAuth>
+            <ReportPostPage />
           </RequireAuth>
         )
       },
@@ -162,5 +171,21 @@ describe("app routes", () => {
     expect(
       await screen.findByRole("option", { name: "租房" })
     ).toBeInTheDocument();
+  });
+
+  it("redirects /post/:id/report to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/post/post-1/report");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the report form at /post/:id/report when a session exists", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/post/post-1/report");
+
+    expect(screen.getByRole("heading", { name: "举报帖子" })).toBeInTheDocument();
   });
 });
