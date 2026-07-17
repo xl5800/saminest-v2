@@ -1,12 +1,24 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listApprovedPosts } = vi.hoisted(() => ({
-  listApprovedPosts: vi.fn()
-}));
+const { listApprovedPosts, useFavoritePostIdsQuery, useToggleFavoriteMutation } =
+  vi.hoisted(() => ({
+    listApprovedPosts: vi.fn(),
+    useFavoritePostIdsQuery: vi.fn(),
+    useToggleFavoriteMutation: vi.fn()
+  }));
 
 vi.mock("../../repositories/posts-repository", () => ({
   listApprovedPosts
+}));
+// PostList renders FavoriteButton per item, which pulls in useQuery/useMutation
+// hooks of its own — mock those the same way favorite-button.test.tsx does so
+// this file stays focused on list/pagination behavior.
+vi.mock("../favorites/use-favorite-post-ids-query", () => ({
+  useFavoritePostIdsQuery
+}));
+vi.mock("../favorites/use-toggle-favorite-mutation", () => ({
+  useToggleFavoriteMutation
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -29,6 +41,10 @@ describe("PostList", () => {
 
   beforeEach(() => {
     listApprovedPosts.mockReset();
+    useFavoritePostIdsQuery.mockReset();
+    useToggleFavoriteMutation.mockReset();
+    useFavoritePostIdsQuery.mockReturnValue({ data: [] });
+    useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
   it("shows a loading state before the query resolves", () => {

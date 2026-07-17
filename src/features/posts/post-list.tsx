@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { FavoriteButton } from "../../components/favorite-button";
 import { formatPrice, formatPublishedAt } from "../../utils/format";
 import { usePostsQuery } from "./use-posts-query";
 
@@ -40,6 +41,7 @@ export function PostList({ categoryId }: PostListProps) {
               <span>{formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}</span>
               <span>{post.locationName ?? "地区未填写"}</span>
               <span>{formatPublishedAt(post.publishedAt)}</span>
+              <FavoriteButton postId={post.id} />
             </Link>
           </li>
         ))}

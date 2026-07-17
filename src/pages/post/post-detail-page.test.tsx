@@ -1,7 +1,22 @@
 import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Location } from "react-router-dom";
+
+const { useFavoritePostIdsQuery, useToggleFavoriteMutation } = vi.hoisted(() => ({
+  useFavoritePostIdsQuery: vi.fn(),
+  useToggleFavoriteMutation: vi.fn()
+}));
+
+// PostDetailPage renders FavoriteButton, which pulls in useQuery/useMutation
+// hooks of its own — mock those the same way favorite-button.test.tsx does so
+// this file stays focused on the placeholder page's own behavior.
+vi.mock("../../features/favorites/use-favorite-post-ids-query", () => ({
+  useFavoritePostIdsQuery
+}));
+vi.mock("../../features/favorites/use-toggle-favorite-mutation", () => ({
+  useToggleFavoriteMutation
+}));
 
 import { renderWithProviders } from "../../test/render-with-providers";
 import { PostDetailPage } from "./post-detail-page";
@@ -20,6 +35,13 @@ function renderAtWithState(path: string, state: unknown) {
 describe("PostDetailPage", () => {
   afterEach(() => {
     cleanup();
+  });
+
+  beforeEach(() => {
+    useFavoritePostIdsQuery.mockReset();
+    useToggleFavoriteMutation.mockReset();
+    useFavoritePostIdsQuery.mockReturnValue({ data: [] });
+    useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
   it("renders the post id from the route and a placeholder status", () => {

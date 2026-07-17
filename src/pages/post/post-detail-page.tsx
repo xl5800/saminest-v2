@@ -1,5 +1,7 @@
 import { useLocation, useParams } from "react-router-dom";
 
+import { FavoriteButton } from "../../components/favorite-button";
+
 const DEFAULT_STATUS_MESSAGE = "详情页正在建设中，敬请期待。";
 
 interface PostDetailLocationState {
@@ -24,6 +26,7 @@ export function PostDetailPage() {
       <h1>帖子详情</h1>
       <p>帖子 ID：{id}</p>
       <p role="status">{statusMessage}</p>
+      {id ? <FavoriteButton postId={id} /> : null}
     </main>
   );
 }
