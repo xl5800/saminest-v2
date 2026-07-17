@@ -1,9 +1,15 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { PostImagePicker } from "../../components/post-image-picker";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { useLocationsQuery } from "../../features/locations/use-locations-query";
+import {
+  type CreatePostImageInput,
+  insertPostImages
+} from "../../repositories/post-images-repository";
 import { createPost } from "../../repositories/posts-repository";
+import { postImageStorageService } from "../../services/storage/post-image-storage-service";
 import { useAuthStore } from "../../store/auth-store";
 import {
   CONTACT_METHOD_OPTIONS,
@@ -16,10 +22,81 @@ import {
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
 const PUBLISH_SUCCESS_MESSAGE = "发布成功，等待审核";
+const PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE =
+  "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。";
 
 /**
- * Phase 1 发布表单：只做基本信息，不含图片上传（见 PRD 第九章发布流程，
- * 图片上传是单独的后续任务）。
+ * 上传所选图片并批量落库，容忍部分/全部图片失败：
+ * - 每张图片单独上传（Promise.allSettled，不因为一张失败丢失其他已成功的）；
+ * - 上传成功的图片一次性批量 insert 到 post_images；
+ * - 这个函数本身不抛异常，调用方只需要知道"是否全部成功"。
+ */
+async function uploadAndInsertPostImages(input: {
+  files: File[];
+  authorId: string;
+  postId: string;
+}): Promise<{ allSucceeded: boolean }> {
+  const { files, authorId, postId } = input;
+  if (files.length === 0) {
+    return { allSucceeded: true };
+  }
+
+  try {
+    const uploadResults = await Promise.allSettled(
+      files.map((file) =>
+        postImageStorageService.uploadPostImage({
+          file,
+          userId: authorId,
+          postId
+        })
+      )
+    );
+
+    const successfulInputs: CreatePostImageInput[] = [];
+    let anyUploadFailed = false;
+
+    uploadResults.forEach((result, index) => {
+      if (result.status === "fulfilled") {
+        successfulInputs.push({
+          postId,
+          ownerId: authorId,
+          storagePath: result.value.storagePath,
+          publicUrl: result.value.publicUrl,
+          altText: null,
+          width: null,
+          height: null,
+          sizeBytes: result.value.sizeBytes,
+          mimeType: result.value.mimeType,
+          sortOrder: index
+        });
+      } else {
+        anyUploadFailed = true;
+      }
+    });
+
+    if (successfulInputs.length === 0) {
+      return { allSucceeded: false };
+    }
+
+    try {
+      await insertPostImages(successfulInputs);
+    } catch {
+      // 这一批图片的行都没有落库，全部算失败。
+      return { allSucceeded: false };
+    }
+
+    return { allSucceeded: !anyUploadFailed };
+  } catch {
+    return { allSucceeded: false };
+  }
+}
+
+/**
+ * 发布表单：基本信息 + 图片上传（见 PRD 第九章发布流程）。
+ *
+ * 图片上传流程（Phase 2）：帖子（posts 行）创建成功之后才会处理图片，
+ * 图片上传/落库失败不会回滚帖子、不会阻止跳转，只影响跳转时的提示文案，
+ * 详见 handleSubmit 里的注释。
  *
  * 安全边界：
  * - author_id 不是表单字段，只从 auth-store 里当前登录用户的 session 读取，
@@ -50,8 +127,10 @@ export function PublishPage() {
   const [price, setPrice] = useState("");
   const [contactMethod, setContactMethod] = useState("");
   const [contactValue, setContactValue] = useState("");
+  const [images, setImages] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -80,8 +159,9 @@ export function PublishPage() {
     }
 
     setSubmitting(true);
+    let postId: string;
     try {
-      const { id } = await createPost({
+      const created = await createPost({
         authorId,
         categoryId: validation.data.categoryId,
         locationId: validation.data.locationId,
@@ -91,13 +171,38 @@ export function PublishPage() {
         contactMethod: validation.data.contactMethod,
         contactValue: validation.data.contactValue
       });
-      navigate(`/post/${id}`, {
-        replace: true,
-        state: { publishSuccessMessage: PUBLISH_SUCCESS_MESSAGE }
-      });
+      postId = created.id;
     } catch {
       setError(DEFAULT_ERROR_MESSAGE);
+      setSubmitting(false);
+      return;
+    }
+
+    // 帖子已经创建成功，之后图片阶段无论成功、部分失败还是整体失败，
+    // 都只影响跳转时带的提示信息，不影响跳转本身、不回滚帖子。
+    // uploadAndInsertPostImages 内部已经吞掉自己范围内的所有异常，这里额外
+    // 包一层 try/catch 只是防御性的兜底，确保这个阶段绝不会阻止跳转。
+    let publishSuccessMessage = PUBLISH_SUCCESS_MESSAGE;
+    try {
+      if (images.length > 0) {
+        setUploadingImages(true);
+        const { allSucceeded } = await uploadAndInsertPostImages({
+          files: images,
+          authorId,
+          postId
+        });
+        if (!allSucceeded) {
+          publishSuccessMessage = PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE;
+        }
+      }
+    } catch {
+      publishSuccessMessage = PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE;
     } finally {
+      setUploadingImages(false);
+      navigate(`/post/${postId}`, {
+        replace: true,
+        state: { publishSuccessMessage }
+      });
       setSubmitting(false);
     }
   }
@@ -197,8 +302,9 @@ export function PublishPage() {
             onChange={(event) => setContactValue(event.target.value)}
           />
         </label>
+        <PostImagePicker value={images} onChange={setImages} />
         <button type="submit" disabled={submitting}>
-          {submitting ? "发布中…" : "发布"}
+          {uploadingImages ? "上传图片中…" : submitting ? "发布中…" : "发布"}
         </button>
       </form>
     </main>

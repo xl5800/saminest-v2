@@ -131,6 +131,69 @@ export type Database = {
           },
         ]
       }
+      post_images: {
+        Row: {
+          alt_text: string | null
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string | null
+          owner_id: string
+          post_id: string
+          public_url: string | null
+          size_bytes: number | null
+          sort_order: number
+          storage_path: string
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          owner_id: string
+          post_id: string
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          storage_path: string
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          owner_id?: string
+          post_id?: string
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          storage_path?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_images_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_images_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           archived_at: string | null

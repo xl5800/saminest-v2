@@ -1,13 +1,21 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActiveCategories, listActiveLocations, createPost, navigateMock } =
-  vi.hoisted(() => ({
-    listActiveCategories: vi.fn(),
-    listActiveLocations: vi.fn(),
-    createPost: vi.fn(),
-    navigateMock: vi.fn()
-  }));
+const {
+  listActiveCategories,
+  listActiveLocations,
+  createPost,
+  uploadPostImage,
+  insertPostImages,
+  navigateMock
+} = vi.hoisted(() => ({
+  listActiveCategories: vi.fn(),
+  listActiveLocations: vi.fn(),
+  createPost: vi.fn(),
+  uploadPostImage: vi.fn(),
+  insertPostImages: vi.fn(),
+  navigateMock: vi.fn()
+}));
 
 vi.mock("../../repositories/categories-repository", () => ({
   listActiveCategories
@@ -17,6 +25,12 @@ vi.mock("../../repositories/locations-repository", () => ({
 }));
 vi.mock("../../repositories/posts-repository", () => ({
   createPost
+}));
+vi.mock("../../services/storage/post-image-storage-service", () => ({
+  postImageStorageService: { uploadPostImage }
+}));
+vi.mock("../../repositories/post-images-repository", () => ({
+  insertPostImages
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -41,6 +55,15 @@ function fillRequiredFields() {
   });
 }
 
+function makeImageFile(name: string): File {
+  return new File(["fake image bytes"], name, { type: "image/png" });
+}
+
+function selectImages(files: File[]) {
+  const input = screen.getByLabelText(/上传图片/) as HTMLInputElement;
+  fireEvent.change(input, { target: { files } });
+}
+
 describe("PublishPage", () => {
   afterEach(() => {
     cleanup();
@@ -51,6 +74,8 @@ describe("PublishPage", () => {
     listActiveCategories.mockReset();
     listActiveLocations.mockReset();
     createPost.mockReset();
+    uploadPostImage.mockReset();
+    insertPostImages.mockReset();
     navigateMock.mockReset();
 
     listActiveCategories.mockResolvedValue([
@@ -59,6 +84,7 @@ describe("PublishPage", () => {
     listActiveLocations.mockResolvedValue([
       { id: "loc-1", name: "Rockville" }
     ]);
+    insertPostImages.mockResolvedValue([]);
     useAuthStore.getState().setSession({
       user: { id: "user-1" }
     } as never);
@@ -162,5 +188,160 @@ describe("PublishPage", () => {
       "发布失败，请稍后重试。"
     );
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("uploads each selected image then batch-inserts them, and navigates with the original success message when everything succeeds", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    uploadPostImage
+      .mockResolvedValueOnce({
+        storagePath: "user-1/post-999/img-0.png",
+        publicUrl: "https://cdn.example.com/img-0.png",
+        mimeType: "image/png",
+        sizeBytes: 100
+      })
+      .mockResolvedValueOnce({
+        storagePath: "user-1/post-999/img-1.png",
+        publicUrl: "https://cdn.example.com/img-1.png",
+        mimeType: "image/png",
+        sizeBytes: 200
+      });
+    insertPostImages.mockResolvedValue([]);
+
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    const fileA = makeImageFile("a.png");
+    const fileB = makeImageFile("b.png");
+    selectImages([fileA, fileB]);
+    await screen.findByText("a.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(uploadPostImage).toHaveBeenCalledTimes(2);
+    });
+    expect(uploadPostImage).toHaveBeenNthCalledWith(1, {
+      file: fileA,
+      userId: "user-1",
+      postId: "post-999"
+    });
+    expect(uploadPostImage).toHaveBeenNthCalledWith(2, {
+      file: fileB,
+      userId: "user-1",
+      postId: "post-999"
+    });
+
+    await waitFor(() => {
+      expect(insertPostImages).toHaveBeenCalledTimes(1);
+    });
+    expect(insertPostImages).toHaveBeenCalledWith([
+      {
+        postId: "post-999",
+        ownerId: "user-1",
+        storagePath: "user-1/post-999/img-0.png",
+        publicUrl: "https://cdn.example.com/img-0.png",
+        altText: null,
+        width: null,
+        height: null,
+        sizeBytes: 100,
+        mimeType: "image/png",
+        sortOrder: 0
+      },
+      {
+        postId: "post-999",
+        ownerId: "user-1",
+        storagePath: "user-1/post-999/img-1.png",
+        publicUrl: "https://cdn.example.com/img-1.png",
+        altText: null,
+        width: null,
+        height: null,
+        sizeBytes: 200,
+        mimeType: "image/png",
+        sortOrder: 1
+      }
+    ]);
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: { publishSuccessMessage: "发布成功，等待审核" }
+      });
+    });
+  });
+
+  it("navigates to the post with a post-created-but-images-failed message when an image upload fails, without showing the generic submit error", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    uploadPostImage.mockRejectedValue(new Error("upload failed"));
+
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    selectImages([makeImageFile("a.png")]);
+    await screen.findByText("a.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: {
+          publishSuccessMessage:
+            "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。"
+        }
+      });
+    });
+    expect(insertPostImages).not.toHaveBeenCalled();
+    expect(screen.queryByText("发布失败，请稍后重试。")).not.toBeInTheDocument();
+  });
+
+  it("navigates with the post-created-but-images-failed message when the batch insert fails even though all uploads succeeded", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    uploadPostImage.mockResolvedValue({
+      storagePath: "user-1/post-999/img-0.png",
+      publicUrl: "https://cdn.example.com/img-0.png",
+      mimeType: "image/png",
+      sizeBytes: 100
+    });
+    insertPostImages.mockRejectedValue(new Error("insert failed"));
+
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    selectImages([makeImageFile("a.png")]);
+    await screen.findByText("a.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: {
+          publishSuccessMessage:
+            "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。"
+        }
+      });
+    });
+    expect(screen.queryByText("发布失败，请稍后重试。")).not.toBeInTheDocument();
+  });
+
+  it("does not call uploadPostImage or insertPostImages, and keeps the original success message, when no images are selected", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: { publishSuccessMessage: "发布成功，等待审核" }
+      });
+    });
+    expect(uploadPostImage).not.toHaveBeenCalled();
+    expect(insertPostImages).not.toHaveBeenCalled();
   });
 });
