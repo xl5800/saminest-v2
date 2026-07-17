@@ -83,6 +83,26 @@ export async function listApprovedPosts(
   };
 }
 
+/**
+ * 只取某个帖子的 author_id，供 ContactSellerButton 判断"当前登录用户是不是
+ * 这个帖子的发布者"用——不是完整的帖子详情查询（那是以后单独的任务），
+ * 只选这一列。帖子不存在（或已被删除到查不到）时返回 null，不当成错误抛出，
+ * 只有真正的 Supabase 查询失败才包装成 AppError。
+ */
+export async function getPostAuthorId(postId: string): Promise<string | null> {
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .select("author_id")
+    .eq("id", postId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "POST_AUTHOR_FETCH_FAILED", error);
+  }
+
+  return data?.author_id ?? null;
+}
+
 export interface CreatePostInput {
   authorId: string;
   categoryId: string;

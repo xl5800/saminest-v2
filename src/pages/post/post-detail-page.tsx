@@ -1,5 +1,6 @@
 import { Link, useLocation, useParams } from "react-router-dom";
 
+import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 
 const DEFAULT_STATUS_MESSAGE = "详情页正在建设中，敬请期待。";
@@ -27,6 +28,7 @@ export function PostDetailPage() {
       <p>帖子 ID：{id}</p>
       <p role="status">{statusMessage}</p>
       {id ? <FavoriteButton postId={id} /> : null}
+      {id ? <ContactSellerButton postId={id} /> : null}
       {id ? <Link to={`/post/${id}/report`}>举报</Link> : null}
     </main>
   );

@@ -3,13 +3,21 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActiveCategories, listActiveLocations, listApprovedPosts, createPost } =
-  vi.hoisted(() => ({
-    listActiveCategories: vi.fn(),
-    listActiveLocations: vi.fn(),
-    listApprovedPosts: vi.fn(),
-    createPost: vi.fn()
-  }));
+const {
+  listActiveCategories,
+  listActiveLocations,
+  listApprovedPosts,
+  createPost,
+  listMessages,
+  sendMessage
+} = vi.hoisted(() => ({
+  listActiveCategories: vi.fn(),
+  listActiveLocations: vi.fn(),
+  listApprovedPosts: vi.fn(),
+  createPost: vi.fn(),
+  listMessages: vi.fn(),
+  sendMessage: vi.fn()
+}));
 
 vi.mock("../repositories/categories-repository", () => ({
   listActiveCategories
@@ -21,11 +29,16 @@ vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
   createPost
 }));
+vi.mock("../repositories/messages-repository", () => ({
+  listMessages,
+  sendMessage
+}));
 
 import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
+import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PublishPage } from "../pages/publish/publish-page";
@@ -62,6 +75,14 @@ function renderAt(path: string) {
           </RequireAuth>
         )
       },
+      {
+        path: "/messages/:conversationId",
+        element: (
+          <RequireAuth>
+            <MessageConversationPage />
+          </RequireAuth>
+        )
+      },
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       { path: "/forgot-password", element: <ForgotPasswordPage /> },
@@ -88,11 +109,14 @@ describe("app routes", () => {
     listActiveLocations.mockReset();
     listApprovedPosts.mockReset();
     createPost.mockReset();
+    listMessages.mockReset();
+    sendMessage.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+    listMessages.mockResolvedValue([]);
   });
 
   it("renders the home page at /", () => {
@@ -187,5 +211,21 @@ describe("app routes", () => {
     renderAt("/post/post-1/report");
 
     expect(screen.getByRole("heading", { name: "举报帖子" })).toBeInTheDocument();
+  });
+
+  it("redirects /messages/:conversationId to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/messages/conversation-1");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the conversation page at /messages/:conversationId when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/messages/conversation-1");
+
+    expect(await screen.findByRole("heading", { name: "会话" })).toBeInTheDocument();
   });
 });

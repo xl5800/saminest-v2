@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, overrideTypesMock, singleMock } = vi.hoisted(() => {
+const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hoisted(() => {
   const overrideTypesMock = vi.fn();
   const singleMock = vi.fn();
+  const maybeSingleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   const chain = [
     "select",
@@ -17,7 +18,8 @@ const { queryBuilder, overrideTypesMock, singleMock } = vi.hoisted(() => {
   }
   builder.overrideTypes = overrideTypesMock;
   builder.single = singleMock;
-  return { queryBuilder: builder, overrideTypesMock, singleMock };
+  builder.maybeSingle = maybeSingleMock;
+  return { queryBuilder: builder, overrideTypesMock, singleMock, maybeSingleMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -26,7 +28,7 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { createPost, listApprovedPosts } from "./posts-repository";
+import { createPost, getPostAuthorId, listApprovedPosts } from "./posts-repository";
 
 describe("listApprovedPosts", () => {
   beforeEach(() => {
@@ -36,6 +38,7 @@ describe("listApprovedPosts", () => {
     }
     overrideTypesMock.mockReset();
     singleMock.mockReset();
+    maybeSingleMock.mockReset();
   });
 
   it("filters to approved, non-deleted posts ordered by published_at desc", async () => {
@@ -163,6 +166,7 @@ describe("createPost", () => {
     }
     overrideTypesMock.mockReset();
     singleMock.mockReset();
+    maybeSingleMock.mockReset();
   });
 
   it("inserts a post with status hardcoded to pending and returns the new id", async () => {
@@ -248,5 +252,48 @@ describe("createPost", () => {
         contactValue: null
       })
     ).rejects.toMatchObject({ code: "POST_CREATE_ID_MISSING" });
+  });
+});
+
+describe("getPostAuthorId", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("returns the post's author id when the post exists", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { author_id: "user-1" },
+      error: null
+    });
+
+    const result = await getPostAuthorId("post-1");
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith("author_id");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
+    expect(result).toBe("user-1");
+  });
+
+  it("returns null without throwing when the post does not exist", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(getPostAuthorId("missing-post")).resolves.toBeNull();
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(getPostAuthorId("post-1")).rejects.toMatchObject({
+      code: "POST_AUTHOR_FETCH_FAILED"
+    });
   });
 });

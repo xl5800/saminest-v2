@@ -4,6 +4,7 @@ import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
+import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PublishPage } from "../pages/publish/publish-page";
@@ -38,6 +39,14 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <ReportPostPage />
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/messages/:conversationId",
+    element: (
+      <RequireAuth>
+        <MessageConversationPage />
       </RequireAuth>
     )
   },
