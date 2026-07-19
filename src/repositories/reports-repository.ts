@@ -79,3 +79,64 @@ export async function createReport(
 
   return { id: data.id };
 }
+
+export interface AdminReportListItem {
+  id: string;
+  reasonCode: string;
+  createdAt: string;
+  targetType: string;
+  targetId: string;
+  reporterName: string;
+}
+
+interface AdminReportRow {
+  id: string;
+  reason_code: string;
+  created_at: string;
+  target_type: string;
+  target_id: string;
+  reporter: { display_name: string } | null;
+}
+
+/**
+ * 管理员举报处理队列用。跟公开的举报提交流程刻意不向任何人（包括被举报的
+ * 帖子作者）展示举报人身份不同，这是内部管理后台，管理员需要知道是谁提交
+ * 的举报（判断是否恶意举报、是否需要联系举报人等），所以用嵌套 select 把
+ * profiles.display_name（通过 reporter_id）一并带出来。
+ *
+ * status 支持按参数过滤（"如果这部分复杂就先只做 pending 列表"——实际实现
+ * 起来只是多一个 .eq("status", status)，成本很低，所以没有省略，默认值是
+ * "pending"，跟 reports_status_check 约束里的四个取值一致）。
+ *
+ * reports 表对 profiles 有两个外键（reporter_id 和 reviewer_id），嵌套
+ * select 写 `profiles(display_name)` 时 PostgREST 分不清该走哪个外键，
+ * 会直接报错（PGRST201: more than one relationship was found），必须显式
+ * 用 `profiles!reports_reporter_id_fkey(display_name)` 指定走哪一个——
+ * 这个坑在真实浏览器验证时才会暴露（vitest 里 Supabase 客户端是 mock 的，
+ * 不会真的触发 PostgREST 的关系消歧逻辑）。
+ */
+export async function listReportsForModeration(
+  status: string = "pending"
+): Promise<AdminReportListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("reports")
+    .select(
+      "id, reason_code, created_at, target_type, target_id, reporter:profiles!reports_reporter_id_fkey(display_name)"
+    )
+    .eq("status", status)
+    .order("created_at", { ascending: true })
+    .overrideTypes<AdminReportRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_REPORTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    reasonCode: row.reason_code,
+    createdAt: row.created_at,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    reporterName: row.reporter?.display_name ?? "未知用户"
+  }));
+}

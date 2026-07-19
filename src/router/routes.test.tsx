@@ -7,18 +7,24 @@ const {
   listActiveCategories,
   listActiveLocations,
   listApprovedPosts,
+  listPendingPosts,
   createPost,
   listMessages,
   sendMessage,
-  listMyConversations
+  listMyConversations,
+  listReportsForModeration,
+  getCurrentUserRole
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listActiveLocations: vi.fn(),
   listApprovedPosts: vi.fn(),
+  listPendingPosts: vi.fn(),
   createPost: vi.fn(),
   listMessages: vi.fn(),
   sendMessage: vi.fn(),
-  listMyConversations: vi.fn()
+  listMyConversations: vi.fn(),
+  listReportsForModeration: vi.fn(),
+  getCurrentUserRole: vi.fn()
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
@@ -29,6 +35,7 @@ vi.mock("../repositories/locations-repository", () => ({
 }));
 vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
+  listPendingPosts,
   createPost
 }));
 vi.mock("../repositories/messages-repository", () => ({
@@ -38,7 +45,21 @@ vi.mock("../repositories/messages-repository", () => ({
 vi.mock("../repositories/conversations-repository", () => ({
   listMyConversations
 }));
+vi.mock("../repositories/reports-repository", async () => {
+  const actual = await vi.importActual<typeof import("../repositories/reports-repository")>(
+    "../repositories/reports-repository"
+  );
+  return {
+    ...actual,
+    listReportsForModeration
+  };
+});
+vi.mock("../repositories/profiles-repository", () => ({
+  getCurrentUserRole
+}));
 
+import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
+import { AdminReportsPage } from "../pages/admin/reports-page";
 import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
@@ -51,6 +72,7 @@ import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
 import { useAuthStore } from "../store/auth-store";
 
@@ -97,6 +119,26 @@ function renderAt(path: string) {
           </RequireAuth>
         )
       },
+      {
+        path: "/admin/posts",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminPendingPostsPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
+      {
+        path: "/admin/reports",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminReportsPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       { path: "/forgot-password", element: <ForgotPasswordPage /> },
@@ -122,17 +164,22 @@ describe("app routes", () => {
     listActiveCategories.mockReset();
     listActiveLocations.mockReset();
     listApprovedPosts.mockReset();
+    listPendingPosts.mockReset();
     createPost.mockReset();
     listMessages.mockReset();
     sendMessage.mockReset();
     listMyConversations.mockReset();
+    listReportsForModeration.mockReset();
+    getCurrentUserRole.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+    listPendingPosts.mockResolvedValue([]);
     listMessages.mockResolvedValue([]);
     listMyConversations.mockResolvedValue([]);
+    listReportsForModeration.mockResolvedValue([]);
   });
 
   it("renders the home page at /", () => {
@@ -259,5 +306,65 @@ describe("app routes", () => {
     renderAt("/messages/conversation-1");
 
     expect(await screen.findByRole("heading", { name: "会话" })).toBeInTheDocument();
+  });
+
+  it("redirects /admin/posts to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/admin/posts");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/posts to / when logged in as a non-admin (reuses RequireAdmin)", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("user");
+
+    renderAt("/admin/posts");
+
+    expect(
+      await screen.findByRole("heading", { name: "Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the pending posts admin page at /admin/posts when logged in as an admin", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("admin");
+
+    renderAt("/admin/posts");
+
+    expect(
+      await screen.findByRole("heading", { name: "待审核帖子" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/reports to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/admin/reports");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/reports to / when logged in as a non-admin (reuses RequireAdmin)", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("user");
+
+    renderAt("/admin/reports");
+
+    expect(
+      await screen.findByRole("heading", { name: "Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the reports admin page at /admin/reports when logged in as an admin", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("super_admin");
+
+    renderAt("/admin/reports");
+
+    expect(
+      await screen.findByRole("heading", { name: "举报处理" })
+    ).toBeInTheDocument();
   });
 });

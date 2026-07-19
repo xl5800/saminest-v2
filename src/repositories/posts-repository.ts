@@ -103,6 +103,59 @@ export async function getPostAuthorId(postId: string): Promise<string | null> {
   return data?.author_id ?? null;
 }
 
+export interface AdminPostListItem {
+  id: string;
+  title: string;
+  createdAt: string;
+  authorName: string;
+  categoryName: string;
+}
+
+interface AdminPendingPostRow {
+  id: string;
+  title: string;
+  created_at: string;
+  author: { display_name: string } | null;
+  category: { name_zh: string } | null;
+}
+
+/**
+ * 管理员审核队列用：所有 status = 'pending' 且未软删除的帖子，按 created_at
+ * 升序排列——审核队列按"等得最久的先处理"排序是有意的选择，不是随手写反了
+ * listApprovedPosts 的 descending。
+ *
+ * 跟公开列表/消息 UI 里刻意不暴露发帖人真实身份（保护普通用户之间的隐私）
+ * 不同，这是内部管理后台，管理员审核内容必须知道是谁发的、发在哪个分类下，
+ * 一个 UUID 对审核工作没有意义，所以这里用嵌套 select 把 profiles.display_name
+ * 和 categories.name_zh 一起带出来（写法跟 listApprovedPosts 的
+ * location:locations(name) 一致）。理论上 author_id/category_id 都有外键
+ * 约束，关联的 profiles/categories 行不应该缺失，但嵌套 join 万一返回 null
+ * 时这里退回一个占位文案，不让页面崩掉。
+ */
+export async function listPendingPosts(): Promise<AdminPostListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .select(
+      "id, title, created_at, author:profiles(display_name), category:categories(name_zh)"
+    )
+    .eq("status", "pending")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: true })
+    .overrideTypes<AdminPendingPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_PENDING_POSTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    authorName: row.author?.display_name ?? "未知用户",
+    categoryName: row.category?.name_zh ?? "未知分类"
+  }));
+}
+
 export interface CreatePostInput {
   authorId: string;
   categoryId: string;

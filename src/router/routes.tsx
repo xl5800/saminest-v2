@@ -1,5 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 
+import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
+import { AdminReportsPage } from "../pages/admin/reports-page";
 import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
@@ -12,6 +14,7 @@ import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
 
 export const router = createBrowserRouter([
@@ -56,6 +59,26 @@ export const router = createBrowserRouter([
     element: (
       <RequireAuth>
         <MessageConversationPage />
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/admin/posts",
+    element: (
+      <RequireAuth>
+        <RequireAdmin>
+          <AdminPendingPostsPage />
+        </RequireAdmin>
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/admin/reports",
+    element: (
+      <RequireAuth>
+        <RequireAdmin>
+          <AdminReportsPage />
+        </RequireAdmin>
       </RequireAuth>
     )
   },

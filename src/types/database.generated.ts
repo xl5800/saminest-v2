@@ -318,6 +318,50 @@ export type Database = {
           },
         ]
       }
+      moderation_actions: {
+        Row: {
+          action_type: string
+          actor_id: string
+          created_at: string
+          id: string
+          metadata: Json
+          note: string | null
+          reason_code: string | null
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action_type: string
+          actor_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          note?: string | null
+          reason_code?: string | null
+          target_id: string
+          target_type: string
+        }
+        Update: {
+          action_type?: string
+          actor_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          note?: string | null
+          reason_code?: string | null
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_images: {
         Row: {
           alt_text: string | null
@@ -593,11 +637,32 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_post: { Args: { target_post_id: string }; Returns: undefined }
       create_direct_conversation: {
         Args: { target_post_id: string }
         Returns: string
       }
+      dismiss_report: {
+        Args: { resolution_note: string; target_report_id: string }
+        Returns: undefined
+      }
+      is_active_conversation_member: {
+        Args: { target_conversation_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
+      is_conversation_member: {
+        Args: { target_conversation_id: string }
+        Returns: boolean
+      }
+      reject_post: {
+        Args: { rejection_note: string; target_post_id: string }
+        Returns: undefined
+      }
+      resolve_report: {
+        Args: { resolution_note: string; target_report_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       post_status:

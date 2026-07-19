@@ -28,7 +28,12 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { createPost, getPostAuthorId, listApprovedPosts } from "./posts-repository";
+import {
+  createPost,
+  getPostAuthorId,
+  listApprovedPosts,
+  listPendingPosts
+} from "./posts-repository";
 
 describe("listApprovedPosts", () => {
   beforeEach(() => {
@@ -252,6 +257,96 @@ describe("createPost", () => {
         contactValue: null
       })
     ).rejects.toMatchObject({ code: "POST_CREATE_ID_MISSING" });
+  });
+});
+
+describe("listPendingPosts", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("filters to pending, non-deleted posts ordered by created_at ascending, with a nested author/category select", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listPendingPosts();
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, title, created_at, author:profiles(display_name), category:categories(name_zh)"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
+  });
+
+  it("maps rows to AdminPostListItem including author and category names", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Sunny room",
+          created_at: "2026-07-01T00:00:00.000Z",
+          author: { display_name: "Alice" },
+          category: { name_zh: "租房" }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listPendingPosts();
+
+    expect(result).toEqual([
+      {
+        id: "post-1",
+        title: "Sunny room",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        authorName: "Alice",
+        categoryName: "租房"
+      }
+    ]);
+  });
+
+  it("falls back to placeholder text when the joined author or category is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Sunny room",
+          created_at: "2026-07-01T00:00:00.000Z",
+          author: null,
+          category: null
+        }
+      ],
+      error: null
+    });
+
+    const result = await listPendingPosts();
+
+    expect(result[0].authorName).toBe("未知用户");
+    expect(result[0].categoryName).toBe("未知分类");
+  });
+
+  it("returns an empty list without throwing when there are no pending posts", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listPendingPosts()).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listPendingPosts()).rejects.toMatchObject({
+      code: "ADMIN_PENDING_POSTS_LIST_FAILED"
+    });
   });
 });
 
