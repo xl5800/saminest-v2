@@ -642,6 +642,10 @@ export type Database = {
         Args: { target_post_id: string }
         Returns: string
       }
+      delete_post: {
+        Args: { delete_reason: string; target_post_id: string }
+        Returns: undefined
+      }
       dismiss_report: {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined

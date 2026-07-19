@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
 
+import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { CategoryPage } from "../pages/category/category-page";
@@ -68,6 +69,16 @@ export const router = createBrowserRouter([
       <RequireAuth>
         <RequireAdmin>
           <AdminPendingPostsPage />
+        </RequireAdmin>
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/admin/posts/all",
+    element: (
+      <RequireAuth>
+        <RequireAdmin>
+          <AdminAllPostsPage />
         </RequireAdmin>
       </RequireAuth>
     )

@@ -109,6 +109,7 @@ export interface AdminPostListItem {
   createdAt: string;
   authorName: string;
   categoryName: string;
+  status: string;
 }
 
 interface AdminPendingPostRow {
@@ -152,7 +153,12 @@ export async function listPendingPosts(): Promise<AdminPostListItem[]> {
     title: row.title,
     createdAt: row.created_at,
     authorName: row.author?.display_name ?? "未知用户",
-    categoryName: row.category?.name_zh ?? "未知分类"
+    categoryName: row.category?.name_zh ?? "未知分类",
+    // 这个查询本身已经用 .eq("status", "pending") 过滤过了，字面量比多选一列
+    // status 再从 row 上读一遍更直接；AdminPostListItem 加这个字段主要是为了
+    // 给 listAllPosts（混合状态的列表）用，listPendingPosts 这边永远是
+    // "pending"，没必要为了这一个已知常量再多查一列。
+    status: "pending"
   }));
 }
 
@@ -203,4 +209,60 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   }
 
   return { id: data.id };
+}
+
+interface AdminAllPostRow {
+  id: string;
+  title: string;
+  created_at: string;
+  status: string;
+  author: { display_name: string } | null;
+  category: { name_zh: string } | null;
+}
+
+/**
+ * 管理员"全部帖子"管理列表（/admin/posts/all）用：默认返回所有未软删除的
+ * 帖子，不限制 status（draft/pending/approved/rejected/archived 都在内），
+ * 可选传 statusFilter 再收窄到某一个状态。
+ *
+ * 按 created_at 降序排列（最新的在前面）——这是刻意跟 listPendingPosts
+ * （created_at 升序、"等得最久的先处理"）不同的排序，不是抄错了写反：这里
+ * 是一个通用的浏览/管理列表，不是要按顺序处理完就清空的审核队列，管理员
+ * 大概率更关心"最近发生了什么"，所以默认最新的在最前面，跟 listApprovedPosts
+ * 面向访客的公开列表排序方向一致。
+ *
+ * 嵌套 select 复用 listPendingPosts 那一套（author:profiles(display_name)、
+ * category:categories(name_zh)）：posts 对 profiles 只有 author_id 这一个
+ * 外键，对 categories 只有 category_id 这一个外键，跟 reports 表对 profiles
+ * 有两个外键（reporter_id / reviewer_id）导致嵌套 select 必须写
+ * `profiles!reports_reporter_id_fkey(...)` 消歧的情况不同，这里没有那个坑，
+ * 沿用不带外键提示的写法是安全的。
+ */
+export async function listAllPosts(statusFilter?: string): Promise<AdminPostListItem[]> {
+  let query = getSupabaseClient()
+    .from("posts")
+    .select(
+      "id, title, created_at, status, author:profiles(display_name), category:categories(name_zh)"
+    )
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (statusFilter) {
+    query = query.eq("status", statusFilter);
+  }
+
+  const { data, error } = await query.overrideTypes<AdminAllPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_ALL_POSTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    authorName: row.author?.display_name ?? "未知用户",
+    categoryName: row.category?.name_zh ?? "未知分类",
+    status: row.status
+  }));
 }

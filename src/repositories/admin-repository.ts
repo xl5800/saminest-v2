@@ -70,3 +70,24 @@ export async function dismissReport(
     throw new AppError(error.message, "ADMIN_DISMISS_REPORT_FAILED", error);
   }
 }
+
+/**
+ * 删除帖子（软删除：设置 posts.deleted_at + 记一条 moderation_actions
+ * 日志，原子性由 delete_post 这个 security definer 函数保证，见
+ * supabase/migrations/20260717000500_delete_post_function.sql）。
+ * 参数名 target_post_id / delete_reason 跟该迁移文件里函数签名完全一致，
+ * 不是照抄 approve_post/reject_post 的 target_post_id 命名习惯猜的。
+ */
+export async function deletePost(
+  postId: string,
+  deleteReason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("delete_post", {
+    target_post_id: postId,
+    delete_reason: deleteReason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_DELETE_POST_FAILED", error);
+  }
+}

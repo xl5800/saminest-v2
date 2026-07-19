@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
 import { useReportsQuery } from "../../features/admin/use-reports-query";
 import { useResolveReportMutation } from "../../features/admin/use-resolve-report-mutation";
@@ -12,6 +13,14 @@ import { formatPublishedAt } from "../../utils/format";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const NOTE_REQUIRED_MESSAGE = "请填写处理说明。";
+const DELETE_REASON_REQUIRED_MESSAGE = "请填写删除原因。";
+// 处理举报成功，但紧接着的删帖失败——这是"举报"和"删帖"两个各自独立原子
+// 的操作串联起来才会出现的新情况，不能用通用的 GENERIC_ERROR_MESSAGE
+// （会让管理员误以为举报处理本身失败了、这一行没变化，实际上举报这一步
+// 已经成功、这一行马上就要从列表消失），需要一条单独的文案说清楚"举报
+// 处理好了，但删帖没成功，需要另外去补"。
+const PARTIAL_DELETE_FAILURE_MESSAGE =
+  "举报已处理，但删除帖子失败，请稍后前往「全部帖子」页面重试删除。";
 
 // 复用 reports-repository.ts 里已经定义好的中文文案，不在这里重复维护一份。
 const REASON_LABELS: Record<string, string> = Object.fromEntries(
@@ -42,12 +51,32 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * 保持同样的模式，方便以后一起维护。这两处目前没有抽出共用组件——两个
  * 页面的行内输入表单只有几行 JSX，抽象出一个共享组件带来的间接层比它省下
  * 的重复更麻烦，等以后出现第三个类似场景再考虑。
+ *
+ * "同时删除该帖子"：产品明确要求在举报处理表单上加一个可选的删帖入口，
+ * 减少管理员来回切换到 /admin/posts/all 的操作。这里刻意不新建一个
+ * "resolve-and-delete"数据库函数——resolveReport/dismissReport 和
+ * deletePost 各自已经是独立原子的（状态变更 + 审计日志各自在自己的
+ * security definer 函数里一次完成），从 UI 层顺序调用两个已经原子的操作
+ * 不需要第三个数据库原语来保证"更大的原子性"，产品这次要的只是操作上的
+ * 便利，不是新的后端一致性保证。删帖原因单独用一个输入框收集，不复用
+ * 处理说明（resolutionNote）——两条审计日志（resolve_report/dismiss_report
+ * 一条，archive_post 一条）各自独立有意义，理由不应该被强行合并成一份。
+ *
+ * 失败处理是顺序调用带来的一个新分支：如果 resolveReport/dismissReport
+ * 失败，跟今天完全一样（这一行还在、错误提示、处理说明保留）；如果
+ * resolveReport/dismissReport 成功但紧接着的 deletePost 失败，举报处理
+ * 本身已经是既成事实，这一行还是要移除，但要用一条独立的、页面级的提示
+ * 说明"举报处理好了，删帖没成功"——不能既不移除这一行（举报明明已经处理
+ * 成功了），也不能什么都不提示（管理员会以为帖子真的被删了）。这条提示
+ * 挂在页面级而不是行内，因为这一行马上就要消失，没法承载一条持续展示的
+ * 行内错误。
  */
 export function AdminReportsPage() {
   const [status, setStatus] = useState<string>("pending");
   const { data, isPending, isError } = useReportsQuery(status);
   const resolveMutation = useResolveReportMutation();
   const dismissMutation = useDismissReportMutation();
+  const deletePostMutation = useDeletePostMutation();
 
   const [reports, setReports] = useState<AdminReportListItem[] | null>(null);
   const [actioningReportId, setActioningReportId] = useState<string | null>(null);
@@ -56,6 +85,16 @@ export function AdminReportsPage() {
   const [openFormAction, setOpenFormAction] = useState<PendingAction | null>(null);
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [deleteChecked, setDeleteChecked] = useState<Record<string, boolean>>({});
+  const [deleteReasonDrafts, setDeleteReasonDrafts] = useState<Record<string, string>>(
+    {}
+  );
+  const [deleteValidationErrors, setDeleteValidationErrors] = useState<
+    Record<string, string>
+  >({});
+  const [partialFailureMessage, setPartialFailureMessage] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     if (data && reports === null) {
@@ -73,6 +112,10 @@ export function AdminReportsPage() {
     setRowErrors({});
     setValidationErrors({});
     setNoteDrafts({});
+    setDeleteChecked({});
+    setDeleteReasonDrafts({});
+    setDeleteValidationErrors({});
+    setPartialFailureMessage(null);
   }
 
   function removeReport(reportId: string): void {
@@ -83,6 +126,8 @@ export function AdminReportsPage() {
     setOpenFormRowId(reportId);
     setOpenFormAction(action);
     setValidationErrors((prev) => withoutKey(prev, reportId));
+    setDeleteValidationErrors((prev) => withoutKey(prev, reportId));
+    setPartialFailureMessage(null);
   }
 
   function cancelForm(reportId: string): void {
@@ -92,13 +137,34 @@ export function AdminReportsPage() {
 
   async function handleConfirm(reportId: string, action: PendingAction): Promise<void> {
     const note = (noteDrafts[reportId] ?? "").trim();
+    const shouldDeletePost = deleteChecked[reportId] ?? false;
+    const deleteReason = (deleteReasonDrafts[reportId] ?? "").trim();
+
+    let hasValidationError = false;
+
     if (!note) {
       setValidationErrors((prev) => ({ ...prev, [reportId]: NOTE_REQUIRED_MESSAGE }));
+      hasValidationError = true;
+    } else {
+      setValidationErrors((prev) => withoutKey(prev, reportId));
+    }
+
+    if (shouldDeletePost && !deleteReason) {
+      setDeleteValidationErrors((prev) => ({
+        ...prev,
+        [reportId]: DELETE_REASON_REQUIRED_MESSAGE
+      }));
+      hasValidationError = true;
+    } else {
+      setDeleteValidationErrors((prev) => withoutKey(prev, reportId));
+    }
+
+    if (hasValidationError) {
       return;
     }
 
-    setValidationErrors((prev) => withoutKey(prev, reportId));
     setRowErrors((prev) => withoutKey(prev, reportId));
+    setPartialFailureMessage(null);
     setActioningReportId(reportId);
     try {
       if (action === "resolve") {
@@ -106,12 +172,40 @@ export function AdminReportsPage() {
       } else {
         await dismissMutation.mutateAsync({ reportId, resolutionNote: note });
       }
+
+      // 举报处理（resolve/dismiss）这一步已经成功——不管接下来的删帖是否
+      // 还要做、做不做得成，这一行都要从列表移除，因为举报处理本身已经是
+      // 既成事实。
+      if (shouldDeletePost) {
+        const report = (reports ?? []).find((item) => item.id === reportId);
+        try {
+          if (report) {
+            await deletePostMutation.mutateAsync({
+              postId: report.targetId,
+              deleteReason
+            });
+          }
+        } catch {
+          removeReport(reportId);
+          setOpenFormRowId((current) => (current === reportId ? null : current));
+          setOpenFormAction(null);
+          setNoteDrafts((prev) => withoutKey(prev, reportId));
+          setDeleteChecked((prev) => withoutKey(prev, reportId));
+          setDeleteReasonDrafts((prev) => withoutKey(prev, reportId));
+          setPartialFailureMessage(PARTIAL_DELETE_FAILURE_MESSAGE);
+          return;
+        }
+      }
+
       removeReport(reportId);
       setOpenFormRowId((current) => (current === reportId ? null : current));
       setOpenFormAction(null);
       setNoteDrafts((prev) => withoutKey(prev, reportId));
+      setDeleteChecked((prev) => withoutKey(prev, reportId));
+      setDeleteReasonDrafts((prev) => withoutKey(prev, reportId));
     } catch {
-      // 失败时保留已输入的处理说明，不清空 noteDrafts。
+      // 提交失败时特意不清空 noteDrafts / deleteReasonDrafts，保留管理员
+      // 已经输入的内容。
       setRowErrors((prev) => ({ ...prev, [reportId]: GENERIC_ERROR_MESSAGE }));
     } finally {
       setActioningReportId(null);
@@ -131,11 +225,16 @@ export function AdminReportsPage() {
     </label>
   );
 
+  const partialFailureBanner = partialFailureMessage ? (
+    <p role="alert">{partialFailureMessage}</p>
+  ) : null;
+
   if (isPending) {
     return (
       <main>
         <h1>举报处理</h1>
         {statusFilter}
+        {partialFailureBanner}
         <p role="status">加载中…</p>
       </main>
     );
@@ -146,6 +245,7 @@ export function AdminReportsPage() {
       <main>
         <h1>举报处理</h1>
         {statusFilter}
+        {partialFailureBanner}
         <p role="alert">举报加载失败，请稍后重试。</p>
       </main>
     );
@@ -157,6 +257,7 @@ export function AdminReportsPage() {
     <main>
       <h1>举报处理</h1>
       {statusFilter}
+      {partialFailureBanner}
       {visibleReports.length === 0 ? (
         <p role="status">暂无举报</p>
       ) : (
@@ -199,6 +300,45 @@ export function AdminReportsPage() {
                         disabled={isActioning}
                       />
                     </label>
+                    {report.targetType === "post" ? (
+                      <div>
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={deleteChecked[report.id] ?? false}
+                            onChange={(event) =>
+                              setDeleteChecked((prev) => ({
+                                ...prev,
+                                [report.id]: event.target.checked
+                              }))
+                            }
+                            disabled={isActioning}
+                          />
+                          同时删除该帖子
+                        </label>
+                        {deleteChecked[report.id] ? (
+                          <>
+                            {deleteValidationErrors[report.id] ? (
+                              <p role="alert">{deleteValidationErrors[report.id]}</p>
+                            ) : null}
+                            <label>
+                              删除原因
+                              <input
+                                type="text"
+                                value={deleteReasonDrafts[report.id] ?? ""}
+                                onChange={(event) =>
+                                  setDeleteReasonDrafts((prev) => ({
+                                    ...prev,
+                                    [report.id]: event.target.value
+                                  }))
+                                }
+                                disabled={isActioning}
+                              />
+                            </label>
+                          </>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       disabled={isActioning}

@@ -8,6 +8,7 @@ const {
   listActiveLocations,
   listApprovedPosts,
   listPendingPosts,
+  listAllPosts,
   createPost,
   listMessages,
   sendMessage,
@@ -19,6 +20,7 @@ const {
   listActiveLocations: vi.fn(),
   listApprovedPosts: vi.fn(),
   listPendingPosts: vi.fn(),
+  listAllPosts: vi.fn(),
   createPost: vi.fn(),
   listMessages: vi.fn(),
   sendMessage: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock("../repositories/locations-repository", () => ({
 vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
   listPendingPosts,
+  listAllPosts,
   createPost
 }));
 vi.mock("../repositories/messages-repository", () => ({
@@ -58,6 +61,7 @@ vi.mock("../repositories/profiles-repository", () => ({
   getCurrentUserRole
 }));
 
+import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { CategoryPage } from "../pages/category/category-page";
@@ -130,6 +134,16 @@ function renderAt(path: string) {
         )
       },
       {
+        path: "/admin/posts/all",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminAllPostsPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
+      {
         path: "/admin/reports",
         element: (
           <RequireAuth>
@@ -165,6 +179,7 @@ describe("app routes", () => {
     listActiveLocations.mockReset();
     listApprovedPosts.mockReset();
     listPendingPosts.mockReset();
+    listAllPosts.mockReset();
     createPost.mockReset();
     listMessages.mockReset();
     sendMessage.mockReset();
@@ -177,6 +192,7 @@ describe("app routes", () => {
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
     listPendingPosts.mockResolvedValue([]);
+    listAllPosts.mockResolvedValue([]);
     listMessages.mockResolvedValue([]);
     listMyConversations.mockResolvedValue([]);
     listReportsForModeration.mockResolvedValue([]);
@@ -335,6 +351,36 @@ describe("app routes", () => {
 
     expect(
       await screen.findByRole("heading", { name: "待审核帖子" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/posts/all to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/admin/posts/all");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/posts/all to / when logged in as a non-admin (reuses RequireAdmin)", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("user");
+
+    renderAt("/admin/posts/all");
+
+    expect(
+      await screen.findByRole("heading", { name: "Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the all posts admin page at /admin/posts/all when logged in as an admin", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("admin");
+
+    renderAt("/admin/posts/all");
+
+    expect(
+      await screen.findByRole("heading", { name: "全部帖子" })
     ).toBeInTheDocument();
   });
 
