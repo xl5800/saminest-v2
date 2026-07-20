@@ -43,24 +43,32 @@ export function ResetPasswordPage() {
 
   if (!session) {
     return (
-      <main>
-        <h1>重置密码</h1>
-        <p role="alert">这个重置密码链接无效或已经过期，请重新发起一次找回密码。</p>
-        <p>
-          <Link to="/forgot-password">重新发送重置邮件</Link>
-        </p>
+      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+        <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
+          <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
+          <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+            这个重置密码链接无效或已经过期，请重新发起一次找回密码。
+          </p>
+          <p className="mt-4 text-center text-sm text-text-muted">
+            <Link to="/forgot-password" className="text-primary hover:underline">重新发送重置邮件</Link>
+          </p>
+        </div>
       </main>
     );
   }
 
   if (submitted) {
     return (
-      <main>
-        <h1>重置密码</h1>
-        <p role="status">密码已更新，请重新登录。</p>
-        <p>
-          <Link to="/login">去登录</Link>
-        </p>
+      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+        <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
+          <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
+          <p className="mb-4 rounded border border-success bg-success/10 px-3 py-2 text-sm text-success" role="status">
+            密码已更新，请重新登录。
+          </p>
+          <p className="mt-4 text-center text-sm text-text-muted">
+            <Link to="/login" className="text-primary hover:underline">去登录</Link>
+          </p>
+        </div>
       </main>
     );
   }
@@ -95,36 +103,48 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <main>
-      <h1>重置密码</h1>
-      <form onSubmit={handleSubmit} noValidate>
-        {error ? <p role="alert">{error}</p> : null}
-        <label>
-          新密码
-          <input
-            type="password"
-            autoComplete="new-password"
-            minLength={MIN_PASSWORD_LENGTH}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          确认新密码
-          <input
-            type="password"
-            autoComplete="new-password"
-            minLength={MIN_PASSWORD_LENGTH}
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={submitting}>
-          {submitting ? "更新中…" : "更新密码"}
-        </button>
-      </form>
+    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
+        <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
+        <form onSubmit={handleSubmit} noValidate>
+          {error ? (
+            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <label className="mb-4 block text-sm font-medium text-text">
+            新密码
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <label className="mb-4 block text-sm font-medium text-text">
+            确认新密码
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? "更新中…" : "更新密码"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

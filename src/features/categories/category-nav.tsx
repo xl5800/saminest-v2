@@ -26,7 +26,7 @@ export function CategoryNav({ activeSlug }: CategoryNavProps) {
   const inactiveClassName =
     "rounded-full border border-border bg-bg px-4 py-1.5 text-sm whitespace-nowrap text-text-muted";
   const activeClassName =
-    "rounded-full px-4 py-1.5 text-sm whitespace-nowrap bg-accent text-text font-semibold";
+    "rounded-full px-4 py-1.5 text-sm whitespace-nowrap bg-accent text-white font-semibold";
 
   return (
     <nav aria-label="分类导航" className="flex gap-2 overflow-x-auto px-4 py-2">

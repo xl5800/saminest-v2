@@ -35,7 +35,7 @@ export function AppHeader() {
 
         <Link
           to="/publish"
-          className="ml-auto shrink-0 rounded bg-accent px-4 py-2 font-semibold text-text"
+          className="ml-auto shrink-0 rounded bg-accent px-4 py-2 font-semibold text-white"
         >
           发布
         </Link>

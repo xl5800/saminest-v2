@@ -68,7 +68,7 @@ export function BottomNav() {
         aria-current={publishActive ? "page" : undefined}
         className="flex flex-1 flex-col items-center justify-center"
       >
-        <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-sm font-semibold text-text shadow-md">
+        <span className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white shadow-md">
           {PUBLISH_ITEM.label}
         </span>
       </Link>

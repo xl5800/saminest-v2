@@ -150,13 +150,14 @@ export function PostImagePicker({
 
   return (
     <div>
-      <label htmlFor={inputId}>
+      <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-text">
         上传图片（最多 {MAX_POST_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 5MB）
       </label>
       <div
         data-testid="post-image-drop-zone"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
+        className="flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-bg px-4 py-8 text-center"
       >
         <input
           id={inputId}
@@ -164,25 +165,41 @@ export function PostImagePicker({
           accept={ACCEPTED_POST_IMAGE_MIME_TYPES.join(",")}
           multiple
           onChange={handleInputChange}
+          className="sr-only"
         />
-        <p>拖拽图片到此处，或点击选择文件</p>
+        <p className="text-sm text-text-muted">拖拽图片到此处，或点击选择文件</p>
       </div>
       {errors.length > 0 ? (
-        <div role="alert">
+        <div role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
           {errors.map((message) => (
-            <p key={message}>{message}</p>
+            <p key={message} className="leading-relaxed">
+              {message}
+            </p>
           ))}
         </div>
       ) : null}
       {value.length > 0 ? (
-        <ul>
+        <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {value.map((file, index) => (
-            <li key={`${file.name}-${file.size}-${index}`}>
+            <li
+              key={`${file.name}-${file.size}-${index}`}
+              className="relative rounded border border-border p-1"
+            >
               {previewUrls[index] ? (
-                <img src={previewUrls[index]} alt={file.name} width={80} height={80} />
+                <img
+                  src={previewUrls[index]}
+                  alt={file.name}
+                  width={80}
+                  height={80}
+                  className="h-20 w-20 rounded object-cover"
+                />
               ) : null}
-              <span>{file.name}</span>
-              <button type="button" onClick={() => handleRemove(index)}>
+              <span className="mt-1 block truncate text-xs text-text-muted">{file.name}</span>
+              <button
+                type="button"
+                onClick={() => handleRemove(index)}
+                className="mt-1 w-full rounded border border-danger px-1 py-0.5 text-xs text-danger hover:bg-danger/10"
+              >
                 删除
               </button>
             </li>

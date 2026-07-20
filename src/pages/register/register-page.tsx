@@ -68,56 +68,70 @@ export function RegisterPage() {
   }
 
   return (
-    <main>
-      <h1>注册 Saminest 账号</h1>
-      <form onSubmit={handleSubmit} noValidate>
-        {error ? <p role="alert">{error}</p> : null}
-        <label>
-          显示名称
-          <input
-            type="text"
-            autoComplete="nickname"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          邮箱
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          密码
-          <input
-            type="password"
-            autoComplete="new-password"
-            minLength={MIN_PASSWORD_LENGTH}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          确认密码
-          <input
-            type="password"
-            autoComplete="new-password"
-            minLength={MIN_PASSWORD_LENGTH}
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            required
-          />
-        </label>
-        <button type="submit" disabled={submitting}>
-          {submitting ? "注册中…" : "注册"}
-        </button>
-      </form>
+    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
+        <h1 className="mb-6 text-xl font-bold text-text">注册 Saminest 账号</h1>
+        <form onSubmit={handleSubmit} noValidate>
+          {error ? (
+            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <label className="mb-4 block text-sm font-medium text-text">
+            显示名称
+            <input
+              type="text"
+              autoComplete="nickname"
+              value={displayName}
+              onChange={(event) => setDisplayName(event.target.value)}
+              required
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <label className="mb-4 block text-sm font-medium text-text">
+            邮箱
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              required
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <label className="mb-4 block text-sm font-medium text-text">
+            密码
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <label className="mb-4 block text-sm font-medium text-text">
+            确认密码
+            <input
+              type="password"
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {submitting ? "注册中…" : "注册"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }
