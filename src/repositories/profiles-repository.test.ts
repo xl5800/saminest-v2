@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, maybeSingleMock } = vi.hoisted(() => {
+const { queryBuilder, maybeSingleMock, rpcMock } = vi.hoisted(() => {
   const maybeSingleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   const chain = ["select", "eq"] as const;
@@ -8,16 +8,16 @@ const { queryBuilder, maybeSingleMock } = vi.hoisted(() => {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = maybeSingleMock;
-  return { queryBuilder: builder, maybeSingleMock };
+  return { queryBuilder: builder, maybeSingleMock, rpcMock: vi.fn() };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
 
 vi.mock("../integrations/supabase/client", () => ({
-  getSupabaseClient: () => ({ from: fromMock })
+  getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
-import { getCurrentUserRole } from "./profiles-repository";
+import { getCurrentUserRole, listProfilesForAdmin } from "./profiles-repository";
 
 describe("getCurrentUserRole", () => {
   beforeEach(() => {
@@ -53,6 +53,78 @@ describe("getCurrentUserRole", () => {
 
     await expect(getCurrentUserRole("user-1")).rejects.toMatchObject({
       code: "PROFILE_ROLE_FETCH_FAILED"
+    });
+  });
+});
+
+describe("listProfilesForAdmin", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls list_profiles_for_admin with search_term: undefined when no search term is given", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await listProfilesForAdmin();
+
+    expect(rpcMock).toHaveBeenCalledWith("list_profiles_for_admin", {
+      search_term: undefined
+    });
+  });
+
+  it("passes the given search term through", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await listProfilesForAdmin("alice");
+
+    expect(rpcMock).toHaveBeenCalledWith("list_profiles_for_admin", {
+      search_term: "alice"
+    });
+  });
+
+  it("maps rows to AdminProfileListItem (camelCase)", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          id: "user-1",
+          display_name: "Alice",
+          email: "alice@example.com",
+          role: "user",
+          account_status: "active",
+          created_at: "2026-07-01T00:00:00.000Z"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listProfilesForAdmin();
+
+    expect(result).toEqual([
+      {
+        id: "user-1",
+        displayName: "Alice",
+        email: "alice@example.com",
+        role: "user",
+        accountStatus: "active",
+        createdAt: "2026-07-01T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("returns an empty list without throwing when there are no matching profiles", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listProfilesForAdmin()).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. caller is not an admin)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "only admins can list user profiles" }
+    });
+
+    await expect(listProfilesForAdmin()).rejects.toMatchObject({
+      code: "ADMIN_PROFILES_LIST_FAILED"
     });
   });
 });

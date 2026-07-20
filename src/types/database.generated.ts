@@ -650,6 +650,8 @@ export type Database = {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined
       }
+      is_account_restricted: { Args: never; Returns: boolean }
+      is_account_suspended: { Args: never; Returns: boolean }
       is_active_conversation_member: {
         Args: { target_conversation_id: string }
         Returns: boolean
@@ -659,12 +661,31 @@ export type Database = {
         Args: { target_conversation_id: string }
         Returns: boolean
       }
+      list_profiles_for_admin: {
+        Args: { search_term?: string }
+        Returns: {
+          account_status: string
+          created_at: string
+          display_name: string
+          email: string
+          id: string
+          role: string
+        }[]
+      }
       reject_post: {
         Args: { rejection_note: string; target_post_id: string }
         Returns: undefined
       }
       resolve_report: {
         Args: { resolution_note: string; target_report_id: string }
+        Returns: undefined
+      }
+      set_account_status: {
+        Args: {
+          new_account_status: string
+          status_change_reason: string
+          target_user_id: string
+        }
         Returns: undefined
       }
     }

@@ -29,3 +29,55 @@ export async function getCurrentUserRole(userId: string): Promise<string | null>
 
   return data?.role ?? null;
 }
+
+export interface AdminProfileListItem {
+  id: string;
+  displayName: string;
+  email: string;
+  role: string;
+  accountStatus: string;
+  createdAt: string;
+}
+
+/**
+ * 后台账号管理列表（/admin/users）用：调用 list_profiles_for_admin 这个
+ * security definer RPC（见
+ * supabase/migrations/20260720000000_list_profiles_for_admin_function.sql），
+ * 而不是直接 `.from("profiles").select(...)`——email 存在 auth.users 里，
+ * 这张表不在这个项目暴露的 API schema 里（supabase/config.toml 的
+ * api.schemas 只有 public / graphql_public），前端没有其它途径拿到邮箱，
+ * 必须走这个函数在服务端把 profiles 和 auth.users join 好。
+ *
+ * search_term 可选，直接透传 searchTerm（undefined 时相当于不传这个
+ * key，命中 RPC 参数自己的默认值 `search_term text default null`）——
+ * 之前手写的类型桩把这个参数错误地标成 `string | null`，真实生成的类型
+ * 是 `search_term?: string`（只接受 undefined/省略，不接受显式 null），
+ * 换成真实类型后这里如果还传 `searchTerm ?? null` 会编译不过，改成直接
+ * 传 searchTerm 本身。
+ * 没有分页参数：函数本身就没有 limit/offset（当前用户规模小，全量列表
+ * 已经够用，是刻意的简化，不是遗漏），这里不需要额外处理。
+ *
+ * RPC 返回的行本身就是扁平结构（不是嵌套 select），只需要把 snake_case
+ * 字段名映射成 camelCase，不需要额外的行内 fallback 处理（display_name/
+ * email 在 profiles/auth.users 里都是 NOT NULL 列）。
+ */
+export async function listProfilesForAdmin(
+  searchTerm?: string
+): Promise<AdminProfileListItem[]> {
+  const { data, error } = await getSupabaseClient().rpc("list_profiles_for_admin", {
+    search_term: searchTerm
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_PROFILES_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    displayName: row.display_name,
+    email: row.email,
+    role: row.role,
+    accountStatus: row.account_status,
+    createdAt: row.created_at
+  }));
+}

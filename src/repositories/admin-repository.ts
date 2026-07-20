@@ -91,3 +91,33 @@ export async function deletePost(
     throw new AppError(error.message, "ADMIN_DELETE_POST_FAILED", error);
   }
 }
+
+/**
+ * 设置某个用户的 account_status（active/restricted/suspended），走
+ * set_account_status 这个 security definer 函数（见
+ * supabase/migrations/20260717000700_account_status_enforcement.sql）。
+ * 参数名 target_user_id / new_account_status / status_change_reason 跟该
+ * 迁移文件里的函数签名完全一致。
+ *
+ * 该函数在管理员对自己执行操作（target_user_id = auth.uid()）、reason 为空、
+ * 或目标账号当前状态已经等于 new_account_status 时都会 raise exception——
+ * 这里统一包装成一个通用的 AppError，不单独解析是哪一种失败原因：自己
+ * 不能操作自己这一条前端已经在 users-page.tsx 隐藏了触发入口（数据库这道
+ * 检查只是纵深防御的最后一道），reason 必填在提交前也已经有客户端校验，
+ * 真正会走到这个 catch 分支的情况理论上很少见，一条通用提示已经够用。
+ */
+export async function setAccountStatus(
+  userId: string,
+  newStatus: "active" | "restricted" | "suspended",
+  reason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("set_account_status", {
+    target_user_id: userId,
+    new_account_status: newStatus,
+    status_change_reason: reason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_SET_ACCOUNT_STATUS_FAILED", error);
+  }
+}

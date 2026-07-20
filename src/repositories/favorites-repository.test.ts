@@ -104,6 +104,22 @@ describe("addFavorite", () => {
       addFavorite({ userId: "user-1", postId: "post-1" })
     ).rejects.toMatchObject({ code: "FAVORITE_ADD_FAILED" });
   });
+
+  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message on an RLS violation (42501)", async () => {
+    insertMock.mockResolvedValue({
+      error: {
+        message: "new row violates row-level security policy for table \"favorites\"",
+        code: "42501"
+      }
+    });
+
+    await expect(
+      addFavorite({ userId: "user-1", postId: "post-1" })
+    ).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
 });
 
 describe("removeFavorite", () => {

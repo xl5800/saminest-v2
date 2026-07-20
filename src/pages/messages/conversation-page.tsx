@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom";
 import { useMessagesQuery } from "../../features/messages/use-messages-query";
 import { useSendMessageMutation } from "../../features/messages/use-send-message-mutation";
 import { useAuthStore } from "../../store/auth-store";
+import { AppError } from "../../utils/app-error";
 
 const MESSAGE_MAX_LENGTH = 5000;
 const EMPTY_MESSAGE_ERROR = "请输入消息内容。";
@@ -72,8 +73,15 @@ export function MessageConversationPage() {
     try {
       await sendMessageMutation.mutateAsync({ senderId, body: trimmedBody });
       setBody("");
-    } catch {
-      setSubmitError(DEFAULT_ERROR_MESSAGE);
+    } catch (error) {
+      // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：账号
+      // 受限是一个明确、可操作的失败原因（重试没有用），跟其它未知失败
+      // 原因共用一条"请稍后重试"文案会误导用户。
+      if (error instanceof AppError && error.code === "ACCOUNT_RESTRICTED") {
+        setSubmitError(error.message);
+      } else {
+        setSubmitError(DEFAULT_ERROR_MESSAGE);
+      }
     }
   }
 

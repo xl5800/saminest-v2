@@ -243,6 +243,32 @@ describe("createPost", () => {
     ).rejects.toMatchObject({ code: "POST_CREATE_FAILED" });
   });
 
+  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message on an RLS violation (42501)", async () => {
+    singleMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "new row violates row-level security policy for table \"posts\"",
+        code: "42501"
+      }
+    });
+
+    await expect(
+      createPost({
+        authorId: "user-1",
+        categoryId: "cat-1",
+        locationId: null,
+        title: "Title long enough",
+        description: "Description long enough.",
+        priceAmount: null,
+        contactMethod: null,
+        contactValue: null
+      })
+    ).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
+
   it("throws an AppError when insert succeeds but no row id is returned", async () => {
     singleMock.mockResolvedValue({ data: null, error: null });
 

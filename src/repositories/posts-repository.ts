@@ -177,6 +177,13 @@ export interface CreatePostResult {
   id: string;
 }
 
+// Postgres/PostgREST 的 insufficient_privilege 错误码，任何 RLS with check
+// 失败都会报这个码——具体为什么这里能把它安全地归因于账号受限，见下面
+// createPost 里的注释。
+const RLS_VIOLATION_CODE = "42501";
+const ACCOUNT_RESTRICTED_MESSAGE =
+  "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
+
 /**
  * 发布表单提交时用这个方法创建帖子。`status` 在这里硬编码为 'pending'，
  * 不接受调用方传入，防止普通用户绕过审核直接把帖子设为 approved
@@ -202,6 +209,20 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     .single();
 
   if (error) {
+    // posts_insert_own 这条 RLS 策略（见
+    // supabase/migrations/20260717000700_account_status_enforcement.sql）的
+    // with check 有两个条件：author_id = auth.uid()，以及
+    // not is_account_restricted()。42501 是 PostgREST 对"任意 with check
+    // 失败"统一返回的错误码，本身分不清是哪个条件失败——但这里的 author_id
+    // 只可能来自 authorId 参数，而 createPost 唯一的调用方
+    // publish-page.tsx 只会传当前登录用户自己的 session.user.id，不接受
+    // 任意/伪造输入，所以 author_id 这个条件对一个正常工作的客户端来说
+    // 永远成立。因此对这个调用点而言，42501 只可能是 is_account_restricted()
+    // 失败，可以放心地映射成一条专门的、可操作的提示，而不是把原始的
+    // "违反行级安全策略"报给用户。
+    if (error.code === RLS_VIOLATION_CODE) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
     throw new AppError(error.message, "POST_CREATE_FAILED", error);
   }
   if (!data) {

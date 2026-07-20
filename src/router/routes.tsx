@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
+import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoryPage } from "../pages/category/category-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
@@ -89,6 +90,16 @@ export const router = createBrowserRouter([
       <RequireAuth>
         <RequireAdmin>
           <AdminReportsPage />
+        </RequireAdmin>
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/admin/users",
+    element: (
+      <RequireAuth>
+        <RequireAdmin>
+          <AdminUsersPage />
         </RequireAdmin>
       </RequireAuth>
     )

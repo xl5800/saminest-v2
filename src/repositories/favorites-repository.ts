@@ -7,6 +7,13 @@ import { AppError } from "../utils/app-error";
 // supabase/migrations/20260716000200_create_favorites_table.sql）。
 const UNIQUE_VIOLATION_CODE = "23505";
 
+// Postgres/PostgREST 的 insufficient_privilege 错误码，任何 RLS with check
+// 失败都会报这个码——具体为什么这里能把它安全地归因于账号被封禁，见下面
+// addFavorite 里的注释。
+const RLS_VIOLATION_CODE = "42501";
+const ACCOUNT_RESTRICTED_MESSAGE =
+  "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
+
 export interface AddFavoriteInput {
   userId: string;
   postId: string;
@@ -51,6 +58,21 @@ export async function addFavorite(input: AddFavoriteInput): Promise<void> {
   if (error) {
     if (error.code === UNIQUE_VIOLATION_CODE) {
       return;
+    }
+    // favorites_insert_own 这条 RLS 策略（见
+    // supabase/migrations/20260717000700_account_status_enforcement.sql）的
+    // with check 有两个条件：user_id = auth.uid()，以及
+    // not is_account_suspended()。42501 是 PostgREST 对"任意 with check
+    // 失败"统一返回的错误码，本身分不清是哪个条件失败——但这里的 user_id
+    // 只可能来自 input.userId，而 addFavorite 唯一的调用方
+    // use-toggle-favorite-mutation.ts 只会传当前登录用户自己的
+    // session.user.id（见 favorite-button.tsx），不接受任意/伪造输入，
+    // 所以 user_id 这个条件对一个正常工作的客户端来说永远成立。因此对
+    // 这个调用点而言，42501 只可能是 is_account_suspended() 失败，可以
+    // 放心地映射成一条专门的、可操作的提示，而不是把原始的"违反行级安全
+    // 策略"报给用户。
+    if (error.code === RLS_VIOLATION_CODE) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
     }
     throw new AppError(error.message, "FAVORITE_ADD_FAILED", error);
   }

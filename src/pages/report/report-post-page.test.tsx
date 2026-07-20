@@ -110,6 +110,25 @@ describe("ReportPostPage", () => {
     );
   });
 
+  it("shows the account-restricted message when the mutation rejects with ACCOUNT_RESTRICTED", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    mutateAsyncMock.mockRejectedValue(
+      new AppError(
+        "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
+        "ACCOUNT_RESTRICTED"
+      )
+    );
+
+    renderPage();
+
+    selectReason("诈骗");
+    fireEvent.click(screen.getByRole("button", { name: "提交举报" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    );
+  });
+
   it("shows a generic error message and preserves the entered description on a generic failure", async () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     mutateAsyncMock.mockRejectedValue(new Error("network down"));

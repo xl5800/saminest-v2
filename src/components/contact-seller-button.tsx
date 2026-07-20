@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useCreateDirectConversationMutation } from "../features/conversations/use-create-direct-conversation-mutation";
 import { usePostAuthorQuery } from "../features/posts/use-post-author-query";
 import { useAuthStore } from "../store/auth-store";
+import { AppError } from "../utils/app-error";
 
 const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 
@@ -53,8 +54,18 @@ export function ContactSellerButton({ postId }: ContactSellerButtonProps) {
       onSuccess: ({ conversationId }) => {
         navigate(`/messages/${conversationId}`);
       },
-      onError: () => {
-        setError(DEFAULT_ERROR_MESSAGE);
+      onError: (mutationError) => {
+        // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：账号
+        // 受限是一个明确、可操作的失败原因（重试没有用），跟其它未知失败
+        // 原因共用一条"请稍后重试"文案会误导用户。
+        if (
+          mutationError instanceof AppError &&
+          mutationError.code === "ACCOUNT_RESTRICTED"
+        ) {
+          setError(mutationError.message);
+        } else {
+          setError(DEFAULT_ERROR_MESSAGE);
+        }
       }
     });
   }

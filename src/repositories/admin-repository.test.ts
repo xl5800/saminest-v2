@@ -11,7 +11,8 @@ import {
   deletePost,
   dismissReport,
   rejectPost,
-  resolveReport
+  resolveReport,
+  setAccountStatus
 } from "./admin-repository";
 
 describe("approvePost", () => {
@@ -150,5 +151,34 @@ describe("deletePost", () => {
     await expect(deletePost("post-1", "")).rejects.toMatchObject({
       code: "ADMIN_DELETE_POST_FAILED"
     });
+  });
+});
+
+describe("setAccountStatus", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls set_account_status with target_user_id, new_account_status, and status_change_reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await setAccountStatus("user-1", "restricted", "多次发布违规内容");
+
+    expect(rpcMock).toHaveBeenCalledWith("set_account_status", {
+      target_user_id: "user-1",
+      new_account_status: "restricted",
+      status_change_reason: "多次发布违规内容"
+    });
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. empty reason, no-op status, or self-targeting)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "cannot change your own account status" }
+    });
+
+    await expect(
+      setAccountStatus("admin-1", "restricted", "note")
+    ).rejects.toMatchObject({ code: "ADMIN_SET_ACCOUNT_STATUS_FAILED" });
   });
 });

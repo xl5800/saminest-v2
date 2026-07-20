@@ -46,6 +46,20 @@ describe("createDirectConversation", () => {
     });
   });
 
+  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message when the account is restricted", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "restricted accounts cannot start a direct conversation"
+      }
+    });
+
+    await expect(createDirectConversation("post-1")).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
+
   it("throws an AppError when the RPC succeeds but returns no conversation id", async () => {
     rpcMock.mockResolvedValue({ data: null, error: null });
 

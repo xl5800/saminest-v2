@@ -16,6 +16,7 @@ vi.mock("../../features/messages/use-send-message-mutation", () => ({
 
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
+import { AppError } from "../../utils/app-error";
 import { MessageConversationPage } from "./conversation-page";
 
 const initialAuthState = useAuthStore.getState();
@@ -143,6 +144,27 @@ describe("MessageConversationPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "发送失败，请稍后重试。"
+    );
+    expect(screen.getByLabelText("消息内容")).toHaveValue("这条消息发不出去");
+  });
+
+  it("shows the account-restricted message and preserves the typed text when sending rejects with ACCOUNT_RESTRICTED", async () => {
+    mutateAsyncMock.mockRejectedValue(
+      new AppError(
+        "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
+        "ACCOUNT_RESTRICTED"
+      )
+    );
+
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText("消息内容"), {
+      target: { value: "这条消息发不出去" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
     );
     expect(screen.getByLabelText("消息内容")).toHaveValue("这条消息发不出去");
   });

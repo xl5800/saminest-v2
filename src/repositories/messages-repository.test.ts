@@ -137,6 +137,27 @@ describe("sendMessage", () => {
     ).rejects.toMatchObject({ code: "MESSAGE_SEND_FAILED" });
   });
 
+  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message on an RLS violation (42501)", async () => {
+    singleMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "new row violates row-level security policy for table \"messages\"",
+        code: "42501"
+      }
+    });
+
+    await expect(
+      sendMessage({
+        conversationId: "conversation-1",
+        senderId: "user-1",
+        body: "你好"
+      })
+    ).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
+
   it("throws an AppError when insert succeeds but no row id is returned", async () => {
     singleMock.mockResolvedValue({ data: null, error: null });
 

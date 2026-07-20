@@ -64,7 +64,10 @@ export function ReportPostPage() {
       });
       setSubmitted(true);
     } catch (error) {
-      if (error instanceof AppError && error.code === "REPORT_DUPLICATE") {
+      if (
+        error instanceof AppError &&
+        (error.code === "REPORT_DUPLICATE" || error.code === "ACCOUNT_RESTRICTED")
+      ) {
         setSubmitError(error.message);
       } else {
         setSubmitError(DEFAULT_ERROR_MESSAGE);

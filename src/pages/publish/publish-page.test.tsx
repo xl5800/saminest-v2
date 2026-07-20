@@ -39,6 +39,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
+import { AppError } from "../../utils/app-error";
 import { PublishPage } from "./publish-page";
 
 const initialAuthState = useAuthStore.getState();
@@ -186,6 +187,25 @@ describe("PublishPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "发布失败，请稍后重试。"
+    );
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  it("shows the account-restricted message and does not navigate when createPost rejects with ACCOUNT_RESTRICTED", async () => {
+    createPost.mockRejectedValue(
+      new AppError(
+        "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
+        "ACCOUNT_RESTRICTED"
+      )
+    );
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
     );
     expect(navigateMock).not.toHaveBeenCalled();
   });

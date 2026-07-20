@@ -11,6 +11,7 @@ import {
 import { createPost } from "../../repositories/posts-repository";
 import { postImageStorageService } from "../../services/storage/post-image-storage-service";
 import { useAuthStore } from "../../store/auth-store";
+import { AppError } from "../../utils/app-error";
 import {
   CONTACT_METHOD_OPTIONS,
   DESCRIPTION_MAX_LENGTH,
@@ -172,8 +173,15 @@ export function PublishPage() {
         contactValue: validation.data.contactValue
       });
       postId = created.id;
-    } catch {
-      setError(DEFAULT_ERROR_MESSAGE);
+    } catch (submitError) {
+      // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：
+      // 账号受限是一个明确、可操作的失败原因（重试没有用，需要联系
+      // 管理员），跟其它未知失败原因共用一条"请稍后重试"文案会误导用户。
+      if (submitError instanceof AppError && submitError.code === "ACCOUNT_RESTRICTED") {
+        setError(submitError.message);
+      } else {
+        setError(DEFAULT_ERROR_MESSAGE);
+      }
       setSubmitting(false);
       return;
     }

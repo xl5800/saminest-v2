@@ -2,6 +2,13 @@ import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 
+// Postgres/PostgREST 的 insufficient_privilege 错误码，任何 RLS with check
+// 失败都会报这个码——具体为什么这里能把它安全地归因于账号受限，见下面
+// sendMessage 里的注释。
+const RLS_VIOLATION_CODE = "42501";
+const ACCOUNT_RESTRICTED_MESSAGE =
+  "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
+
 export interface MessageListItem {
   id: string;
   senderId: string;
@@ -73,6 +80,23 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
     .single();
 
   if (error) {
+    // messages_insert_own_as_active_member 这条 RLS 策略（见
+    // supabase/migrations/20260717000700_account_status_enforcement.sql）的
+    // with check 有三个条件：sender_id = auth.uid()、当前用户仍是该会话
+    // 的有效成员、以及 not is_account_restricted()。42501 是 PostgREST 对
+    // "任意 with check 失败"统一返回的错误码，本身分不清是哪个条件失败——
+    // 但这里的 sender_id 只可能来自 input.senderId，而 sendMessage 唯一的
+    // 调用方 conversation-page.tsx 只会传当前登录用户自己的
+    // session.user.id，不接受任意/伪造输入；"是否仍是会话成员"这一条在
+    // RequireAuth 保护的 /messages/:conversationId 页面里，用户能看到这个
+    // 会话本身就已经隐含了他是成员（会话列表/详情查询都受
+    // conversations_select_member 这条 RLS 限制），正常操作路径下不会在
+    // 发消息这一步才突然失去成员资格。因此对这个调用点而言，42501 在实践
+    // 中只可能是 is_account_restricted() 失败，可以放心地映射成一条专门
+    // 的、可操作的提示，而不是把原始的"违反行级安全策略"报给用户。
+    if (error.code === RLS_VIOLATION_CODE) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
     throw new AppError(error.message, "MESSAGE_SEND_FAILED", error);
   }
   if (!data) {

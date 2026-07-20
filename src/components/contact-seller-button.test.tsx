@@ -26,6 +26,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 
 import { useAuthStore } from "../store/auth-store";
 import { renderWithProviders } from "../test/render-with-providers";
+import { AppError } from "../utils/app-error";
 import { ContactSellerButton } from "./contact-seller-button";
 
 const initialAuthState = useAuthStore.getState();
@@ -121,6 +122,31 @@ describe("ContactSellerButton", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent(
       "会话创建失败，请稍后重试。"
+    );
+    expect(navigateMock).not.toHaveBeenCalledWith(
+      expect.stringMatching(/^\/messages\//)
+    );
+  });
+
+  it("shows the account-restricted message and does not navigate when the mutation rejects with ACCOUNT_RESTRICTED", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderWithProviders(<ContactSellerButton postId="post-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "联系发布者" }));
+
+    const { onError } = mutateMock.mock.calls[0][1];
+    act(() => {
+      onError(
+        new AppError(
+          "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
+          "ACCOUNT_RESTRICTED"
+        )
+      );
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
     );
     expect(navigateMock).not.toHaveBeenCalledWith(
       expect.stringMatching(/^\/messages\//)

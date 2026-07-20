@@ -1,6 +1,19 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
 import { AppError } from "../utils/app-error";
 
+// create_direct_conversation() 在账号受限时抛出的异常文本，跟
+// supabase/migrations/20260717000700_account_status_enforcement.sql 里
+// `raise exception 'restricted accounts cannot start a direct
+// conversation'` 逐字一致。这个函数是显式 plpgsql raise exception（不是
+// RLS with check），不同失败原因有各自不同的文本，PostgREST 把 message
+// 原样透传在 error.message 上，所以这里能（也应该）按文本匹配来区分具体
+// 原因，不像 posts/favorites/reports/messages 那四个走 RLS with check 的
+// 插入操作那样，只能拿到一个分不清原因的 42501 错误码。
+const ACCOUNT_RESTRICTED_ERROR_TEXT =
+  "restricted accounts cannot start a direct conversation";
+const ACCOUNT_RESTRICTED_MESSAGE =
+  "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
+
 export interface CreateDirectConversationResult {
   conversationId: string;
 }
@@ -106,6 +119,9 @@ export async function createDirectConversation(
   );
 
   if (error) {
+    if (error.message?.includes(ACCOUNT_RESTRICTED_ERROR_TEXT)) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
     throw new AppError(error.message, "CONVERSATION_CREATE_FAILED", error);
   }
   if (!data) {
