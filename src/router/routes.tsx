@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
+import { AdminCategoriesPage } from "../pages/admin/categories-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
@@ -100,6 +101,16 @@ export const router = createBrowserRouter([
       <RequireAuth>
         <RequireAdmin>
           <AdminUsersPage />
+        </RequireAdmin>
+      </RequireAuth>
+    )
+  },
+  {
+    path: "/admin/categories",
+    element: (
+      <RequireAuth>
+        <RequireAdmin>
+          <AdminCategoriesPage />
         </RequireAdmin>
       </RequireAuth>
     )

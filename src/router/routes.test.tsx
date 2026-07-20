@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   listActiveCategories,
+  listAllCategoriesForAdmin,
   listActiveLocations,
   listApprovedPosts,
   listPendingPosts,
@@ -18,6 +19,7 @@ const {
   listProfilesForAdmin
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
+  listAllCategoriesForAdmin: vi.fn(),
   listActiveLocations: vi.fn(),
   listApprovedPosts: vi.fn(),
   listPendingPosts: vi.fn(),
@@ -32,7 +34,8 @@ const {
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
-  listActiveCategories
+  listActiveCategories,
+  listAllCategoriesForAdmin
 }));
 vi.mock("../repositories/locations-repository", () => ({
   listActiveLocations
@@ -65,6 +68,7 @@ vi.mock("../repositories/profiles-repository", () => ({
 }));
 
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
+import { AdminCategoriesPage } from "../pages/admin/categories-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
@@ -167,6 +171,16 @@ function renderAt(path: string) {
           </RequireAuth>
         )
       },
+      {
+        path: "/admin/categories",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminCategoriesPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
       { path: "/login", element: <LoginPage /> },
       { path: "/register", element: <RegisterPage /> },
       { path: "/forgot-password", element: <ForgotPasswordPage /> },
@@ -190,6 +204,7 @@ describe("app routes", () => {
   beforeEach(() => {
     useAuthStore.setState(initialAuthState, true);
     listActiveCategories.mockReset();
+    listAllCategoriesForAdmin.mockReset();
     listActiveLocations.mockReset();
     listApprovedPosts.mockReset();
     listPendingPosts.mockReset();
@@ -204,6 +219,7 @@ describe("app routes", () => {
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
+    listAllCategoriesForAdmin.mockResolvedValue([]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
     listPendingPosts.mockResolvedValue([]);
@@ -457,6 +473,36 @@ describe("app routes", () => {
 
     expect(
       await screen.findByRole("heading", { name: "账号管理" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/categories to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/admin/categories");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/categories to / when logged in as a non-admin (reuses RequireAdmin)", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("user");
+
+    renderAt("/admin/categories");
+
+    expect(
+      await screen.findByRole("heading", { name: "Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the categories admin page at /admin/categories when logged in as an admin", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("admin");
+
+    renderAt("/admin/categories");
+
+    expect(
+      await screen.findByRole("heading", { name: "分类管理" })
     ).toBeInTheDocument();
   });
 });
