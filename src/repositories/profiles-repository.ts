@@ -30,6 +30,37 @@ export async function getCurrentUserRole(userId: string): Promise<string | null>
   return data?.role ?? null;
 }
 
+export interface MyProfile {
+  displayName: string;
+}
+
+/**
+ * 只读当前登录用户自己的 display_name，供 /profile 页面展示用（跟
+ * getCurrentUserRole 只取 role 一列是同一个"按需只选一列"的原则，不复用
+ * 同一个函数——两者用途不同、以后各自演化的字段也可能不同，没必要为了
+ * 省一个函数而耦合在一起）。
+ *
+ * profiles_select_public_or_self 这条已有的 RLS 策略保证任何登录用户都能
+ * 读到自己的 profile 行（见上面 getCurrentUserRole 的注释），不需要新增
+ * RLS/migration，纯前端新增。
+ *
+ * 用户不存在（理论上不会发生，但防御性处理）时返回 null，只有真正的
+ * Supabase 查询失败才包装成 AppError。
+ */
+export async function getMyProfile(userId: string): Promise<MyProfile | null> {
+  const { data, error } = await getSupabaseClient()
+    .from("profiles")
+    .select("display_name")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "MY_PROFILE_FETCH_FAILED", error);
+  }
+
+  return data ? { displayName: data.display_name } : null;
+}
+
 export interface AdminProfileListItem {
   id: string;
   displayName: string;

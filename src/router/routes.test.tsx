@@ -16,7 +16,10 @@ const {
   listMyConversations,
   listReportsForModeration,
   getCurrentUserRole,
-  listProfilesForAdmin
+  listProfilesForAdmin,
+  getMyProfile,
+  listFavoritedPostIds,
+  listFavoritedPosts
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listAllCategoriesForAdmin: vi.fn(),
@@ -30,7 +33,10 @@ const {
   listMyConversations: vi.fn(),
   listReportsForModeration: vi.fn(),
   getCurrentUserRole: vi.fn(),
-  listProfilesForAdmin: vi.fn()
+  listProfilesForAdmin: vi.fn(),
+  getMyProfile: vi.fn(),
+  listFavoritedPostIds: vi.fn(),
+  listFavoritedPosts: vi.fn()
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
@@ -64,15 +70,23 @@ vi.mock("../repositories/reports-repository", async () => {
 });
 vi.mock("../repositories/profiles-repository", () => ({
   getCurrentUserRole,
-  listProfilesForAdmin
+  listProfilesForAdmin,
+  getMyProfile
+}));
+vi.mock("../repositories/favorites-repository", () => ({
+  listFavoritedPostIds,
+  listFavoritedPosts
 }));
 
+import { AppShell } from "../components/app-shell";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
+import { CategoriesPage } from "../pages/categories/categories-page";
 import { CategoryPage } from "../pages/category/category-page";
+import { FavoritesPage } from "../pages/favorites/favorites-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
@@ -80,6 +94,7 @@ import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
+import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
@@ -96,96 +111,119 @@ function renderAt(path: string) {
   });
   const router = createMemoryRouter(
     [
-      { path: "/", element: <HomePage /> },
-      { path: "/category/:slug", element: <CategoryPage /> },
-      { path: "/post/:id", element: <PostDetailPage /> },
       {
-        path: "/publish",
-        element: (
-          <RequireAuth>
-            <PublishPage />
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/post/:id/report",
-        element: (
-          <RequireAuth>
-            <ReportPostPage />
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/messages",
-        element: (
-          <RequireAuth>
-            <ConversationListPage />
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/messages/:conversationId",
-        element: (
-          <RequireAuth>
-            <MessageConversationPage />
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/admin/posts",
-        element: (
-          <RequireAuth>
-            <RequireAdmin>
-              <AdminPendingPostsPage />
-            </RequireAdmin>
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/admin/posts/all",
-        element: (
-          <RequireAuth>
-            <RequireAdmin>
-              <AdminAllPostsPage />
-            </RequireAdmin>
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/admin/reports",
-        element: (
-          <RequireAuth>
-            <RequireAdmin>
-              <AdminReportsPage />
-            </RequireAdmin>
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/admin/users",
-        element: (
-          <RequireAuth>
-            <RequireAdmin>
-              <AdminUsersPage />
-            </RequireAdmin>
-          </RequireAuth>
-        )
-      },
-      {
-        path: "/admin/categories",
-        element: (
-          <RequireAuth>
-            <RequireAdmin>
-              <AdminCategoriesPage />
-            </RequireAdmin>
-          </RequireAuth>
-        )
-      },
-      { path: "/login", element: <LoginPage /> },
-      { path: "/register", element: <RegisterPage /> },
-      { path: "/forgot-password", element: <ForgotPasswordPage /> },
-      { path: "/reset-password", element: <ResetPasswordPage /> },
-      { path: "*", element: <NotFoundPage /> }
+        path: "/",
+        element: <AppShell />,
+        children: [
+          { index: true, element: <HomePage /> },
+          { path: "category/:slug", element: <CategoryPage /> },
+          { path: "categories", element: <CategoriesPage /> },
+          { path: "post/:id", element: <PostDetailPage /> },
+          {
+            path: "publish",
+            element: (
+              <RequireAuth>
+                <PublishPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "post/:id/report",
+            element: (
+              <RequireAuth>
+                <ReportPostPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "messages",
+            element: (
+              <RequireAuth>
+                <ConversationListPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "messages/:conversationId",
+            element: (
+              <RequireAuth>
+                <MessageConversationPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "favorites",
+            element: (
+              <RequireAuth>
+                <FavoritesPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "profile",
+            element: (
+              <RequireAuth>
+                <ProfilePage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "admin/posts",
+            element: (
+              <RequireAuth>
+                <RequireAdmin>
+                  <AdminPendingPostsPage />
+                </RequireAdmin>
+              </RequireAuth>
+            )
+          },
+          {
+            path: "admin/posts/all",
+            element: (
+              <RequireAuth>
+                <RequireAdmin>
+                  <AdminAllPostsPage />
+                </RequireAdmin>
+              </RequireAuth>
+            )
+          },
+          {
+            path: "admin/reports",
+            element: (
+              <RequireAuth>
+                <RequireAdmin>
+                  <AdminReportsPage />
+                </RequireAdmin>
+              </RequireAuth>
+            )
+          },
+          {
+            path: "admin/users",
+            element: (
+              <RequireAuth>
+                <RequireAdmin>
+                  <AdminUsersPage />
+                </RequireAdmin>
+              </RequireAuth>
+            )
+          },
+          {
+            path: "admin/categories",
+            element: (
+              <RequireAuth>
+                <RequireAdmin>
+                  <AdminCategoriesPage />
+                </RequireAdmin>
+              </RequireAuth>
+            )
+          },
+          { path: "login", element: <LoginPage /> },
+          { path: "register", element: <RegisterPage /> },
+          { path: "forgot-password", element: <ForgotPasswordPage /> },
+          { path: "reset-password", element: <ResetPasswordPage /> },
+          { path: "*", element: <NotFoundPage /> }
+        ]
+      }
     ],
     { initialEntries: [path] }
   );
@@ -216,6 +254,9 @@ describe("app routes", () => {
     listReportsForModeration.mockReset();
     getCurrentUserRole.mockReset();
     listProfilesForAdmin.mockReset();
+    getMyProfile.mockReset();
+    listFavoritedPostIds.mockReset();
+    listFavoritedPosts.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
@@ -228,6 +269,9 @@ describe("app routes", () => {
     listMyConversations.mockResolvedValue([]);
     listReportsForModeration.mockResolvedValue([]);
     listProfilesForAdmin.mockResolvedValue([]);
+    getMyProfile.mockResolvedValue({ displayName: "Alice" });
+    listFavoritedPostIds.mockResolvedValue([]);
+    listFavoritedPosts.mockResolvedValue([]);
   });
 
   it("renders the home page at /", () => {
@@ -241,6 +285,14 @@ describe("app routes", () => {
 
     expect(
       await screen.findByRole("heading", { name: "租房" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the categories page at /categories", async () => {
+    renderAt("/categories");
+
+    expect(
+      await screen.findByRole("heading", { name: "分类" })
     ).toBeInTheDocument();
   });
 
@@ -354,6 +406,41 @@ describe("app routes", () => {
     renderAt("/messages/conversation-1");
 
     expect(await screen.findByRole("heading", { name: "会话" })).toBeInTheDocument();
+  });
+
+  it("redirects /favorites to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/favorites");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the favorites page at /favorites when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/favorites");
+
+    expect(await screen.findByRole("heading", { name: "我的收藏" })).toBeInTheDocument();
+  });
+
+  it("redirects /profile to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/profile");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the profile page at /profile when a session exists", async () => {
+    useAuthStore.getState().setSession({
+      user: { id: "user-1", email: "alice@example.com" }
+    } as never);
+    getCurrentUserRole.mockResolvedValue("user");
+
+    renderAt("/profile");
+
+    expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
   });
 
   it("redirects /admin/posts to /login when there is no session (reuses RequireAuth)", () => {

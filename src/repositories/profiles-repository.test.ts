@@ -17,7 +17,7 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
-import { getCurrentUserRole, listProfilesForAdmin } from "./profiles-repository";
+import { getCurrentUserRole, getMyProfile, listProfilesForAdmin } from "./profiles-repository";
 
 describe("getCurrentUserRole", () => {
   beforeEach(() => {
@@ -53,6 +53,47 @@ describe("getCurrentUserRole", () => {
 
     await expect(getCurrentUserRole("user-1")).rejects.toMatchObject({
       code: "PROFILE_ROLE_FETCH_FAILED"
+    });
+  });
+});
+
+describe("getMyProfile", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    maybeSingleMock.mockReset();
+  });
+
+  it("returns the display name when the profile row exists", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { display_name: "Alice" },
+      error: null
+    });
+
+    const result = await getMyProfile("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("profiles");
+    expect(queryBuilder.select).toHaveBeenCalledWith("display_name");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-1");
+    expect(result).toEqual({ displayName: "Alice" });
+  });
+
+  it("returns null without throwing when there is no matching profile row", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(getMyProfile("missing-user")).resolves.toBeNull();
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(getMyProfile("user-1")).rejects.toMatchObject({
+      code: "MY_PROFILE_FETCH_FAILED"
     });
   });
 });
