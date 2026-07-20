@@ -1,15 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { listActiveCategories } = vi.hoisted(() => ({
-  listActiveCategories: vi.fn()
-}));
-
-vi.mock("../repositories/categories-repository", () => ({
-  listActiveCategories
-}));
+import { afterEach, describe, expect, it } from "vitest";
 
 import { AppHeader } from "./app-header";
 
@@ -52,15 +44,6 @@ describe("AppHeader", () => {
     cleanup();
   });
 
-  beforeEach(() => {
-    listActiveCategories.mockReset();
-    listActiveCategories.mockResolvedValue([
-      { id: "cat-1", slug: "rent", nameZh: "租房" },
-      { id: "cat-2", slug: "wanted", nameZh: "求租" },
-      { id: "cat-3", slug: "used", nameZh: "二手" }
-    ]);
-  });
-
   it("does not render a back button on /", () => {
     renderAt(["/"]);
 
@@ -82,24 +65,6 @@ describe("AppHeader", () => {
     expect(screen.getByRole("link", { name: "Saminest" })).toHaveAttribute(
       "href",
       "/"
-    );
-  });
-
-  it("renders '首页' plus one link per category, from the database not hardcoded", async () => {
-    renderAt(["/"]);
-
-    expect(screen.getByRole("link", { name: "首页" })).toHaveAttribute("href", "/");
-    expect(await screen.findByRole("link", { name: "租房" })).toHaveAttribute(
-      "href",
-      "/category/rent"
-    );
-    expect(screen.getByRole("link", { name: "求租" })).toHaveAttribute(
-      "href",
-      "/category/wanted"
-    );
-    expect(screen.getByRole("link", { name: "二手" })).toHaveAttribute(
-      "href",
-      "/category/used"
     );
   });
 
