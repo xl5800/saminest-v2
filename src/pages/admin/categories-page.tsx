@@ -260,10 +260,14 @@ export function AdminCategoriesPage() {
     trimmedCreateSlug !== "" && existingSlugs.has(trimmedCreateSlug);
 
   const createForm = (
-    <form onSubmit={handleCreateSubmit} noValidate>
-      <h2>新建分类</h2>
-      {createError ? <p role="alert">{createError}</p> : null}
-      <label>
+    <form onSubmit={handleCreateSubmit} noValidate className="mb-6 rounded-lg border border-border bg-white p-4">
+      <h2 className="mb-3 text-sm font-semibold text-text">新建分类</h2>
+      {createError ? (
+        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          {createError}
+        </p>
+      ) : null}
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
         Slug
         <input
           type="text"
@@ -272,10 +276,11 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, slug: event.target.value }))
           }
           disabled={isCreating}
+          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
-      {showSlugDuplicateHint ? <p>{SLUG_DUPLICATE_HINT_MESSAGE}</p> : null}
-      <label>
+      {showSlugDuplicateHint ? <p className="text-xs text-warning">{SLUG_DUPLICATE_HINT_MESSAGE}</p> : null}
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
         中文名称
         <input
           type="text"
@@ -284,9 +289,10 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, nameZh: event.target.value }))
           }
           disabled={isCreating}
+          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
-      <label>
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
         英文名称
         <input
           type="text"
@@ -295,9 +301,10 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, nameEn: event.target.value }))
           }
           disabled={isCreating}
+          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
-      <label>
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
         描述
         <textarea
           value={createDraft.description}
@@ -305,9 +312,10 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, description: event.target.value }))
           }
           disabled={isCreating}
+          className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
-      <label>
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
         排序
         <input
           type="number"
@@ -318,9 +326,14 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, sortOrder: event.target.value }))
           }
           disabled={isCreating}
+          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
-      <button type="submit" disabled={isCreating}>
+      <button
+        type="submit"
+        disabled={isCreating}
+        className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+      >
         新建分类
       </button>
     </form>
@@ -328,20 +341,22 @@ export function AdminCategoriesPage() {
 
   if (isPending) {
     return (
-      <main>
-        <h1>分类管理</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">分类管理</h1>
         {createForm}
-        <p role="status">加载中…</p>
+        <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <h1>分类管理</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">分类管理</h1>
         {createForm}
-        <p role="alert">分类加载失败，请稍后重试。</p>
+        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          分类加载失败，请稍后重试。
+        </p>
       </main>
     );
   }
@@ -349,11 +364,11 @@ export function AdminCategoriesPage() {
   const visibleCategories = categories ?? [];
 
   return (
-    <main>
-      <h1>分类管理</h1>
+    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">分类管理</h1>
       {createForm}
       {visibleCategories.length === 0 ? (
-        <p role="status">暂无分类</p>
+        <p role="status" className="text-sm text-text-muted">暂无分类</p>
       ) : (
         <ul>
           {visibleCategories.map((category) => {
@@ -362,16 +377,20 @@ export function AdminCategoriesPage() {
             const draft = editDrafts[category.id] ?? draftFromCategory(category);
 
             return (
-              <li key={category.id}>
+              <li key={category.id} className="mb-2 rounded-lg border border-border bg-white p-4">
                 {rowErrors[category.id] ? (
-                  <p role="alert">{rowErrors[category.id]}</p>
+                  <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {rowErrors[category.id]}
+                  </p>
                 ) : null}
                 {isEditOpen ? (
-                  <div>
+                  <div className="mt-3 rounded border border-border bg-bg p-3">
                     {editValidationErrors[category.id] ? (
-                      <p role="alert">{editValidationErrors[category.id]}</p>
+                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                        {editValidationErrors[category.id]}
+                      </p>
                     ) : null}
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       Slug
                       <input
                         type="text"
@@ -383,9 +402,10 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       中文名称
                       <input
                         type="text"
@@ -397,9 +417,10 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       英文名称
                       <input
                         type="text"
@@ -411,9 +432,10 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       描述
                       <textarea
                         value={draft.description}
@@ -427,9 +449,10 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       排序
                       <input
                         type="number"
@@ -443,47 +466,64 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => handleEditSave(category.id)}
-                    >
-                      保存
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => cancelEdit(category.id)}
-                    >
-                      取消
-                    </button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => handleEditSave(category.id)}
+                        className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        保存
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => cancelEdit(category.id)}
+                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <>
-                    <span>{category.slug}</span>
-                    <span>{category.nameZh}</span>
-                    <span>{category.nameEn ?? ""}</span>
-                    <span>{category.description ?? ""}</span>
-                    <span>{category.sortOrder}</span>
-                    <span>
+                    <span className="mr-3 text-sm text-text-muted">{category.slug}</span>
+                    <span className="mr-3 text-sm text-text">{category.nameZh}</span>
+                    <span className="mr-3 text-sm text-text-muted">{category.nameEn ?? ""}</span>
+                    <span className="mr-3 text-sm text-text-muted">{category.description ?? ""}</span>
+                    <span className="mr-3 text-sm text-text-muted">{category.sortOrder}</span>
+                    <span
+                      className={`mr-3 rounded-full px-2 py-0.5 text-xs font-medium ${
+                        category.isActive ? "bg-success/10 text-success" : "bg-bg text-text-muted"
+                      }`}
+                    >
                       {IS_ACTIVE_LABELS[category.isActive ? "true" : "false"]}
                     </span>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => openEdit(category)}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => handleToggleActive(category)}
-                    >
-                      {category.isActive ? "停用" : "启用"}
-                    </button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => openEdit(category)}
+                        className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        编辑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => handleToggleActive(category)}
+                        className={
+                          category.isActive
+                            ? "rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                            : "rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                        }
+                      >
+                        {category.isActive ? "停用" : "启用"}
+                      </button>
+                    </div>
                   </>
                 )}
               </li>

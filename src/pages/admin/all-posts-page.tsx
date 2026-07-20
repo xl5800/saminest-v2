@@ -122,11 +122,12 @@ export function AdminAllPostsPage() {
   }
 
   const statusFilterControl = (
-    <label>
+    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
       状态
       <select
         value={statusFilter}
         onChange={(event) => handleStatusFilterChange(event.target.value)}
+        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {STATUS_FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -139,20 +140,22 @@ export function AdminAllPostsPage() {
 
   if (isPending) {
     return (
-      <main>
-        <h1>全部帖子</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">全部帖子</h1>
         {statusFilterControl}
-        <p role="status">加载中…</p>
+        <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <h1>全部帖子</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">全部帖子</h1>
         {statusFilterControl}
-        <p role="alert">帖子加载失败，请稍后重试。</p>
+        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          帖子加载失败，请稍后重试。
+        </p>
       </main>
     );
   }
@@ -160,31 +163,59 @@ export function AdminAllPostsPage() {
   const visiblePosts = posts ?? [];
 
   return (
-    <main>
-      <h1>全部帖子</h1>
+    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">全部帖子</h1>
       {statusFilterControl}
       {visiblePosts.length === 0 ? (
-        <p role="status">暂无帖子</p>
+        <p role="status" className="text-sm text-text-muted">暂无帖子</p>
       ) : (
         <ul>
           {visiblePosts.map((post) => {
             const isActioning = actioningPostId === post.id;
             const isDeleteFormOpen = openDeleteRowId === post.id;
+            const statusVariant =
+              post.status === "approved"
+                ? "bg-success/10 text-success"
+                : post.status === "pending"
+                  ? "bg-warning/10 text-warning"
+                  : post.status === "rejected"
+                    ? "bg-danger/10 text-danger"
+                    : "bg-bg text-text-muted";
 
             return (
-              <li key={post.id}>
-                <span>{post.title}</span>
-                <span>{post.authorName}</span>
-                <span>{post.categoryName}</span>
-                <span>{STATUS_LABELS[post.status] ?? post.status}</span>
-                <span>{formatPublishedAt(post.createdAt)}</span>
-                {rowErrors[post.id] ? <p role="alert">{rowErrors[post.id]}</p> : null}
+              <li key={post.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+                <span className="mr-3 text-sm text-text">{post.title}</span>
+                <span className="mr-3 text-sm text-text-muted">{post.authorName}</span>
+                <span className="mr-3 text-sm text-text-muted">{post.categoryName}</span>
+                <span className={`mr-3 rounded-full px-2 py-0.5 text-xs font-medium ${statusVariant}`}>
+                  {STATUS_LABELS[post.status] ?? post.status}
+                </span>
+                <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(post.createdAt)}</span>
+                {rowErrors[post.id] ? (
+                  <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {rowErrors[post.id]}
+                  </p>
+                ) : null}
+                {isDeleteFormOpen ? null : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => openDeleteForm(post.id)}
+                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      删除
+                    </button>
+                  </div>
+                )}
                 {isDeleteFormOpen ? (
-                  <div>
+                  <div className="mt-3 rounded border border-border bg-bg p-3">
                     {deleteValidationErrors[post.id] ? (
-                      <p role="alert">{deleteValidationErrors[post.id]}</p>
+                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                        {deleteValidationErrors[post.id]}
+                      </p>
                     ) : null}
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       删除原因
                       <input
                         type="text"
@@ -196,32 +227,29 @@ export function AdminAllPostsPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => handleConfirmDelete(post.id)}
-                    >
-                      确认删除
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => cancelDeleteForm(post.id)}
-                    >
-                      取消
-                    </button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => handleConfirmDelete(post.id)}
+                        className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        确认删除
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => cancelDeleteForm(post.id)}
+                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={isActioning}
-                    onClick={() => openDeleteForm(post.id)}
-                  >
-                    删除
-                  </button>
-                )}
+                ) : null}
               </li>
             );
           })}

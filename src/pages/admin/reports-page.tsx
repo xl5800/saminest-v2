@@ -213,9 +213,13 @@ export function AdminReportsPage() {
   }
 
   const statusFilter = (
-    <label>
+    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
       状态
-      <select value={status} onChange={(event) => handleStatusChange(event.target.value)}>
+      <select
+        value={status}
+        onChange={(event) => handleStatusChange(event.target.value)}
+        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+      >
         {STATUS_FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -226,27 +230,31 @@ export function AdminReportsPage() {
   );
 
   const partialFailureBanner = partialFailureMessage ? (
-    <p role="alert">{partialFailureMessage}</p>
+    <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+      {partialFailureMessage}
+    </p>
   ) : null;
 
   if (isPending) {
     return (
-      <main>
-        <h1>举报处理</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
         {statusFilter}
         {partialFailureBanner}
-        <p role="status">加载中…</p>
+        <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <h1>举报处理</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
         {statusFilter}
         {partialFailureBanner}
-        <p role="alert">举报加载失败，请稍后重试。</p>
+        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          举报加载失败，请稍后重试。
+        </p>
       </main>
     );
   }
@@ -254,12 +262,12 @@ export function AdminReportsPage() {
   const visibleReports = reports ?? [];
 
   return (
-    <main>
-      <h1>举报处理</h1>
+    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
       {statusFilter}
       {partialFailureBanner}
       {visibleReports.length === 0 ? (
-        <p role="status">暂无举报</p>
+        <p role="status" className="text-sm text-text-muted">暂无举报</p>
       ) : (
         <ul>
           {visibleReports.map((report) => {
@@ -267,26 +275,54 @@ export function AdminReportsPage() {
             const isFormOpen = openFormRowId === report.id;
 
             return (
-              <li key={report.id}>
-                <span>{REASON_LABELS[report.reasonCode] ?? report.reasonCode}</span>
-                <span>{report.reporterName}</span>
-                <span>
+              <li key={report.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+                <span className="mr-3 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
+                  {REASON_LABELS[report.reasonCode] ?? report.reasonCode}
+                </span>
+                <span className="mr-3 text-sm text-text">{report.reporterName}</span>
+                <span className="mr-3 text-sm text-text-muted">
                   {report.targetType === "post" ? (
-                    <Link to={`/post/${report.targetId}`}>
+                    <Link to={`/post/${report.targetId}`} className="text-primary hover:underline">
                       {report.targetType} / {report.targetId}
                     </Link>
                   ) : (
                     `${report.targetType} / ${report.targetId}`
                   )}
                 </span>
-                <span>{formatPublishedAt(report.createdAt)}</span>
-                {rowErrors[report.id] ? <p role="alert">{rowErrors[report.id]}</p> : null}
+                <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(report.createdAt)}</span>
+                {rowErrors[report.id] ? (
+                  <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {rowErrors[report.id]}
+                  </p>
+                ) : null}
+                {isFormOpen ? null : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => openForm(report.id, "resolve")}
+                      className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      标记已处理
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => openForm(report.id, "dismiss")}
+                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      驳回举报
+                    </button>
+                  </div>
+                )}
                 {isFormOpen ? (
-                  <div>
+                  <div className="mt-3 rounded border border-border bg-bg p-3">
                     {validationErrors[report.id] ? (
-                      <p role="alert">{validationErrors[report.id]}</p>
+                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                        {validationErrors[report.id]}
+                      </p>
                     ) : null}
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       处理说明
                       <input
                         type="text"
@@ -298,11 +334,12 @@ export function AdminReportsPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     {report.targetType === "post" ? (
                       <div>
-                        <label>
+                        <label className="mb-2 flex items-center gap-2 text-sm text-text">
                           <input
                             type="checkbox"
                             checked={deleteChecked[report.id] ?? false}
@@ -313,15 +350,18 @@ export function AdminReportsPage() {
                               }))
                             }
                             disabled={isActioning}
+                            className="accent-primary"
                           />
                           同时删除该帖子
                         </label>
                         {deleteChecked[report.id] ? (
                           <>
                             {deleteValidationErrors[report.id] ? (
-                              <p role="alert">{deleteValidationErrors[report.id]}</p>
+                              <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                                {deleteValidationErrors[report.id]}
+                              </p>
                             ) : null}
-                            <label>
+                            <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                               删除原因
                               <input
                                 type="text"
@@ -333,47 +373,39 @@ export function AdminReportsPage() {
                                   }))
                                 }
                                 disabled={isActioning}
+                                className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                               />
                             </label>
                           </>
                         ) : null}
                       </div>
                     ) : null}
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() =>
-                        handleConfirm(report.id, openFormAction as PendingAction)
-                      }
-                    >
-                      {openFormAction === "resolve" ? "确认标记已处理" : "确认驳回举报"}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => cancelForm(report.id)}
-                    >
-                      取消
-                    </button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() =>
+                          handleConfirm(report.id, openFormAction as PendingAction)
+                        }
+                        className={
+                          openFormAction === "resolve"
+                            ? "rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                            : "rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        }
+                      >
+                        {openFormAction === "resolve" ? "确认标记已处理" : "确认驳回举报"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => cancelForm(report.id)}
+                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => openForm(report.id, "resolve")}
-                    >
-                      标记已处理
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => openForm(report.id, "dismiss")}
-                    >
-                      驳回举报
-                    </button>
-                  </>
-                )}
+                ) : null}
               </li>
             );
           })}

@@ -144,34 +144,42 @@ export function AdminUsersPage() {
 
   const searchForm = (
     <form onSubmit={handleSearchSubmit}>
-      <label>
+      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
         搜索昵称或邮箱
         <input
           type="text"
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
+          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
-      <button type="submit">搜索</button>
+      <button
+        type="submit"
+        className="ml-2 rounded bg-primary px-3 py-1 text-sm font-semibold text-white hover:bg-primary-hover"
+      >
+        搜索
+      </button>
     </form>
   );
 
   if (isPending) {
     return (
-      <main>
-        <h1>账号管理</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">账号管理</h1>
         {searchForm}
-        <p role="status">加载中…</p>
+        <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <h1>账号管理</h1>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">账号管理</h1>
         {searchForm}
-        <p role="alert">用户加载失败，请稍后重试。</p>
+        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          用户加载失败，请稍后重试。
+        </p>
       </main>
     );
   }
@@ -179,11 +187,11 @@ export function AdminUsersPage() {
   const visibleUsers = users ?? [];
 
   return (
-    <main>
-      <h1>账号管理</h1>
+    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">账号管理</h1>
       {searchForm}
       {visibleUsers.length === 0 ? (
-        <p role="status">暂无用户</p>
+        <p role="status" className="text-sm text-text-muted">暂无用户</p>
       ) : (
         <ul>
           {visibleUsers.map((user) => {
@@ -194,21 +202,59 @@ export function AdminUsersPage() {
               Object.keys(ACTION_LABELS) as StatusAction[]
             ).filter((action) => action !== user.accountStatus);
 
+            const statusVariant =
+              user.accountStatus === "active"
+                ? "bg-success/10 text-success"
+                : user.accountStatus === "restricted"
+                  ? "bg-warning/10 text-warning"
+                  : user.accountStatus === "suspended"
+                    ? "bg-danger/10 text-danger"
+                    : "bg-bg text-text-muted";
+            const actionButtonClassName: Record<StatusAction, string> = {
+              restricted:
+                "rounded border border-warning px-3 py-1.5 text-sm font-medium text-warning hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60",
+              suspended:
+                "rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60",
+              active:
+                "rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            };
+
             return (
-              <li key={user.id}>
-                <span>{user.displayName}</span>
-                <span>{user.email}</span>
-                <span>{user.role}</span>
-                <span>
+              <li key={user.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+                <span className="mr-3 text-sm text-text">{user.displayName}</span>
+                <span className="mr-3 text-sm text-text-muted">{user.email}</span>
+                <span className="mr-3 text-sm text-text-muted">{user.role}</span>
+                <span className={`mr-3 rounded-full px-2 py-0.5 text-xs font-medium ${statusVariant}`}>
                   {ACCOUNT_STATUS_LABELS[user.accountStatus] ?? user.accountStatus}
                 </span>
-                {rowErrors[user.id] ? <p role="alert">{rowErrors[user.id]}</p> : null}
+                {rowErrors[user.id] ? (
+                  <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {rowErrors[user.id]}
+                  </p>
+                ) : null}
+                {isSelf ? null : isFormOpen ? null : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {availableActions.map((action) => (
+                      <button
+                        key={action}
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => openForm(user.id, action)}
+                        className={actionButtonClassName[action]}
+                      >
+                        {ACTION_LABELS[action]}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {isSelf ? null : isFormOpen ? (
-                  <div>
+                  <div className="mt-3 rounded border border-border bg-bg p-3">
                     {validationErrors[user.id] ? (
-                      <p role="alert">{validationErrors[user.id]}</p>
+                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                        {validationErrors[user.id]}
+                      </p>
                     ) : null}
-                    <label>
+                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                       原因
                       <input
                         type="text"
@@ -220,37 +266,31 @@ export function AdminUsersPage() {
                           }))
                         }
                         disabled={isActioning}
+                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() =>
-                        handleConfirm(user.id, openFormAction as StatusAction)
-                      }
-                    >
-                      确认{ACTION_LABELS[openFormAction as StatusAction]}
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => cancelForm(user.id)}
-                    >
-                      取消
-                    </button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() =>
+                          handleConfirm(user.id, openFormAction as StatusAction)
+                        }
+                        className={actionButtonClassName[openFormAction as StatusAction]}
+                      >
+                        确认{ACTION_LABELS[openFormAction as StatusAction]}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => cancelForm(user.id)}
+                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        取消
+                      </button>
+                    </div>
                   </div>
-                ) : (
-                  availableActions.map((action) => (
-                    <button
-                      key={action}
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => openForm(user.id, action)}
-                    >
-                      {ACTION_LABELS[action]}
-                    </button>
-                  ))
-                )}
+                ) : null}
               </li>
             );
           })}

@@ -102,18 +102,20 @@ export function AdminPendingPostsPage() {
 
   if (isPending) {
     return (
-      <main>
-        <h1>待审核帖子</h1>
-        <p role="status">加载中…</p>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
+        <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <h1>待审核帖子</h1>
-        <p role="alert">帖子加载失败，请稍后重试。</p>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
+        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          帖子加载失败，请稍后重试。
+        </p>
       </main>
     );
   }
@@ -122,41 +124,60 @@ export function AdminPendingPostsPage() {
 
   if (visiblePosts.length === 0) {
     return (
-      <main>
-        <h1>待审核帖子</h1>
-        <p role="status">暂无待审核帖子</p>
+      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
+        <p role="status" className="text-sm text-text-muted">暂无待审核帖子</p>
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>待审核帖子</h1>
+    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
       <ul>
         {visiblePosts.map((post) => {
           const isActioning = actioningPostId === post.id;
           const isRejectFormOpen = openRejectRowId === post.id;
 
           return (
-            <li key={post.id}>
-              <span>{post.title}</span>
-              <span>{post.authorName}</span>
-              <span>{post.categoryName}</span>
-              <span>{formatPublishedAt(post.createdAt)}</span>
-              {rowErrors[post.id] ? <p role="alert">{rowErrors[post.id]}</p> : null}
-              <button
-                type="button"
-                disabled={isActioning}
-                onClick={() => handleApprove(post.id)}
-              >
-                通过
-              </button>
+            <li key={post.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+              <span className="mr-3 text-sm text-text">{post.title}</span>
+              <span className="mr-3 text-sm text-text-muted">{post.authorName}</span>
+              <span className="mr-3 text-sm text-text-muted">{post.categoryName}</span>
+              <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(post.createdAt)}</span>
+              {rowErrors[post.id] ? (
+                <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {rowErrors[post.id]}
+                </p>
+              ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={isActioning}
+                  onClick={() => handleApprove(post.id)}
+                  className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  通过
+                </button>
+                {isRejectFormOpen ? null : (
+                  <button
+                    type="button"
+                    disabled={isActioning}
+                    onClick={() => openRejectForm(post.id)}
+                    className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    驳回
+                  </button>
+                )}
+              </div>
               {isRejectFormOpen ? (
-                <div>
+                <div className="mt-3 rounded border border-border bg-bg p-3">
                   {rejectValidationErrors[post.id] ? (
-                    <p role="alert">{rejectValidationErrors[post.id]}</p>
+                    <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                      {rejectValidationErrors[post.id]}
+                    </p>
                   ) : null}
-                  <label>
+                  <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
                     驳回原因
                     <input
                       type="text"
@@ -168,32 +189,29 @@ export function AdminPendingPostsPage() {
                         }))
                       }
                       disabled={isActioning}
+                      className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                     />
                   </label>
-                  <button
-                    type="button"
-                    disabled={isActioning}
-                    onClick={() => handleConfirmReject(post.id)}
-                  >
-                    确认驳回
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isActioning}
-                    onClick={() => cancelRejectForm(post.id)}
-                  >
-                    取消
-                  </button>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => handleConfirmReject(post.id)}
+                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      确认驳回
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => cancelRejectForm(post.id)}
+                      className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      取消
+                    </button>
+                  </div>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  disabled={isActioning}
-                  onClick={() => openRejectForm(post.id)}
-                >
-                  驳回
-                </button>
-              )}
+              ) : null}
             </li>
           );
         })}
