@@ -12,6 +12,20 @@ export interface PostListItem {
   publishedAt: string | null;
 }
 
+// 卡片瀑布流首页/分类页用的扩展形状，在 PostListItem 基础上多带分类名、
+// 发布者昵称、封面图、收藏数——特意不直接扩宽 PostListItem 本身，因为
+// favorites-repository.ts 的 listFavoritedPosts（/favorites 收藏列表页用）
+// 复用的正是 PostListItem 这个类型，如果在这里加字段，会强迫收藏列表页
+// 也去查/映射这些跟它无关的字段。两个功能读的字段集合本来就不一样
+// （收藏列表目前不需要分类/作者/封面图/收藏数），拆成两个类型能让
+// listApprovedPosts 和 listFavoritedPosts 继续互不影响地演进。
+export interface PostFeedItem extends PostListItem {
+  categoryName: string;
+  authorDisplayName: string;
+  coverImageUrl: string | null;
+  favoriteCount: number;
+}
+
 export interface ListApprovedPostsInput {
   categoryId?: string;
   page: number;
@@ -19,18 +33,47 @@ export interface ListApprovedPostsInput {
 }
 
 export interface ListApprovedPostsResult {
-  posts: PostListItem[];
+  posts: PostFeedItem[];
   hasNextPage: boolean;
 }
 
-interface PostListRow {
+interface PostFeedImageRow {
+  public_url: string | null;
+  sort_order: number;
+  deleted_at: string | null;
+}
+
+interface PostFeedRow {
   id: string;
   title: string;
   price_amount: number | null;
   price_label: string | null;
   currency_code: string;
   published_at: string | null;
+  favorite_count: number;
   location: { name: string } | null;
+  category: { name_zh: string } | null;
+  author: { display_name: string } | null;
+  post_images: PostFeedImageRow[] | null;
+}
+
+/**
+ * post_images 这里用 `.order(..., { foreignTable: "post_images" })` +
+ * `.limit(1, { foreignTable: "post_images" })` 把每个帖子最多带出一条
+ * （按 sort_order 最小，即封面图）内嵌图片行，避免 N+1；但 supabase-js
+ * 这种嵌套 select 语法本身没有再加一个只作用于 post_images 这张内嵌表的
+ * `.eq("deleted_at", null)`（那个 `.eq`/`.is` 会作用在外层 posts 查询上），
+ * 所以这里跟 favorites-repository.ts 的 listFavoritedPosts 处理
+ * posts.deleted_at 一样，多选出 deleted_at 这一列，在 JS 里判断：这一条
+ * 内嵌图片如果已被软删除，封面图当作不存在处理，而不是把已软删除的图片
+ * 展示出来。
+ */
+function resolveCoverImageUrl(images: PostFeedImageRow[] | null): string | null {
+  const cover = images?.[0];
+  if (!cover || cover.deleted_at !== null) {
+    return null;
+  }
+  return cover.public_url;
 }
 
 /**
@@ -48,18 +91,20 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, price_amount, price_label, currency_code, published_at, location:locations(name)"
+      "id, title, price_amount, price_label, currency_code, published_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     )
     .eq("status", "approved")
     .is("deleted_at", null)
     .order("published_at", { ascending: false })
+    .order("sort_order", { foreignTable: "post_images", ascending: true })
+    .limit(1, { foreignTable: "post_images" })
     .range(from, to);
 
   if (categoryId) {
     query = query.eq("category_id", categoryId);
   }
 
-  const { data, error } = await query.overrideTypes<PostListRow[]>();
+  const { data, error } = await query.overrideTypes<PostFeedRow[]>();
 
   if (error) {
     throw new AppError(error.message, "POSTS_LIST_FAILED", error);
@@ -77,7 +122,11 @@ export async function listApprovedPosts(
       priceLabel: row.price_label,
       currencyCode: row.currency_code,
       locationName: row.location?.name ?? null,
-      publishedAt: row.published_at
+      publishedAt: row.published_at,
+      categoryName: row.category?.name_zh ?? "未知分类",
+      authorDisplayName: row.author?.display_name ?? "未知用户",
+      coverImageUrl: resolveCoverImageUrl(row.post_images),
+      favoriteCount: row.favorite_count
     })),
     hasNextPage
   };

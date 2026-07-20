@@ -11,7 +11,8 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
     "is",
     "order",
     "range",
-    "insert"
+    "insert",
+    "limit"
   ] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
@@ -47,17 +48,25 @@ describe("listApprovedPosts", () => {
     maybeSingleMock.mockReset();
   });
 
-  it("filters to approved, non-deleted posts ordered by published_at desc", async () => {
+  it("filters to approved, non-deleted posts ordered by published_at desc, with a nested category/author/cover-image select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listApprovedPosts({ page: 0, pageSize: 20 });
 
     expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, title, price_amount, price_label, currency_code, published_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.order).toHaveBeenCalledWith("published_at", {
       ascending: false
     });
+    expect(queryBuilder.order).toHaveBeenCalledWith("sort_order", {
+      foreignTable: "post_images",
+      ascending: true
+    });
+    expect(queryBuilder.limit).toHaveBeenCalledWith(1, { foreignTable: "post_images" });
     expect(queryBuilder.range).toHaveBeenCalledWith(0, 20);
   });
 
@@ -78,7 +87,7 @@ describe("listApprovedPosts", () => {
     expect(queryBuilder.range).toHaveBeenCalledWith(20, 30);
   });
 
-  it("maps rows to PostListItem and reports no next page when exactly pageSize rows come back", async () => {
+  it("maps rows to PostFeedItem (including category, author, cover image, favorite count) and reports no next page when exactly pageSize rows come back", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -88,7 +97,13 @@ describe("listApprovedPosts", () => {
           price_label: null,
           currency_code: "USD",
           published_at: "2026-07-01T00:00:00.000Z",
-          location: { name: "Rockville" }
+          favorite_count: 3,
+          location: { name: "Rockville" },
+          category: { name_zh: "租房" },
+          author: { display_name: "Alice" },
+          post_images: [
+            { public_url: "https://img.example.com/cover.jpg", sort_order: 0, deleted_at: null }
+          ]
         }
       ],
       error: null
@@ -105,7 +120,11 @@ describe("listApprovedPosts", () => {
           priceLabel: null,
           currencyCode: "USD",
           publishedAt: "2026-07-01T00:00:00.000Z",
-          locationName: "Rockville"
+          locationName: "Rockville",
+          categoryName: "租房",
+          authorDisplayName: "Alice",
+          coverImageUrl: "https://img.example.com/cover.jpg",
+          favoriteCount: 3
         }
       ],
       hasNextPage: false
@@ -122,7 +141,11 @@ describe("listApprovedPosts", () => {
           price_label: "面议",
           currency_code: "USD",
           published_at: null,
-          location: null
+          favorite_count: 0,
+          location: null,
+          category: null,
+          author: null,
+          post_images: []
         },
         {
           id: "post-2",
@@ -131,7 +154,11 @@ describe("listApprovedPosts", () => {
           price_label: "面议",
           currency_code: "USD",
           published_at: null,
-          location: null
+          favorite_count: 0,
+          location: null,
+          category: null,
+          author: null,
+          post_images: []
         }
       ],
       error: null
@@ -142,6 +169,62 @@ describe("listApprovedPosts", () => {
     expect(result.hasNextPage).toBe(true);
     expect(result.posts).toHaveLength(1);
     expect(result.posts[0].id).toBe("post-1");
+  });
+
+  it("returns coverImageUrl: null when a post has no post_images rows at all", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "No photo listing",
+          price_amount: null,
+          price_label: "面议",
+          currency_code: "USD",
+          published_at: null,
+          favorite_count: 0,
+          location: null,
+          category: { name_zh: "二手" },
+          author: { display_name: "Bob" },
+          post_images: []
+        }
+      ],
+      error: null
+    });
+
+    const result = await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(result.posts[0].coverImageUrl).toBeNull();
+  });
+
+  it("returns coverImageUrl: null when the one embedded image row is soft-deleted", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Deleted cover listing",
+          price_amount: null,
+          price_label: "面议",
+          currency_code: "USD",
+          published_at: null,
+          favorite_count: 0,
+          location: null,
+          category: { name_zh: "二手" },
+          author: { display_name: "Bob" },
+          post_images: [
+            {
+              public_url: "https://img.example.com/deleted.jpg",
+              sort_order: 0,
+              deleted_at: "2026-07-02T00:00:00.000Z"
+            }
+          ]
+        }
+      ],
+      error: null
+    });
+
+    const result = await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(result.posts[0].coverImageUrl).toBeNull();
   });
 
   it("returns an empty list without throwing when there are no matching posts", async () => {

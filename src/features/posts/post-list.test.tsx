@@ -31,7 +31,11 @@ const samplePost = {
   priceLabel: null,
   currencyCode: "USD",
   locationName: "Rockville",
-  publishedAt: "2026-07-01T00:00:00.000Z"
+  publishedAt: "2026-07-01T00:00:00.000Z",
+  categoryName: "租房",
+  authorDisplayName: "Alice",
+  coverImageUrl: "https://img.example.com/cover.jpg",
+  favoriteCount: 5
 };
 
 describe("PostList", () => {
@@ -83,6 +87,40 @@ describe("PostList", () => {
     expect(link).toHaveTextContent("Sunny room near metro");
     expect(link).toHaveTextContent("USD 1,200");
     expect(link).toHaveTextContent("Rockville");
+  });
+
+  it("renders the category tag, author nickname, and favorite count", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    const link = await screen.findByRole("link");
+    expect(link).toHaveTextContent("租房");
+    expect(link).toHaveTextContent("Alice");
+    expect(screen.getByText("♥ 5")).toBeInTheDocument();
+  });
+
+  it("renders an <img> with the cover image url when coverImageUrl is present", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    const img = await screen.findByRole("img");
+    expect(img).toHaveAttribute("src", "https://img.example.com/cover.jpg");
+    expect(screen.queryByTestId("post-thumbnail-placeholder")).not.toBeInTheDocument();
+  });
+
+  it("renders a designed placeholder instead of an <img> when coverImageUrl is absent", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...samplePost, coverImageUrl: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList />);
+
+    await screen.findByRole("link");
+    expect(screen.getByTestId("post-thumbnail-placeholder")).toBeInTheDocument();
+    expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
   it("falls back to a placeholder label when a post has no location", async () => {
