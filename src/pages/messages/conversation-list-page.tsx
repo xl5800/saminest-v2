@@ -26,21 +26,34 @@ export function ConversationListPage() {
   const { data: conversations, isPending, isError } = useMyConversationsQuery();
 
   return (
-    <main>
-      <h1>消息</h1>
-      {isPending ? <p role="status">加载中…</p> : null}
-      {isError ? <p role="alert">{LOAD_ERROR_MESSAGE}</p> : null}
+    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">消息</h1>
+      {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+      {isError ? (
+        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          {LOAD_ERROR_MESSAGE}
+        </p>
+      ) : null}
       {!isPending && !isError && conversations && conversations.length === 0 ? (
-        <p role="status">{EMPTY_LIST_MESSAGE}</p>
+        <p role="status" className="text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
       ) : null}
       {!isPending && !isError && conversations && conversations.length > 0 ? (
-        <ul>
+        <ul className="flex flex-col gap-2">
           {conversations.map((conversation) => (
             <li key={conversation.id}>
-              <Link to={`/messages/${conversation.id}`}>
-                <span>{OTHER_PARTY_ROLE_LABEL[conversation.otherPartyRole]}</span>
-                {conversation.postTitle ? <span>关于：{conversation.postTitle}</span> : null}
-                <span>{formatPublishedAt(conversation.lastActivityAt)}</span>
+              <Link
+                to={`/messages/${conversation.id}`}
+                className="block rounded-lg border border-border bg-white p-4 hover:border-primary"
+              >
+                <span className="mr-2 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
+                  {OTHER_PARTY_ROLE_LABEL[conversation.otherPartyRole]}
+                </span>
+                {conversation.postTitle ? (
+                  <span className="text-sm text-text">关于：{conversation.postTitle}</span>
+                ) : null}
+                <span className="mt-1 block text-xs text-text-muted">
+                  {formatPublishedAt(conversation.lastActivityAt)}
+                </span>
               </Link>
             </li>
           ))}

@@ -20,42 +20,49 @@ export function FavoritesPage() {
 
   if (isPending) {
     return (
-      <main>
-        <h1>我的收藏</h1>
-        <p role="status">加载中…</p>
+      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
+        <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <h1>我的收藏</h1>
-        <p role="alert">收藏加载失败，请稍后重试。</p>
+      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
+        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          收藏加载失败，请稍后重试。
+        </p>
       </main>
     );
   }
 
   if (posts.length === 0) {
     return (
-      <main>
-        <h1>我的收藏</h1>
-        <p role="status">暂无收藏。</p>
+      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
+        <p role="status" className="text-sm text-text-muted">暂无收藏。</p>
       </main>
     );
   }
 
   return (
-    <main>
-      <h1>我的收藏</h1>
-      <ul>
+    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
+      <ul className="flex flex-col gap-2">
         {posts.map((post) => (
-          <li key={post.id}>
-            <Link to={`/post/${post.id}`}>
-              <span>{post.title}</span>
-              <span>{formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}</span>
-              <span>{post.locationName ?? "地区未填写"}</span>
-              <span>{formatPublishedAt(post.publishedAt)}</span>
+          <li
+            key={post.id}
+            className="flex items-center justify-between gap-4 rounded-lg border border-border bg-white p-4"
+          >
+            <Link to={`/post/${post.id}`} className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-text">{post.title}</span>
+              <span className="text-sm font-semibold text-accent">
+                {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
+              </span>
+              <span className="text-xs text-text-muted">{post.locationName ?? "地区未填写"}</span>
+              <span className="text-xs text-text-muted">{formatPublishedAt(post.publishedAt)}</span>
             </Link>
             <FavoriteButton postId={post.id} />
           </li>

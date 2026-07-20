@@ -40,27 +40,54 @@ export function ProfilePage() {
   }
 
   return (
-    <main>
-      <h1>我的</h1>
+    <main className="mx-auto max-w-md px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">我的</h1>
 
-      {isPending ? <p role="status">加载中…</p> : null}
-      {isError ? <p role="alert">用户信息加载失败，请稍后重试。</p> : null}
-      {!isPending && !isError ? <p>{profile?.displayName ?? "未知用户"}</p> : null}
-      <p>{email}</p>
+      {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+      {isError ? (
+        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          用户信息加载失败，请稍后重试。
+        </p>
+      ) : null}
+      <div className="mb-4 rounded-lg border border-border bg-white p-4">
+        {!isPending && !isError ? (
+          <p className="font-medium text-text">{profile?.displayName ?? "未知用户"}</p>
+        ) : null}
+        <p className="text-sm text-text-muted">{email}</p>
+      </div>
 
       <nav aria-label="我的功能">
-        <Link to="/favorites">我的收藏</Link>
+        <Link
+          to="/favorites"
+          className="mb-2 block rounded-lg border border-border bg-white p-4 text-sm text-text hover:border-primary"
+        >
+          我的收藏
+        </Link>
       </nav>
 
       {isAdmin === true ? (
-        <section aria-label="管理员功能">
-          <h2>后台管理</h2>
-          <Link to="/admin/posts">后台管理</Link>
+        <section aria-label="管理员功能" className="mb-4">
+          <h2 className="mb-2 text-sm font-medium text-text-muted">后台管理</h2>
+          <Link
+            to="/admin/posts"
+            className="mb-2 block rounded-lg border border-border bg-white p-4 text-sm text-text hover:border-primary"
+          >
+            后台管理
+          </Link>
         </section>
       ) : null}
 
-      {logoutError ? <p role="alert">{logoutError}</p> : null}
-      <button type="button" onClick={handleLogout} disabled={isLoggingOut}>
+      {logoutError ? (
+        <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          {logoutError}
+        </p>
+      ) : null}
+      <button
+        type="button"
+        onClick={handleLogout}
+        disabled={isLoggingOut}
+        className="w-full rounded border border-border px-4 py-2 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+      >
         退出登录
       </button>
     </main>

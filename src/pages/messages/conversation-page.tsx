@@ -88,36 +88,63 @@ export function MessageConversationPage() {
   const messageList = messages ?? [];
 
   return (
-    <main>
-      <h1>会话</h1>
-      {messagesPending ? <p role="status">加载中…</p> : null}
-      {messagesError ? <p role="alert">{LOAD_ERROR_MESSAGE}</p> : null}
+    <main className="mx-auto flex max-w-2xl flex-col px-4 py-6 pb-20 md:pb-6">
+      <h1 className="mb-4 text-xl font-bold text-text">会话</h1>
+      {messagesPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+      {messagesError ? (
+        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          {LOAD_ERROR_MESSAGE}
+        </p>
+      ) : null}
       {!messagesPending && !messagesError && messageList.length === 0 ? (
-        <p role="status">{EMPTY_CONVERSATION_MESSAGE}</p>
+        <p role="status" className="text-sm text-text-muted">{EMPTY_CONVERSATION_MESSAGE}</p>
       ) : null}
       {!messagesPending && !messagesError && messageList.length > 0 ? (
-        <ul>
+        <ul className="mb-4 flex flex-col gap-2">
           {messageList.map((message) => {
             const label = message.senderId === currentUserId ? "我" : "对方";
+            const isMine = label === "我";
             return (
-              <li key={message.id}>
-                {label}：{message.body}
+              <li key={message.id} className={isMine ? "flex justify-end" : "flex justify-start"}>
+                <div
+                  className={
+                    isMine
+                      ? "max-w-[75%] rounded-lg bg-primary px-3 py-2 text-sm text-white"
+                      : "max-w-[75%] rounded-lg bg-bg px-3 py-2 text-sm text-text"
+                  }
+                >
+                  {label}：{message.body}
+                </div>
               </li>
             );
           })}
         </ul>
       ) : null}
-      <form onSubmit={handleSubmit} noValidate>
-        {validationError ? <p role="alert">{validationError}</p> : null}
-        {submitError ? <p role="alert">{submitError}</p> : null}
-        <label>
+      <form onSubmit={handleSubmit} noValidate className="mt-auto flex flex-col gap-2 border-t border-border pt-4">
+        {validationError ? (
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {validationError}
+          </p>
+        ) : null}
+        {submitError ? (
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {submitError}
+          </p>
+        ) : null}
+        <label className="block text-sm font-medium text-text">
           消息内容
           <textarea
             value={body}
             onChange={(event) => setBody(event.target.value)}
+            rows={3}
+            className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </label>
-        <button type="submit" disabled={sendMessageMutation.isPending}>
+        <button
+          type="submit"
+          disabled={sendMessageMutation.isPending}
+          className="self-end rounded bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+        >
           {sendMessageMutation.isPending ? "发送中…" : "发送"}
         </button>
       </form>
