@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { listActiveCategories, listApprovedPosts } = vi.hoisted(() => ({
@@ -44,6 +44,7 @@ describe("CategoryPage", () => {
     expect(await screen.findByText("暂无帖子。")).toBeInTheDocument();
     expect(listApprovedPosts).toHaveBeenCalledWith({
       categoryId: "cat-1",
+      searchQuery: "",
       page: 0,
       pageSize: 20
     });
@@ -63,5 +64,35 @@ describe("CategoryPage", () => {
       await screen.findByRole("heading", { name: "分类未找到" })
     ).toBeInTheDocument();
     expect(listApprovedPosts).not.toHaveBeenCalled();
+  });
+
+  it("debounces typing in the search box and queries with both categoryId and the typed search value (search stays scoped to the category)", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" }
+    ]);
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+    renderWithProviders(<CategoryPage />, {
+      initialEntries: ["/category/rent"],
+      route: "/category/:slug"
+    });
+
+    await screen.findByText("暂无帖子。");
+    listApprovedPosts.mockClear();
+
+    const input = screen.getByPlaceholderText("搜索本分类下的帖子…");
+    fireEvent.change(input, { target: { value: "sunny" } });
+
+    await waitFor(
+      () => {
+        expect(listApprovedPosts).toHaveBeenCalledWith({
+          categoryId: "cat-1",
+          searchQuery: "sunny",
+          page: 0,
+          pageSize: 20
+        });
+      },
+      { timeout: 2000 }
+    );
   });
 });

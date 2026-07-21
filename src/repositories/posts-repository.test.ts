@@ -12,7 +12,8 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
     "order",
     "range",
     "insert",
-    "limit"
+    "limit",
+    "or"
   ] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
@@ -32,6 +33,7 @@ vi.mock("../integrations/supabase/client", () => ({
 import {
   createPost,
   getPostAuthorId,
+  getPostDetail,
   listAllPosts,
   listApprovedPosts,
   listPendingPosts
@@ -77,6 +79,72 @@ describe("listApprovedPosts", () => {
 
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.eq).toHaveBeenCalledWith("category_id", "cat-1");
+  });
+
+  it("filters by title/description ilike when searchQuery is provided", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ searchQuery: "sunny room", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.or).toHaveBeenCalledWith(
+      "title.ilike.%sunny room%,description.ilike.%sunny room%"
+    );
+  });
+
+  it("combines the search filter with the category filter (both apply together)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({
+      categoryId: "cat-1",
+      searchQuery: "sunny",
+      page: 0,
+      pageSize: 20
+    });
+
+    expect(queryBuilder.eq).toHaveBeenCalledWith("category_id", "cat-1");
+    expect(queryBuilder.or).toHaveBeenCalledWith(
+      "title.ilike.%sunny%,description.ilike.%sunny%"
+    );
+  });
+
+  it("sanitizes a search term containing PostgREST-significant and ILIKE-wildcard characters before passing it to .or()", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({
+      searchQuery: "50% off, (great) deal_now\\",
+      page: 0,
+      pageSize: 20
+    });
+
+    // "," "(" ")" 整个丢弃；"%" "_" "\\" 转义成字面字符（先转义 \，避免
+    // 转义出来的反斜杠又被后面 %/_ 那两条规则再转义一遍）。
+    expect(queryBuilder.or).toHaveBeenCalledWith(
+      "title.ilike.%50\\% off great deal\\_now\\\\%,description.ilike.%50\\% off great deal\\_now\\\\%"
+    );
+  });
+
+  it("does not call .or() at all when searchQuery is empty or whitespace-only", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ searchQuery: "   ", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.or).not.toHaveBeenCalled();
+  });
+
+  it("does not call .or() at all when searchQuery is a string that sanitizes down to nothing (only , ( ) characters)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ searchQuery: " (),( ", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.or).not.toHaveBeenCalled();
+  });
+
+  it("does not call .or() at all when searchQuery is not provided", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(queryBuilder.or).not.toHaveBeenCalled();
   });
 
   it("requests page * pageSize as the range offset", async () => {
@@ -500,6 +568,107 @@ describe("getPostAuthorId", () => {
 
     await expect(getPostAuthorId("post-1")).rejects.toMatchObject({
       code: "POST_AUTHOR_FETCH_FAILED"
+    });
+  });
+});
+
+describe("getPostDetail", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+    // getPostDetail 在 .maybeSingle() 之后还链式调用 .overrideTypes()（跟
+    // listApprovedPosts 处理嵌套 select 类型的方式一致），所以这里让
+    // maybeSingle() 返回 builder 本身以便继续链式调用，由 overrideTypesMock
+    // 负责最终 resolve 出 { data, error }——跟 favorites-repository.test.ts
+    // 里 eq()/overrideTypes() 链式调用的处理方式是同一个模式。
+    maybeSingleMock.mockReturnValue(queryBuilder);
+  });
+
+  it("returns full post detail with images ordered by sort_order, excluding a soft-deleted image, when the post exists and is visible (RLS already filtered)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        id: "post-1",
+        title: "Sunny room",
+        description: "A lovely room near the metro.",
+        price_amount: 1200,
+        price_label: null,
+        currency_code: "USD",
+        published_at: "2026-07-01T00:00:00.000Z",
+        contact_method: "email",
+        contact_value: "a@b.com",
+        location: { name: "Rockville" },
+        category: { name_zh: "租房" },
+        author: { display_name: "Alice" },
+        post_images: [
+          { id: "img-1", public_url: "https://img.example.com/1.jpg", sort_order: 0, deleted_at: null },
+          {
+            id: "img-deleted",
+            public_url: "https://img.example.com/deleted.jpg",
+            sort_order: 1,
+            deleted_at: "2026-07-02T00:00:00.000Z"
+          },
+          { id: "img-2", public_url: "https://img.example.com/2.jpg", sort_order: 2, deleted_at: null }
+        ]
+      },
+      error: null
+    });
+
+    const result = await getPostDetail("post-1");
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("sort_order", {
+      foreignTable: "post_images",
+      ascending: true
+    });
+    expect(result).toEqual({
+      id: "post-1",
+      title: "Sunny room",
+      description: "A lovely room near the metro.",
+      priceAmount: 1200,
+      priceLabel: null,
+      currencyCode: "USD",
+      categoryName: "租房",
+      locationName: "Rockville",
+      publishedAt: "2026-07-01T00:00:00.000Z",
+      authorDisplayName: "Alice",
+      contactMethod: "email",
+      contactValue: "a@b.com",
+      images: [
+        { id: "img-1", publicUrl: "https://img.example.com/1.jpg", sortOrder: 0 },
+        { id: "img-2", publicUrl: "https://img.example.com/2.jpg", sortOrder: 2 }
+      ]
+    });
+  });
+
+  it("does not filter by status — visibility is left entirely to RLS", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: null });
+
+    await getPostDetail("post-1");
+
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("status", expect.anything());
+  });
+
+  it("returns null without throwing when the post does not exist or is not visible to the current viewer", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(getPostDetail("missing-or-invisible-post")).resolves.toBeNull();
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(getPostDetail("post-1")).rejects.toMatchObject({
+      code: "POST_DETAIL_FETCH_FAILED"
     });
   });
 });

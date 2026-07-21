@@ -11,6 +11,7 @@ const {
   listPendingPosts,
   listAllPosts,
   createPost,
+  getPostDetail,
   listMessages,
   sendMessage,
   listMyConversations,
@@ -28,6 +29,7 @@ const {
   listPendingPosts: vi.fn(),
   listAllPosts: vi.fn(),
   createPost: vi.fn(),
+  getPostDetail: vi.fn(),
   listMessages: vi.fn(),
   sendMessage: vi.fn(),
   listMyConversations: vi.fn(),
@@ -50,7 +52,8 @@ vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
   listPendingPosts,
   listAllPosts,
-  createPost
+  createPost,
+  getPostDetail
 }));
 vi.mock("../repositories/messages-repository", () => ({
   listMessages,
@@ -248,6 +251,7 @@ describe("app routes", () => {
     listPendingPosts.mockReset();
     listAllPosts.mockReset();
     createPost.mockReset();
+    getPostDetail.mockReset();
     listMessages.mockReset();
     sendMessage.mockReset();
     listMyConversations.mockReset();
@@ -263,6 +267,7 @@ describe("app routes", () => {
     listAllCategoriesForAdmin.mockResolvedValue([]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+    getPostDetail.mockResolvedValue(null);
     listPendingPosts.mockResolvedValue([]);
     listAllPosts.mockResolvedValue([]);
     listMessages.mockResolvedValue([]);
@@ -296,11 +301,13 @@ describe("app routes", () => {
     ).toBeInTheDocument();
   });
 
-  it("renders the post detail placeholder at /post/:id", () => {
+  it("renders the post detail page at /post/:id (not-found state when the post doesn't resolve)", async () => {
     renderAt("/post/post-1");
 
-    expect(screen.getByRole("heading", { name: "帖子详情" })).toBeInTheDocument();
-    expect(screen.getByText("帖子 ID：post-1")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "帖子未找到" })
+    ).toBeInTheDocument();
+    expect(getPostDetail).toHaveBeenCalledWith("post-1");
   });
 
   it("renders the login page at /login", () => {

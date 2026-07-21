@@ -28,6 +28,7 @@ export interface PostFeedItem extends PostListItem {
 
 export interface ListApprovedPostsInput {
   categoryId?: string;
+  searchQuery?: string;
   page: number;
   pageSize: number;
 }
@@ -77,6 +78,37 @@ function resolveCoverImageUrl(images: PostFeedImageRow[] | null): string | null 
 }
 
 /**
+ * 首页/分类页搜索框传进来的原始用户输入，在拼进 PostgREST 的
+ * `.or("title.ilike.%xxx%,description.ilike.%xxx%")` 过滤字符串之前，必须
+ * 先经过这道清洗，原因有两个、彼此独立：
+ *
+ * 1. PostgREST 的 `or=(...)` 过滤字符串语法把 `,`、`(`、`)` 当成有语法意义
+ *    的分隔符/分组符——用户搜索词里如果原样带着这几个字符，会把过滤表达式
+ *    拼坏（不是 SQL 注入风险，PostgREST 执行阶段仍然是参数化查询，但过滤
+ *    条件本身会被解析错，可能报错也可能匹配到完全不是用户想要的结果）。
+ *    这几个字符对这个应用的搜索场景也没什么有意义的内容（不是短语搜索
+ *    语法），直接整个丢弃，不需要转义保留。
+ * 2. `%` 和 `_` 是 ILIKE 的通配符——用户如果就是想搜一个字面的 `%` 或 `_`
+ *    （比如帖子标题里真的带百分号），不转义的话会被当成通配符语义，
+ *    匹配到用户没打算匹配的内容。这里反斜杠转义成字面字符。
+ *
+ * 转义顺序有讲究：先转义 `\` 本身，再转义 `%`/`_`，避免把这一步新加出来的
+ * 转义反斜杠自己又被后面的规则再转义一遍（双重转义）。
+ *
+ * 清洗完如果是空字符串（原始输入整个是空白，或者整个只由 `,()` 组成），
+ * 调用方视为"没有搜索词"，不施加这个过滤条件——而不是拼一个空的
+ * `ilike.%%` 条件（那等价于"随便什么都匹配"，语义上没问题但没必要）。
+ */
+function sanitizeSearchTerm(raw: string): string {
+  return raw
+    .trim()
+    .replace(/[,()]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/%/g, "\\%")
+    .replace(/_/g, "\\_");
+}
+
+/**
  * 只返回 status = 'approved' 且未软删除的帖子，游客和登录用户看到的列表一致。
  * 用多取一条（pageSize + 1）判断是否有下一页，不额外发 COUNT(*) 查询，
  * 见 Tables.md 24 节"不要为了每次展示数量都执行昂贵的全表统计"。
@@ -84,7 +116,7 @@ function resolveCoverImageUrl(images: PostFeedImageRow[] | null): string | null 
 export async function listApprovedPosts(
   input: ListApprovedPostsInput
 ): Promise<ListApprovedPostsResult> {
-  const { categoryId, page, pageSize } = input;
+  const { categoryId, searchQuery, page, pageSize } = input;
   const from = page * pageSize;
   const to = from + pageSize;
 
@@ -102,6 +134,13 @@ export async function listApprovedPosts(
 
   if (categoryId) {
     query = query.eq("category_id", categoryId);
+  }
+
+  if (searchQuery) {
+    const sanitized = sanitizeSearchTerm(searchQuery);
+    if (sanitized) {
+      query = query.or(`title.ilike.%${sanitized}%,description.ilike.%${sanitized}%`);
+    }
   }
 
   const { data, error } = await query.overrideTypes<PostFeedRow[]>();
@@ -150,6 +189,117 @@ export async function getPostAuthorId(postId: string): Promise<string | null> {
   }
 
   return data?.author_id ?? null;
+}
+
+export interface PostDetailImage {
+  id: string;
+  publicUrl: string | null;
+  sortOrder: number;
+}
+
+export interface PostDetail {
+  id: string;
+  title: string;
+  description: string;
+  priceAmount: number | null;
+  priceLabel: string | null;
+  currencyCode: string;
+  categoryName: string;
+  locationName: string | null;
+  publishedAt: string | null;
+  authorDisplayName: string;
+  contactMethod: string | null;
+  contactValue: string | null;
+  images: PostDetailImage[];
+}
+
+interface PostDetailImageRow {
+  id: string;
+  public_url: string | null;
+  sort_order: number;
+  deleted_at: string | null;
+}
+
+interface PostDetailRow {
+  id: string;
+  title: string;
+  description: string;
+  price_amount: number | null;
+  price_label: string | null;
+  currency_code: string;
+  published_at: string | null;
+  contact_method: string | null;
+  contact_value: string | null;
+  location: { name: string } | null;
+  category: { name_zh: string } | null;
+  author: { display_name: string } | null;
+  post_images: PostDetailImageRow[] | null;
+}
+
+/**
+ * 帖子详情页用：跟 listApprovedPosts（首页/分类页公开列表）故意不共用同一个
+ * 查询——那边只需要一条封面图，这里需要帖子的完整字段和全部图片。
+ *
+ * 这里刻意不加 `.eq("status", "approved")`：可见性完全交给
+ * posts_select_public_or_own_or_admin 这条 RLS 策略去决定（游客只能看
+ * approved 的，作者本人能看自己任何状态的帖子，管理员能看全部），详情页
+ * 不需要在应用层再重复一遍这个判断逻辑——同一个查询对游客/作者本人/管理员
+ * 三种身份天然返回各自应该看到的结果。
+ *
+ * 用 `.maybeSingle()` 而不是 `.single()`：帖子不存在，或者存在但当前登录
+ * 身份看不到（被 RLS 过滤掉），这两种情况在这一层是无法区分、也不应该区分
+ * 的（区分开来会向未授权的访问者泄露"这个 ID 存在，只是审核没通过"这种
+ * 信息），所以统一返回 null，交给页面渲染同一条"帖子未找到"文案，不抛错。
+ * 只有真正的 Supabase 查询失败（网络错误等）才包装成 AppError。
+ *
+ * post_images 内嵌 select 拿不到只作用于内嵌表的软删除过滤（跟
+ * listApprovedPosts 里 resolveCoverImageUrl 那段注释是同一个 supabase-js
+ * 限制），所以这里也是多选出 deleted_at 这一列，在 JS 里把软删除的图片
+ * 过滤掉，而不是展示出来。
+ */
+export async function getPostDetail(postId: string): Promise<PostDetail | null> {
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .select(
+      "id, title, description, price_amount, price_label, currency_code, published_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+    )
+    .eq("id", postId)
+    .is("deleted_at", null)
+    .order("sort_order", { foreignTable: "post_images", ascending: true })
+    .maybeSingle()
+    .overrideTypes<PostDetailRow>();
+
+  if (error) {
+    throw new AppError(error.message, "POST_DETAIL_FETCH_FAILED", error);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const images = (data.post_images ?? [])
+    .filter((image) => image.deleted_at === null)
+    .map((image) => ({
+      id: image.id,
+      publicUrl: image.public_url,
+      sortOrder: image.sort_order
+    }));
+
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description,
+    priceAmount: data.price_amount,
+    priceLabel: data.price_label,
+    currencyCode: data.currency_code,
+    categoryName: data.category?.name_zh ?? "未知分类",
+    locationName: data.location?.name ?? null,
+    publishedAt: data.published_at,
+    authorDisplayName: data.author?.display_name ?? "未知用户",
+    contactMethod: data.contact_method,
+    contactValue: data.contact_value,
+    images
+  };
 }
 
 export interface AdminPostListItem {

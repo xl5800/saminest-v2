@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
@@ -7,6 +7,7 @@ import { usePostsQuery } from "./use-posts-query";
 
 export interface PostListProps {
   categoryId?: string;
+  searchQuery?: string;
 }
 
 /**
@@ -24,9 +25,18 @@ export interface PostListProps {
  * <a>，button 嵌套在 a 里本身是不合法的 HTML，且会干扰它自己的
  * stopPropagation 逻辑），而是作为 <Link> 的同级兄弟节点放在卡片内。
  */
-export function PostList({ categoryId }: PostListProps) {
+export function PostList({ categoryId, searchQuery }: PostListProps) {
   const [page, setPage] = useState(0);
-  const { data, isPending, isError } = usePostsQuery({ categoryId, page });
+
+  // 搜索词变化时要把分页重置回第 0 页：否则用户翻到无过滤列表第 3 页后再
+  // 输入搜索词，会拿着"第 3 页"这个 page 值去查过滤后的结果，而过滤后的
+  // 结果可能根本没有第 3 页。只在 searchQuery 变化时触发，不能让这个
+  // effect 在其它无关的重新渲染上也把 page 重置掉。
+  useEffect(() => {
+    setPage(0);
+  }, [searchQuery]);
+
+  const { data, isPending, isError } = usePostsQuery({ categoryId, searchQuery, page });
 
   if (isPending) {
     return <p role="status">加载中…</p>;
@@ -37,7 +47,7 @@ export function PostList({ categoryId }: PostListProps) {
   }
 
   if (data.posts.length === 0) {
-    return <p role="status">暂无帖子。</p>;
+    return <p role="status">{searchQuery ? "没有找到相关帖子。" : "暂无帖子。"}</p>;
   }
 
   return (
