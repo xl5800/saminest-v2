@@ -147,28 +147,43 @@ export function PostImagePicker({
   }
 
   const inputId = `${id}-input`;
+  const cameraInputId = `${id}-camera-input`;
 
   return (
     <div>
-      <label htmlFor={inputId} className="mb-2 block text-sm font-medium text-text">
+      <label htmlFor={inputId} className="mb-2 block cursor-pointer text-sm font-medium text-text">
         上传图片（最多 {MAX_POST_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 5MB）
+        <div
+          data-testid="post-image-drop-zone"
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          className="mt-2 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-bg px-4 py-8 text-center font-normal"
+        >
+          <input
+            id={inputId}
+            type="file"
+            accept={ACCEPTED_POST_IMAGE_MIME_TYPES.join(",")}
+            multiple
+            onChange={handleInputChange}
+            className="sr-only"
+          />
+          <p className="text-sm text-text-muted">拖拽图片到此处，或点击从相册选择</p>
+        </div>
       </label>
-      <div
-        data-testid="post-image-drop-zone"
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        className="flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-bg px-4 py-8 text-center"
+      <label
+        htmlFor={cameraInputId}
+        className="mt-2 inline-block cursor-pointer rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg"
       >
+        拍照
         <input
-          id={inputId}
+          id={cameraInputId}
           type="file"
-          accept={ACCEPTED_POST_IMAGE_MIME_TYPES.join(",")}
-          multiple
+          accept="image/*"
+          capture="environment"
           onChange={handleInputChange}
           className="sr-only"
         />
-        <p className="text-sm text-text-muted">拖拽图片到此处，或点击选择文件</p>
-      </div>
+      </label>
       {errors.length > 0 ? (
         <div role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
           {errors.map((message) => (

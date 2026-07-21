@@ -279,8 +279,8 @@ export function AdminReportsPage() {
                 <span className="mr-3 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
                   {REASON_LABELS[report.reasonCode] ?? report.reasonCode}
                 </span>
-                <span className="mr-3 text-sm text-text">{report.reporterName}</span>
-                <span className="mr-3 text-sm text-text-muted">
+                <span className="mr-3 break-words text-sm text-text">{report.reporterName}</span>
+                <span className="mr-3 break-words text-sm text-text-muted">
                   {report.targetType === "post" ? (
                     <Link to={`/post/${report.targetId}`} className="text-primary hover:underline">
                       {report.targetType} / {report.targetId}

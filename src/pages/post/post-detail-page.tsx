@@ -25,7 +25,7 @@ export function PostDetailPage() {
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
       <h1 className="mb-4 text-xl font-bold text-text">帖子详情</h1>
-      <p className="mb-2 text-sm text-text-muted">帖子 ID：{id}</p>
+      <p className="mb-2 break-words text-sm text-text-muted">帖子 ID：{id}</p>
       <p role="status" className="mb-4 text-sm text-text-muted">
         {statusMessage}
       </p>

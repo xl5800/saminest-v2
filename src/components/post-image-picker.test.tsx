@@ -201,7 +201,7 @@ describe("PostImagePicker", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
 
-    await screen.findByText("拖拽图片到此处，或点击选择文件");
+    await screen.findByText("拖拽图片到此处，或点击从相册选择");
     expect(revokeObjectURLSpy).toHaveBeenCalled();
   });
 

@@ -109,8 +109,8 @@ export function MessageConversationPage() {
                 <div
                   className={
                     isMine
-                      ? "max-w-[75%] rounded-lg bg-primary px-3 py-2 text-sm text-white"
-                      : "max-w-[75%] rounded-lg bg-bg px-3 py-2 text-sm text-text"
+                      ? "max-w-[75%] break-words rounded-lg bg-primary px-3 py-2 text-sm text-white"
+                      : "max-w-[75%] break-words rounded-lg bg-bg px-3 py-2 text-sm text-text"
                   }
                 >
                   {label}：{message.body}

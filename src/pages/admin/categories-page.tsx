@@ -490,10 +490,10 @@ export function AdminCategoriesPage() {
                   </div>
                 ) : (
                   <>
-                    <span className="mr-3 text-sm text-text-muted">{category.slug}</span>
-                    <span className="mr-3 text-sm text-text">{category.nameZh}</span>
-                    <span className="mr-3 text-sm text-text-muted">{category.nameEn ?? ""}</span>
-                    <span className="mr-3 text-sm text-text-muted">{category.description ?? ""}</span>
+                    <span className="mr-3 break-words text-sm text-text-muted">{category.slug}</span>
+                    <span className="mr-3 break-words text-sm text-text">{category.nameZh}</span>
+                    <span className="mr-3 break-words text-sm text-text-muted">{category.nameEn ?? ""}</span>
+                    <span className="mr-3 break-words text-sm text-text-muted">{category.description ?? ""}</span>
                     <span className="mr-3 text-sm text-text-muted">{category.sortOrder}</span>
                     <span
                       className={`mr-3 rounded-full px-2 py-0.5 text-xs font-medium ${

@@ -56,8 +56,8 @@ export function FavoritesPage() {
             key={post.id}
             className="flex items-center justify-between gap-4 rounded-lg border border-border bg-white p-4"
           >
-            <Link to={`/post/${post.id}`} className="flex flex-col gap-1">
-              <span className="text-sm font-medium text-text">{post.title}</span>
+            <Link to={`/post/${post.id}`} className="flex min-w-0 flex-col gap-1">
+              <span className="break-words text-sm font-medium text-text">{post.title}</span>
               <span className="text-sm font-semibold text-accent">
                 {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
               </span>

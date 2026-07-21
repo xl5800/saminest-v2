@@ -65,7 +65,7 @@ export function PostList({ categoryId }: PostListProps) {
                 </div>
               )}
               <div className="space-y-1 p-2">
-                <p className="line-clamp-2 text-sm text-text">{post.title}</p>
+                <p className="line-clamp-2 break-words text-sm text-text">{post.title}</p>
                 <p className="font-semibold text-accent">
                   {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
                 </p>

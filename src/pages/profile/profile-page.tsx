@@ -51,9 +51,9 @@ export function ProfilePage() {
       ) : null}
       <div className="mb-4 rounded-lg border border-border bg-white p-4">
         {!isPending && !isError ? (
-          <p className="font-medium text-text">{profile?.displayName ?? "未知用户"}</p>
+          <p className="break-words font-medium text-text">{profile?.displayName ?? "未知用户"}</p>
         ) : null}
-        <p className="text-sm text-text-muted">{email}</p>
+        <p className="break-words text-sm text-text-muted">{email}</p>
       </div>
 
       <nav aria-label="我的功能">

@@ -222,7 +222,7 @@ export function AdminUsersPage() {
             return (
               <li key={user.id} className="mb-2 rounded-lg border border-border bg-white p-4">
                 <span className="mr-3 text-sm text-text">{user.displayName}</span>
-                <span className="mr-3 text-sm text-text-muted">{user.email}</span>
+                <span className="mr-3 break-words text-sm text-text-muted">{user.email}</span>
                 <span className="mr-3 text-sm text-text-muted">{user.role}</span>
                 <span className={`mr-3 rounded-full px-2 py-0.5 text-xs font-medium ${statusVariant}`}>
                   {ACCOUNT_STATUS_LABELS[user.accountStatus] ?? user.accountStatus}

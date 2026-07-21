@@ -49,7 +49,7 @@ export function ConversationListPage() {
                   {OTHER_PARTY_ROLE_LABEL[conversation.otherPartyRole]}
                 </span>
                 {conversation.postTitle ? (
-                  <span className="text-sm text-text">关于：{conversation.postTitle}</span>
+                  <span className="break-words text-sm text-text">关于：{conversation.postTitle}</span>
                 ) : null}
                 <span className="mt-1 block text-xs text-text-muted">
                   {formatPublishedAt(conversation.lastActivityAt)}

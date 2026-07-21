@@ -141,8 +141,8 @@ export function AdminPendingPostsPage() {
 
           return (
             <li key={post.id} className="mb-2 rounded-lg border border-border bg-white p-4">
-              <span className="mr-3 text-sm text-text">{post.title}</span>
-              <span className="mr-3 text-sm text-text-muted">{post.authorName}</span>
+              <span className="mr-3 break-words text-sm text-text">{post.title}</span>
+              <span className="mr-3 break-words text-sm text-text-muted">{post.authorName}</span>
               <span className="mr-3 text-sm text-text-muted">{post.categoryName}</span>
               <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(post.createdAt)}</span>
               {rowErrors[post.id] ? (
