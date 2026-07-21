@@ -124,7 +124,7 @@ export function ReportPostPage() {
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </label>
           <button

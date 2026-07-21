@@ -137,7 +137,7 @@ export function MessageConversationPage() {
             value={body}
             onChange={(event) => setBody(event.target.value)}
             rows={3}
-            className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </label>
         <button

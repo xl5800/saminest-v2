@@ -276,7 +276,7 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, slug: event.target.value }))
           }
           disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
       {showSlugDuplicateHint ? <p className="text-xs text-warning">{SLUG_DUPLICATE_HINT_MESSAGE}</p> : null}
@@ -289,7 +289,7 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, nameZh: event.target.value }))
           }
           disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
       <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -301,7 +301,7 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, nameEn: event.target.value }))
           }
           disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
       <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -312,7 +312,7 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, description: event.target.value }))
           }
           disabled={isCreating}
-          className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
       <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -326,7 +326,7 @@ export function AdminCategoriesPage() {
             setCreateDraft((prev) => ({ ...prev, sortOrder: event.target.value }))
           }
           disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         />
       </label>
       <button
@@ -402,7 +402,7 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -417,7 +417,7 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -432,7 +432,7 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -449,7 +449,7 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
@@ -466,7 +466,7 @@ export function AdminCategoriesPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     <div className="mt-2 flex flex-wrap gap-2">

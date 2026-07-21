@@ -232,7 +232,7 @@ export function PublishPage() {
               onChange={(event) => setCategoryId(event.target.value)}
               disabled={categoriesPending}
               required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">请选择分类</option>
               {(categories ?? []).map((category) => (
@@ -253,7 +253,7 @@ export function PublishPage() {
               value={locationId}
               onChange={(event) => setLocationId(event.target.value)}
               disabled={locationsPending}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">不限地区</option>
               {(locations ?? []).map((location) => (
@@ -277,7 +277,7 @@ export function PublishPage() {
               minLength={TITLE_MIN_LENGTH}
               maxLength={TITLE_MAX_LENGTH}
               required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </label>
           <label className="mb-4 block text-sm font-medium text-text">
@@ -288,7 +288,7 @@ export function PublishPage() {
               minLength={DESCRIPTION_MIN_LENGTH}
               maxLength={DESCRIPTION_MAX_LENGTH}
               required
-              className="mt-1 min-h-[120px] w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 min-h-[120px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </label>
           <label className="mb-4 block text-sm font-medium text-text">
@@ -299,7 +299,7 @@ export function PublishPage() {
               step="0.01"
               value={price}
               onChange={(event) => setPrice(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </label>
           <label className="mb-4 block text-sm font-medium text-text">
@@ -307,7 +307,7 @@ export function PublishPage() {
             <select
               value={contactMethod}
               onChange={(event) => setContactMethod(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
               <option value="">请选择联系方式</option>
               {CONTACT_METHOD_OPTIONS.map((option) => (
@@ -323,7 +323,7 @@ export function PublishPage() {
               type="text"
               value={contactValue}
               onChange={(event) => setContactValue(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </label>
           <PostImagePicker value={images} onChange={setImages} />

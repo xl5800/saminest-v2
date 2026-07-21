@@ -127,7 +127,7 @@ export function AdminAllPostsPage() {
       <select
         value={statusFilter}
         onChange={(event) => handleStatusFilterChange(event.target.value)}
-        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {STATUS_FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -227,7 +227,7 @@ export function AdminAllPostsPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     <div className="mt-2 flex flex-wrap gap-2">

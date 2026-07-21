@@ -218,7 +218,7 @@ export function AdminReportsPage() {
       <select
         value={status}
         onChange={(event) => handleStatusChange(event.target.value)}
-        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       >
         {STATUS_FILTER_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>
@@ -334,7 +334,7 @@ export function AdminReportsPage() {
                           }))
                         }
                         disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
                     {report.targetType === "post" ? (
@@ -373,7 +373,7 @@ export function AdminReportsPage() {
                                   }))
                                 }
                                 disabled={isActioning}
-                                className="rounded border border-border px-2 py-1 text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                               />
                             </label>
                           </>

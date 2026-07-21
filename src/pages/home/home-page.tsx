@@ -9,7 +9,7 @@ export function HomePage() {
         <input
           type="search"
           placeholder="搜租房、求租、二手物品…"
-          className="w-full rounded-full border border-border bg-bg px-4 py-2 text-sm text-text shadow-sm"
+          className="w-full rounded-full border border-border bg-bg px-4 py-2 text-base text-text shadow-sm"
         />
       </div>
       <CategoryNav />
