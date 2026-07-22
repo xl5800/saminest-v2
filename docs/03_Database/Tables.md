@@ -534,8 +534,8 @@ other
 建议：
 
 ```text
-title 长度：5–120 字符
-description 长度：10–10000 字符
+title 长度：1–120 字符
+description 长度：1–10000 字符
 price_amount >= 0
 currency_code 长度为 3
 ```

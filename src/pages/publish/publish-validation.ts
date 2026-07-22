@@ -1,7 +1,11 @@
 /**
  * 边界值和可选值都来自 Tables.md 第 9 章 posts 表：
- * - 9.6 字段验证："title 长度：5–120 字符"、"description 长度：10–10000 字符"、
- *   "price_amount >= 0"
+ * - 9.6 字段验证："title 长度：1–120 字符"、"description 长度：1–10000 字符"、
+ *   "price_amount >= 0"（下限从 5/10 放宽到 1 是 2026-07-21 的产品决定，
+ *   数据库侧对应 posts_title_length_check / posts_description_length_check
+ *   两条约束，见
+ *   supabase/migrations/20260721000000_relax_posts_title_description_min_length.sql；
+ *   上限 120 / 10000 未改动）
  * - 9.5 contact_method 可选值：message / email / phone / wechat / other
  * 这里的前端校验必须和这些约束保持一致，不额外发明更严格或更宽松的规则。
  */
@@ -20,9 +24,9 @@ const CONTACT_METHOD_VALUES: readonly string[] = CONTACT_METHOD_OPTIONS.map(
   (option) => option.value
 );
 
-export const TITLE_MIN_LENGTH = 5;
+export const TITLE_MIN_LENGTH = 1;
 export const TITLE_MAX_LENGTH = 120;
-export const DESCRIPTION_MIN_LENGTH = 10;
+export const DESCRIPTION_MIN_LENGTH = 1;
 export const DESCRIPTION_MAX_LENGTH = 10000;
 
 export interface PublishFormInput {
@@ -73,20 +77,27 @@ export function validatePublishInput(
     return fail("PUBLISH_CATEGORY_REQUIRED", "请选择分类。");
   }
 
-  if (title.length < TITLE_MIN_LENGTH || title.length > TITLE_MAX_LENGTH) {
-    return fail(
-      "PUBLISH_TITLE_LENGTH",
-      `标题长度需要在 ${TITLE_MIN_LENGTH}-${TITLE_MAX_LENGTH} 字符之间。`
-    );
+  // 下限现在是 1（TITLE_MIN_LENGTH/DESCRIPTION_MIN_LENGTH），trim 之后
+  // "不满足下限"等价于"整个字符串是空的"，所以下限失败只提示"请输入
+  // 标题/描述"，不再报"至少 X 个字符"这种数字提示——数字提示是给"下限
+  // 明显大于 1"的场景用的，下限就是 1 的时候报数字反而让人困惑。上限
+  // （120 / 10000）没有变，超过上限时仍然需要具体提示。
+  if (title.length < TITLE_MIN_LENGTH) {
+    return fail("PUBLISH_TITLE_REQUIRED", "请输入标题。");
   }
 
-  if (
-    description.length < DESCRIPTION_MIN_LENGTH ||
-    description.length > DESCRIPTION_MAX_LENGTH
-  ) {
+  if (title.length > TITLE_MAX_LENGTH) {
+    return fail("PUBLISH_TITLE_LENGTH", `标题不能超过 ${TITLE_MAX_LENGTH} 字符。`);
+  }
+
+  if (description.length < DESCRIPTION_MIN_LENGTH) {
+    return fail("PUBLISH_DESCRIPTION_REQUIRED", "请输入描述。");
+  }
+
+  if (description.length > DESCRIPTION_MAX_LENGTH) {
     return fail(
       "PUBLISH_DESCRIPTION_LENGTH",
-      `描述长度需要在 ${DESCRIPTION_MIN_LENGTH}-${DESCRIPTION_MAX_LENGTH} 字符之间。`
+      `描述不能超过 ${DESCRIPTION_MAX_LENGTH} 字符。`
     );
   }
 

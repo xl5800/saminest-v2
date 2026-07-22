@@ -45,15 +45,15 @@ describe("validatePublishInput", () => {
     expect(result.data?.locationId).toBeNull();
   });
 
-  it("rejects a title shorter than 5 characters", () => {
-    const result = validatePublishInput({ ...validInput, title: "abcd" });
+  it("rejects an empty title", () => {
+    const result = validatePublishInput({ ...validInput, title: "   " });
 
     expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("PUBLISH_TITLE_LENGTH");
+    expect(result.error?.code).toBe("PUBLISH_TITLE_REQUIRED");
   });
 
-  it("accepts a title exactly at the 5 character lower boundary", () => {
-    const result = validatePublishInput({ ...validInput, title: "abcde" });
+  it("accepts a single-character title", () => {
+    const result = validatePublishInput({ ...validInput, title: "A" });
 
     expect(result.success).toBe(true);
   });
@@ -71,18 +71,15 @@ describe("validatePublishInput", () => {
     expect(result.success).toBe(true);
   });
 
-  it("rejects a description shorter than 10 characters", () => {
-    const result = validatePublishInput({ ...validInput, description: "short" });
+  it("rejects an empty description", () => {
+    const result = validatePublishInput({ ...validInput, description: "   " });
 
     expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("PUBLISH_DESCRIPTION_LENGTH");
+    expect(result.error?.code).toBe("PUBLISH_DESCRIPTION_REQUIRED");
   });
 
-  it("accepts a description exactly at the 10 character lower boundary", () => {
-    const result = validatePublishInput({
-      ...validInput,
-      description: "a".repeat(10)
-    });
+  it("accepts a single-character description", () => {
+    const result = validatePublishInput({ ...validInput, description: "A" });
 
     expect(result.success).toBe(true);
   });

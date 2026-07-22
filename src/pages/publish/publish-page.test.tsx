@@ -113,7 +113,7 @@ describe("PublishPage", () => {
     expect(screen.queryByLabelText(/status/i)).not.toBeInTheDocument();
   });
 
-  it("blocks submission when the title is shorter than 5 characters", async () => {
+  it("blocks submission when the title is empty", async () => {
     renderWithProviders(<PublishPage />);
     await screen.findByRole("option", { name: "租房" });
 
@@ -121,16 +121,14 @@ describe("PublishPage", () => {
       target: { value: "cat-1" }
     });
     fireEvent.change(screen.getByLabelText("标题"), {
-      target: { value: "abcd" }
+      target: { value: "   " }
     });
     fireEvent.change(screen.getByLabelText("描述"), {
       target: { value: "A description that is definitely long enough." }
     });
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "标题长度需要在 5-120 字符之间。"
-    );
+    expect(await screen.findByRole("alert")).toHaveTextContent("请输入标题。");
     expect(createPost).not.toHaveBeenCalled();
   });
 
