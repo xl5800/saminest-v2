@@ -61,6 +61,16 @@ describe("ProfilePage", () => {
     );
   });
 
+  it("shows the '我的发布' link to /my-posts", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(screen.getByRole("link", { name: "我的发布" })).toHaveAttribute(
+      "href",
+      "/my-posts"
+    );
+  });
+
   it("calls authService.signOut and navigates home when logging out", async () => {
     signOut.mockResolvedValue(undefined);
 

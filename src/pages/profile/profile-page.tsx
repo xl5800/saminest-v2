@@ -93,6 +93,12 @@ export function ProfilePage() {
       </div>
 
       <nav aria-label="我的功能" className="mb-6">
+        <Link to="/my-posts" className={settingsItemClassName}>
+          <span>我的发布</span>
+          <span aria-hidden="true" className={chevronClassName}>
+            ›
+          </span>
+        </Link>
         <Link to="/favorites" className={settingsItemClassName}>
           <span>我的收藏</span>
           <span aria-hidden="true" className={chevronClassName}>

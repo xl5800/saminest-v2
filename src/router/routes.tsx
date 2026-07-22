@@ -14,6 +14,7 @@ import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
+import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { ProfilePage } from "../pages/profile/profile-page";
@@ -47,6 +48,19 @@ export const router = createBrowserRouter([
       },
       {
         path: "publish",
+        element: (
+          <RequireAuth>
+            <PublishPage />
+          </RequireAuth>
+        )
+      },
+      {
+        // 编辑帖子复用同一个 PublishPage（阶段六会让它按有没有 :id 参数
+        // 分新建/编辑两种模式），这里先注册好路由，让"我的发布"页面阶段四
+        // 的"编辑"按钮跳转有地方落地，不会命中通配符 404 页——PublishPage
+        // 本身在阶段六之前还不认识这个 :id 参数，会跟 /publish 一样渲染成
+        // 新建表单，这是过渡状态，不是 bug。
+        path: "publish/:id",
         element: (
           <RequireAuth>
             <PublishPage />
@@ -90,6 +104,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ProfilePage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "my-posts",
+        element: (
+          <RequireAuth>
+            <MyPostsPage />
           </RequireAuth>
         )
       },

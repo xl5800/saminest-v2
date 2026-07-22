@@ -443,6 +443,7 @@ export type Database = {
           price_amount: number | null
           price_label: string | null
           published_at: string | null
+          rejection_reason: string | null
           status: string
           title: string
           updated_at: string
@@ -466,6 +467,7 @@ export type Database = {
           price_amount?: number | null
           price_label?: string | null
           published_at?: string | null
+          rejection_reason?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -489,6 +491,7 @@ export type Database = {
           price_amount?: number | null
           price_label?: string | null
           published_at?: string | null
+          rejection_reason?: string | null
           status?: string
           title?: string
           updated_at?: string

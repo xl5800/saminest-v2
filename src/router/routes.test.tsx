@@ -10,6 +10,7 @@ const {
   listApprovedPosts,
   listPendingPosts,
   listAllPosts,
+  listMyPosts,
   createPost,
   getPostDetail,
   listMessages,
@@ -28,6 +29,7 @@ const {
   listApprovedPosts: vi.fn(),
   listPendingPosts: vi.fn(),
   listAllPosts: vi.fn(),
+  listMyPosts: vi.fn(),
   createPost: vi.fn(),
   getPostDetail: vi.fn(),
   listMessages: vi.fn(),
@@ -52,6 +54,7 @@ vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
   listPendingPosts,
   listAllPosts,
+  listMyPosts,
   createPost,
   getPostDetail
 }));
@@ -95,6 +98,7 @@ import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
+import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { ProfilePage } from "../pages/profile/profile-page";
@@ -168,6 +172,14 @@ function renderAt(path: string | string[]) {
             element: (
               <RequireAuth>
                 <ProfilePage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "my-posts",
+            element: (
+              <RequireAuth>
+                <MyPostsPage />
               </RequireAuth>
             )
           },
@@ -490,6 +502,25 @@ describe("app routes", () => {
     renderAt("/profile");
 
     expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
+  });
+
+  it("redirects /my-posts to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/my-posts");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the my-posts page at /my-posts when a session exists", async () => {
+    useAuthStore.getState().setSession({
+      user: { id: "user-1", email: "alice@example.com" }
+    } as never);
+    listMyPosts.mockResolvedValue([]);
+
+    renderAt("/my-posts");
+
+    expect(await screen.findByRole("heading", { name: "我的发布" })).toBeInTheDocument();
   });
 
   it("redirects /admin/posts to /login when there is no session (reuses RequireAuth)", () => {

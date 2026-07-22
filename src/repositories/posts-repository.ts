@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
-import type { TablesInsert } from "../types/database.generated";
+import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 
 export interface PostListItem {
@@ -204,7 +204,9 @@ export interface PostDetail {
   priceAmount: number | null;
   priceLabel: string | null;
   currencyCode: string;
+  categoryId: string;
   categoryName: string;
+  locationId: string | null;
   locationName: string | null;
   createdAt: string;
   authorDisplayName: string;
@@ -227,6 +229,8 @@ interface PostDetailRow {
   price_amount: number | null;
   price_label: string | null;
   currency_code: string;
+  category_id: string;
+  location_id: string | null;
   created_at: string;
   contact_method: string | null;
   contact_value: string | null;
@@ -256,12 +260,18 @@ interface PostDetailRow {
  * listApprovedPosts 里 resolveCoverImageUrl 那段注释是同一个 supabase-js
  * 限制），所以这里也是多选出 deleted_at 这一列，在 JS 里把软删除的图片
  * 过滤掉，而不是展示出来。
+ *
+ * category_id / location_id 这两个原始外键值是"我的发布"编辑表单回填用的
+ * （下拉框要按 ID 选中对应选项，联表查出来的 category_name_zh/location_name
+ * 展示名对回填没用）——只读详情页不需要这两个字段，但没必要为了这一个
+ * 只读页面单独拆一份"编辑用查询"，两边字段大部分重叠，多出的这两列对
+ * 只读页面没有副作用，加在同一个查询里更省一次请求。
  */
 export async function getPostDetail(postId: string): Promise<PostDetail | null> {
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, description, price_amount, price_label, currency_code, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, title, description, price_amount, price_label, currency_code, category_id, location_id, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -292,7 +302,9 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     priceAmount: data.price_amount,
     priceLabel: data.price_label,
     currencyCode: data.currency_code,
+    categoryId: data.category_id,
     categoryName: data.category?.name_zh ?? "未知分类",
+    locationId: data.location_id,
     locationName: data.location?.name ?? null,
     createdAt: data.created_at,
     authorDisplayName: data.author?.display_name ?? "未知用户",
@@ -485,4 +497,244 @@ export async function listAllPosts(statusFilter?: string): Promise<AdminPostList
     categoryName: row.category?.name_zh ?? "未知分类",
     status: row.status
   }));
+}
+
+export interface MyPostListItem {
+  id: string;
+  title: string;
+  categoryName: string;
+  locationName: string | null;
+  coverImageUrl: string | null;
+  status: string;
+  createdAt: string;
+  rejectionReason: string | null;
+}
+
+interface MyPostRow {
+  id: string;
+  title: string;
+  status: string;
+  created_at: string;
+  rejection_reason: string | null;
+  location: { name: string } | null;
+  category: { name_zh: string } | null;
+  post_images: PostFeedImageRow[] | null;
+}
+
+/**
+ * "我的发布"管理页用：按 author_id 过滤出当前登录用户自己的帖子，不限制
+ * status（draft/pending/approved/rejected/archived 全部要展示，让作者
+ * 能在一个页面管理所有状态），只排除已软删除的（deleted_at 不为 null——
+ * 作者自己删除过的帖子，删除本身在这个页面上就是终态操作，不需要再让它
+ * 出现在列表里）。
+ *
+ * 可见性完全靠 posts_select_public_or_own_or_admin 这条 RLS 策略保证
+ * （作者能读到自己任何状态的帖子），这里加 `.eq("author_id", authorId)`
+ * 只是为了不把"当前用户能看到的全部帖子"（游客也能看到的 approved 帖子）
+ * 也混进来，不是权限判断本身。
+ *
+ * 封面图取法（一条 post_images，按 sort_order 排序，JS 里过滤软删除）
+ * 直接复用 listApprovedPosts 的 resolveCoverImageUrl，跟那边是同一个
+ * supabase-js 嵌套 select 限制。
+ *
+ * rejection_reason 见
+ * supabase/migrations/20260722000000_add_posts_rejection_reason.sql——
+ * 只在 status = 'rejected' 时才有意义，但这里不做按状态才选择性查询这一列
+ * 的处理，统一带出来，卡片组件自己决定什么时候展示。
+ */
+export async function listMyPosts(authorId: string): Promise<MyPostListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .select(
+      "id, title, status, created_at, rejection_reason, location:locations(name), category:categories(name_zh), post_images(public_url, sort_order, deleted_at)"
+    )
+    .eq("author_id", authorId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .order("sort_order", { foreignTable: "post_images", ascending: true })
+    .limit(1, { foreignTable: "post_images" })
+    .overrideTypes<MyPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_POSTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    categoryName: row.category?.name_zh ?? "未知分类",
+    locationName: row.location?.name ?? null,
+    coverImageUrl: resolveCoverImageUrl(row.post_images),
+    status: row.status,
+    createdAt: row.created_at,
+    rejectionReason: row.rejection_reason
+  }));
+}
+
+// 下面四个方法（updatePost/archivePost/resubmitPost/deleteMyPost）都是
+// 作者对自己帖子的自助操作，全部走 posts_update_own_or_admin 这条 RLS
+// 策略的作者分支直接 UPDATE，不新建 security definer 函数、不写
+// moderation_actions——这是跟用户确认过的方案（管理员那一套 approve_post/
+// reject_post/delete_post 走函数+审计日志，是因为那是"对别人内容的裁决"；
+// 这四个是"作者对自己内容的自助管理"，两者权限模型不同，不应该共用同一套
+// 机制）。
+//
+// 四个方法都在 .update() 后面接 `.select("id").maybeSingle()`：RLS 的
+// `using` 子句只是让不满足条件的行在 UPDATE 的目标集合里"消失"，不会让
+// PostgREST 报错——如果 postId 不存在、不属于当前用户、或者已经被软删除，
+// `.update()` 本身会静默地影响 0 行、返回成功。只看 `error` 字段判断不出
+// "改成功了"和"这一行根本没被选中"的区别，所以额外 select 回 id，
+// `data` 是 null 就视为"帖子不存在，或没有权限操作"，包装成明确的 AppError，
+// 不让调用方误以为操作成功了。
+
+const MY_POST_NOT_FOUND_MESSAGE = "帖子不存在，或没有权限操作。";
+
+export interface UpdatePostInput {
+  postId: string;
+  currentStatus: string;
+  categoryId: string;
+  locationId: string | null;
+  title: string;
+  description: string;
+  priceAmount: number | null;
+  contactMethod: string | null;
+  contactValue: string | null;
+}
+
+/**
+ * 编辑帖子字段用。currentStatus 由调用方传入（编辑表单加载时已经查出来的
+ * 当前状态），不在这个函数内部再查一次——理由见 UpdatePostInput 类型上方
+ * 这段：这个值只用来决定"要不要顺带把 status 改回 pending"，不是权限判断
+ * 依据（RLS 的 with check 才是权限判断依据，这里传错/传旧了 currentStatus
+ * 顶多导致"该转 pending 的没转"这种业务逻辑小问题，不会绕过任何权限限制）。
+ *
+ * status 只有原本是 'approved' 时才会被带进这次 UPDATE、改成 'pending'——
+ * 内容变了要重新审核。如果原本是 rejected/archived/draft/pending，这次
+ * 编辑不自动改状态，等作者自己手动点"重新提交审核"（resubmitPost）。这跟
+ * posts_update_own_or_admin 的 with check（status 不变，或者不等于
+ * approved）完全对得上：不传 status 字段时，UPDATE 不触碰这一列，新值
+ * 自动等于旧值，天然满足"status 不变"这一支。
+ */
+export async function updatePost(input: UpdatePostInput): Promise<void> {
+  const payload: TablesUpdate<"posts"> = {
+    category_id: input.categoryId,
+    location_id: input.locationId,
+    title: input.title,
+    description: input.description,
+    price_amount: input.priceAmount,
+    contact_method: input.contactMethod,
+    contact_value: input.contactValue
+  };
+
+  if (input.currentStatus === "approved") {
+    payload.status = "pending";
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .update(payload)
+    .eq("id", input.postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "POST_UPDATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(MY_POST_NOT_FOUND_MESSAGE, "POST_UPDATE_NOT_FOUND");
+  }
+}
+
+/**
+ * 下架：status 改成 'archived'，同时把 archived_at 设成当前时间——这一列
+ * 从建表到现在从没被任何代码写过（见 Tables.md "下架时间"字段说明），
+ * 这次是它第一次被用到。'archived' 不是 posts_update_own_or_admin 作者
+ * 分支黑名单挡住的 'approved'，直接 UPDATE 可以通过。
+ */
+export async function archivePost(postId: string): Promise<void> {
+  const payload: TablesUpdate<"posts"> = {
+    status: "archived",
+    archived_at: new Date().toISOString()
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .update(payload)
+    .eq("id", postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "POST_ARCHIVE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(MY_POST_NOT_FOUND_MESSAGE, "POST_ARCHIVE_NOT_FOUND");
+  }
+}
+
+/**
+ * 重新提交审核：status 改回 'pending'，同时把 rejection_reason 清空成
+ * null——旧的驳回原因对一条已经重新提交的帖子没有意义了，留着会在下一次
+ * 审核完成前展示一条过期信息。清空这一列被
+ * posts_update_own_or_admin 作者分支的 with check 显式允许（见
+ * supabase/migrations/20260722000000_add_posts_rejection_reason.sql），
+ * 但这条策略只放行"改成 null"，不放行"改成任意其它文本"，所以这个函数
+ * 不接受调用方传入自定义的 rejection_reason，只能清空，不能捏造。
+ */
+export async function resubmitPost(postId: string): Promise<void> {
+  const payload: TablesUpdate<"posts"> = {
+    status: "pending",
+    rejection_reason: null
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .update(payload)
+    .eq("id", postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "POST_RESUBMIT_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(MY_POST_NOT_FOUND_MESSAGE, "POST_RESUBMIT_NOT_FOUND");
+  }
+}
+
+/**
+ * 作者自己删除自己的帖子（软删除：设置 deleted_at）。故意叫 deleteMyPost
+ * 而不是 deletePost——admin-repository.ts 里已经有一个 deletePost，那个是
+ * 管理员专用的 delete_post() RPC 封装（内部硬性检查 is_admin()，普通作者
+ * 调用会被数据库拒绝），跟这个函数权限模型完全不同，不能共用一个名字，
+ * 避免以后有人看名字以为能互相替换调用。
+ *
+ * 这个操作没有对应的 moderation_actions 记录（那张表的 INSERT 策略是
+ * 管理员专用，作者自助删除不属于"管理员审核动作"，见方案讨论）；也没有
+ * "删除原因"这个概念——不像管理员删帖需要为审计日志留一个理由，这里只是
+ * 一个 Yes/No 确认。
+ *
+ * posts_update_own_or_admin 的 using 子句要求 `deleted_at is null` 才能
+ * 选中一行做 UPDATE，所以这个操作天然不可逆：一旦 deleted_at 被设置，
+ * 作者自己也无法再通过这条策略选中这一行做任何后续更新（包括恢复），不需要
+ * 额外代码去保证"删除是终态"。
+ */
+export async function deleteMyPost(postId: string): Promise<void> {
+  const payload: TablesUpdate<"posts"> = {
+    deleted_at: new Date().toISOString()
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .update(payload)
+    .eq("id", postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "MY_POST_DELETE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(MY_POST_NOT_FOUND_MESSAGE, "MY_POST_DELETE_NOT_FOUND");
+  }
 }

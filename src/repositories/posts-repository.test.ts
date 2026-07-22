@@ -12,6 +12,7 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
     "order",
     "range",
     "insert",
+    "update",
     "limit",
     "or"
   ] as const;
@@ -31,12 +32,17 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  archivePost,
   createPost,
+  deleteMyPost,
   getPostAuthorId,
   getPostDetail,
   listAllPosts,
   listApprovedPosts,
-  listPendingPosts
+  listMyPosts,
+  listPendingPosts,
+  resubmitPost,
+  updatePost
 } from "./posts-repository";
 
 describe("listApprovedPosts", () => {
@@ -598,6 +604,8 @@ describe("getPostDetail", () => {
         price_amount: 1200,
         price_label: null,
         currency_code: "USD",
+        category_id: "cat-1",
+        location_id: "loc-1",
         created_at: "2026-07-01T00:00:00.000Z",
         contact_method: "email",
         contact_value: "a@b.com",
@@ -622,7 +630,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, description, price_amount, price_label, currency_code, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, title, description, price_amount, price_label, currency_code, category_id, location_id, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -637,7 +645,9 @@ describe("getPostDetail", () => {
       priceAmount: 1200,
       priceLabel: null,
       currencyCode: "USD",
+      categoryId: "cat-1",
       categoryName: "租房",
+      locationId: "loc-1",
       locationName: "Rockville",
       createdAt: "2026-07-01T00:00:00.000Z",
       authorDisplayName: "Alice",
@@ -773,6 +783,317 @@ describe("listAllPosts", () => {
 
     await expect(listAllPosts()).rejects.toMatchObject({
       code: "ADMIN_ALL_POSTS_LIST_FAILED"
+    });
+  });
+});
+
+describe("listMyPosts", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("filters by author_id, excludes soft-deleted posts, does not filter by status, and orders by created_at desc", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listMyPosts("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, title, status, created_at, rejection_reason, location:locations(name), category:categories(name_zh), post_images(public_url, sort_order, deleted_at)"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("author_id", "user-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("status", expect.anything());
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(queryBuilder.limit).toHaveBeenCalledWith(1, { foreignTable: "post_images" });
+  });
+
+  it("maps rows including a rejected post's rejection_reason and a cover image", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Sunny room",
+          status: "rejected",
+          created_at: "2026-07-01T00:00:00.000Z",
+          rejection_reason: "标题涉嫌虚假宣传。",
+          location: { name: "Rockville" },
+          category: { name_zh: "租房" },
+          post_images: [
+            { public_url: "https://img.example.com/1.jpg", sort_order: 0, deleted_at: null }
+          ]
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyPosts("user-1");
+
+    expect(result).toEqual([
+      {
+        id: "post-1",
+        title: "Sunny room",
+        categoryName: "租房",
+        locationName: "Rockville",
+        coverImageUrl: "https://img.example.com/1.jpg",
+        status: "rejected",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        rejectionReason: "标题涉嫌虚假宣传。"
+      }
+    ]);
+  });
+
+  it("returns a null rejectionReason for a non-rejected post", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Sunny room",
+          status: "approved",
+          created_at: "2026-07-01T00:00:00.000Z",
+          rejection_reason: null,
+          location: null,
+          category: null,
+          post_images: []
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyPosts("user-1");
+
+    expect(result[0].rejectionReason).toBeNull();
+    expect(result[0].coverImageUrl).toBeNull();
+    expect(result[0].locationName).toBeNull();
+    expect(result[0].categoryName).toBe("未知分类");
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listMyPosts("user-1")).rejects.toMatchObject({
+      code: "MY_POSTS_LIST_FAILED"
+    });
+  });
+});
+
+const validUpdateInput = {
+  postId: "post-1",
+  currentStatus: "pending",
+  categoryId: "cat-1",
+  locationId: "loc-1",
+  title: "Updated title",
+  description: "Updated description",
+  priceAmount: 500,
+  contactMethod: "email",
+  contactValue: "a@b.com"
+};
+
+describe("updatePost", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("updates the editable fields without touching status when currentStatus is not approved", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await updatePost(validUpdateInput);
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.update).toHaveBeenCalledWith({
+      category_id: "cat-1",
+      location_id: "loc-1",
+      title: "Updated title",
+      description: "Updated description",
+      price_amount: 500,
+      contact_method: "email",
+      contact_value: "a@b.com"
+    });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
+  });
+
+  it("also resets status to pending when currentStatus was approved", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await updatePost({ ...validUpdateInput, currentStatus: "approved" });
+
+    expect(queryBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "pending" })
+    );
+  });
+
+  it("does not touch status when currentStatus is rejected or archived", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await updatePost({ ...validUpdateInput, currentStatus: "rejected" });
+
+    expect(queryBuilder.update).toHaveBeenCalledWith(
+      expect.not.objectContaining({ status: expect.anything() })
+    );
+  });
+
+  it("throws an AppError when the Supabase update fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "update failed", code: "500" }
+    });
+
+    await expect(updatePost(validUpdateInput)).rejects.toMatchObject({
+      code: "POST_UPDATE_FAILED"
+    });
+  });
+
+  it("throws a not-found AppError when no row was affected (not the author, or does not exist)", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(updatePost(validUpdateInput)).rejects.toMatchObject({
+      code: "POST_UPDATE_NOT_FOUND"
+    });
+  });
+});
+
+describe("archivePost", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("sets status to archived and stamps archived_at", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await archivePost("post-1");
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "archived" })
+    );
+    const [payload] = queryBuilder.update.mock.calls[0];
+    expect(typeof payload.archived_at).toBe("string");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
+  });
+
+  it("throws an AppError when the Supabase update fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "update failed", code: "500" }
+    });
+
+    await expect(archivePost("post-1")).rejects.toMatchObject({
+      code: "POST_ARCHIVE_FAILED"
+    });
+  });
+
+  it("throws a not-found AppError when no row was affected", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(archivePost("post-1")).rejects.toMatchObject({
+      code: "POST_ARCHIVE_NOT_FOUND"
+    });
+  });
+});
+
+describe("resubmitPost", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("sets status to pending and clears rejection_reason", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await resubmitPost("post-1");
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.update).toHaveBeenCalledWith({
+      status: "pending",
+      rejection_reason: null
+    });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
+  });
+
+  it("throws an AppError when the Supabase update fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "update failed", code: "500" }
+    });
+
+    await expect(resubmitPost("post-1")).rejects.toMatchObject({
+      code: "POST_RESUBMIT_FAILED"
+    });
+  });
+
+  it("throws a not-found AppError when no row was affected", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(resubmitPost("post-1")).rejects.toMatchObject({
+      code: "POST_RESUBMIT_NOT_FOUND"
+    });
+  });
+});
+
+describe("deleteMyPost", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("sets deleted_at", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await deleteMyPost("post-1");
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    const [payload] = queryBuilder.update.mock.calls[0];
+    expect(typeof payload.deleted_at).toBe("string");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
+  });
+
+  it("throws an AppError when the Supabase update fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "update failed", code: "500" }
+    });
+
+    await expect(deleteMyPost("post-1")).rejects.toMatchObject({
+      code: "MY_POST_DELETE_FAILED"
+    });
+  });
+
+  it("throws a not-found AppError when no row was affected (not the author, or already deleted)", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(deleteMyPost("post-1")).rejects.toMatchObject({
+      code: "MY_POST_DELETE_NOT_FOUND"
     });
   });
 });
