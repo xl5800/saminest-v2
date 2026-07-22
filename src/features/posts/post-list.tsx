@@ -56,31 +56,31 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
         {data.posts.map((post) => (
           <div
             key={post.id}
-            className="mb-3 break-inside-avoid overflow-hidden rounded-lg border border-border bg-white"
+            className="mb-3 break-inside-avoid overflow-hidden rounded-2xl border border-border bg-white shadow-card"
           >
             <Link to={`/post/${post.id}`} className="block">
               {post.coverImageUrl ? (
                 <img
                   src={post.coverImageUrl}
                   alt={post.title}
-                  className="aspect-[4/3] w-full rounded-t-lg object-cover"
+                  className="aspect-[4/3] w-full rounded-t-2xl object-cover"
                 />
               ) : (
                 <div
                   aria-hidden="true"
                   data-testid="post-thumbnail-placeholder"
-                  className="flex aspect-[4/3] w-full items-center justify-center rounded-t-lg bg-border text-2xl"
+                  className="flex aspect-[4/3] w-full items-center justify-center rounded-t-2xl bg-border text-2xl"
                 >
                   🖼
                 </div>
               )}
-              <div className="space-y-1 p-2">
-                <p className="line-clamp-2 break-words text-sm text-text">{post.title}</p>
-                <p className="font-semibold text-accent">
+              <div className="space-y-1 p-3">
+                <p className="line-clamp-2 break-words text-base text-text">{post.title}</p>
+                <p className="text-lg font-semibold text-accent">
                   {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
                 </p>
                 <div className="flex flex-wrap items-center gap-1">
-                  <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
+                  <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
                     {post.categoryName}
                   </span>
                   <span className="text-xs text-text-muted">
@@ -93,7 +93,7 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
                 </div>
               </div>
             </Link>
-            <div className="flex items-center justify-between px-2 pb-2">
+            <div className="flex items-center justify-between px-3 pb-3">
               <span className="text-xs text-text-muted">♥ {post.favoriteCount}</span>
               <FavoriteButton postId={post.id} />
             </div>

@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+/*
+ * 间距刻度：8 / 12 / 16 / 24px。不新建自定义间距 token——Tailwind 默认的
+ * 0.25rem 基准刻度本来就精确落在这四个数值上（p-2=8px, p-3=12px,
+ * p-4=16px, p-6=24px），直接用这四档做全站间距节奏就够了，不需要再建一套
+ * 名字不同、数值却重复的 token。
+ *
+ * 字号层级：不新建自定义字号 token，Tailwind 默认字号刻度已经精确覆盖，
+ * 按下面这套语义约定使用（配合 font-medium/font-semibold 控制字重）：
+ *   Title（页面/卡片主标题）        text-lg 或 text-xl（18-20px）+ font-semibold
+ *   Subtitle（副标题）              text-base（16px） + font-medium
+ *   Body（正文，含所有表单控件）    text-base（16px） + font-normal
+ *     —— 输入类控件字号不能小于 16px，聚焦时会触发 iOS Safari 自动放大
+ *        页面的 bug，之前专门修过，这里再次强调不要在任何 input/textarea/
+ *        select 上使用 text-sm 或更小的字号。
+ *   Caption / 次要文字              text-sm（14px） + text-text-muted
+ *   Price（价格数字）               text-lg 或 text-xl + font-semibold + text-accent
+ *   Tag（分类标签等小标签）         text-xs（12px） + font-medium
+ *
+ * 次要文字色：规范里提到的"次要文字色"就是下面已有的 --color-text-muted，
+ * 不另外建 --color-text-secondary 这个同义 token。
+ */
 @theme {
   --color-primary: #2563eb;
   --color-primary-hover: #1e40af;
@@ -11,9 +32,36 @@
   --color-success: #2e7d32;
   --color-warning: #b7791f;
   --color-danger: #c0392b;
+
+  /*
+   * 圆角刻度：Tailwind 默认圆角档位（rounded-lg=8px, rounded-xl=12px,
+   * rounded-2xl=16px, rounded-3xl=24px）里没有正好落在 20px / 26px 上的
+   * 档位，这两个是规范里明确要求的具体数值，所以单独建具名 token。
+   * rounded-2xl（16px）已经满足帖子卡片的圆角要求，不用再建一个重复的。
+   */
+  --radius-search: 26px;
+  --radius-profile-card: 20px;
+
+  /*
+   * 阴影刻度：Airbnb 风格的双层轻阴影（卡片）+ 更轻一档（搜索框/设置列表项）
+   * + 更重一档、突出层级（悬浮发布按钮）。
+   */
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-search: 0 1px 4px rgba(0, 0, 0, 0.06);
+  --shadow-fab: 0 4px 16px rgba(0, 0, 0, 0.12);
+  --shadow-settings-item: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
+}
+
+/*
+ * 我的页面背景单独用 #F8F8F6（不是纯白，也不是全局的 --color-bg），
+ * 规范里明确要求这个页面背景色跟其它页面区分开——用一个专门的 class
+ * 而不是改 body 背景色，避免影响其它所有页面。
+ */
+.bg-profile-page {
+  background-color: #f8f8f6;
 }

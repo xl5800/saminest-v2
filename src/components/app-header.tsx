@@ -17,7 +17,7 @@ export function AppHeader() {
 
   return (
     <header className="sticky top-0 z-10 border-b border-border bg-bg">
-      <div className="flex items-center gap-4 px-4 py-3">
+      <div className="flex h-14 items-center gap-4 px-4">
         {showBackButton ? (
           <button
             type="button"
@@ -35,7 +35,7 @@ export function AppHeader() {
 
         <Link
           to="/publish"
-          className="ml-auto shrink-0 rounded bg-accent px-4 py-2 font-semibold text-white"
+          className="ml-auto shrink-0 rounded-xl bg-accent px-4 py-2 font-semibold text-white"
         >
           发布
         </Link>

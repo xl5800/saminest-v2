@@ -66,18 +66,29 @@ describe("getMyProfile", () => {
     maybeSingleMock.mockReset();
   });
 
-  it("returns the display name when the profile row exists", async () => {
+  it("returns the display name and avatar url when the profile row exists", async () => {
     maybeSingleMock.mockResolvedValue({
-      data: { display_name: "Alice" },
+      data: { display_name: "Alice", avatar_url: "https://example.com/avatar.png" },
       error: null
     });
 
     const result = await getMyProfile("user-1");
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
-    expect(queryBuilder.select).toHaveBeenCalledWith("display_name");
+    expect(queryBuilder.select).toHaveBeenCalledWith("display_name, avatar_url");
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-1");
-    expect(result).toEqual({ displayName: "Alice" });
+    expect(result).toEqual({ displayName: "Alice", avatarUrl: "https://example.com/avatar.png" });
+  });
+
+  it("returns a null avatar url when the profile has no avatar", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { display_name: "Alice", avatar_url: null },
+      error: null
+    });
+
+    const result = await getMyProfile("user-1");
+
+    expect(result).toEqual({ displayName: "Alice", avatarUrl: null });
   });
 
   it("returns null without throwing when there is no matching profile row", async () => {

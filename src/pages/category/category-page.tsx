@@ -36,7 +36,7 @@ function CategoryPosts({ categoryId, slug }: CategoryPostsProps) {
           placeholder="搜索本分类下的帖子…"
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
-          className="w-full rounded-full border border-border bg-bg px-4 py-2 text-base text-text shadow-sm"
+          className="h-13 w-full rounded-search border border-border bg-bg px-4 text-base text-text shadow-search"
         />
       </div>
       <CategoryNav activeSlug={slug} />

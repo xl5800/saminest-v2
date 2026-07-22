@@ -4,7 +4,7 @@ import { getMyProfile, type MyProfile } from "../../repositories/profiles-reposi
 import { useAuthStore } from "../../store/auth-store";
 
 /**
- * 当前登录用户自己的 profile（目前只有 display_name），供 /profile 页面
+ * 当前登录用户自己的 profile（display_name + avatar_url），供 /profile 页面
  * 展示用。没有登录用户时禁用查询——这个 hook 只会在 /profile 页面使用，
  * 而该路由已经被 RequireAuth 包裹，这里的 enabled 只是防御性的，不承担
  * 鉴权职责。

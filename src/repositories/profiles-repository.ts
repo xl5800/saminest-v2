@@ -32,13 +32,21 @@ export async function getCurrentUserRole(userId: string): Promise<string | null>
 
 export interface MyProfile {
   displayName: string;
+  avatarUrl: string | null;
 }
 
 /**
- * 只读当前登录用户自己的 display_name，供 /profile 页面展示用（跟
- * getCurrentUserRole 只取 role 一列是同一个"按需只选一列"的原则，不复用
- * 同一个函数——两者用途不同、以后各自演化的字段也可能不同，没必要为了
- * 省一个函数而耦合在一起）。
+ * 只读当前登录用户自己的 display_name + avatar_url，供 /profile 页面
+ * 展示用（跟 getCurrentUserRole 只取 role 一列是同一个"按需只选一列"的
+ * 原则，不复用同一个函数——两者用途不同、以后各自演化的字段也可能不同，
+ * 没必要为了省一个函数而耦合在一起）。
+ *
+ * avatar_url 这次一并带出来，是这版"我的"页面视觉规范要求展示一个头像
+ * 位——profiles 表本来就有这一列（v1 遗留字段），但整个 v2 目前没有任何
+ * 头像上传功能，所以这一列现在总是 null，页面侧要按"没有头像时显示
+ * 首字母占位"处理，不能假设它一定有值。真正的头像上传功能是另一个独立
+ * 任务，这次只是把已经存在的这一列读出来、把展示位置做对，不在这里顺带
+ * 做上传。
  *
  * profiles_select_public_or_self 这条已有的 RLS 策略保证任何登录用户都能
  * 读到自己的 profile 行（见上面 getCurrentUserRole 的注释），不需要新增
@@ -50,7 +58,7 @@ export interface MyProfile {
 export async function getMyProfile(userId: string): Promise<MyProfile | null> {
   const { data, error } = await getSupabaseClient()
     .from("profiles")
-    .select("display_name")
+    .select("display_name, avatar_url")
     .eq("id", userId)
     .maybeSingle();
 
@@ -58,7 +66,7 @@ export async function getMyProfile(userId: string): Promise<MyProfile | null> {
     throw new AppError(error.message, "MY_PROFILE_FETCH_FAILED", error);
   }
 
-  return data ? { displayName: data.display_name } : null;
+  return data ? { displayName: data.display_name, avatarUrl: data.avatar_url } : null;
 }
 
 export interface AdminProfileListItem {

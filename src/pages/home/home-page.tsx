@@ -31,7 +31,7 @@ export function HomePage() {
           placeholder="搜租房、求租、二手物品…"
           value={inputValue}
           onChange={(event) => setInputValue(event.target.value)}
-          className="w-full rounded-full border border-border bg-bg px-4 py-2 text-base text-text shadow-sm"
+          className="h-13 w-full rounded-search border border-border bg-bg px-4 text-base text-text shadow-search"
         />
       </div>
       <CategoryNav />
