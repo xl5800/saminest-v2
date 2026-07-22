@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from "react";
+import { Fragment, type FormEvent, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
@@ -6,7 +6,7 @@ import { useMessagesQuery } from "../../features/messages/use-messages-query";
 import { useSendMessageMutation } from "../../features/messages/use-send-message-mutation";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
-import { formatPublishedAt } from "../../utils/format";
+import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
 
 const MESSAGE_MAX_LENGTH = 5000;
 const EMPTY_MESSAGE_ERROR = "请输入消息内容。";
@@ -171,30 +171,43 @@ export function MessageConversationPage() {
         ) : null}
         {!messagesPending && !messagesError && messageList.length > 0 ? (
           <ul className="flex flex-col gap-3">
-            {messageList.map((message) => {
+            {messageList.map((message, index) => {
+              const previousMessage = messageList[index - 1];
+              const showTimeDivider = shouldShowMessageTimeDivider(
+                message.createdAt,
+                previousMessage ? previousMessage.createdAt : null
+              );
               const isMine = message.senderId === currentUserId;
               return (
-                <li
-                  key={message.id}
-                  data-message-owner={isMine ? "self" : "other"}
-                  aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
-                  className={isMine ? "flex justify-end" : "flex justify-start"}
-                >
-                  <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
-                    <div
-                      className={
-                        isMine
-                          ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
-                          : "min-w-0 whitespace-pre-wrap rounded-2xl bg-white px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
-                      }
-                    >
-                      {message.body}
+                <Fragment key={message.id}>
+                  {showTimeDivider ? (
+                    <li className="flex justify-center">
+                      <time
+                        dateTime={message.createdAt}
+                        className="rounded-full bg-black/5 px-2.5 py-1 text-xs text-text-muted"
+                      >
+                        {formatMessageTimeDivider(message.createdAt)}
+                      </time>
+                    </li>
+                  ) : null}
+                  <li
+                    data-message-owner={isMine ? "self" : "other"}
+                    aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
+                    className={isMine ? "flex justify-end" : "flex justify-start"}
+                  >
+                    <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+                      <div
+                        className={
+                          isMine
+                            ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
+                            : "min-w-0 whitespace-pre-wrap rounded-2xl bg-white px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
+                        }
+                      >
+                        {message.body}
+                      </div>
                     </div>
-                    <time dateTime={message.createdAt} className="mt-1 px-1 text-xs text-text-muted">
-                      {formatPublishedAt(message.createdAt)}
-                    </time>
-                  </div>
-                </li>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>

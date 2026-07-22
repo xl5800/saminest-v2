@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { formatListingDate, formatPrice, formatPublishedAt } from "./format";
+import {
+  formatListingDate,
+  formatMessageTimeDivider,
+  formatPrice,
+  formatPublishedAt,
+  shouldShowMessageTimeDivider
+} from "./format";
 
 describe("formatPrice", () => {
   it("prefers the price label when present", () => {
@@ -60,5 +66,67 @@ describe("formatListingDate", () => {
 
   it("keeps the database UTC date near UTC midnight", () => {
     expect(formatListingDate("2026-07-01T00:30:00.000Z")).toBe("07-01");
+  });
+});
+
+describe("shouldShowMessageTimeDivider", () => {
+  it("shows a divider for the first message in a conversation", () => {
+    expect(shouldShowMessageTimeDivider("2026-07-20T12:00:00.000Z", null)).toBe(true);
+  });
+
+  it("does not show a divider for consecutive messages within 5 minutes on the same day", () => {
+    expect(
+      shouldShowMessageTimeDivider("2026-07-20T12:04:00.000Z", "2026-07-20T12:00:00.000Z")
+    ).toBe(false);
+  });
+
+  it("shows a divider once the gap exceeds 5 minutes", () => {
+    expect(
+      shouldShowMessageTimeDivider("2026-07-20T12:05:01.000Z", "2026-07-20T12:00:00.000Z")
+    ).toBe(true);
+  });
+
+  it("shows a divider when the message crosses into a new local day even if the gap is small", () => {
+    // 本地时区午夜前后各 1 分钟：即使间隔很短，只要跨过本地日历日就应显示分隔线。
+    const localMidnight = new Date(2026, 6, 21, 0, 0, 0, 0);
+    const justBeforeMidnight = new Date(localMidnight.getTime() - 60 * 1000).toISOString();
+    const justAfterMidnight = new Date(localMidnight.getTime() + 60 * 1000).toISOString();
+
+    expect(shouldShowMessageTimeDivider(justAfterMidnight, justBeforeMidnight)).toBe(true);
+  });
+
+  it("treats an invalid previous timestamp as if there were no previous message", () => {
+    expect(shouldShowMessageTimeDivider("2026-07-20T12:00:00.000Z", "not-a-date")).toBe(true);
+  });
+});
+
+describe("formatMessageTimeDivider", () => {
+  const now = new Date("2026-07-20T18:00:00.000Z");
+
+  function expectedTimeLabel(date: Date): string {
+    return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+  }
+
+  it("shows only the time for a message sent today", () => {
+    const today = new Date("2026-07-20T12:34:00.000Z");
+    expect(formatMessageTimeDivider(today.toISOString(), now)).toBe(expectedTimeLabel(today));
+  });
+
+  it("prefixes yesterday's messages with 昨天", () => {
+    const yesterday = new Date("2026-07-19T12:34:00.000Z");
+    expect(formatMessageTimeDivider(yesterday.toISOString(), now)).toBe(
+      `昨天 ${expectedTimeLabel(yesterday)}`
+    );
+  });
+
+  it("shows the full date for messages older than yesterday", () => {
+    const older = new Date("2026-07-01T12:34:00.000Z");
+    expect(formatMessageTimeDivider(older.toISOString(), now)).toBe(
+      `2026-07-01 ${expectedTimeLabel(older)}`
+    );
+  });
+
+  it("returns an empty string for an invalid timestamp", () => {
+    expect(formatMessageTimeDivider("not-a-date", now)).toBe("");
   });
 });

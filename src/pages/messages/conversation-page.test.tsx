@@ -109,6 +109,65 @@ describe("MessageConversationPage", () => {
     expect(within(mine as HTMLElement).getByText("你好")).toBeInTheDocument();
     expect(within(theirs as HTMLElement).getByText("在的")).toBeInTheDocument();
     expect(screen.queryByText(/^(我|对方)：/)).not.toBeInTheDocument();
+    // 两条消息相隔 1 分钟且同一天，按分组时间线规则只在第一条消息前显示一条时间分隔线。
+    expect(container.querySelectorAll("time")).toHaveLength(1);
+  });
+
+  it("only shows a time divider before the first message of a tightly-spaced run", () => {
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "第一条", createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "第二条", createdAt: "2026-07-20T12:02:00.000Z" },
+        { id: "message-3", senderId: "user-1", body: "第三条", createdAt: "2026-07-20T12:04:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    const { container } = renderPage();
+
+    const messageRegion = screen.getByTestId("conversation-messages");
+    const listItems = Array.from(messageRegion.querySelectorAll("li"));
+
+    expect(container.querySelectorAll("time")).toHaveLength(1);
+    // 时间分隔线是列表里独立的一项，排在这组消息最前面，不属于任何消息气泡。
+    expect(listItems[0].querySelector("time")).toBeInTheDocument();
+    expect(listItems[0]).not.toHaveAttribute("data-message-owner");
+    expect(listItems.slice(1).every((item) => item.hasAttribute("data-message-owner"))).toBe(true);
+  });
+
+  it("inserts a new time divider after a gap of more than 5 minutes", () => {
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "早一点的消息", createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "十分钟后的消息", createdAt: "2026-07-20T12:10:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    const { container } = renderPage();
+
+    expect(container.querySelectorAll("time")).toHaveLength(2);
+  });
+
+  it("inserts a new time divider when messages cross a local day boundary even if the gap is small", () => {
+    // 使用本地午夜前后各 1 分钟，避免测试结果依赖运行环境的时区。
+    const localMidnight = new Date(2026, 6, 21, 0, 0, 0, 0);
+    const justBeforeMidnight = new Date(localMidnight.getTime() - 60 * 1000).toISOString();
+    const justAfterMidnight = new Date(localMidnight.getTime() + 60 * 1000).toISOString();
+
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "昨晚的消息", createdAt: justBeforeMidnight },
+        { id: "message-2", senderId: "seller-1", body: "今天凌晨的消息", createdAt: justAfterMidnight }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    const { container } = renderPage();
+
     expect(container.querySelectorAll("time")).toHaveLength(2);
   });
 
