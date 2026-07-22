@@ -69,3 +69,34 @@ export async function insertPostImages(
     sortOrder: row.sort_order
   }));
 }
+
+const POST_IMAGE_NOT_FOUND_MESSAGE = "图片不存在，或没有权限操作。";
+
+/**
+ * 编辑帖子页面用：作者删除一张自己已经上传的图片（软删除：设置
+ * deleted_at）。走 post_images_update_own_post 这条 RLS 策略的作者分支
+ * 直接 UPDATE，跟 posts-repository.ts 的 deleteMyPost 同一个模式——不新建
+ * security definer 函数，因为这条策略本身在
+ * supabase/migrations/20260722000300_fix_post_images_update_recursion_and_select_bug.sql
+ * 里已经修过自引用子查询递归和"新行对自己不可见"这两个问题，直接 UPDATE
+ * 现在是可用的。
+ *
+ * 跟 deleteMyPost 一样，`.select("id").maybeSingle()`：这张图片不存在、
+ * 不属于当前用户、或者已经被删过，UPDATE 都会静默影响 0 行，只看 error
+ * 字段判断不出来，要额外 select 回 id 才能确认真的改到了这一行。
+ */
+export async function removeOwnPostImage(imageId: string): Promise<void> {
+  const { data, error } = await getSupabaseClient()
+    .from("post_images")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("id", imageId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "POST_IMAGE_REMOVE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(POST_IMAGE_NOT_FOUND_MESSAGE, "POST_IMAGE_REMOVE_NOT_FOUND");
+  }
+}

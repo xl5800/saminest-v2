@@ -1,7 +1,7 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
-import type { PostListItem } from "./posts-repository";
+import { resolveLocationName, type PostListItem } from "./posts-repository";
 
 // Postgres/PostgREST 的 unique_violation 错误码，对应 favorites 表的
 // favorites_user_id_post_id_key 唯一约束（见
@@ -104,6 +104,7 @@ interface FavoritedPostRow {
     created_at: string;
     deleted_at: string | null;
     location: { name: string } | null;
+    location_text: string | null;
   } | null;
 }
 
@@ -130,7 +131,7 @@ export async function listFavoritedPosts(userId: string): Promise<PostListItem[]
   const { data, error } = await getSupabaseClient()
     .from("favorites")
     .select(
-      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name))"
+      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name), location_text)"
     )
     .eq("user_id", userId)
     .overrideTypes<FavoritedPostRow[]>();
@@ -150,7 +151,7 @@ export async function listFavoritedPosts(userId: string): Promise<PostListItem[]
       priceAmount: row.post.price_amount,
       priceLabel: row.post.price_label,
       currencyCode: row.post.currency_code,
-      locationName: row.post.location?.name ?? null,
+      locationName: resolveLocationName(row.post.location, row.post.location_text),
       createdAt: row.post.created_at
     }));
 }

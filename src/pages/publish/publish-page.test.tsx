@@ -5,15 +5,21 @@ const {
   listActiveCategories,
   listActiveLocations,
   createPost,
+  getPostDetail,
+  updatePost,
   uploadPostImage,
   insertPostImages,
+  removeOwnPostImage,
   navigateMock
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listActiveLocations: vi.fn(),
   createPost: vi.fn(),
+  getPostDetail: vi.fn(),
+  updatePost: vi.fn(),
   uploadPostImage: vi.fn(),
   insertPostImages: vi.fn(),
+  removeOwnPostImage: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -24,13 +30,16 @@ vi.mock("../../repositories/locations-repository", () => ({
   listActiveLocations
 }));
 vi.mock("../../repositories/posts-repository", () => ({
-  createPost
+  createPost,
+  getPostDetail,
+  updatePost
 }));
 vi.mock("../../services/storage/post-image-storage-service", () => ({
   postImageStorageService: { uploadPostImage }
 }));
 vi.mock("../../repositories/post-images-repository", () => ({
-  insertPostImages
+  insertPostImages,
+  removeOwnPostImage
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -75,8 +84,11 @@ describe("PublishPage", () => {
     listActiveCategories.mockReset();
     listActiveLocations.mockReset();
     createPost.mockReset();
+    getPostDetail.mockReset();
+    updatePost.mockReset();
     uploadPostImage.mockReset();
     insertPostImages.mockReset();
+    removeOwnPostImage.mockReset();
     navigateMock.mockReset();
 
     listActiveCategories.mockResolvedValue([
@@ -161,6 +173,7 @@ describe("PublishPage", () => {
         authorId: "user-1",
         categoryId: "cat-1",
         locationId: null,
+        locationText: null,
         title: "Sunny room near metro",
         description: "A description that is definitely long enough.",
         priceAmount: null,
@@ -361,5 +374,184 @@ describe("PublishPage", () => {
     });
     expect(uploadPostImage).not.toHaveBeenCalled();
     expect(insertPostImages).not.toHaveBeenCalled();
+  });
+
+  it("submits a custom locationText and a null locationId when 'other' is selected", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.change(screen.getByLabelText("地区"), {
+      target: { value: "__other__" }
+    });
+    fireEvent.change(screen.getByLabelText("地区名称"), {
+      target: { value: "Somewhere not listed" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locationId: null,
+          locationText: "Somewhere not listed"
+        })
+      );
+    });
+  });
+
+  it("blocks submission when 'other' is selected but no location name is typed", async () => {
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.change(screen.getByLabelText("地区"), {
+      target: { value: "__other__" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("请输入地区名称。");
+    expect(createPost).not.toHaveBeenCalled();
+  });
+});
+
+describe("PublishPage in edit mode", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  const existingPostDetail = {
+    id: "post-1",
+    status: "pending",
+    title: "Original title",
+    description: "Original description that is long enough.",
+    priceAmount: 500,
+    priceLabel: null,
+    currencyCode: "USD",
+    categoryId: "cat-1",
+    categoryName: "租房",
+    locationId: "loc-1",
+    locationText: null,
+    locationName: "Rockville",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    authorDisplayName: "Alice",
+    contactMethod: "email",
+    contactValue: "alice@example.com",
+    images: [{ id: "img-1", publicUrl: "https://cdn.example.com/img-1.png", sortOrder: 0 }]
+  };
+
+  beforeEach(() => {
+    useAuthStore.setState(initialAuthState, true);
+    listActiveCategories.mockReset();
+    listActiveLocations.mockReset();
+    createPost.mockReset();
+    getPostDetail.mockReset();
+    updatePost.mockReset();
+    uploadPostImage.mockReset();
+    insertPostImages.mockReset();
+    removeOwnPostImage.mockReset();
+    navigateMock.mockReset();
+
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" }
+    ]);
+    listActiveLocations.mockResolvedValue([
+      { id: "loc-1", name: "Rockville" }
+    ]);
+    insertPostImages.mockResolvedValue([]);
+    useAuthStore.getState().setSession({
+      user: { id: "user-1" }
+    } as never);
+  });
+
+  function renderEditPage() {
+    return renderWithProviders(<PublishPage />, {
+      route: "/publish/:id",
+      initialEntries: ["/publish/post-1"]
+    });
+  }
+
+  it("loads the existing post via getPostDetail and pre-fills the form instead of showing a blank form", async () => {
+    getPostDetail.mockResolvedValue(existingPostDetail);
+    renderEditPage();
+
+    expect(await screen.findByDisplayValue("Original title")).toBeInTheDocument();
+    expect(
+      screen.getByDisplayValue("Original description that is long enough.")
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("分类")).toHaveValue("cat-1");
+    expect(screen.getByLabelText("地区")).toHaveValue("loc-1");
+    expect(getPostDetail).toHaveBeenCalledWith("post-1");
+  });
+
+  it("shows a not-found/no-permission message instead of a blank create form when getPostDetail returns null", async () => {
+    getPostDetail.mockResolvedValue(null);
+    renderEditPage();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "帖子不存在，或没有权限编辑。"
+    );
+    expect(screen.queryByLabelText("标题")).not.toBeInTheDocument();
+  });
+
+  it("pre-selects the 'other' location option and fills locationText when the post used a custom location", async () => {
+    getPostDetail.mockResolvedValue({
+      ...existingPostDetail,
+      locationId: null,
+      locationText: "Somewhere custom",
+      locationName: "Somewhere custom"
+    });
+    renderEditPage();
+
+    await screen.findByDisplayValue("Original title");
+    expect(screen.getByLabelText("地区")).toHaveValue("__other__");
+    expect(screen.getByLabelText("地区名称")).toHaveValue("Somewhere custom");
+  });
+
+  it("calls updatePost (not createPost) on submit, passing the loaded currentStatus", async () => {
+    getPostDetail.mockResolvedValue(existingPostDetail);
+    updatePost.mockResolvedValue(undefined);
+    renderEditPage();
+
+    await screen.findByDisplayValue("Original title");
+    fireEvent.change(screen.getByLabelText("标题"), {
+      target: { value: "Updated title" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    await waitFor(() => {
+      expect(updatePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          postId: "post-1",
+          currentStatus: "pending",
+          title: "Updated title",
+          locationId: "loc-1",
+          locationText: null
+        })
+      );
+    });
+    expect(createPost).not.toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith("/post/post-1", {
+      replace: true,
+      state: { publishSuccessMessage: "修改已保存" }
+    });
+  });
+
+  it("renders already-uploaded images with a delete button and removes one via removeOwnPostImage", async () => {
+    getPostDetail.mockResolvedValue(existingPostDetail);
+    removeOwnPostImage.mockResolvedValue(undefined);
+    renderEditPage();
+
+    await screen.findByDisplayValue("Original title");
+    expect(screen.getByText("已上传的图片")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+
+    await waitFor(() => {
+      expect(removeOwnPostImage).toHaveBeenCalledWith("img-1");
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("已上传的图片")).not.toBeInTheDocument();
+    });
   });
 });

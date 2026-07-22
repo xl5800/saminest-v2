@@ -63,7 +63,7 @@ describe("listApprovedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -339,6 +339,7 @@ describe("createPost", () => {
       authorId: "user-1",
       categoryId: "cat-1",
       locationId: "loc-1",
+      locationText: null,
       title: "Sunny room",
       description: "A description long enough.",
       priceAmount: 1200,
@@ -351,6 +352,7 @@ describe("createPost", () => {
       author_id: "user-1",
       category_id: "cat-1",
       location_id: "loc-1",
+      location_text: null,
       title: "Sunny room",
       description: "A description long enough.",
       price_amount: 1200,
@@ -369,6 +371,7 @@ describe("createPost", () => {
       authorId: "user-1",
       categoryId: "cat-1",
       locationId: null,
+      locationText: null,
       title: "Title long enough",
       description: "Description long enough.",
       priceAmount: null,
@@ -391,6 +394,7 @@ describe("createPost", () => {
         authorId: "user-1",
         categoryId: "cat-1",
         locationId: null,
+        locationText: null,
         title: "Title long enough",
         description: "Description long enough.",
         priceAmount: null,
@@ -414,6 +418,7 @@ describe("createPost", () => {
         authorId: "user-1",
         categoryId: "cat-1",
         locationId: null,
+        locationText: null,
         title: "Title long enough",
         description: "Description long enough.",
         priceAmount: null,
@@ -434,6 +439,7 @@ describe("createPost", () => {
         authorId: "user-1",
         categoryId: "cat-1",
         locationId: null,
+        locationText: null,
         title: "Title long enough",
         description: "Description long enough.",
         priceAmount: null,
@@ -599,6 +605,7 @@ describe("getPostDetail", () => {
     overrideTypesMock.mockResolvedValue({
       data: {
         id: "post-1",
+        status: "pending",
         title: "Sunny room",
         description: "A lovely room near the metro.",
         price_amount: 1200,
@@ -606,6 +613,7 @@ describe("getPostDetail", () => {
         currency_code: "USD",
         category_id: "cat-1",
         location_id: "loc-1",
+        location_text: null,
         created_at: "2026-07-01T00:00:00.000Z",
         contact_method: "email",
         contact_value: "a@b.com",
@@ -630,7 +638,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, description, price_amount, price_label, currency_code, category_id, location_id, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -640,6 +648,7 @@ describe("getPostDetail", () => {
     });
     expect(result).toEqual({
       id: "post-1",
+      status: "pending",
       title: "Sunny room",
       description: "A lovely room near the metro.",
       priceAmount: 1200,
@@ -648,6 +657,7 @@ describe("getPostDetail", () => {
       categoryId: "cat-1",
       categoryName: "租房",
       locationId: "loc-1",
+      locationText: null,
       locationName: "Rockville",
       createdAt: "2026-07-01T00:00:00.000Z",
       authorDisplayName: "Alice",
@@ -805,7 +815,7 @@ describe("listMyPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, status, created_at, rejection_reason, location:locations(name), category:categories(name_zh), post_images(public_url, sort_order, deleted_at)"
+      "id, title, status, created_at, rejection_reason, location:locations(name), location_text, category:categories(name_zh), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("author_id", "user-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -891,6 +901,7 @@ const validUpdateInput = {
   currentStatus: "pending",
   categoryId: "cat-1",
   locationId: "loc-1",
+  locationText: null,
   title: "Updated title",
   description: "Updated description",
   priceAmount: 500,
@@ -918,6 +929,7 @@ describe("updatePost", () => {
     expect(queryBuilder.update).toHaveBeenCalledWith({
       category_id: "cat-1",
       location_id: "loc-1",
+      location_text: null,
       title: "Updated title",
       description: "Updated description",
       price_amount: 500,

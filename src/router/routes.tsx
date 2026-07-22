@@ -55,11 +55,10 @@ export const router = createBrowserRouter([
         )
       },
       {
-        // 编辑帖子复用同一个 PublishPage（阶段六会让它按有没有 :id 参数
-        // 分新建/编辑两种模式），这里先注册好路由，让"我的发布"页面阶段四
-        // 的"编辑"按钮跳转有地方落地，不会命中通配符 404 页——PublishPage
-        // 本身在阶段六之前还不认识这个 :id 参数，会跟 /publish 一样渲染成
-        // 新建表单，这是过渡状态，不是 bug。
+        // 编辑帖子复用同一个 PublishPage（阶段六）：组件内部按有没有 :id
+        // 参数区分新建/编辑两种模式，编辑模式下挂载时用 getPostDetail(:id)
+        // 回填表单字段，提交时调用 updatePost() 而不是 createPost()，
+        // 详见 publish-page.tsx 顶部注释。
         path: "publish/:id",
         element: (
           <RequireAuth>

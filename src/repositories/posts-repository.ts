@@ -53,9 +53,25 @@ interface PostFeedRow {
   created_at: string;
   favorite_count: number;
   location: { name: string } | null;
+  location_text: string | null;
   category: { name_zh: string } | null;
   author: { display_name: string } | null;
   post_images: PostFeedImageRow[] | null;
+}
+
+/**
+ * 地区展示名：优先用标准化地区（location_id 联表出来的 name），
+ * 没有的话退回作者发布/编辑时手动填的 location_text（"其他"选项，见
+ * supabase/migrations/20260722000400_add_posts_location_text.sql），
+ * 两者都没有才是真的"不限地区"。四处需要展示地区名的查询
+ * （listApprovedPosts / getPostDetail / listMyPosts / listFavoritedPosts）
+ * 共用这一个函数，避免同一个 fallback 逻辑写四遍。
+ */
+export function resolveLocationName(
+  location: { name: string } | null,
+  locationText: string | null
+): string | null {
+  return location?.name ?? locationText ?? null;
 }
 
 /**
@@ -123,7 +139,7 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     )
     .eq("status", "approved")
     .is("deleted_at", null)
@@ -160,7 +176,7 @@ export async function listApprovedPosts(
       priceAmount: row.price_amount,
       priceLabel: row.price_label,
       currencyCode: row.currency_code,
-      locationName: row.location?.name ?? null,
+      locationName: resolveLocationName(row.location, row.location_text),
       createdAt: row.created_at,
       categoryName: row.category?.name_zh ?? "未知分类",
       authorDisplayName: row.author?.display_name ?? "未知用户",
@@ -199,6 +215,7 @@ export interface PostDetailImage {
 
 export interface PostDetail {
   id: string;
+  status: string;
   title: string;
   description: string;
   priceAmount: number | null;
@@ -207,6 +224,7 @@ export interface PostDetail {
   categoryId: string;
   categoryName: string;
   locationId: string | null;
+  locationText: string | null;
   locationName: string | null;
   createdAt: string;
   authorDisplayName: string;
@@ -224,6 +242,7 @@ interface PostDetailImageRow {
 
 interface PostDetailRow {
   id: string;
+  status: string;
   title: string;
   description: string;
   price_amount: number | null;
@@ -231,6 +250,7 @@ interface PostDetailRow {
   currency_code: string;
   category_id: string;
   location_id: string | null;
+  location_text: string | null;
   created_at: string;
   contact_method: string | null;
   contact_value: string | null;
@@ -261,17 +281,20 @@ interface PostDetailRow {
  * 限制），所以这里也是多选出 deleted_at 这一列，在 JS 里把软删除的图片
  * 过滤掉，而不是展示出来。
  *
- * category_id / location_id 这两个原始外键值是"我的发布"编辑表单回填用的
- * （下拉框要按 ID 选中对应选项，联表查出来的 category_name_zh/location_name
- * 展示名对回填没用）——只读详情页不需要这两个字段，但没必要为了这一个
- * 只读页面单独拆一份"编辑用查询"，两边字段大部分重叠，多出的这两列对
- * 只读页面没有副作用，加在同一个查询里更省一次请求。
+ * category_id / location_id / location_text / status 这几个原始值是
+ * "我的发布"编辑表单回填用的（下拉框要按 ID 选中对应选项，location_text
+ * 是"其他"手动填的地区名，status 是 updatePost() 判断"原来是不是
+ * approved、要不要顺带转回 pending"用的入参；联表查出来的
+ * category_name_zh/location_name 展示名对回填没用）——只读详情页不需要
+ * 这几个字段，但没必要为了这一个只读页面单独拆一份"编辑用查询"，两边
+ * 字段大部分重叠，多出的这几列对只读页面没有副作用，加在同一个查询里
+ * 更省一次请求。
  */
 export async function getPostDetail(postId: string): Promise<PostDetail | null> {
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, description, price_amount, price_label, currency_code, category_id, location_id, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -297,6 +320,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
 
   return {
     id: data.id,
+    status: data.status,
     title: data.title,
     description: data.description,
     priceAmount: data.price_amount,
@@ -305,7 +329,8 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     categoryId: data.category_id,
     categoryName: data.category?.name_zh ?? "未知分类",
     locationId: data.location_id,
-    locationName: data.location?.name ?? null,
+    locationText: data.location_text,
+    locationName: resolveLocationName(data.location, data.location_text),
     createdAt: data.created_at,
     authorDisplayName: data.author?.display_name ?? "未知用户",
     contactMethod: data.contact_method,
@@ -377,6 +402,7 @@ export interface CreatePostInput {
   authorId: string;
   categoryId: string;
   locationId: string | null;
+  locationText: string | null;
   title: string;
   description: string;
   priceAmount: number | null;
@@ -405,6 +431,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     author_id: input.authorId,
     category_id: input.categoryId,
     location_id: input.locationId,
+    location_text: input.locationText,
     title: input.title,
     description: input.description,
     price_amount: input.priceAmount,
@@ -517,6 +544,7 @@ interface MyPostRow {
   created_at: string;
   rejection_reason: string | null;
   location: { name: string } | null;
+  location_text: string | null;
   category: { name_zh: string } | null;
   post_images: PostFeedImageRow[] | null;
 }
@@ -546,7 +574,7 @@ export async function listMyPosts(authorId: string): Promise<MyPostListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, status, created_at, rejection_reason, location:locations(name), category:categories(name_zh), post_images(public_url, sort_order, deleted_at)"
+      "id, title, status, created_at, rejection_reason, location:locations(name), location_text, category:categories(name_zh), post_images(public_url, sort_order, deleted_at)"
     )
     .eq("author_id", authorId)
     .is("deleted_at", null)
@@ -563,7 +591,7 @@ export async function listMyPosts(authorId: string): Promise<MyPostListItem[]> {
     id: row.id,
     title: row.title,
     categoryName: row.category?.name_zh ?? "未知分类",
-    locationName: row.location?.name ?? null,
+    locationName: resolveLocationName(row.location, row.location_text),
     coverImageUrl: resolveCoverImageUrl(row.post_images),
     status: row.status,
     createdAt: row.created_at,
@@ -594,6 +622,7 @@ export interface UpdatePostInput {
   currentStatus: string;
   categoryId: string;
   locationId: string | null;
+  locationText: string | null;
   title: string;
   description: string;
   priceAmount: number | null;
@@ -619,6 +648,7 @@ export async function updatePost(input: UpdatePostInput): Promise<void> {
   const payload: TablesUpdate<"posts"> = {
     category_id: input.categoryId,
     location_id: input.locationId,
+    location_text: input.locationText,
     title: input.title,
     description: input.description,
     price_amount: input.priceAmount,

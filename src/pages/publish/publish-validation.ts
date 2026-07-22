@@ -29,9 +29,20 @@ export const TITLE_MAX_LENGTH = 120;
 export const DESCRIPTION_MIN_LENGTH = 1;
 export const DESCRIPTION_MAX_LENGTH = 10000;
 
+// 地区下拉框"其他"选项用的哨兵值，不会和 locations 表里的真实 UUID 冲突。
+// 选中这个值时，locationId 提交为 null，locationText 改为必填——见
+// supabase/migrations/20260722000400_add_posts_location_text.sql 的说明：
+// 这是给"下拉框里没有的地区"提供的兜底手动输入，不是把标准化地区选择
+// 整个换成自由文本，locations 表和 location_id 外键完全不受影响。
+export const OTHER_LOCATION_VALUE = "__other__";
+
+// 跟 posts_location_text_length_check 这条数据库约束保持一致。
+export const LOCATION_TEXT_MAX_LENGTH = 100;
+
 export interface PublishFormInput {
   categoryId: string;
   locationId: string;
+  locationText: string;
   title: string;
   description: string;
   price: string;
@@ -42,6 +53,7 @@ export interface PublishFormInput {
 export interface PublishFormData {
   categoryId: string;
   locationId: string | null;
+  locationText: string | null;
   title: string;
   description: string;
   priceAmount: number | null;
@@ -66,7 +78,8 @@ export function validatePublishInput(
   input: PublishFormInput
 ): PublishValidationResult {
   const categoryId = input.categoryId.trim();
-  const locationId = input.locationId.trim();
+  const locationIdRaw = input.locationId.trim();
+  const locationTextRaw = input.locationText.trim();
   const title = input.title.trim();
   const description = input.description.trim();
   const priceRaw = input.price.trim();
@@ -75,6 +88,25 @@ export function validatePublishInput(
 
   if (!categoryId) {
     return fail("PUBLISH_CATEGORY_REQUIRED", "请选择分类。");
+  }
+
+  // 地区："其他"是下拉框里的哨兵选项，选中后 locationId 不提交真实外键值
+  // （提交 null），改为要求 locationText 必填；选真实地区时 locationText
+  // 不提交（提交 null），两者互斥，见 OTHER_LOCATION_VALUE 上方注释。
+  let locationId: string | null = locationIdRaw || null;
+  let locationText: string | null = null;
+  if (locationIdRaw === OTHER_LOCATION_VALUE) {
+    if (!locationTextRaw) {
+      return fail("PUBLISH_LOCATION_TEXT_REQUIRED", "请输入地区名称。");
+    }
+    if (locationTextRaw.length > LOCATION_TEXT_MAX_LENGTH) {
+      return fail(
+        "PUBLISH_LOCATION_TEXT_LENGTH",
+        `地区名称不能超过 ${LOCATION_TEXT_MAX_LENGTH} 字符。`
+      );
+    }
+    locationId = null;
+    locationText = locationTextRaw;
   }
 
   // 下限现在是 1（TITLE_MIN_LENGTH/DESCRIPTION_MIN_LENGTH），trim 之后
@@ -121,7 +153,8 @@ export function validatePublishInput(
     success: true,
     data: {
       categoryId,
-      locationId: locationId || null,
+      locationId,
+      locationText,
       title,
       description,
       priceAmount,

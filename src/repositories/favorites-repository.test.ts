@@ -167,7 +167,7 @@ describe("listFavoritedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("favorites");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name))"
+      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name), location_text)"
     );
     expect(eqMock).toHaveBeenCalledWith("user_id", "user-1");
     expect(result).toEqual([

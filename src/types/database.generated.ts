@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       categories: {
@@ -167,6 +142,21 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      diag_visibility_test: {
+        Row: {
+          id: number
+          val: number | null
+        }
+        Insert: {
+          id: number
+          val?: number | null
+        }
+        Update: {
+          id?: number
+          val?: number | null
+        }
+        Relationships: []
       }
       favorites: {
         Row: {
@@ -440,6 +430,7 @@ export type Database = {
           favorite_count: number
           id: string
           location_id: string | null
+          location_text: string | null
           price_amount: number | null
           price_label: string | null
           published_at: string | null
@@ -464,6 +455,7 @@ export type Database = {
           favorite_count?: number
           id?: string
           location_id?: string | null
+          location_text?: string | null
           price_amount?: number | null
           price_label?: string | null
           published_at?: string | null
@@ -488,6 +480,7 @@ export type Database = {
           favorite_count?: number
           id?: string
           location_id?: string | null
+          location_text?: string | null
           price_amount?: number | null
           price_label?: string | null
           published_at?: string | null
@@ -652,6 +645,64 @@ export type Database = {
       dismiss_report: {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined
+      }
+      get_post_image_snapshot: {
+        Args: { target_id: string }
+        Returns: {
+          alt_text: string | null
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string | null
+          owner_id: string
+          post_id: string
+          public_url: string | null
+          size_bytes: number | null
+          sort_order: number
+          storage_path: string
+          width: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "post_images"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_post_snapshot: {
+        Args: { target_id: string }
+        Returns: {
+          archived_at: string | null
+          author_id: string
+          category_id: string
+          contact_method: string | null
+          contact_value: string | null
+          created_at: string
+          currency_code: string
+          deleted_at: string | null
+          description: string
+          expires_at: string | null
+          favorite_count: number
+          id: string
+          location_id: string | null
+          location_text: string | null
+          price_amount: number | null
+          price_label: string | null
+          published_at: string | null
+          rejection_reason: string | null
+          status: string
+          title: string
+          updated_at: string
+          view_count: number
+          visibility: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "posts"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       is_account_restricted: { Args: never; Returns: boolean }
       is_account_suspended: { Args: never; Returns: boolean }
@@ -827,9 +878,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       post_status: [

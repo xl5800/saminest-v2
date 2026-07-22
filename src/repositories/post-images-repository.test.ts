@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, selectMock } = vi.hoisted(() => {
+const { queryBuilder, selectMock, maybeSingleMock } = vi.hoisted(() => {
   const selectMock = vi.fn();
+  const maybeSingleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   builder.insert = vi.fn(() => builder);
   builder.select = selectMock;
-  return { queryBuilder: builder, selectMock };
+  builder.update = vi.fn(() => builder);
+  builder.eq = vi.fn(() => builder);
+  return { queryBuilder: builder, selectMock, maybeSingleMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -14,7 +17,7 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { insertPostImages } from "./post-images-repository";
+import { insertPostImages, removeOwnPostImage } from "./post-images-repository";
 
 describe("insertPostImages", () => {
   beforeEach(() => {
@@ -167,5 +170,53 @@ describe("insertPostImages", () => {
     ]);
 
     expect(result).toEqual([]);
+  });
+});
+
+describe("removeOwnPostImage", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.update.mockClear();
+    queryBuilder.eq.mockClear();
+    selectMock.mockReset();
+    maybeSingleMock.mockReset();
+    // 走 .update(...).eq(...).select("id").maybeSingle() 这条链——跟
+    // insertPostImages 的 .insert(...).select(...) 不共用 select() 之后
+    // 的用法，这里每个测试自己配好 select() 返回带 maybeSingle 的对象，
+    // 不在模块顶层设默认实现，避免和 insertPostImages 那组测试的
+    // selectMock.mockResolvedValue(...) 互相干扰。
+    selectMock.mockReturnValue({ maybeSingle: maybeSingleMock });
+  });
+
+  it("soft-deletes the image by id and resolves when a row was found", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "img-1" }, error: null });
+
+    await removeOwnPostImage("img-1");
+
+    expect(fromMock).toHaveBeenCalledWith("post_images");
+    expect(queryBuilder.update).toHaveBeenCalledWith(
+      expect.objectContaining({ deleted_at: expect.any(String) })
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "img-1");
+    expect(selectMock).toHaveBeenCalledWith("id");
+  });
+
+  it("throws an AppError when the Supabase update fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "update failed", code: "500" }
+    });
+
+    await expect(removeOwnPostImage("img-1")).rejects.toMatchObject({
+      code: "POST_IMAGE_REMOVE_FAILED"
+    });
+  });
+
+  it("throws a not-found AppError when no row was affected (not the owner, already deleted, or does not exist)", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(removeOwnPostImage("img-1")).rejects.toMatchObject({
+      code: "POST_IMAGE_REMOVE_NOT_FOUND"
+    });
   });
 });

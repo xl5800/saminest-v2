@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { validatePublishInput } from "./publish-validation";
+import { OTHER_LOCATION_VALUE, validatePublishInput } from "./publish-validation";
 
 const validInput = {
   categoryId: "cat-1",
   locationId: "loc-1",
+  locationText: "",
   title: "Sunny room near metro",
   description: "A description that is definitely long enough.",
   price: "1200",
@@ -22,6 +23,7 @@ describe("validatePublishInput", () => {
       data: {
         categoryId: "cat-1",
         locationId: "loc-1",
+        locationText: null,
         title: "Sunny room near metro",
         description: "A description that is definitely long enough.",
         priceAmount: 1200,
@@ -43,6 +45,41 @@ describe("validatePublishInput", () => {
 
     expect(result.success).toBe(true);
     expect(result.data?.locationId).toBeNull();
+    expect(result.data?.locationText).toBeNull();
+  });
+
+  it("requires locationText when the location is the 'other' sentinel", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      locationId: OTHER_LOCATION_VALUE,
+      locationText: "   "
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_LOCATION_TEXT_REQUIRED");
+  });
+
+  it("rejects locationText longer than 100 characters", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      locationId: OTHER_LOCATION_VALUE,
+      locationText: "a".repeat(101)
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_LOCATION_TEXT_LENGTH");
+  });
+
+  it("normalizes the 'other' location into a null locationId and a trimmed locationText", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      locationId: OTHER_LOCATION_VALUE,
+      locationText: "  Somewhere else  "
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.locationId).toBeNull();
+    expect(result.data?.locationText).toBe("Somewhere else");
   });
 
   it("rejects an empty title", () => {
