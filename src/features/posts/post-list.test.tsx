@@ -31,7 +31,7 @@ const samplePost = {
   priceLabel: null,
   currencyCode: "USD",
   locationName: "Rockville",
-  publishedAt: "2026-07-01T00:00:00.000Z",
+  createdAt: "2000-07-01T00:00:00.000Z",
   categoryName: "租房",
   authorDisplayName: "Alice",
   coverImageUrl: "https://img.example.com/cover.jpg",
@@ -87,6 +87,7 @@ describe("PostList", () => {
     expect(link).toHaveTextContent("Sunny room near metro");
     expect(link).toHaveTextContent("USD 1,200");
     expect(link).toHaveTextContent("Rockville");
+    expect(link).toHaveTextContent("2000-07-01");
   });
 
   it("renders the category tag, author nickname, and favorite count", async () => {

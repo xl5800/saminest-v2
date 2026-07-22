@@ -72,7 +72,7 @@ describe("FavoritesPage", () => {
         priceLabel: null,
         currencyCode: "USD",
         locationName: "Rockville",
-        publishedAt: "2026-07-01T00:00:00.000Z"
+        createdAt: "2000-07-01T00:00:00.000Z"
       }
     ]);
     listFavoritedPostIds.mockResolvedValue(["post-1"]);
@@ -82,6 +82,7 @@ describe("FavoritesPage", () => {
     expect(await screen.findByText("Sunny room")).toBeInTheDocument();
     expect(screen.getByText("USD 1,200")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
+    expect(screen.getByText("2000-07-01")).toBeInTheDocument();
   });
 
   it("removes the row from the list after un-favoriting via FavoriteButton", async () => {
@@ -93,7 +94,7 @@ describe("FavoritesPage", () => {
         priceLabel: null,
         currencyCode: "USD",
         locationName: "Rockville",
-        publishedAt: "2026-07-01T00:00:00.000Z"
+        createdAt: "2000-07-01T00:00:00.000Z"
       }
     ]);
     listFavoritedPostIds.mockResolvedValue(["post-1"]);

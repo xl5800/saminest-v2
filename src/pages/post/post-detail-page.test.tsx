@@ -60,7 +60,7 @@ const samplePostDetail = {
   currencyCode: "USD",
   categoryName: "租房",
   locationName: "Rockville",
-  publishedAt: "2026-07-01T00:00:00.000Z",
+  createdAt: "2000-07-01T00:00:00.000Z",
   authorDisplayName: "Alice",
   contactMethod: "email",
   contactValue: "alice@example.com",
@@ -149,6 +149,7 @@ describe("PostDetailPage", () => {
     expect(screen.getByText("USD 1,200")).toBeInTheDocument();
     expect(screen.getByText("租房")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
+    expect(screen.getByText("2000-07-01")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 

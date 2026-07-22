@@ -154,7 +154,7 @@ describe("listFavoritedPosts", () => {
             price_amount: 1200,
             price_label: null,
             currency_code: "USD",
-            published_at: "2026-07-01T00:00:00.000Z",
+            created_at: "2026-07-01T00:00:00.000Z",
             deleted_at: null,
             location: { name: "Rockville" }
           }
@@ -167,7 +167,7 @@ describe("listFavoritedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("favorites");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "post:posts(id, title, price_amount, price_label, currency_code, published_at, deleted_at, location:locations(name))"
+      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name))"
     );
     expect(eqMock).toHaveBeenCalledWith("user_id", "user-1");
     expect(result).toEqual([
@@ -178,7 +178,7 @@ describe("listFavoritedPosts", () => {
         priceLabel: null,
         currencyCode: "USD",
         locationName: "Rockville",
-        publishedAt: "2026-07-01T00:00:00.000Z"
+        createdAt: "2026-07-01T00:00:00.000Z"
       }
     ]);
   });
@@ -193,7 +193,7 @@ describe("listFavoritedPosts", () => {
             price_amount: 1200,
             price_label: null,
             currency_code: "USD",
-            published_at: "2026-07-01T00:00:00.000Z",
+            created_at: "2026-07-01T00:00:00.000Z",
             deleted_at: "2026-07-10T00:00:00.000Z",
             location: null
           }
@@ -205,7 +205,7 @@ describe("listFavoritedPosts", () => {
             price_amount: 900,
             price_label: null,
             currency_code: "USD",
-            published_at: "2026-07-02T00:00:00.000Z",
+            created_at: "2026-07-02T00:00:00.000Z",
             deleted_at: null,
             location: null
           }
@@ -224,7 +224,7 @@ describe("listFavoritedPosts", () => {
         priceLabel: null,
         currencyCode: "USD",
         locationName: null,
-        publishedAt: "2026-07-02T00:00:00.000Z"
+        createdAt: "2026-07-02T00:00:00.000Z"
       }
     ]);
   });

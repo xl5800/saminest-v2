@@ -1,19 +1,24 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useMatch } from "react-router-dom";
 
 import { AppHeader } from "./app-header";
 import { BottomNav } from "./bottom-nav";
 
 /**
- * 根布局路由的 element：给每一个页面路由外层套上持久的顶部导航栏
- * （AppHeader）和移动端底部导航栏（BottomNav），中间用 <Outlet />
- * 渲染当前匹配到的子路由。见 routes.tsx。
+ * 根布局路由的 element：普通页面使用持久的 AppHeader 和 BottomNav；
+ * 单个会话页是沉浸式二级页面，由页面自身渲染聊天 Header 和输入栏，因此
+ * 只在精确匹配 /messages/:conversationId 时不渲染全站 chrome。
  */
 export function AppShell() {
+  const isConversationDetail = useMatch({
+    path: "/messages/:conversationId",
+    end: true
+  });
+
   return (
     <>
-      <AppHeader />
+      {!isConversationDetail ? <AppHeader /> : null}
       <Outlet />
-      <BottomNav />
+      {!isConversationDetail ? <BottomNav /> : null}
     </>
   );
 }

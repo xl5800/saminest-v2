@@ -3,7 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
-import { formatPrice, formatPublishedAt } from "../../utils/format";
+import { formatListingDate, formatPrice } from "../../utils/format";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -66,7 +66,7 @@ export function PostDetailPage() {
             </div>
             <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
               <span>{data.authorDisplayName}</span>
-              <span>{formatPublishedAt(data.publishedAt)}</span>
+              <span>{formatListingDate(data.createdAt)}</span>
             </div>
           </div>
 

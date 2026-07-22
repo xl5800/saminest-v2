@@ -9,7 +9,7 @@ export interface PostListItem {
   priceLabel: string | null;
   currencyCode: string;
   locationName: string | null;
-  publishedAt: string | null;
+  createdAt: string;
 }
 
 // 卡片瀑布流首页/分类页用的扩展形状，在 PostListItem 基础上多带分类名、
@@ -50,7 +50,7 @@ interface PostFeedRow {
   price_amount: number | null;
   price_label: string | null;
   currency_code: string;
-  published_at: string | null;
+  created_at: string;
   favorite_count: number;
   location: { name: string } | null;
   category: { name_zh: string } | null;
@@ -123,11 +123,11 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, price_amount, price_label, currency_code, published_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     )
     .eq("status", "approved")
     .is("deleted_at", null)
-    .order("published_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .order("sort_order", { foreignTable: "post_images", ascending: true })
     .limit(1, { foreignTable: "post_images" })
     .range(from, to);
@@ -161,7 +161,7 @@ export async function listApprovedPosts(
       priceLabel: row.price_label,
       currencyCode: row.currency_code,
       locationName: row.location?.name ?? null,
-      publishedAt: row.published_at,
+      createdAt: row.created_at,
       categoryName: row.category?.name_zh ?? "未知分类",
       authorDisplayName: row.author?.display_name ?? "未知用户",
       coverImageUrl: resolveCoverImageUrl(row.post_images),
@@ -206,7 +206,7 @@ export interface PostDetail {
   currencyCode: string;
   categoryName: string;
   locationName: string | null;
-  publishedAt: string | null;
+  createdAt: string;
   authorDisplayName: string;
   contactMethod: string | null;
   contactValue: string | null;
@@ -227,7 +227,7 @@ interface PostDetailRow {
   price_amount: number | null;
   price_label: string | null;
   currency_code: string;
-  published_at: string | null;
+  created_at: string;
   contact_method: string | null;
   contact_value: string | null;
   location: { name: string } | null;
@@ -261,7 +261,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, description, price_amount, price_label, currency_code, published_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, title, description, price_amount, price_label, currency_code, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -294,7 +294,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     currencyCode: data.currency_code,
     categoryName: data.category?.name_zh ?? "未知分类",
     locationName: data.location?.name ?? null,
-    publishedAt: data.published_at,
+    createdAt: data.created_at,
     authorDisplayName: data.author?.display_name ?? "未知用户",
     contactMethod: data.contact_method,
     contactValue: data.contact_value,

@@ -101,7 +101,7 @@ interface FavoritedPostRow {
     price_amount: number | null;
     price_label: string | null;
     currency_code: string;
-    published_at: string | null;
+    created_at: string;
     deleted_at: string | null;
     location: { name: string } | null;
   } | null;
@@ -130,7 +130,7 @@ export async function listFavoritedPosts(userId: string): Promise<PostListItem[]
   const { data, error } = await getSupabaseClient()
     .from("favorites")
     .select(
-      "post:posts(id, title, price_amount, price_label, currency_code, published_at, deleted_at, location:locations(name))"
+      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name))"
     )
     .eq("user_id", userId)
     .overrideTypes<FavoritedPostRow[]>();
@@ -151,6 +151,6 @@ export async function listFavoritedPosts(userId: string): Promise<PostListItem[]
       priceLabel: row.post.price_label,
       currencyCode: row.post.currency_code,
       locationName: row.post.location?.name ?? null,
-      publishedAt: row.post.published_at
+      createdAt: row.post.created_at
     }));
 }

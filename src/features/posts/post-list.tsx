@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
-import { formatPrice, formatPublishedAt } from "../../utils/format";
+import { formatListingDate, formatPrice } from "../../utils/format";
 import { usePostsQuery } from "./use-posts-query";
 
 export interface PostListProps {
@@ -89,7 +89,7 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
                 </div>
                 <div className="flex items-center justify-between text-xs text-text-muted">
                   <span>{post.authorDisplayName}</span>
-                  <span>{formatPublishedAt(post.publishedAt)}</span>
+                  <span>{formatListingDate(post.createdAt)}</span>
                 </div>
               </div>
             </Link>

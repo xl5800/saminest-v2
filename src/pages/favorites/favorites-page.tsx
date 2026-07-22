@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
 import { useFavoritedPostsQuery } from "../../features/favorites/use-favorited-posts-query";
-import { formatPrice, formatPublishedAt } from "../../utils/format";
+import { formatListingDate, formatPrice } from "../../utils/format";
 
 /**
  * 收藏列表页（/favorites，路由已在 routes.tsx 用 RequireAuth 包裹）。
@@ -12,8 +12,8 @@ import { formatPrice, formatPublishedAt } from "../../utils/format";
  * postId={...} />（跟 PostList 列表项用法一致），不重新实现收藏/取消收藏
  * 的请求逻辑、RLS 错误提示等——这些 FavoriteButton 内部已经处理好了。
  *
- * 价格/发布时间格式化复用 utils/format.ts 的 formatPrice /
- * formatPublishedAt，不在这里重新拼字符串。
+ * 价格/时间格式化复用 utils/format.ts 的 formatPrice /
+ * formatListingDate，不在这里重新拼字符串。
  */
 export function FavoritesPage() {
   const { data: posts, isPending, isError } = useFavoritedPostsQuery();
@@ -62,7 +62,7 @@ export function FavoritesPage() {
                 {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
               </span>
               <span className="text-xs text-text-muted">{post.locationName ?? "地区未填写"}</span>
-              <span className="text-xs text-text-muted">{formatPublishedAt(post.publishedAt)}</span>
+              <span className="text-xs text-text-muted">{formatListingDate(post.createdAt)}</span>
             </Link>
             <FavoriteButton postId={post.id} />
           </li>

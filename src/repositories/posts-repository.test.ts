@@ -50,18 +50,18 @@ describe("listApprovedPosts", () => {
     maybeSingleMock.mockReset();
   });
 
-  it("filters to approved, non-deleted posts ordered by published_at desc, with a nested category/author/cover-image select", async () => {
+  it("filters to approved, non-deleted posts ordered by created_at desc, with a nested category/author/cover-image select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listApprovedPosts({ page: 0, pageSize: 20 });
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, price_amount, price_label, currency_code, published_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
-    expect(queryBuilder.order).toHaveBeenCalledWith("published_at", {
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", {
       ascending: false
     });
     expect(queryBuilder.order).toHaveBeenCalledWith("sort_order", {
@@ -164,7 +164,7 @@ describe("listApprovedPosts", () => {
           price_amount: 1200,
           price_label: null,
           currency_code: "USD",
-          published_at: "2026-07-01T00:00:00.000Z",
+          created_at: "2026-07-01T00:00:00.000Z",
           favorite_count: 3,
           location: { name: "Rockville" },
           category: { name_zh: "租房" },
@@ -187,7 +187,7 @@ describe("listApprovedPosts", () => {
           priceAmount: 1200,
           priceLabel: null,
           currencyCode: "USD",
-          publishedAt: "2026-07-01T00:00:00.000Z",
+          createdAt: "2026-07-01T00:00:00.000Z",
           locationName: "Rockville",
           categoryName: "租房",
           authorDisplayName: "Alice",
@@ -208,7 +208,7 @@ describe("listApprovedPosts", () => {
           price_amount: null,
           price_label: "面议",
           currency_code: "USD",
-          published_at: null,
+          created_at: "2026-07-01T00:00:00.000Z",
           favorite_count: 0,
           location: null,
           category: null,
@@ -221,7 +221,7 @@ describe("listApprovedPosts", () => {
           price_amount: null,
           price_label: "面议",
           currency_code: "USD",
-          published_at: null,
+          created_at: "2026-07-02T00:00:00.000Z",
           favorite_count: 0,
           location: null,
           category: null,
@@ -248,7 +248,7 @@ describe("listApprovedPosts", () => {
           price_amount: null,
           price_label: "面议",
           currency_code: "USD",
-          published_at: null,
+          created_at: "2026-07-01T00:00:00.000Z",
           favorite_count: 0,
           location: null,
           category: { name_zh: "二手" },
@@ -273,7 +273,7 @@ describe("listApprovedPosts", () => {
           price_amount: null,
           price_label: "面议",
           currency_code: "USD",
-          published_at: null,
+          created_at: "2026-07-01T00:00:00.000Z",
           favorite_count: 0,
           location: null,
           category: { name_zh: "二手" },
@@ -598,7 +598,7 @@ describe("getPostDetail", () => {
         price_amount: 1200,
         price_label: null,
         currency_code: "USD",
-        published_at: "2026-07-01T00:00:00.000Z",
+        created_at: "2026-07-01T00:00:00.000Z",
         contact_method: "email",
         contact_value: "a@b.com",
         location: { name: "Rockville" },
@@ -621,6 +621,9 @@ describe("getPostDetail", () => {
     const result = await getPostDetail("post-1");
 
     expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, title, description, price_amount, price_label, currency_code, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.order).toHaveBeenCalledWith("sort_order", {
@@ -636,7 +639,7 @@ describe("getPostDetail", () => {
       currencyCode: "USD",
       categoryName: "租房",
       locationName: "Rockville",
-      publishedAt: "2026-07-01T00:00:00.000Z",
+      createdAt: "2026-07-01T00:00:00.000Z",
       authorDisplayName: "Alice",
       contactMethod: "email",
       contactValue: "a@b.com",

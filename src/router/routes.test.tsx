@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -108,10 +108,11 @@ import { useAuthStore } from "../store/auth-store";
 
 const initialAuthState = useAuthStore.getState();
 
-function renderAt(path: string) {
+function renderAt(path: string | string[]) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } }
   });
+  const initialEntries = Array.isArray(path) ? path : [path];
   const router = createMemoryRouter(
     [
       {
@@ -228,13 +229,14 @@ function renderAt(path: string) {
         ]
       }
     ],
-    { initialEntries: [path] }
+    { initialEntries, initialIndex: initialEntries.length - 1 }
   );
-  return render(
+  const renderResult = render(
     <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>
   );
+  return { ...renderResult, router };
 }
 
 describe("app routes", () => {
@@ -397,6 +399,7 @@ describe("app routes", () => {
     renderAt("/messages");
 
     expect(await screen.findByRole("heading", { name: "消息" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
   });
 
   it("redirects /messages/:conversationId to /login when there is no session (reuses RequireAuth)", () => {
@@ -412,7 +415,46 @@ describe("app routes", () => {
 
     renderAt("/messages/conversation-1");
 
-    expect(await screen.findByRole("heading", { name: "会话" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "对方" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+  });
+
+  it("restores the conversation list chrome when the in-page back button handles a direct detail URL", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/messages/conversation-1");
+    fireEvent.click(await screen.findByRole("button", { name: "返回" }));
+
+    expect(await screen.findByRole("heading", { name: "消息" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+  });
+
+  it("restores the conversation list chrome after browser history returns from a conversation", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    listMyConversations.mockResolvedValue([
+      {
+        id: "conversation-1",
+        postId: "post-1",
+        postTitle: "木桌",
+        otherPartyRole: "seller",
+        lastActivityAt: "2026-07-20T12:00:00.000Z"
+      }
+    ]);
+
+    const { router } = renderAt("/messages");
+    fireEvent.click(await screen.findByRole("link", { name: /卖家/ }));
+
+    expect(await screen.findByRole("heading", { name: "卖家" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+
+    await act(async () => {
+      await router.navigate(-1);
+    });
+
+    expect(await screen.findByRole("heading", { name: "消息" })).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
   });
 
   it("redirects /favorites to /login when there is no session (reuses RequireAuth)", () => {

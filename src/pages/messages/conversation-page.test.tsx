@@ -1,9 +1,10 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useMessagesQuery, useSendMessageMutation, mutateAsyncMock } = vi.hoisted(() => ({
+const { useMessagesQuery, useSendMessageMutation, useMyConversationsQuery, mutateAsyncMock } = vi.hoisted(() => ({
   useMessagesQuery: vi.fn(),
   useSendMessageMutation: vi.fn(),
+  useMyConversationsQuery: vi.fn(),
   mutateAsyncMock: vi.fn()
 }));
 
@@ -12,6 +13,9 @@ vi.mock("../../features/messages/use-messages-query", () => ({
 }));
 vi.mock("../../features/messages/use-send-message-mutation", () => ({
   useSendMessageMutation
+}));
+vi.mock("../../features/conversations/use-my-conversations-query", () => ({
+  useMyConversationsQuery
 }));
 
 import { useAuthStore } from "../../store/auth-store";
@@ -40,6 +44,7 @@ describe("MessageConversationPage", () => {
     mutateAsyncMock.mockReset();
     useMessagesQuery.mockReset();
     useSendMessageMutation.mockReset();
+    useMyConversationsQuery.mockReset();
 
     useMessagesQuery.mockReturnValue({
       data: [],
@@ -50,22 +55,61 @@ describe("MessageConversationPage", () => {
       mutateAsync: mutateAsyncMock,
       isPending: false
     });
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conversation-1",
+          postId: "post-1",
+          postTitle: "木桌",
+          otherPartyRole: "seller",
+          lastActivityAt: "2026-07-20T12:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
   });
 
-  it("labels each message as 我 or 对方 based on the current session's user id", () => {
+  it("renders the other party identity and conversation context in the chat header", () => {
+    renderPage();
+
+    expect(screen.getByRole("heading", { name: "卖家" })).toBeInTheDocument();
+    expect(screen.getByText("关于 木桌")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "更多会话选项（暂不可用）" })).toBeDisabled();
+  });
+
+  it("separates my messages from the other party without visible form-style labels", () => {
     useMessagesQuery.mockReturnValue({
       data: [
-        { id: "message-1", senderId: "user-1", body: "你好", createdAt: "t1" },
-        { id: "message-2", senderId: "seller-1", body: "在的", createdAt: "t2" }
+        {
+          id: "message-1",
+          senderId: "user-1",
+          body: "你好",
+          createdAt: "2026-07-20T12:00:00.000Z"
+        },
+        {
+          id: "message-2",
+          senderId: "seller-1",
+          body: "在的",
+          createdAt: "2026-07-20T12:01:00.000Z"
+        }
       ],
       isPending: false,
       isError: false
     });
 
-    renderPage();
+    const { container } = renderPage();
 
-    expect(screen.getByText("我：你好")).toBeInTheDocument();
-    expect(screen.getByText("对方：在的")).toBeInTheDocument();
+    const mine = container.querySelector('[data-message-owner="self"]');
+    const theirs = container.querySelector('[data-message-owner="other"]');
+
+    expect(mine).toHaveClass("justify-end");
+    expect(theirs).toHaveClass("justify-start");
+    expect(within(mine as HTMLElement).getByText("你好")).toBeInTheDocument();
+    expect(within(theirs as HTMLElement).getByText("在的")).toBeInTheDocument();
+    expect(screen.queryByText(/^(我|对方)：/)).not.toBeInTheDocument();
+    expect(container.querySelectorAll("time")).toHaveLength(2);
   });
 
   it("shows an empty-conversation message when there are no messages yet", () => {
@@ -109,13 +153,53 @@ describe("MessageConversationPage", () => {
     expect(screen.getByLabelText("消息内容")).toHaveValue("");
   });
 
-  it("shows a validation error and does not call the mutation for an empty message", () => {
+  it("disables the send button for empty or whitespace-only content", () => {
     renderPage();
 
-    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    const sendButton = screen.getByRole("button", { name: "发送" });
+    expect(sendButton).toBeDisabled();
 
-    expect(screen.getByRole("alert")).toHaveTextContent("请输入消息内容。");
+    fireEvent.change(screen.getByLabelText("消息内容"), {
+      target: { value: "   " }
+    });
+
+    expect(sendButton).toBeDisabled();
     expect(mutateAsyncMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps the compact composer above the safe area and reserves message-list bottom space", () => {
+    renderPage();
+
+    const composer = screen.getByTestId("conversation-composer");
+    const messageRegion = screen.getByTestId("conversation-messages");
+    const input = screen.getByLabelText("消息内容");
+
+    expect(composer.getAttribute("style")).toContain("env(safe-area-inset-bottom)");
+    expect(messageRegion).toHaveClass("overflow-y-auto", "pb-6");
+    expect(input).toHaveAttribute("rows", "1");
+    expect(input).toHaveClass("h-12", "text-base");
+  });
+
+  it("wraps a long unbroken message inside a 75 percent bubble", () => {
+    const longMessage = "a".repeat(300);
+    useMessagesQuery.mockReturnValue({
+      data: [
+        {
+          id: "message-long",
+          senderId: "seller-1",
+          body: longMessage,
+          createdAt: "2026-07-20T12:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    const bubble = screen.getByText(longMessage);
+    expect(bubble).toHaveClass("[overflow-wrap:anywhere]");
+    expect(bubble.parentElement).toHaveClass("max-w-[75%]");
   });
 
   it("shows a validation error and does not call the mutation when the message is too long", () => {
