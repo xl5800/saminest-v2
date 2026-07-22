@@ -1,14 +1,13 @@
 import { getSupabaseClient } from "../../integrations/supabase/client";
 import { AppError } from "../../utils/app-error";
+import { compressImageToWebp } from "./compress-post-image";
 
 const POST_IMAGES_BUCKET = "post-images";
 
 /**
- * 只支持 publish-page 图片选择器已经校验过的三种类型（见
- * post-image-picker.tsx），扩展名按文件真实的 MIME 类型决定，
- * 本阶段不做压缩/转码，不强制统一成 .webp
- * （docs/02_SystemDesign/Architecture.md 15 节的 .webp 示例路径
- * 是压缩后的推荐做法，压缩本身不在这一阶段范围内，已经和产品确认）。
+ * 只在压缩失败、退回上传原始文件时才用得到——扩展名按文件真实的 MIME
+ * 类型决定，覆盖 post-image-picker.tsx 已经校验过的三种类型。压缩成功
+ * 时统一是 .webp，不查这张表（见 uploadPostImage 里的分支）。
  */
 const EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -53,6 +52,13 @@ export const postImageStorageService = {
    * 如果这里再拼一次 "post-images/" 前缀，第一段就变成了 bucket 名，
    * 会导致所有用户的上传都被拒绝。
    *
+   * 上传前先尝试压缩成 webp（见 compress-post-image.ts）——手机相机原图
+   * 常见 8-15MB，选图阶段（post-image-picker.tsx）只做 20MB 的兜底拦截，
+   * 真正把体积降下来靠这一步。压缩失败（浏览器不支持相关 API、图片解码
+   * 失败等）不让整个上传失败，退回用原始文件、按它自己的 MIME 类型
+   * 上传——这条失败路径已经在 publish-page.tsx 的"部分图片上传失败"
+   * 容错提示里覆盖，不需要额外的 UI。
+   *
    * width/height 留给调用方按需补充（例如用 Image 读取尺寸后再拼装
    * post_images 的 insert 行），这个方法本身不读取图片尺寸，避免为了
    * 一个次要字段引入额外的图片解码逻辑。
@@ -60,12 +66,22 @@ export const postImageStorageService = {
   async uploadPostImage(input: UploadPostImageInput): Promise<UploadPostImageResult> {
     const { file, userId, postId } = input;
     const imageId = crypto.randomUUID();
-    const extension = resolveExtension(file.type);
+
+    let uploadFile: File;
+    let extension: string;
+    try {
+      uploadFile = await compressImageToWebp(file);
+      extension = "webp";
+    } catch {
+      uploadFile = file;
+      extension = resolveExtension(file.type);
+    }
+
     const path = `${userId}/${postId}/${imageId}.${extension}`;
 
     const supabase = getSupabaseClient();
-    const { error } = await supabase.storage.from(POST_IMAGES_BUCKET).upload(path, file, {
-      contentType: file.type
+    const { error } = await supabase.storage.from(POST_IMAGES_BUCKET).upload(path, uploadFile, {
+      contentType: uploadFile.type
     });
 
     if (error) {
@@ -79,8 +95,8 @@ export const postImageStorageService = {
     return {
       storagePath: path,
       publicUrl: publicUrlData?.publicUrl ?? null,
-      mimeType: file.type,
-      sizeBytes: file.size
+      mimeType: uploadFile.type,
+      sizeBytes: uploadFile.size
     };
   }
 };

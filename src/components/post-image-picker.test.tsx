@@ -78,14 +78,14 @@ describe("PostImagePicker", () => {
     expect(screen.queryByText("photo.gif")).not.toBeInTheDocument();
   });
 
-  it("rejects a file larger than 5MB", async () => {
+  it("rejects a file larger than 20MB", async () => {
     render(<PickerHarness />);
 
-    const file = makeFile("big.png", "image/png", 5 * 1024 * 1024 + 1);
+    const file = makeFile("big.png", "image/png", 20 * 1024 * 1024 + 1);
     fireEvent.change(getFileInput(), { target: { files: [file] } });
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("文件大小不能超过 5MB");
+    expect(alert).toHaveTextContent("文件大小不能超过 20MB");
   });
 
   it("rejects an empty (0 byte) file", async () => {

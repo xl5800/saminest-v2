@@ -15,14 +15,30 @@ import {
  *
  * 校验规则（数量上限、文件类型、大小、空文件、批次内重复）都是产品已确认的
  * 决定，这里不额外发明更宽松或更严格的规则。
+ *
+ * MAX_POST_IMAGE_SIZE_BYTES 这里是 20MB，不是真正的业务上限——真正的
+ * "上传后不超过多大"由 post-image-storage-service.ts 里上传前的压缩
+ * 负责（见该文件 compressImageToWebp）。这里只是选图阶段的兜底上限，
+ * 用来拦住明显异常/损坏的文件，不应该拦住手机相机拍出来的正常原图
+ * （iPhone 原图常见 8-15MB，压缩必须有机会先跑一遍才有意义，选图阶段
+ * 卡在 5MB 会让压缩完全没有介入的机会）。
  */
 export const MAX_POST_IMAGES = 9;
-export const MAX_POST_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
+export const MAX_POST_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_POST_IMAGE_SIZE_MB = MAX_POST_IMAGE_SIZE_BYTES / (1024 * 1024);
 export const ACCEPTED_POST_IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp"
 ] as const;
+
+// iPhone 相机默认就拍 HEIC，这是用户真实会撞上的最常见"不支持格式"场景，
+// 给一句能让用户自己动手解决的具体提示，比笼统的"只支持 JPEG/PNG/WEBP"
+// 更有用——不确定 file.type 本身是不是 100% 可靠地报告成这两个字符串
+// （不同浏览器/系统对 HEIC 的 MIME 类型上报本来就不完全一致），但这里
+// 只处理这两个已确认的字面值，不为了覆盖更多不确定的情况去猜测别的
+// 检测方式。
+const HEIC_MIME_TYPES = ["image/heic", "image/heif"];
 
 type AcceptedMimeType = (typeof ACCEPTED_POST_IMAGE_MIME_TYPES)[number];
 
@@ -56,7 +72,13 @@ function validateIncomingFiles(
 
   for (const file of candidateFiles) {
     if (!isAcceptedMimeType(file.type)) {
-      errors.push(`${file.name}：只支持 JPEG、PNG 或 WEBP 格式的图片。`);
+      if (HEIC_MIME_TYPES.includes(file.type)) {
+        errors.push(
+          `${file.name}：iPhone 拍摄的 HEIC 格式暂不支持，请在系统设置里把拍照格式改成"兼容性最好"（设置 → 相机 → 格式），或从相册选择时选择 JPEG 格式后再试。`
+        );
+      } else {
+        errors.push(`${file.name}：只支持 JPEG、PNG 或 WEBP 格式的图片。`);
+      }
       continue;
     }
     if (file.size === 0) {
@@ -64,7 +86,7 @@ function validateIncomingFiles(
       continue;
     }
     if (file.size > MAX_POST_IMAGE_SIZE_BYTES) {
-      errors.push(`${file.name}：文件大小不能超过 5MB。`);
+      errors.push(`${file.name}：文件大小不能超过 ${MAX_POST_IMAGE_SIZE_MB}MB。`);
       continue;
     }
     if (isDuplicateOf(file, existingFiles) || isDuplicateOf(file, validated)) {
@@ -152,7 +174,7 @@ export function PostImagePicker({
   return (
     <div>
       <label htmlFor={inputId} className="mb-2 block cursor-pointer text-sm font-medium text-text">
-        上传图片（最多 {MAX_POST_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 5MB）
+        上传图片（最多 {MAX_POST_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 {MAX_POST_IMAGE_SIZE_MB}MB）
         <div
           data-testid="post-image-drop-zone"
           onDragOver={handleDragOver}

@@ -1,0 +1,56 @@
+-- Migration: raise post-images Storage bucket 的 file_size_limit，
+-- 补上"客户端压缩"功能上线时漏掉的一环
+--
+-- 为什么改：
+--   这次给发布/编辑帖子加了上传前压缩（见
+--   src/services/storage/compress-post-image.ts、
+--   src/services/storage/post-image-storage-service.ts），客户端选图
+--   阶段的兜底上限（post-image-picker.tsx 的 MAX_POST_IMAGE_SIZE_BYTES）
+--   同时也从 5MB 提到了 20MB，理由是手机原图常见 8-15MB，选图阶段不能
+--   卡死在 5MB，否则压缩没有机会介入。
+--
+--   但功能上线后用户反馈发布帖子时图片依然上传失败。排查发现：
+--   post-images 这个 Storage bucket 本身在 storage.buckets 表里配置了
+--   file_size_limit = 5242880（5MB）——这个配置从建 bucket开始就没有
+--   被任何迁移文件追踪过（这次之前，仓库里没有任何一份迁移碰过
+--   storage.buckets），是纯粹的手工配置遗留。客户端压缩、选图上限都改了，
+--   但没人注意到 Storage 服务端自己还有这一道独立的硬限制。
+--
+--   实际影响：压缩成功且压缩后体积在 5MB 以内时，上传不受影响；但只要
+--   出现"浏览器不支持压缩相关 API、图片解码失败"这类情况（
+--   compressImageToWebp 抛异常，uploadPostImage 按设计回退到上传原始
+--   文件），或者极少数情况压缩到 0.5 质量下限后仍然略超 5MB，实际要
+--   上传的文件就会超过这个 bucket 限制，Supabase Storage 服务端直接拒绝
+--   这次上传（跟客户端的任何校验/压缩逻辑无关）——这正是用户反馈的
+--   "发布时图片还是上传失败"的真正原因。
+--
+-- 影响哪些表：
+--   不新建表，只更新 storage.buckets 里 post-images 这一行的
+--   file_size_limit 列。不改 allowed_mime_types（jpeg/png/webp 三种，
+--   压缩后统一是 webp，压缩失败回退时的原始文件也只可能是这三种之一，
+--   因为 HEIC 等不支持格式已经在 post-image-picker.tsx 选图阶段被挡住，
+--   根本不会走到上传这一步）。
+--
+-- 修法：
+--   file_size_limit 从 5242880（5MB）提到 20 * 1024 * 1024（20MB）——
+--   跟客户端选图阶段的兜底上限（MAX_POST_IMAGE_SIZE_BYTES）保持一致，
+--   确保"压缩失败、退回上传原始文件"这条路径在服务端也真的走得通，
+--   不会出现"客户端已经放行、服务端又挡住"的不一致状态。
+--
+-- 是否影响现有数据：
+--   不影响，只放宽一个 bucket 级别的配置上限，不影响已经上传过的文件。
+--
+-- 是否需要回滚方案：
+--   需要。回滚 SQL 见文件末尾注释（默认不执行，会重新引入这次要修的
+--   bug，需要人工确认后单独运行）。
+
+update storage.buckets
+set file_size_limit = 20 * 1024 * 1024
+where id = 'post-images';
+
+-- 回滚方案（默认不执行，会让"压缩失败退回原图"和"压缩后偶尔略超 5MB"
+-- 这两种情况重新在服务端被拒绝，需要人工确认后单独运行）：
+--
+-- update storage.buckets
+-- set file_size_limit = 5 * 1024 * 1024
+-- where id = 'post-images';
