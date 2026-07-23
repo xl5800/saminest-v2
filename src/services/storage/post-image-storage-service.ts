@@ -98,6 +98,29 @@ export const postImageStorageService = {
       mimeType: uploadFile.type,
       sizeBytes: uploadFile.size
     };
+  },
+
+  /**
+   * 补偿清理：Storage 已经上传成功、但紧接着的 post_images 数据库记录
+   * 没能写入时用——只删调用方明确给出的这几个 path（这一批刚上传、还没
+   * 落库的孤儿文件），不做"扫描这个帖子底下所有文件再挑一批删"这种更
+   * 危险的操作，不会碰到帖子已有的旧图片。
+   *
+   * 这个方法本身失败时会抛 AppError，调用方（publish-page.tsx）需要
+   * 自己 catch 住，不能让"清理失败"盖过原本的"数据库写入失败"这个更
+   * 重要的错误——两个错误都要能看到。
+   */
+  async removePostImageFiles(paths: string[]): Promise<void> {
+    if (paths.length === 0) {
+      return;
+    }
+
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.storage.from(POST_IMAGES_BUCKET).remove(paths);
+
+    if (error) {
+      throw new AppError(error.message, "POST_IMAGE_CLEANUP_FAILED", error);
+    }
   }
 };
 

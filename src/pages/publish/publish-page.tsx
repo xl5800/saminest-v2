@@ -15,6 +15,7 @@ import { createPost, type PostDetailImage } from "../../repositories/posts-repos
 import { postImageStorageService } from "../../services/storage/post-image-storage-service";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
+import { getNextPostImageSortOrder } from "../../utils/post-image-sort-order";
 import {
   CONTACT_METHOD_OPTIONS,
   DESCRIPTION_MAX_LENGTH,
@@ -37,10 +38,42 @@ const EDIT_LOAD_FAILED_MESSAGE = "帖子不存在，或没有权限编辑。";
 const IMAGE_REMOVE_FAILED_MESSAGE = "图片删除失败，请稍后重试。";
 
 /**
+ * 开发环境下把图片上传/落库失败的真实错误打印出来——用户看到的提示文案
+ * 一直是那句简单的"部分图片上传失败"，但排查问题时不能只有这一句话，
+ * 数据库/Storage 返回的 code/message/details/hint 这些真实信息不能被
+ * 这里的 catch 吞掉。生产环境不打印（避免把内部错误细节暴露给普通用户
+ * 能打开的浏览器控制台），只在 import.meta.env.DEV 下生效。
+ */
+function logDevImageError(stage: string, error: unknown): void {
+  if (!import.meta.env.DEV) return;
+  if (error instanceof AppError) {
+    console.error(`[post-image] ${stage}`, {
+      code: error.code,
+      message: error.message,
+      cause: error.cause
+    });
+  } else {
+    console.error(`[post-image] ${stage}`, error);
+  }
+}
+
+/**
  * 上传所选图片并批量落库，容忍部分/全部图片失败：
  * - 每张图片单独上传（Promise.allSettled，不因为一张失败丢失其他已成功的）；
  * - 上传成功的图片一次性批量 insert 到 post_images；
  * - 这个函数本身不抛异常，调用方只需要知道"是否全部成功"。
+ *
+ * sortOrderOffset 由调用方传入 getNextPostImageSortOrder(existingImages)
+ * 算好的值，不是这个函数自己算——新建帖子（existingImages 恒为空数组）
+ * 和编辑帖子（existingImages 是当前还在展示的活跃图片）走的是同一个
+ * 计算函数，不是两套逻辑，也不在这里重复实现一遍。
+ *
+ * 如果 Storage 都传完了、但 insertPostImages 这一步失败（比如触发了
+ * post_images 表的唯一索引冲突），这一批已经传到 Storage 的文件就成了
+ * 孤儿——不会被任何帖子引用，也不会在页面上出现，但会一直占着 Storage
+ * 空间。这里失败后会尝试把这一批（只有这一批，不影响帖子已有的旧图片）
+ * 删掉；清理本身失败不会盖过原始的 insert 错误，两个错误分别用
+ * logDevImageError 记录。
  */
 async function uploadAndInsertPostImages(input: {
   files: File[];
@@ -83,6 +116,7 @@ async function uploadAndInsertPostImages(input: {
         });
       } else {
         anyUploadFailed = true;
+        logDevImageError("单张图片上传失败", result.reason);
       }
     });
 
@@ -92,13 +126,23 @@ async function uploadAndInsertPostImages(input: {
 
     try {
       await insertPostImages(successfulInputs);
-    } catch {
-      // 这一批图片的行都没有落库，全部算失败。
+    } catch (insertError) {
+      logDevImageError("post_images 批量写入失败", insertError);
+
+      try {
+        await postImageStorageService.removePostImageFiles(
+          successfulInputs.map((successfulInput) => successfulInput.storagePath)
+        );
+      } catch (cleanupError) {
+        logDevImageError("孤儿 Storage 文件清理失败", cleanupError);
+      }
+
       return { allSucceeded: false };
     }
 
     return { allSucceeded: !anyUploadFailed };
-  } catch {
+  } catch (error) {
+    logDevImageError("图片上传流程异常", error);
     return { allSucceeded: false };
   }
 }
@@ -312,7 +356,7 @@ export function PublishPage() {
           files: images,
           authorId,
           postId: resolvedPostId,
-          sortOrderOffset: existingImages.length
+          sortOrderOffset: getNextPostImageSortOrder(existingImages)
         });
         if (!allSucceeded) {
           publishSuccessMessage = imageFailureMessage;

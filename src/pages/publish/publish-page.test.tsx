@@ -8,6 +8,7 @@ const {
   getPostDetail,
   updatePost,
   uploadPostImage,
+  removePostImageFiles,
   insertPostImages,
   removeOwnPostImage,
   navigateMock
@@ -18,6 +19,7 @@ const {
   getPostDetail: vi.fn(),
   updatePost: vi.fn(),
   uploadPostImage: vi.fn(),
+  removePostImageFiles: vi.fn(),
   insertPostImages: vi.fn(),
   removeOwnPostImage: vi.fn(),
   navigateMock: vi.fn()
@@ -35,7 +37,7 @@ vi.mock("../../repositories/posts-repository", () => ({
   updatePost
 }));
 vi.mock("../../services/storage/post-image-storage-service", () => ({
-  postImageStorageService: { uploadPostImage }
+  postImageStorageService: { uploadPostImage, removePostImageFiles }
 }));
 vi.mock("../../repositories/post-images-repository", () => ({
   insertPostImages,
@@ -87,6 +89,7 @@ describe("PublishPage", () => {
     getPostDetail.mockReset();
     updatePost.mockReset();
     uploadPostImage.mockReset();
+    removePostImageFiles.mockReset();
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
     navigateMock.mockReset();
@@ -98,6 +101,7 @@ describe("PublishPage", () => {
       { id: "loc-1", name: "Rockville" }
     ]);
     insertPostImages.mockResolvedValue([]);
+    removePostImageFiles.mockResolvedValue(undefined);
     useAuthStore.getState().setSession({
       user: { id: "user-1" }
     } as never);
@@ -358,6 +362,100 @@ describe("PublishPage", () => {
     expect(screen.queryByText("发布失败，请稍后重试。")).not.toBeInTheDocument();
   });
 
+  it("cleans up the just-uploaded Storage files when the batch insert fails (avoids leaving orphaned files)", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    uploadPostImage
+      .mockResolvedValueOnce({
+        storagePath: "user-1/post-999/img-0.webp",
+        publicUrl: "https://cdn.example.com/img-0.webp",
+        mimeType: "image/webp",
+        sizeBytes: 100
+      })
+      .mockResolvedValueOnce({
+        storagePath: "user-1/post-999/img-1.webp",
+        publicUrl: "https://cdn.example.com/img-1.webp",
+        mimeType: "image/webp",
+        sizeBytes: 200
+      });
+    insertPostImages.mockRejectedValue({
+      message: "duplicate key value violates unique constraint",
+      code: "23505",
+      details: "Key (post_id, sort_order)=(post-999, 0) already exists.",
+      hint: null
+    });
+
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    selectImages([makeImageFile("a.png"), makeImageFile("b.png")]);
+    await screen.findByText("a.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(removePostImageFiles).toHaveBeenCalledWith([
+        "user-1/post-999/img-0.webp",
+        "user-1/post-999/img-1.webp"
+      ]);
+    });
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: {
+          publishSuccessMessage:
+            "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。"
+        }
+      });
+    });
+  });
+
+  it("does not crash and still shows the image-failure message when the cleanup itself also fails after an insert failure", async () => {
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    createPost.mockResolvedValue({ id: "post-999" });
+    uploadPostImage.mockResolvedValue({
+      storagePath: "user-1/post-999/img-0.webp",
+      publicUrl: "https://cdn.example.com/img-0.webp",
+      mimeType: "image/webp",
+      sizeBytes: 100
+    });
+    const insertError = { message: "insert failed", code: "23505" };
+    insertPostImages.mockRejectedValue(insertError);
+    const cleanupError = { message: "remove failed", code: "500" };
+    removePostImageFiles.mockRejectedValue(cleanupError);
+
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    selectImages([makeImageFile("a.png")]);
+    await screen.findByText("a.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: {
+          publishSuccessMessage:
+            "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。"
+        }
+      });
+    });
+    // 原始的 insert 错误和 cleanup 错误都要能在开发环境的日志里看到，
+    // cleanup 失败不能把 insert 失败这条更重要的错误盖掉。
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("post_images 批量写入失败"),
+      expect.objectContaining({ code: "23505" })
+    );
+    expect(consoleErrorSpy).toHaveBeenCalledWith(
+      expect.stringContaining("孤儿 Storage 文件清理失败"),
+      expect.objectContaining({ code: "500" })
+    );
+
+    consoleErrorSpy.mockRestore();
+  });
+
   it("does not call uploadPostImage or insertPostImages, and keeps the original success message, when no images are selected", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
@@ -448,6 +546,7 @@ describe("PublishPage in edit mode", () => {
     getPostDetail.mockReset();
     updatePost.mockReset();
     uploadPostImage.mockReset();
+    removePostImageFiles.mockReset();
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
     navigateMock.mockReset();
@@ -459,6 +558,7 @@ describe("PublishPage in edit mode", () => {
       { id: "loc-1", name: "Rockville" }
     ]);
     insertPostImages.mockResolvedValue([]);
+    removePostImageFiles.mockResolvedValue(undefined);
     useAuthStore.getState().setSession({
       user: { id: "user-1" }
     } as never);
@@ -553,5 +653,79 @@ describe("PublishPage in edit mode", () => {
     await waitFor(() => {
       expect(screen.queryByText("已上传的图片")).not.toBeInTheDocument();
     });
+  });
+
+  it("computes the new image's sort_order from the max active sort_order among existing images, not from how many are currently displayed (regression for the soft-delete collision bug)", async () => {
+    // 模拟"曾经有 sort_order 0/1/2 三张图，1 被软删除"之后的状态：
+    // 编辑页现在只展示 2 张（0 和 2），如果用旧算法
+    // existingImages.length（=2）当起始值，新图会被分配 sort_order=2，
+    // 正好撞上还活跃的那一张——这正是这次要修的 bug。新算法应该是
+    // max(0, 2) + 1 = 3。
+    getPostDetail.mockResolvedValue({
+      ...existingPostDetail,
+      images: [
+        { id: "img-1", publicUrl: "https://cdn.example.com/img-1.png", sortOrder: 0 },
+        { id: "img-3", publicUrl: "https://cdn.example.com/img-3.png", sortOrder: 2 }
+      ]
+    });
+    updatePost.mockResolvedValue(undefined);
+    uploadPostImage.mockResolvedValue({
+      storagePath: "user-1/post-1/img-new.webp",
+      publicUrl: "https://cdn.example.com/img-new.webp",
+      mimeType: "image/webp",
+      sizeBytes: 100
+    });
+    insertPostImages.mockResolvedValue([]);
+
+    renderEditPage();
+    await screen.findByDisplayValue("Original title");
+
+    selectImages([makeImageFile("new.png")]);
+    await screen.findByText("new.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    await waitFor(() => {
+      expect(insertPostImages).toHaveBeenCalledWith([
+        expect.objectContaining({
+          storagePath: "user-1/post-1/img-new.webp",
+          sortOrder: 3
+        })
+      ]);
+    });
+  });
+
+  it("only cleans up this batch's newly uploaded Storage files on insert failure, never the post's pre-existing images", async () => {
+    getPostDetail.mockResolvedValue(existingPostDetail);
+    updatePost.mockResolvedValue(undefined);
+    uploadPostImage.mockResolvedValue({
+      storagePath: "user-1/post-1/img-new.webp",
+      publicUrl: "https://cdn.example.com/img-new.webp",
+      mimeType: "image/webp",
+      sizeBytes: 100
+    });
+    insertPostImages.mockRejectedValue({ message: "insert failed", code: "23505" });
+
+    renderEditPage();
+    await screen.findByDisplayValue("Original title");
+    // 编辑页加载时已经有一张旧图（existingPostDetail.images 里的
+    // img-1），这里再选一张新图触发失败路径。
+    expect(screen.getByText("已上传的图片")).toBeInTheDocument();
+
+    selectImages([makeImageFile("new.png")]);
+    await screen.findByText("new.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    await waitFor(() => {
+      expect(removePostImageFiles).toHaveBeenCalledWith([
+        "user-1/post-1/img-new.webp"
+      ]);
+    });
+    // 只清理了这一批新上传的这一个 path，没有把旧图片（img-1 对应的
+    // storage path）也传进去——旧图片本来就不在 successfulInputs 里，
+    // 这里显式断言调用参数只有这一个元素，把这个保证钉死。
+    expect(removePostImageFiles).toHaveBeenCalledTimes(1);
+    expect(removePostImageFiles.mock.calls[0][0]).toHaveLength(1);
   });
 });
