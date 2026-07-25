@@ -75,22 +75,40 @@ export function resolveLocationName(
 }
 
 /**
- * post_images 这里用 `.order(..., { foreignTable: "post_images" })` +
- * `.limit(1, { foreignTable: "post_images" })` 把每个帖子最多带出一条
- * （按 sort_order 最小，即封面图）内嵌图片行，避免 N+1；但 supabase-js
- * 这种嵌套 select 语法本身没有再加一个只作用于 post_images 这张内嵌表的
- * `.eq("deleted_at", null)`（那个 `.eq`/`.is` 会作用在外层 posts 查询上），
- * 所以这里跟 favorites-repository.ts 的 listFavoritedPosts 处理
- * posts.deleted_at 一样，多选出 deleted_at 这一列，在 JS 里判断：这一条
- * 内嵌图片如果已被软删除，封面图当作不存在处理，而不是把已软删除的图片
- * 展示出来。
+ * 封面图规则：只从 deleted_at IS NULL 的活跃图片里，按 sort_order 最小的
+ * 那一张作为封面；一张活跃图片都没有时返回 null（前端展示占位图）。
+ *
+ * 曾经的实现（已修复的 bug）：查询端用
+ * `.order(..., { foreignTable: "post_images" }).limit(1, { foreignTable:
+ * "post_images" })` 在 SQL 层面就只取一条，指望"按 sort_order 排序后取
+ * 第一条"天然就是封面——但 supabase-js/PostgREST 的嵌套 select 语法没有
+ * 办法在这一步顺带加一个只作用于 post_images 这张内嵌表的
+ * `deleted_at is null` 过滤（那个 `.eq`/`.is` 只会作用在外层 posts
+ * 查询上），排序又只看 sort_order、不看 deleted_at。一旦这张帖子有过
+ * "软删除旧图 + 重新上传新图"的历史，新图片的 sort_order 不一定比旧的
+ * 软删除记录小（尤其是软删除只清空了一部分图片时，新图会从"当前还活跃的
+ * 图片里最大的 sort_order + 1"开始编号，见
+ * src/utils/post-image-sort-order.ts），SQL 层面 `ORDER BY sort_order ASC
+ * LIMIT 1` 完全可能选中一条 sort_order 更小、但已经被软删除的旧记录，
+ * 这张图片对详情页/Storage 都已经不存在有效引用，首页封面因此显示占位图，
+ * 但详情页（getPostDetail 从不在 SQL 层面 LIMIT，取全部图片后在 JS 里过滤
+ * deleted_at）完全不受影响——这正是"详情页正常、首页占位"这个现象的根因。
+ *
+ * 现在的修法：查询端不再在 SQL 层面 LIMIT 这张内嵌表（见
+ * listApprovedPosts/listMyPosts 的查询，已经去掉
+ * `.limit(1, { foreignTable: "post_images" })`），拿到这张帖子全部图片
+ * 行之后，在这个函数里先按 deleted_at 过滤出活跃图片，再取 sort_order
+ * 最小的一张——跟 getPostDetail 是同一个"先过滤再选"的思路，不依赖
+ * SQL 层面排序结果的第一条就一定是想要的那条。
  */
 function resolveCoverImageUrl(images: PostFeedImageRow[] | null): string | null {
-  const cover = images?.[0];
-  if (!cover || cover.deleted_at !== null) {
+  const activeImages = (images ?? []).filter((image) => image.deleted_at === null);
+  if (activeImages.length === 0) {
     return null;
   }
-  return cover.public_url;
+  return activeImages.reduce((min, image) =>
+    image.sort_order < min.sort_order ? image : min
+  ).public_url;
 }
 
 /**
@@ -128,6 +146,16 @@ function sanitizeSearchTerm(raw: string): string {
  * 只返回 status = 'approved' 且未软删除的帖子，游客和登录用户看到的列表一致。
  * 用多取一条（pageSize + 1）判断是否有下一页，不额外发 COUNT(*) 查询，
  * 见 Tables.md 24 节"不要为了每次展示数量都执行昂贵的全表统计"。
+ *
+ * post_images 这里不再在 SQL 层面 `.limit(1, { foreignTable: "post_images"
+ * })`——原因见 resolveCoverImageUrl 上面的大段注释（那个写法在有软删除+
+ * 重新上传历史的帖子上会选错封面图）。代价是每张帖子的 post_images 现在
+ * 会把包括已软删除在内的全部历史图片行都带出来，而不是只带一条——单个
+ * 帖子的图片数量上限是 MAX_POST_IMAGES=9（见 post-image-picker.tsx），
+ * 就算算上历史软删除记录，单条帖子的图片行数在这个产品体量下也不会大到
+ * 值得为了省这点数据量、再冒一次选错封面图的风险，先按这个更简单可靠的
+ * 方式做，以后如果这张表软删除记录堆积到明显影响首页列表接口体积，
+ * 再考虑专门为封面图做一个只读视图或者 RPC。
  */
 export async function listApprovedPosts(
   input: ListApprovedPostsInput
@@ -145,7 +173,6 @@ export async function listApprovedPosts(
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .order("sort_order", { foreignTable: "post_images", ascending: true })
-    .limit(1, { foreignTable: "post_images" })
     .range(from, to);
 
   if (categoryId) {
@@ -580,7 +607,6 @@ export async function listMyPosts(authorId: string): Promise<MyPostListItem[]> {
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .order("sort_order", { foreignTable: "post_images", ascending: true })
-    .limit(1, { foreignTable: "post_images" })
     .overrideTypes<MyPostRow[]>();
 
   if (error) {

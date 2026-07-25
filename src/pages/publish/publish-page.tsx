@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -201,6 +202,7 @@ export function PublishPage() {
   } = usePostDetailQuery(postId ?? "", { enabled: isEditMode });
   const updatePostMutation = useUpdatePostMutation();
   const removePostImageMutation = useRemovePostImageMutation();
+  const queryClient = useQueryClient();
 
   const [categoryId, setCategoryId] = useState("");
   const [locationId, setLocationId] = useState("");
@@ -366,6 +368,19 @@ export function PublishPage() {
       publishSuccessMessage = imageFailureMessage;
     } finally {
       setUploadingImages(false);
+      // 只要尝试过上传图片（不管全部成功、部分成功还是全部失败），
+      // post_images 表都有可能被改动过——首页/分类页/搜索（usePostsQuery，
+      // queryKey 前缀 "posts"）、"我的发布"（["my-posts", userId]）会展示
+      // 这个帖子的封面图，不 invalidate 的话这几个页面的缓存不会知道
+      // 要重新拉取，用户跳转过去看到的还是上传前缓存住的旧封面（或者
+      // 全新帖子在这几个列表里干脆没有封面图，直到手动刷新）。收藏列表
+      // 目前不展示封面图，一起失效不会有可见效果，但保持跟 rmeove-image
+      // 那个 mutation 同一个作用域，不留不一致的例外。
+      if (images.length > 0) {
+        void queryClient.invalidateQueries({ queryKey: ["posts"] });
+        void queryClient.invalidateQueries({ queryKey: ["my-posts"] });
+        void queryClient.invalidateQueries({ queryKey: ["favorited-posts"] });
+      }
       navigate(`/post/${resolvedPostId}`, {
         replace: true,
         state: { publishSuccessMessage }

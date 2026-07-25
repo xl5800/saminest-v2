@@ -74,7 +74,11 @@ describe("listApprovedPosts", () => {
       foreignTable: "post_images",
       ascending: true
     });
-    expect(queryBuilder.limit).toHaveBeenCalledWith(1, { foreignTable: "post_images" });
+    // 故意不再对 post_images 这张内嵌表调用 .limit(1, ...)——见
+    // resolveCoverImageUrl 上面的大段注释，SQL 层面 LIMIT 1 在有软删除历史
+    // 的帖子上会选错封面图，这次改成拿全部图片行、在 JS 里过滤+选最小
+    // sort_order 的活跃图片。
+    expect(queryBuilder.limit).not.toHaveBeenCalled();
     expect(queryBuilder.range).toHaveBeenCalledWith(0, 20);
   });
 
@@ -299,6 +303,81 @@ describe("listApprovedPosts", () => {
     const result = await listApprovedPosts({ page: 0, pageSize: 20 });
 
     expect(result.posts[0].coverImageUrl).toBeNull();
+  });
+
+  it("picks the lowest-sort_order active image as cover, skipping a soft-deleted image with a lower sort_order (regression: 首页封面图选错的真实 bug)", async () => {
+    // 真实复现过的场景：这张帖子曾经把 sort_order=0 的图删过，后来重新
+    // 上传的新图从"活跃图片最大 sort_order + 1"开始编号，结果新图的
+    // sort_order 比那条已经软删除的旧记录大——封面图逻辑如果只看
+    // "sort_order 最小的一条"而不看 deleted_at，会选中这条已经不存在
+    // 有效引用的旧记录，页面上就是占位图。
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Re-uploaded photos listing",
+          price_amount: null,
+          price_label: "面议",
+          currency_code: "USD",
+          created_at: "2026-07-01T00:00:00.000Z",
+          favorite_count: 0,
+          location: null,
+          category: { name_zh: "二手" },
+          author: { display_name: "Bob" },
+          post_images: [
+            {
+              public_url: "https://img.example.com/old-deleted.jpg",
+              sort_order: 0,
+              deleted_at: "2026-07-23T02:45:40.000Z"
+            },
+            {
+              public_url: "https://img.example.com/new-active-1.jpg",
+              sort_order: 1,
+              deleted_at: null
+            },
+            {
+              public_url: "https://img.example.com/new-active-2.jpg",
+              sort_order: 2,
+              deleted_at: null
+            }
+          ]
+        }
+      ],
+      error: null
+    });
+
+    const result = await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(result.posts[0].coverImageUrl).toBe("https://img.example.com/new-active-1.jpg");
+  });
+
+  it("picks the correct cover image regardless of which order the rows come back in (does not assume the array is already sorted)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Out of order rows",
+          price_amount: null,
+          price_label: "面议",
+          currency_code: "USD",
+          created_at: "2026-07-01T00:00:00.000Z",
+          favorite_count: 0,
+          location: null,
+          category: { name_zh: "二手" },
+          author: { display_name: "Bob" },
+          post_images: [
+            { public_url: "https://img.example.com/sort-2.jpg", sort_order: 2, deleted_at: null },
+            { public_url: "https://img.example.com/sort-0-deleted.jpg", sort_order: 0, deleted_at: "2026-07-23T00:00:00.000Z" },
+            { public_url: "https://img.example.com/sort-1.jpg", sort_order: 1, deleted_at: null }
+          ]
+        }
+      ],
+      error: null
+    });
+
+    const result = await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(result.posts[0].coverImageUrl).toBe("https://img.example.com/sort-1.jpg");
   });
 
   it("returns an empty list without throwing when there are no matching posts", async () => {
@@ -821,7 +900,41 @@ describe("listMyPosts", () => {
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.eq).not.toHaveBeenCalledWith("status", expect.anything());
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
-    expect(queryBuilder.limit).toHaveBeenCalledWith(1, { foreignTable: "post_images" });
+    // 跟 listApprovedPosts 同一个修复：不再对 post_images 内嵌表 LIMIT 1。
+    expect(queryBuilder.limit).not.toHaveBeenCalled();
+  });
+
+  it("picks the lowest-sort_order active image as cover, skipping a soft-deleted image with a lower sort_order (regression)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Re-uploaded photos listing",
+          status: "approved",
+          created_at: "2026-07-01T00:00:00.000Z",
+          rejection_reason: null,
+          location: null,
+          category: { name_zh: "二手" },
+          post_images: [
+            {
+              public_url: "https://img.example.com/old-deleted.jpg",
+              sort_order: 0,
+              deleted_at: "2026-07-23T02:45:40.000Z"
+            },
+            {
+              public_url: "https://img.example.com/new-active-1.jpg",
+              sort_order: 1,
+              deleted_at: null
+            }
+          ]
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyPosts("user-1");
+
+    expect(result[0].coverImageUrl).toBe("https://img.example.com/new-active-1.jpg");
   });
 
   it("maps rows including a rejected post's rejection_reason and a cover image", async () => {

@@ -1,4 +1,7 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { ReactElement } from "react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -74,6 +77,34 @@ function makeImageFile(name: string): File {
 function selectImages(files: File[]) {
   const input = screen.getByLabelText(/上传图片/) as HTMLInputElement;
   fireEvent.change(input, { target: { files } });
+}
+
+/**
+ * 跟 renderWithProviders 内部结构完全一样（QueryClientProvider +
+ * MemoryRouter + Routes），唯一区别是把 QueryClient 实例返回给调用方，
+ * 这样测试才能在这个具体实例上 spy invalidateQueries——renderWithProviders
+ * 自己在内部 new 了一个不对外暴露的 QueryClient，测不了这个。
+ */
+function renderWithSpyableQueryClient(
+  ui: ReactElement,
+  options: { initialEntries?: string[]; route?: string } = {}
+) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+  const invalidateQueriesSpy = vi.spyOn(queryClient, "invalidateQueries");
+
+  const result = render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={options.initialEntries}>
+        <Routes>
+          <Route path={options.route ?? "*"} element={ui} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+
+  return { ...result, invalidateQueriesSpy };
 }
 
 describe("PublishPage", () => {
@@ -303,6 +334,48 @@ describe("PublishPage", () => {
         state: { publishSuccessMessage: "发布成功，等待审核" }
       });
     });
+  });
+
+  it("invalidates the posts/my-posts/favorited-posts list caches after a successful image upload (regression: 首页/我的发布缓存没刷新的问题)", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    uploadPostImage.mockResolvedValue({
+      storagePath: "user-1/post-999/img-0.png",
+      publicUrl: "https://cdn.example.com/img-0.png",
+      mimeType: "image/png",
+      sizeBytes: 100
+    });
+    insertPostImages.mockResolvedValue([]);
+
+    const { invalidateQueriesSpy } = renderWithSpyableQueryClient(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    selectImages([makeImageFile("a.png")]);
+    await screen.findByText("a.png");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalled();
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["posts"] });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["my-posts"] });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["favorited-posts"] });
+  });
+
+  it("does not invalidate any list caches when no images were selected (nothing in post_images could have changed)", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+
+    const { invalidateQueriesSpy } = renderWithSpyableQueryClient(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalled();
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalled();
   });
 
   it("navigates to the post with a post-created-but-images-failed message when an image upload fails, without showing the generic submit error", async () => {
@@ -653,6 +726,27 @@ describe("PublishPage in edit mode", () => {
     await waitFor(() => {
       expect(screen.queryByText("已上传的图片")).not.toBeInTheDocument();
     });
+  });
+
+  it("invalidates the posts/my-posts/favorited-posts list caches after removing an existing image (regression: 删图后首页缓存没刷新的问题)", async () => {
+    getPostDetail.mockResolvedValue(existingPostDetail);
+    removeOwnPostImage.mockResolvedValue(undefined);
+    const { invalidateQueriesSpy } = renderWithSpyableQueryClient(<PublishPage />, {
+      route: "/publish/:id",
+      initialEntries: ["/publish/post-1"]
+    });
+
+    await screen.findByDisplayValue("Original title");
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+
+    await waitFor(() => {
+      expect(removeOwnPostImage).toHaveBeenCalledWith("img-1");
+    });
+    await waitFor(() => {
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["posts"] });
+    });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["my-posts"] });
+    expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["favorited-posts"] });
   });
 
   it("computes the new image's sort_order from the max active sort_order among existing images, not from how many are currently displayed (regression for the soft-delete collision bug)", async () => {
