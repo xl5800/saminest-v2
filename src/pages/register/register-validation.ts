@@ -3,6 +3,7 @@ export interface RegisterFormInput {
   password: string;
   confirmPassword: string;
   displayName: string;
+  agreedToTerms: boolean;
 }
 
 export interface RegisterFormData {
@@ -60,6 +61,9 @@ export function validateRegisterInput(
   }
   if (password !== confirmPassword) {
     return fail("REGISTER_PASSWORD_MISMATCH", "两次输入的密码不一致。");
+  }
+  if (!input.agreedToTerms) {
+    return fail("REGISTER_TERMS_NOT_AGREED", "请先阅读并同意用户协议和隐私政策。");
   }
 
   return { success: true, data: { email, password, displayName }, error: null };

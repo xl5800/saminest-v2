@@ -8,6 +8,7 @@ function input(overrides: Partial<Parameters<typeof validateRegisterInput>[0]> =
     password: "password123",
     confirmPassword: "password123",
     displayName: "小明",
+    agreedToTerms: true,
     ...overrides
   };
 }
@@ -93,6 +94,17 @@ describe("validateRegisterInput", () => {
       success: false,
       data: null,
       error: { code: "REGISTER_PASSWORD_MISMATCH", message: "两次输入的密码不一致。" }
+    });
+  });
+
+  it("requires the terms/privacy checkbox to be checked", () => {
+    expect(validateRegisterInput(input({ agreedToTerms: false }))).toEqual({
+      success: false,
+      data: null,
+      error: {
+        code: "REGISTER_TERMS_NOT_AGREED",
+        message: "请先阅读并同意用户协议和隐私政策。"
+      }
     });
   });
 });

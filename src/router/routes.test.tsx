@@ -102,11 +102,13 @@ import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
+import { PrivacyPage } from "../pages/privacy/privacy-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { TermsPage } from "../pages/terms/terms-page";
 import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
 import { useAuthStore } from "../store/auth-store";
@@ -246,6 +248,8 @@ function renderAt(path: string | string[]) {
           { path: "register", element: <RegisterPage /> },
           { path: "forgot-password", element: <ForgotPasswordPage /> },
           { path: "reset-password", element: <ResetPasswordPage /> },
+          { path: "terms", element: <TermsPage /> },
+          { path: "privacy", element: <PrivacyPage /> },
           { path: "*", element: <NotFoundPage /> }
         ]
       }
@@ -302,10 +306,12 @@ describe("app routes", () => {
     listFavoritedPosts.mockResolvedValue([]);
   });
 
-  it("renders the home page at /", () => {
+  it("renders the home page at / with the site-wide footer", () => {
     renderAt("/");
 
     expect(screen.getByRole("heading", { name: "Saminest" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
+    expect(screen.getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
   });
 
   it("renders the category page at /category/:slug", async () => {
@@ -363,6 +369,18 @@ describe("app routes", () => {
     expect(
       screen.getByRole("heading", { name: "重置密码" })
     ).toBeInTheDocument();
+  });
+
+  it("renders the terms page at /terms without requiring a session", () => {
+    renderAt("/terms");
+
+    expect(screen.getByRole("heading", { name: "用户协议" })).toBeInTheDocument();
+  });
+
+  it("renders the privacy page at /privacy without requiring a session", () => {
+    renderAt("/privacy");
+
+    expect(screen.getByRole("heading", { name: "隐私政策" })).toBeInTheDocument();
   });
 
   it("renders the not-found page for an unknown path", () => {
@@ -440,6 +458,7 @@ describe("app routes", () => {
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "页脚" })).not.toBeInTheDocument();
   });
 
   it("restores the conversation list chrome when the in-page back button handles a direct detail URL", async () => {

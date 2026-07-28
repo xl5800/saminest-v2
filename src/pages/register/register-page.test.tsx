@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { signUp, navigateMock } = vi.hoisted(() => ({
@@ -18,11 +19,20 @@ vi.mock("react-router-dom", async (importOriginal) => {
 import { AppError } from "../../utils/app-error";
 import { RegisterPage } from "./register-page";
 
+function renderRegisterPage() {
+  return render(
+    <MemoryRouter>
+      <RegisterPage />
+    </MemoryRouter>
+  );
+}
+
 const validValues = {
   displayName: "小明",
   email: "user@example.com",
   password: "password123",
-  confirmPassword: "password123"
+  confirmPassword: "password123",
+  agreeToTerms: true
 };
 
 function fillForm(overrides: Partial<typeof validValues> = {}) {
@@ -39,6 +49,9 @@ function fillForm(overrides: Partial<typeof validValues> = {}) {
   fireEvent.change(screen.getByLabelText("确认密码"), {
     target: { value: values.confirmPassword }
   });
+  if (values.agreeToTerms) {
+    fireEvent.click(screen.getByRole("checkbox"));
+  }
 }
 
 describe("RegisterPage", () => {
@@ -52,7 +65,7 @@ describe("RegisterPage", () => {
   });
 
   it("renders the four required fields", () => {
-    render(<RegisterPage />);
+    renderRegisterPage();
 
     expect(screen.getByLabelText("显示名称")).toBeInTheDocument();
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
@@ -60,8 +73,20 @@ describe("RegisterPage", () => {
     expect(screen.getByLabelText("确认密码")).toBeInTheDocument();
   });
 
+  it("renders the terms/privacy checkbox with links that open in a new tab", () => {
+    renderRegisterPage();
+
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    const termsLink = screen.getByRole("link", { name: "《用户协议》" });
+    expect(termsLink).toHaveAttribute("href", "/terms");
+    expect(termsLink).toHaveAttribute("target", "_blank");
+    const privacyLink = screen.getByRole("link", { name: "《隐私政策》" });
+    expect(privacyLink).toHaveAttribute("href", "/privacy");
+    expect(privacyLink).toHaveAttribute("target", "_blank");
+  });
+
   it("blocks submission on the client and shows a friendly message when passwords mismatch", async () => {
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm({ confirmPassword: "different123" });
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
@@ -71,12 +96,24 @@ describe("RegisterPage", () => {
   });
 
   it("blocks submission when the password is shorter than the minimum length", async () => {
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm({ password: "short1", confirmPassword: "short1" });
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("密码至少需要 8 位。");
+    expect(signUp).not.toHaveBeenCalled();
+  });
+
+  it("blocks submission and shows a friendly message when the terms checkbox is not checked", async () => {
+    renderRegisterPage();
+    fillForm({ agreeToTerms: false });
+
+    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "请先阅读并同意用户协议和隐私政策。"
+    );
     expect(signUp).not.toHaveBeenCalled();
   });
 
@@ -88,7 +125,7 @@ describe("RegisterPage", () => {
       })
     );
 
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
 
@@ -102,9 +139,9 @@ describe("RegisterPage", () => {
     });
   });
 
-  it("calls authService.signUp with the validated fields and redirects home on success", async () => {
+  it("calls authService.signUp with the validated fields and redirects home on success once the terms checkbox is checked", async () => {
     signUp.mockResolvedValue({ user: null, session: null });
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm();
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
@@ -121,7 +158,7 @@ describe("RegisterPage", () => {
 
   it("maps a known Supabase error code to a friendly message instead of the raw error", async () => {
     signUp.mockRejectedValue(new AppError("User already registered", "email_exists"));
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm();
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
@@ -133,7 +170,7 @@ describe("RegisterPage", () => {
 
   it("falls back to a generic message for an unmapped error code", async () => {
     signUp.mockRejectedValue(new AppError("boom", "some_unmapped_code"));
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm();
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
@@ -143,7 +180,7 @@ describe("RegisterPage", () => {
 
   it("falls back to a generic message for a non-AppError rejection", async () => {
     signUp.mockRejectedValue(new Error("network down"));
-    render(<RegisterPage />);
+    renderRegisterPage();
     fillForm();
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));

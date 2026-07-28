@@ -18,11 +18,13 @@ import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
+import { PrivacyPage } from "../pages/privacy/privacy-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { TermsPage } from "../pages/terms/terms-page";
 import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
 
@@ -188,6 +190,14 @@ export const router = createBrowserRouter([
       {
         path: "reset-password",
         element: <ResetPasswordPage />
+      },
+      {
+        path: "terms",
+        element: <TermsPage />
+      },
+      {
+        path: "privacy",
+        element: <PrivacyPage />
       },
       {
         path: "*",

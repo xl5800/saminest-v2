@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
@@ -37,6 +37,7 @@ export function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -49,7 +50,8 @@ export function RegisterPage() {
       email,
       password,
       confirmPassword,
-      displayName
+      displayName,
+      agreedToTerms
     });
     if (!validation.success) {
       setError(validation.error.message);
@@ -122,6 +124,34 @@ export function RegisterPage() {
               required
               className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
+          </label>
+          <label className="mb-4 flex items-start gap-2 text-base font-normal text-text">
+            <input
+              type="checkbox"
+              checked={agreedToTerms}
+              onChange={(event) => setAgreedToTerms(event.target.checked)}
+              className="mt-1 h-4 w-4 shrink-0 rounded border-border text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <span>
+              我已阅读并同意
+              <Link
+                to="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline"
+              >
+                《用户协议》
+              </Link>
+              和
+              <Link
+                to="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary underline"
+              >
+                《隐私政策》
+              </Link>
+            </span>
           </label>
           <button
             type="submit"
