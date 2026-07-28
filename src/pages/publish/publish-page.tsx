@@ -369,7 +369,7 @@ export function PublishPage() {
     } finally {
       setUploadingImages(false);
       // 只要尝试过上传图片（不管全部成功、部分成功还是全部失败），
-      // post_images 表都有可能被改动过——首页/分类页/搜索（usePostsQuery，
+      // post_images 表都有可能被改动过——首页/分类页/搜索（usePostsInfiniteQuery，
       // queryKey 前缀 "posts"）、"我的发布"（["my-posts", userId]）会展示
       // 这个帖子的封面图，不 invalidate 的话这几个页面的缓存不会知道
       // 要重新拉取，用户跳转过去看到的还是上传前缓存住的旧封面（或者

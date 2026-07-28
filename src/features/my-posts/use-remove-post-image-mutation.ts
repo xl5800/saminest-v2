@@ -11,7 +11,7 @@ import { removeOwnPostImage } from "../../repositories/post-images-repository";
  * mutation.ts 是同一个模式。
  *
  * 但这张图片有没有被删，直接影响"这个帖子的封面图是哪一张"，而封面图会
- * 出现在首页/分类页/搜索（都是 usePostsQuery，queryKey 前缀 "posts"）和
+ * 出现在首页/分类页/搜索（都是 usePostsInfiniteQuery，queryKey 前缀 "posts"）和
  * "我的发布"（["my-posts", userId]）里——这几个列表页各自维护自己的
  * TanStack Query 缓存，删图片这个动作本身不会让它们知道要重新拉数据，
  * 不显式 invalidate 的话，用户删完图片回到首页，看到的还是删除前缓存住的

@@ -1,8 +1,9 @@
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
 import { formatListingDate, formatPrice } from "../../utils/format";
-import { usePostsQuery } from "./use-posts-query";
+import { usePostsInfiniteQuery } from "./use-posts-query";
 
 export interface PostListProps {
   categoryId?: string;
@@ -11,8 +12,8 @@ export interface PostListProps {
 
 /**
  * 可复用的帖子列表：首页和分类页都用这一个组件，靠 categoryId 区分。
- * 以后"我的帖子"、"收藏列表"如果也是"分页 + 列表项"的形态，优先扩展这里
- * 而不是照抄一份。
+ * 以后"我的帖子"、"收藏列表"如果也是"无限滚动 + 列表项"的形态，优先扩展
+ * 这里而不是照抄一份。
  *
  * 渲染成"瀑布流双列"卡片网格：用原生 CSS 多栏布局（columns-2）而不是
  * CSS grid——grid 会强制同一行的卡片等高，做不出瀑布流那种"高矮不一、
@@ -23,9 +24,37 @@ export interface PostListProps {
  * FavoriteButton 保持跟改版之前一样，不嵌套在 <Link> 里面（<Link> 渲染成
  * <a>，button 嵌套在 a 里本身是不合法的 HTML，且会干扰它自己的
  * stopPropagation 逻辑），而是作为 <Link> 的同级兄弟节点放在卡片内。
+ *
+ * 分页按钮已经删掉了（今晚早些时候的改动），这里用"哨兵元素 +
+ * IntersectionObserver"实现无限滚动：列表底部放一个不可见的哨兵 div，
+ * 它进入视口时触发 fetchNextPage()。哨兵只在 hasNextPage 为真时渲染——
+ * 没有下一页时彻底不挂这个元素，而不是渲染出来但不响应，避免它一直
+ * 空占着 DOM/被观察却永远不会有意义地触发。
  */
 export function PostList({ categoryId, searchQuery }: PostListProps) {
-  const { data, isPending, isError } = usePostsQuery({ categoryId, searchQuery, page: 0 });
+  const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
+    usePostsInfiniteQuery({ categoryId, searchQuery });
+
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) {
+      return;
+    }
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        void fetchNextPage();
+      }
+    });
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (isPending) {
     return <p role="status">加载中…</p>;
@@ -35,14 +64,16 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
     return <p role="alert">帖子加载失败，请稍后重试。</p>;
   }
 
-  if (data.posts.length === 0) {
+  const posts = data.pages.flatMap((page) => page.posts);
+
+  if (posts.length === 0) {
     return <p role="status">{searchQuery ? "没有找到相关帖子。" : "暂无帖子。"}</p>;
   }
 
   return (
     <div>
       <div className="columns-2 gap-3">
-        {data.posts.map((post) => (
+        {posts.map((post) => (
           <div
             key={post.id}
             className="mb-3 break-inside-avoid overflow-hidden rounded-2xl border border-border bg-white shadow-card"
@@ -89,6 +120,8 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
           </div>
         ))}
       </div>
+      {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
+      {isFetchingNextPage ? <p role="status">加载更多…</p> : null}
     </div>
   );
 }

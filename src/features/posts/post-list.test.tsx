@@ -1,6 +1,11 @@
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  resetIntersectionObserverMock,
+  triggerLastIntersectionObserver
+} from "../../test/setup";
+
 const { listApprovedPosts, useFavoritePostIdsQuery, useToggleFavoriteMutation } =
   vi.hoisted(() => ({
     listApprovedPosts: vi.fn(),
@@ -13,7 +18,7 @@ vi.mock("../../repositories/posts-repository", () => ({
 }));
 // PostList renders FavoriteButton per item, which pulls in useQuery/useMutation
 // hooks of its own — mock those the same way favorite-button.test.tsx does so
-// this file stays focused on list/pagination behavior.
+// this file stays focused on list/infinite-scroll behavior.
 vi.mock("../favorites/use-favorite-post-ids-query", () => ({
   useFavoritePostIdsQuery
 }));
@@ -49,6 +54,7 @@ describe("PostList", () => {
     useToggleFavoriteMutation.mockReset();
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });
     useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    resetIntersectionObserverMock();
   });
 
   it("shows a loading state before the query resolves", () => {
@@ -149,4 +155,98 @@ describe("PostList", () => {
     });
   });
 
+  it("only requests the first page on initial load", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: true });
+
+    renderWithProviders(<PostList />);
+
+    await screen.findByRole("link");
+
+    expect(listApprovedPosts).toHaveBeenCalledTimes(1);
+    expect(listApprovedPosts).toHaveBeenCalledWith({
+      categoryId: undefined,
+      searchQuery: undefined,
+      page: 0,
+      pageSize: 20
+    });
+  });
+
+  it("loads and appends the next page when the sentinel enters the viewport", async () => {
+    const secondPost = { ...samplePost, id: "post-2", title: "Second room" };
+    listApprovedPosts
+      .mockResolvedValueOnce({ posts: [samplePost], hasNextPage: true })
+      .mockResolvedValueOnce({ posts: [secondPost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+    await screen.findByRole("link");
+
+    triggerLastIntersectionObserver(true);
+
+    await waitFor(() => {
+      expect(listApprovedPosts).toHaveBeenCalledTimes(2);
+    });
+    expect(listApprovedPosts).toHaveBeenNthCalledWith(2, {
+      categoryId: undefined,
+      searchQuery: undefined,
+      page: 1,
+      pageSize: 20
+    });
+
+    const links = await screen.findAllByRole("link");
+    expect(links).toHaveLength(2);
+    expect(links[0]).toHaveAttribute("href", "/post/post-1");
+    expect(links[1]).toHaveAttribute("href", "/post/post-2");
+  });
+
+  it("does not fetch again once there is no next page", async () => {
+    listApprovedPosts
+      .mockResolvedValueOnce({ posts: [samplePost], hasNextPage: true })
+      .mockResolvedValueOnce({
+        posts: [{ ...samplePost, id: "post-2" }],
+        hasNextPage: false
+      });
+
+    renderWithProviders(<PostList />);
+    await screen.findByRole("link");
+
+    triggerLastIntersectionObserver(true);
+    await waitFor(() => {
+      expect(listApprovedPosts).toHaveBeenCalledTimes(2);
+    });
+    await screen.findAllByRole("link");
+
+    // hasNextPage is now false, so the sentinel has been unmounted and its
+    // observer disconnected — triggering the last known instance again must
+    // not cause a third request.
+    triggerLastIntersectionObserver(true);
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(listApprovedPosts).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows a loading indicator while fetching the next page", async () => {
+    let resolveSecondPage: (value: { posts: typeof samplePost[]; hasNextPage: boolean }) => void =
+      () => {};
+    const secondPagePromise = new Promise<{ posts: typeof samplePost[]; hasNextPage: boolean }>(
+      (resolve) => {
+        resolveSecondPage = resolve;
+      }
+    );
+    listApprovedPosts
+      .mockResolvedValueOnce({ posts: [samplePost], hasNextPage: true })
+      .mockReturnValueOnce(secondPagePromise);
+
+    renderWithProviders(<PostList />);
+    await screen.findByRole("link");
+
+    triggerLastIntersectionObserver(true);
+
+    expect(await screen.findByText("加载更多…")).toBeInTheDocument();
+
+    resolveSecondPage({ posts: [{ ...samplePost, id: "post-2" }], hasNextPage: false });
+
+    await waitFor(() => {
+      expect(screen.queryByText("加载更多…")).not.toBeInTheDocument();
+    });
+  });
 });
