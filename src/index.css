@@ -56,12 +56,3 @@ body {
   background-color: var(--color-bg);
   color: var(--color-text);
 }
-
-/*
- * 我的页面背景单独用 #F8F8F6（不是纯白，也不是全局的 --color-bg），
- * 规范里明确要求这个页面背景色跟其它页面区分开——用一个专门的 class
- * 而不是改 body 背景色，避免影响其它所有页面。
- */
-.bg-profile-page {
-  background-color: #f8f8f6;
-}

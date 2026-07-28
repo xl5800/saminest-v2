@@ -385,8 +385,8 @@ interface AdminPendingPostRow {
 
 /**
  * 管理员审核队列用：所有 status = 'pending' 且未软删除的帖子，按 created_at
- * 升序排列——审核队列按"等得最久的先处理"排序是有意的选择，不是随手写反了
- * listApprovedPosts 的 descending。
+ * 降序排列（最新的在前面），跟 listAllPosts/listApprovedPosts 的排序方向
+ * 保持一致。
  *
  * 跟公开列表/消息 UI 里刻意不暴露发帖人真实身份（保护普通用户之间的隐私）
  * 不同，这是内部管理后台，管理员审核内容必须知道是谁发的、发在哪个分类下，
@@ -404,7 +404,7 @@ export async function listPendingPosts(): Promise<AdminPostListItem[]> {
     )
     .eq("status", "pending")
     .is("deleted_at", null)
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .overrideTypes<AdminPendingPostRow[]>();
 
   if (error) {
@@ -511,11 +511,9 @@ interface AdminAllPostRow {
  * 帖子，不限制 status（draft/pending/approved/rejected/archived 都在内），
  * 可选传 statusFilter 再收窄到某一个状态。
  *
- * 按 created_at 降序排列（最新的在前面）——这是刻意跟 listPendingPosts
- * （created_at 升序、"等得最久的先处理"）不同的排序，不是抄错了写反：这里
- * 是一个通用的浏览/管理列表，不是要按顺序处理完就清空的审核队列，管理员
- * 大概率更关心"最近发生了什么"，所以默认最新的在最前面，跟 listApprovedPosts
- * 面向访客的公开列表排序方向一致。
+ * 按 created_at 降序排列（最新的在前面），管理员大概率更关心"最近发生了
+ * 什么"，跟 listApprovedPosts 面向访客的公开列表、listPendingPosts 审核
+ * 队列的排序方向都一致。
  *
  * 嵌套 select 复用 listPendingPosts 那一套（author:profiles(display_name)、
  * category:categories(name_zh)）：posts 对 profiles 只有 author_id 这一个

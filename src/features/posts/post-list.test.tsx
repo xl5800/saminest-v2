@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { listApprovedPosts, useFavoritePostIdsQuery, useToggleFavoriteMutation } =
@@ -149,30 +149,4 @@ describe("PostList", () => {
     });
   });
 
-  it("disables 上一页 on the first page and disables 下一页 when there is no next page", async () => {
-    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
-
-    renderWithProviders(<PostList />);
-    await screen.findByRole("link");
-
-    expect(screen.getByRole("button", { name: "上一页" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "下一页" })).toBeDisabled();
-  });
-
-  it("advances to the next page and requests it from the repository", async () => {
-    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: true });
-
-    renderWithProviders(<PostList />);
-    await screen.findByRole("link");
-
-    fireEvent.click(screen.getByRole("button", { name: "下一页" }));
-
-    await waitFor(() => {
-      expect(listApprovedPosts).toHaveBeenCalledWith({
-        categoryId: undefined,
-        page: 1,
-        pageSize: 20
-      });
-    });
-  });
 });

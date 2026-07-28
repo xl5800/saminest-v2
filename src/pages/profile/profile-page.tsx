@@ -55,7 +55,7 @@ export function ProfilePage() {
   const avatarInitial = profile?.displayName?.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <main className="bg-profile-page mx-auto min-h-screen max-w-md px-4 py-6 pb-20 md:pb-6">
+    <main className="mx-auto min-h-screen max-w-md px-4 py-6 pb-20 md:pb-6">
       <h1 className="mb-4 text-xl font-bold text-text">我的</h1>
 
       {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}

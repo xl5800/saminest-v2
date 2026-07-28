@@ -540,7 +540,7 @@ describe("listPendingPosts", () => {
     maybeSingleMock.mockReset();
   });
 
-  it("filters to pending, non-deleted posts ordered by created_at ascending, with a nested author/category select", async () => {
+  it("filters to pending, non-deleted posts ordered by created_at descending, with a nested author/category select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listPendingPosts();
@@ -551,7 +551,7 @@ describe("listPendingPosts", () => {
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
-    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
   it("maps rows to AdminPostListItem including author and category names", async () => {

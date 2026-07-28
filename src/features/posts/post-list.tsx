@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
@@ -26,17 +25,7 @@ export interface PostListProps {
  * stopPropagation 逻辑），而是作为 <Link> 的同级兄弟节点放在卡片内。
  */
 export function PostList({ categoryId, searchQuery }: PostListProps) {
-  const [page, setPage] = useState(0);
-
-  // 搜索词变化时要把分页重置回第 0 页：否则用户翻到无过滤列表第 3 页后再
-  // 输入搜索词，会拿着"第 3 页"这个 page 值去查过滤后的结果，而过滤后的
-  // 结果可能根本没有第 3 页。只在 searchQuery 变化时触发，不能让这个
-  // effect 在其它无关的重新渲染上也把 page 重置掉。
-  useEffect(() => {
-    setPage(0);
-  }, [searchQuery]);
-
-  const { data, isPending, isError } = usePostsQuery({ categoryId, searchQuery, page });
+  const { data, isPending, isError } = usePostsQuery({ categoryId, searchQuery, page: 0 });
 
   if (isPending) {
     return <p role="status">加载中…</p>;
@@ -99,22 +88,6 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
             </div>
           </div>
         ))}
-      </div>
-      <div>
-        <button
-          type="button"
-          disabled={page === 0}
-          onClick={() => setPage((current) => Math.max(0, current - 1))}
-        >
-          上一页
-        </button>
-        <button
-          type="button"
-          disabled={!data.hasNextPage}
-          onClick={() => setPage((current) => current + 1)}
-        >
-          下一页
-        </button>
       </div>
     </div>
   );
