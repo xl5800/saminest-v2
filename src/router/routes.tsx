@@ -9,6 +9,7 @@ import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
 import { CategoryPage } from "../pages/category/category-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
+import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
@@ -95,6 +96,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <FavoritesPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "feedback",
+        element: (
+          <RequireAuth>
+            <SubmitFeedbackPage />
           </RequireAuth>
         )
       },

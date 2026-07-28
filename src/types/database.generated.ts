@@ -194,6 +194,104 @@ export type Database = {
           },
         ]
       }
+      feedback: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          status: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          status?: string
+          title: string
+          type: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          status?: string
+          title?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_images: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          feedback_id: string
+          height: number | null
+          id: string
+          mime_type: string | null
+          owner_id: string
+          public_url: string | null
+          size_bytes: number | null
+          sort_order: number
+          storage_path: string
+          width: number | null
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          feedback_id: string
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          owner_id: string
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          storage_path: string
+          width?: number | null
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          feedback_id?: string
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          owner_id?: string
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          storage_path?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_images_feedback_id_fkey"
+            columns: ["feedback_id"]
+            isOneToOne: false
+            referencedRelation: "feedback"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_images_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       locations: {
         Row: {
           country_code: string
@@ -762,7 +860,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
+type DefaultSchema = DatabaseWithoutInternals["public"]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends

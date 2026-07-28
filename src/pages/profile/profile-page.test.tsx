@@ -61,6 +61,16 @@ describe("ProfilePage", () => {
     );
   });
 
+  it("shows the '意见反馈' link to /feedback", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(screen.getByRole("link", { name: "意见反馈" })).toHaveAttribute(
+      "href",
+      "/feedback"
+    );
+  });
+
   it("shows the '我的发布' link to /my-posts", async () => {
     renderWithProviders(<ProfilePage />);
 

@@ -105,6 +105,12 @@ export function ProfilePage() {
             ›
           </span>
         </Link>
+        <Link to="/feedback" className={settingsItemClassName}>
+          <span>意见反馈</span>
+          <span aria-hidden="true" className={chevronClassName}>
+            ›
+          </span>
+        </Link>
       </nav>
 
       {isAdmin === true ? (

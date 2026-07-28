@@ -93,6 +93,7 @@ import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
 import { CategoryPage } from "../pages/category/category-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
+import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
@@ -164,6 +165,14 @@ function renderAt(path: string | string[]) {
             element: (
               <RequireAuth>
                 <FavoritesPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "feedback",
+            element: (
+              <RequireAuth>
+                <SubmitFeedbackPage />
               </RequireAuth>
             )
           },
@@ -502,6 +511,24 @@ describe("app routes", () => {
     renderAt("/profile");
 
     expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
+  });
+
+  it("redirects /feedback to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/feedback");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the submit-feedback page at /feedback when a session exists", async () => {
+    useAuthStore.getState().setSession({
+      user: { id: "user-1", email: "alice@example.com" }
+    } as never);
+
+    renderAt("/feedback");
+
+    expect(await screen.findByRole("heading", { name: "意见反馈" })).toBeInTheDocument();
   });
 
   it("redirects /my-posts to /login when there is no session (reuses RequireAuth)", () => {
