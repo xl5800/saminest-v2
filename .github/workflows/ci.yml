@@ -1,0 +1,43 @@
+name: CI
+
+# Pull request 和推到 main 都跑一遍，PR 页面上会直接看到每一步的通过/失败状态，
+# 不用再靠 AI 自己口头说"测试通过"——以这个跑出来的结果为准。
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# 同一个分支/PR 如果连续推了好几次，只跑最新这一次，取消掉排队中的旧一次，
+# 省 CI 时间。
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+        env:
+          # vite build 只是打包，不会真的连 Supabase，getSupabaseClient() 也不在
+          # 模块顶层调用，所以这两个值只是占位、让类型/打包过程别因为读到 undefined
+          # 而意外报错，不是真的密钥，不需要在仓库 Secrets 里配置真实值。
+          VITE_SUPABASE_URL: https://ci-placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: ci-placeholder-anon-key
