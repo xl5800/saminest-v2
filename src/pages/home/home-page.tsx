@@ -23,8 +23,7 @@ export function HomePage() {
   const debouncedSearchQuery = useDebouncedValue(inputValue, SEARCH_DEBOUNCE_MS);
 
   return (
-    <main>
-      <h1>Saminest</h1>
+    <main data-testid="home-page">
       <div className="px-4 pt-2">
         <input
           type="search"
