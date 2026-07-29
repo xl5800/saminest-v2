@@ -73,6 +73,37 @@ describe("LoginPage", () => {
     );
   });
 
+  it("does not mention 用户协议 or 隐私政策 anywhere on the login page", () => {
+    renderLoginPage();
+
+    expect(screen.queryByText(/用户协议/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/隐私政策/)).not.toBeInTheDocument();
+  });
+
+  it("only shows 忘记密码 and 没有账号 as the two bottom links, in that order", () => {
+    renderLoginPage();
+
+    const bottomLinks = screen.getAllByRole("link");
+    expect(bottomLinks.map((link) => link.textContent)).toEqual([
+      "Saminest",
+      "忘记密码？",
+      "去注册"
+    ]);
+  });
+
+  it("toggles the password field between hidden and visible text", () => {
+    renderLoginPage();
+
+    const passwordInput = screen.getByLabelText("密码");
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "显示密码" }));
+    expect(passwordInput).toHaveAttribute("type", "text");
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏密码" }));
+    expect(passwordInput).toHaveAttribute("type", "password");
+  });
+
   it("blocks submission and shows a friendly message when fields are empty", async () => {
     renderLoginPage();
 

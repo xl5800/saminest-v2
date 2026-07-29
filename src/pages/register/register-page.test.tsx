@@ -105,6 +105,26 @@ describe("RegisterPage", () => {
     expect(signUp).not.toHaveBeenCalled();
   });
 
+  it("toggles the password and confirm-password fields between hidden and visible text independently", () => {
+    renderRegisterPage();
+
+    const passwordInput = screen.getByLabelText("密码");
+    const confirmInput = screen.getByLabelText("确认密码");
+    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(confirmInput).toHaveAttribute("type", "password");
+
+    const [passwordToggle, confirmToggle] = screen.getAllByRole("button", {
+      name: "显示密码"
+    });
+    fireEvent.click(passwordToggle);
+
+    expect(passwordInput).toHaveAttribute("type", "text");
+    expect(confirmInput).toHaveAttribute("type", "password");
+
+    fireEvent.click(confirmToggle);
+    expect(confirmInput).toHaveAttribute("type", "text");
+  });
+
   it("blocks submission and shows a friendly message when the terms checkbox is not checked", async () => {
     renderRegisterPage();
     fillForm({ agreeToTerms: false });

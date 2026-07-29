@@ -34,7 +34,7 @@ describe("HomePage", () => {
 
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByRole("heading", { name: "Saminest" })).toBeInTheDocument();
+    expect(screen.getByTestId("home-page")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "租房" })).toHaveAttribute(
       "href",
       "/category/rent"

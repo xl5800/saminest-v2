@@ -1,6 +1,13 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import {
+  AuthLayout,
+  authInputClassName,
+  authLabelClassName,
+  authSubmitButtonClassName
+} from "../../components/auth-layout";
+import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
 
@@ -57,16 +64,17 @@ export function LoginPage() {
   }
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">登录 Saminest</h1>
-        <form onSubmit={handleSubmit} noValidate>
-          {error ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <label className="mb-4 block text-sm font-medium text-text">
+    <AuthLayout>
+      <p className="mb-1 text-sm text-text-muted">欢迎回来</p>
+      <h1 className="mb-6 text-xl font-bold text-text">登录 Saminest</h1>
+      {error ? (
+        <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="space-y-4">
+          <label className={authLabelClassName}>
             邮箱
             <input
               type="email"
@@ -74,35 +82,38 @@ export function LoginPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className={authInputClassName}
             />
           </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            密码
-            <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? "登录中…" : "登录"}
-          </button>
-        </form>
-        <p className="mt-4 text-center text-sm text-text-muted">
-          <Link to="/forgot-password" className="text-primary hover:underline">忘记密码？</Link>
+          <PasswordInput
+            id="login-password"
+            label="密码"
+            value={password}
+            onChange={setPassword}
+            autoComplete="current-password"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={submitting}
+          className={`mt-6 ${authSubmitButtonClassName}`}
+        >
+          {submitting ? "登录中…" : "登录"}
+        </button>
+      </form>
+      <div className="mt-5 space-y-2 text-center text-sm text-text-muted">
+        <p>
+          <Link to="/forgot-password" className="text-primary hover:underline">
+            忘记密码？
+          </Link>
         </p>
-        <p className="mt-4 text-center text-sm text-text-muted">
-          还没有账号？<Link to="/register" className="text-primary hover:underline">去注册</Link>
+        <p>
+          还没有账号？
+          <Link to="/register" className="text-primary hover:underline">
+            去注册
+          </Link>
         </p>
       </div>
-    </main>
+    </AuthLayout>
   );
 }

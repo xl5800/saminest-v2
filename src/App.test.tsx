@@ -21,9 +21,7 @@ describe("App", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(
-        screen.getByRole("heading", { name: "Saminest" })
-      ).toBeInTheDocument();
+      expect(screen.getByTestId("home-page")).toBeInTheDocument();
     });
   });
 });

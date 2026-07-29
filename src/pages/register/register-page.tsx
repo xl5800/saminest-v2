@@ -1,6 +1,13 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import {
+  AuthLayout,
+  authInputClassName,
+  authLabelClassName,
+  authSubmitButtonClassName
+} from "../../components/auth-layout";
+import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
 import { MIN_PASSWORD_LENGTH, validateRegisterInput } from "./register-validation";
@@ -70,16 +77,16 @@ export function RegisterPage() {
   }
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">注册 Saminest 账号</h1>
-        <form onSubmit={handleSubmit} noValidate>
-          {error ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <label className="mb-4 block text-sm font-medium text-text">
+    <AuthLayout>
+      <h1 className="mb-6 text-xl font-bold text-text">注册 Saminest 账号</h1>
+      {error ? (
+        <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <form onSubmit={handleSubmit} noValidate>
+        <div className="space-y-4">
+          <label className={authLabelClassName}>
             显示名称
             <input
               type="text"
@@ -87,10 +94,10 @@ export function RegisterPage() {
               value={displayName}
               onChange={(event) => setDisplayName(event.target.value)}
               required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className={authInputClassName}
             />
           </label>
-          <label className="mb-4 block text-sm font-medium text-text">
+          <label className={authLabelClassName}>
             邮箱
             <input
               type="email"
@@ -98,34 +105,26 @@ export function RegisterPage() {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className={authInputClassName}
             />
           </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            密码
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={MIN_PASSWORD_LENGTH}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            确认密码
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={MIN_PASSWORD_LENGTH}
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 flex items-start gap-2 text-base font-normal text-text">
+          <PasswordInput
+            id="register-password"
+            label="密码"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD_LENGTH}
+          />
+          <PasswordInput
+            id="register-confirm-password"
+            label="确认密码"
+            value={confirmPassword}
+            onChange={setConfirmPassword}
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD_LENGTH}
+          />
+          <label className="flex items-start gap-2 text-base font-normal text-text">
             <input
               type="checkbox"
               checked={agreedToTerms}
@@ -153,15 +152,15 @@ export function RegisterPage() {
               </Link>
             </span>
           </label>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? "注册中…" : "注册"}
-          </button>
-        </form>
-      </div>
-    </main>
+        </div>
+        <button
+          type="submit"
+          disabled={submitting}
+          className={`mt-6 ${authSubmitButtonClassName}`}
+        >
+          {submitting ? "注册中…" : "注册"}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

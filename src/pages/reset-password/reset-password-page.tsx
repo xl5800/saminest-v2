@@ -1,6 +1,13 @@
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
+import {
+  AuthLayout,
+  authInputClassName,
+  authLabelClassName,
+  authSubmitButtonClassName
+} from "../../components/auth-layout";
+import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
@@ -43,33 +50,33 @@ export function ResetPasswordPage() {
 
   if (!session) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
-          <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-            这个重置密码链接无效或已经过期，请重新发起一次找回密码。
-          </p>
-          <p className="mt-4 text-center text-sm text-text-muted">
-            <Link to="/forgot-password" className="text-primary hover:underline">重新发送重置邮件</Link>
-          </p>
+      <AuthLayout>
+        <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
+        <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+          这个重置密码链接无效或已经过期，请重新发起一次找回密码。
+        </p>
+        <div className="mt-5 text-center text-sm text-text-muted">
+          <Link to="/forgot-password" className="text-primary hover:underline">
+            重新发送重置邮件
+          </Link>
         </div>
-      </main>
+      </AuthLayout>
     );
   }
 
   if (submitted) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
-          <p className="mb-4 rounded border border-success bg-success/10 px-3 py-2 text-sm text-success" role="status">
-            密码已更新，请重新登录。
-          </p>
-          <p className="mt-4 text-center text-sm text-text-muted">
-            <Link to="/login" className="text-primary hover:underline">去登录</Link>
-          </p>
+      <AuthLayout>
+        <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
+        <p className="mb-4 rounded border border-success bg-success/10 px-3 py-2 text-sm text-success" role="status">
+          密码已更新，请重新登录。
+        </p>
+        <div className="mt-5 text-center text-sm text-text-muted">
+          <Link to="/login" className="text-primary hover:underline">
+            去登录
+          </Link>
         </div>
-      </main>
+      </AuthLayout>
     );
   }
 
@@ -103,28 +110,24 @@ export function ResetPasswordPage() {
   }
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
-        <form onSubmit={handleSubmit} noValidate>
-          {error ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <label className="mb-4 block text-sm font-medium text-text">
-            新密码
-            <input
-              type="password"
-              autoComplete="new-password"
-              minLength={MIN_PASSWORD_LENGTH}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
+    <AuthLayout>
+      <h1 className="mb-6 text-xl font-bold text-text">重置密码</h1>
+      <form onSubmit={handleSubmit} noValidate>
+        {error ? (
+          <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <div className="space-y-4">
+          <PasswordInput
+            id="reset-password-new-password"
+            label="新密码"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            minLength={MIN_PASSWORD_LENGTH}
+          />
+          <label className={authLabelClassName}>
             确认新密码
             <input
               type="password"
@@ -133,18 +136,18 @@ export function ResetPasswordPage() {
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              className={authInputClassName}
             />
           </label>
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? "更新中…" : "更新密码"}
-          </button>
-        </form>
-      </div>
-    </main>
+        </div>
+        <button
+          type="submit"
+          disabled={submitting}
+          className={`mt-6 ${authSubmitButtonClassName}`}
+        >
+          {submitting ? "更新中…" : "更新密码"}
+        </button>
+      </form>
+    </AuthLayout>
   );
 }

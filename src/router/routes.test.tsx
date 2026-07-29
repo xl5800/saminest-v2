@@ -306,12 +306,10 @@ describe("app routes", () => {
     listFavoritedPosts.mockResolvedValue([]);
   });
 
-  it("renders the home page at / with the site-wide footer", () => {
+  it("renders the home page at /", () => {
     renderAt("/");
 
-    expect(screen.getByRole("heading", { name: "Saminest" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "用户协议" })).toHaveAttribute("href", "/terms");
-    expect(screen.getByRole("link", { name: "隐私政策" })).toHaveAttribute("href", "/privacy");
+    expect(screen.getByTestId("home-page")).toBeInTheDocument();
   });
 
   it("renders the category page at /category/:slug", async () => {
@@ -339,36 +337,44 @@ describe("app routes", () => {
     expect(getPostDetail).toHaveBeenCalledWith("post-1");
   });
 
-  it("renders the login page at /login", () => {
+  it("renders the login page at /login without the global header/bottom nav chrome", () => {
     renderAt("/login");
 
     expect(
       screen.getByRole("heading", { name: "登录 Saminest" })
     ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
 
-  it("renders the register page at /register", () => {
+  it("renders the register page at /register without the global header/bottom nav chrome", () => {
     renderAt("/register");
 
     expect(
       screen.getByRole("heading", { name: "注册 Saminest 账号" })
     ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
 
-  it("renders the forgot-password page at /forgot-password", () => {
+  it("renders the forgot-password page at /forgot-password without the global header/bottom nav chrome", () => {
     renderAt("/forgot-password");
 
     expect(
       screen.getByRole("heading", { name: "找回密码" })
     ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
 
-  it("renders the reset-password page at /reset-password", () => {
+  it("renders the reset-password page at /reset-password without the global header/bottom nav chrome", () => {
     renderAt("/reset-password");
 
     expect(
       screen.getByRole("heading", { name: "重置密码" })
     ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
 
   it("renders the terms page at /terms without requiring a session", () => {
@@ -458,7 +464,6 @@ describe("app routes", () => {
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "页脚" })).not.toBeInTheDocument();
   });
 
   it("restores the conversation list chrome when the in-page back button handles a direct detail URL", async () => {
@@ -584,7 +589,7 @@ describe("app routes", () => {
     renderAt("/admin/posts");
 
     expect(
-      await screen.findByRole("heading", { name: "Saminest" })
+      await screen.findByTestId("home-page")
     ).toBeInTheDocument();
   });
 
@@ -614,7 +619,7 @@ describe("app routes", () => {
     renderAt("/admin/posts/all");
 
     expect(
-      await screen.findByRole("heading", { name: "Saminest" })
+      await screen.findByTestId("home-page")
     ).toBeInTheDocument();
   });
 
@@ -644,7 +649,7 @@ describe("app routes", () => {
     renderAt("/admin/reports");
 
     expect(
-      await screen.findByRole("heading", { name: "Saminest" })
+      await screen.findByTestId("home-page")
     ).toBeInTheDocument();
   });
 
@@ -674,7 +679,7 @@ describe("app routes", () => {
     renderAt("/admin/users");
 
     expect(
-      await screen.findByRole("heading", { name: "Saminest" })
+      await screen.findByTestId("home-page")
     ).toBeInTheDocument();
   });
 
@@ -704,7 +709,7 @@ describe("app routes", () => {
     renderAt("/admin/categories");
 
     expect(
-      await screen.findByRole("heading", { name: "Saminest" })
+      await screen.findByTestId("home-page")
     ).toBeInTheDocument();
   });
 

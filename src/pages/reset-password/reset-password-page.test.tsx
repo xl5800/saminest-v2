@@ -52,6 +52,20 @@ describe("ResetPasswordPage", () => {
     expect(screen.getByLabelText("确认新密码")).toBeInTheDocument();
   });
 
+  it("toggles the 新密码 field between hidden and visible text", () => {
+    useAuthStore.setState({ session: { access_token: "token" } as never });
+    renderPage();
+
+    const passwordInput = screen.getByLabelText("新密码");
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByRole("button", { name: "显示密码" }));
+    expect(passwordInput).toHaveAttribute("type", "text");
+
+    fireEvent.click(screen.getByRole("button", { name: "隐藏密码" }));
+    expect(passwordInput).toHaveAttribute("type", "password");
+  });
+
   it("blocks submission when the password is shorter than the minimum length", async () => {
     useAuthStore.setState({ session: { access_token: "token" } as never });
     renderPage();
