@@ -1,5 +1,93 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
+import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
+
+const UNIQUE_VIOLATION_CODE = "23505";
+const DEFAULT_PROFILE_DISPLAY_NAME = "新用户";
+
+export interface CreateProfileInput {
+  id: string;
+  displayName: string;
+}
+
+/**
+ * 建一行新的 profiles 记录。两处调用：
+ * 1. authService.signUp()——项目没开邮箱验证、或者用户已经验证过邮箱时，
+ *    signUp 成功后当场就有 session，直接建。
+ * 2. ensureProfileExists()（下面）——项目开启邮箱验证时，signUp 阶段
+ *    session 是 null，客户端还是匿名身份，这里的 insert 会被 RLS 拒绝
+ *    （auth.uid() = id 那条 with check 不满足），只能等用户真正完成邮箱
+ *    验证、登录进来拿到有效 session 之后再补建。
+ * 两处insert逻辑完全一样，抽成这一个函数共用，不写两份。
+ *
+ * displayName 传空字符串/纯空白时退回一个默认值，不让这一步因为拿不到
+ * 有效昵称（比如 auth 用户 user_metadata 里意外没有 display_name）而
+ * 插入一行空显示名，也不因此让整个补建失败。
+ */
+export async function createProfile(input: CreateProfileInput): Promise<void> {
+  const displayName = input.displayName.trim() || DEFAULT_PROFILE_DISPLAY_NAME;
+  const payload: TablesInsert<"profiles"> = {
+    id: input.id,
+    display_name: displayName,
+    role: "user",
+    account_status: "active"
+  };
+  const { error } = await getSupabaseClient().from("profiles").insert(payload);
+
+  if (error) {
+    throw new AppError(error.message, "PROFILE_CREATE_FAILED", error);
+  }
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    error instanceof AppError &&
+    typeof error.cause === "object" &&
+    error.cause !== null &&
+    (error.cause as { code?: unknown }).code === UNIQUE_VIOLATION_CODE
+  );
+}
+
+/**
+ * useAuthBootstrap 用：确保当前登录用户在 public.profiles 里有一行记录，
+ * 没有就用 createProfile 补建——补上"邮箱验证开启时 authService.signUp()
+ * 阶段 session 是 null、profile 从来不会被创建"这个缺口。
+ *
+ * 先查一次是不是已经存在：老用户每次打开网站都会走一遍 useAuthBootstrap，
+ * 绝大多数情况下不应该每次都尝试插入，只有真的查不到时才 insert。
+ *
+ * 这中间仍然有一个理论上的竞态窗口——两个标签页/两次 onAuthStateChange
+ * 几乎同时判断"不存在"、几乎同时插入，profiles.id 是主键，后完成的那次
+ * 会撞 23505 唯一冲突。这种情况直接当成"已经建好了"忽略，不当成真正的
+ * 失败抛出去——调用方不需要关心这种竞态，只需要知道"这次调用之后 profile
+ * 一定存在，或者是真的失败了"。
+ */
+export async function ensureProfileExists(
+  userId: string,
+  displayName: string
+): Promise<void> {
+  const { data: existing, error: selectError } = await getSupabaseClient()
+    .from("profiles")
+    .select("id")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new AppError(selectError.message, "PROFILE_EXISTS_CHECK_FAILED", selectError);
+  }
+  if (existing) {
+    return;
+  }
+
+  try {
+    await createProfile({ id: userId, displayName });
+  } catch (error) {
+    if (isUniqueViolation(error)) {
+      return;
+    }
+    throw error;
+  }
+}
 
 /**
  * 只读某个用户 profiles.role 一列，供 RequireAdmin 判断"当前登录用户是不是

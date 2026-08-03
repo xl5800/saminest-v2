@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, maybeSingleMock, rpcMock } = vi.hoisted(() => {
+const { queryBuilder, maybeSingleMock, insertMock, rpcMock } = vi.hoisted(() => {
   const maybeSingleMock = vi.fn();
+  const insertMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   const chain = ["select", "eq"] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
   }
   builder.maybeSingle = maybeSingleMock;
-  return { queryBuilder: builder, maybeSingleMock, rpcMock: vi.fn() };
+  builder.insert = insertMock;
+  return { queryBuilder: builder, maybeSingleMock, insertMock, rpcMock: vi.fn() };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -17,7 +19,13 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
-import { getCurrentUserRole, getMyProfile, listProfilesForAdmin } from "./profiles-repository";
+import {
+  createProfile,
+  ensureProfileExists,
+  getCurrentUserRole,
+  getMyProfile,
+  listProfilesForAdmin
+} from "./profiles-repository";
 
 describe("getCurrentUserRole", () => {
   beforeEach(() => {
@@ -178,5 +186,111 @@ describe("listProfilesForAdmin", () => {
     await expect(listProfilesForAdmin()).rejects.toMatchObject({
       code: "ADMIN_PROFILES_LIST_FAILED"
     });
+  });
+});
+
+describe("createProfile", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    insertMock.mockReset();
+  });
+
+  it("inserts a new profile row with role=user and account_status=active", async () => {
+    insertMock.mockResolvedValue({ error: null });
+
+    await createProfile({ id: "user-1", displayName: "小明" });
+
+    expect(fromMock).toHaveBeenCalledWith("profiles");
+    expect(insertMock).toHaveBeenCalledWith({
+      id: "user-1",
+      display_name: "小明",
+      role: "user",
+      account_status: "active"
+    });
+  });
+
+  it("falls back to a default display name when given an empty/whitespace-only value", async () => {
+    insertMock.mockResolvedValue({ error: null });
+
+    await createProfile({ id: "user-1", displayName: "   " });
+
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ display_name: "新用户" })
+    );
+  });
+
+  it("throws PROFILE_CREATE_FAILED when the insert fails", async () => {
+    insertMock.mockResolvedValue({ error: { message: "boom", code: "500" } });
+
+    await expect(
+      createProfile({ id: "user-1", displayName: "小明" })
+    ).rejects.toMatchObject({ code: "PROFILE_CREATE_FAILED" });
+  });
+});
+
+describe("ensureProfileExists", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    maybeSingleMock.mockReset();
+    insertMock.mockReset();
+  });
+
+  it("does nothing when a profile row already exists", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "user-1" }, error: null });
+
+    await ensureProfileExists("user-1", "小明");
+
+    expect(queryBuilder.select).toHaveBeenCalledWith("id");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-1");
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it("inserts a profile row when none exists yet", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    insertMock.mockResolvedValue({ error: null });
+
+    await ensureProfileExists("user-1", "小明");
+
+    expect(insertMock).toHaveBeenCalledWith({
+      id: "user-1",
+      display_name: "小明",
+      role: "user",
+      account_status: "active"
+    });
+  });
+
+  it("treats a 23505 unique violation on insert as already-created and does not throw", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    insertMock.mockResolvedValue({
+      error: { message: "duplicate key value violates unique constraint", code: "23505" }
+    });
+
+    await expect(ensureProfileExists("user-1", "小明")).resolves.toBeUndefined();
+  });
+
+  it("throws for a real insert failure that is not a unique violation", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    insertMock.mockResolvedValue({ error: { message: "network down", code: "500" } });
+
+    await expect(
+      ensureProfileExists("user-1", "小明")
+    ).rejects.toMatchObject({ code: "PROFILE_CREATE_FAILED" });
+  });
+
+  it("throws PROFILE_EXISTS_CHECK_FAILED when the existence check itself fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(
+      ensureProfileExists("user-1", "小明")
+    ).rejects.toMatchObject({ code: "PROFILE_EXISTS_CHECK_FAILED" });
   });
 });

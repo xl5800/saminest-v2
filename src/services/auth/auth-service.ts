@@ -1,6 +1,6 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { getSupabaseClient } from "../../integrations/supabase/client";
-import type { TablesInsert } from "../../types/database.generated";
+import { createProfile } from "../../repositories/profiles-repository";
 import { AppError } from "../../utils/app-error";
 
 export interface SignUpInput {
@@ -19,29 +19,6 @@ export interface AuthResult {
   session: Session | null;
 }
 
-/**
- * 仅当 signUp 返回了可用 session 时才能调用：RLS 要求 auth.uid() = id，
- * 如果项目开启了邮箱验证，signUp 成功后 session 会是 null，此时客户端还是
- * 匿名身份，插入会被拒绝。这种情况下 profile 应该延后到用户完成邮箱验证、
- * 首次登录成功后再补建——当前 useAuthBootstrap 还没有这段逻辑，是已知缺口。
- */
-async function createInitialProfile(
-  user: User,
-  displayName: string
-): Promise<void> {
-  const payload: TablesInsert<"profiles"> = {
-    id: user.id,
-    display_name: displayName,
-    role: "user",
-    account_status: "active"
-  };
-  const { error } = await getSupabaseClient().from("profiles").insert(payload);
-
-  if (error) {
-    throw new AppError(error.message, "PROFILE_CREATE_FAILED", error);
-  }
-}
-
 export const authService = {
   async signUp(input: SignUpInput): Promise<AuthResult> {
     const supabase = getSupabaseClient();
@@ -58,7 +35,15 @@ export const authService = {
     }
 
     if (data.user && data.session) {
-      await createInitialProfile(data.user, input.displayName);
+      /**
+       * RLS 要求 auth.uid() = id。项目开启邮箱验证时，signUp 成功后
+       * session 会是 null（客户端此时还是匿名身份），插入会被拒绝，所以
+       * 这个分支不会执行——这种情况下不在这里补建，交给 useAuthBootstrap
+       * 在用户真正完成邮箱验证、登录进来拿到有效 session 时，用
+       * ensureProfileExists 兜底补上（两处共用同一份 createProfile 插入
+       * 逻辑，见 profiles-repository.ts）。
+       */
+      await createProfile({ id: data.user.id, displayName: input.displayName });
     }
 
     return { user: data.user, session: data.session };
