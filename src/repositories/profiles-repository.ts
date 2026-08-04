@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
-import type { TablesInsert } from "../types/database.generated";
+import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 
 const UNIQUE_VIOLATION_CODE = "23505";
@@ -86,6 +86,35 @@ export async function ensureProfileExists(
       return;
     }
     throw error;
+  }
+}
+
+/**
+ * 用户在"编辑昵称"页面（/profile/edit）主动修改自己的 display_name。
+ * profiles_update_self 这条 RLS UPDATE 策略（见
+ * supabase/migrations/20260715220000_create_profiles_table.sql 第
+ * 127-138 行）允许用户更新自己整行 profiles 记录，WITH CHECK 只锁死了
+ * role/account_status 必须跟数据库里已有的值一致，display_name 没有被
+ * 锁——这里直接 update 即可，不需要新的 migration，也不用碰 RLS。
+ *
+ * 调用方负责传入已经 trim 过、校验过的 displayName，这里不做空值兜底
+ * ——跟 createProfile 的默认值兜底不是同一个场景：createProfile 是给
+ * "从来没填过昵称"的账号兜底一个占位值，这里是用户主动编辑，不应该在
+ * 用户没填的时候悄悄换成一个他没输入过的默认值，那属于校验阶段该挡住的
+ * 情况（见 pages/profile/edit-profile-validation.ts）。
+ */
+export async function updateMyDisplayName(
+  userId: string,
+  displayName: string
+): Promise<void> {
+  const payload: TablesUpdate<"profiles"> = { display_name: displayName };
+  const { error } = await getSupabaseClient()
+    .from("profiles")
+    .update(payload)
+    .eq("id", userId);
+
+  if (error) {
+    throw new AppError(error.message, "PROFILE_DISPLAY_NAME_UPDATE_FAILED", error);
   }
 }
 

@@ -86,7 +86,12 @@ export function ProfilePage() {
         )}
         <div className="min-w-0">
           {!isPending && !isError ? (
-            <p className="break-words text-lg font-medium text-text">{profile?.displayName ?? "未知用户"}</p>
+            <div className="flex items-center gap-2">
+              <p className="break-words text-lg font-medium text-text">{profile?.displayName ?? "未知用户"}</p>
+              <Link to="/profile/edit" className="shrink-0 text-sm text-primary hover:underline">
+                编辑
+              </Link>
+            </div>
           ) : null}
           <p className="break-words text-sm text-text-muted">{email}</p>
         </div>

@@ -51,6 +51,16 @@ describe("ProfilePage", () => {
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
   });
 
+  it("shows an '编辑' link next to the display name pointing to /profile/edit", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(screen.getByRole("link", { name: "编辑" })).toHaveAttribute(
+      "href",
+      "/profile/edit"
+    );
+  });
+
   it("shows the '我的收藏' link to /favorites", async () => {
     renderWithProviders(<ProfilePage />);
 

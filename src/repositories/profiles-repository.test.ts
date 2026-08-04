@@ -1,19 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, maybeSingleMock, insertMock, rpcMock } = vi.hoisted(() => {
-  const maybeSingleMock = vi.fn();
-  const insertMock = vi.fn();
-  const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  const chain = ["select", "eq"] as const;
-  for (const method of chain) {
-    builder[method] = vi.fn(() => builder);
-  }
-  builder.maybeSingle = maybeSingleMock;
-  builder.insert = insertMock;
-  return { queryBuilder: builder, maybeSingleMock, insertMock, rpcMock: vi.fn() };
-});
+const { queryBuilder, maybeSingleMock, insertMock, updateMock, eqAfterUpdateMock, rpcMock } =
+  vi.hoisted(() => {
+    const maybeSingleMock = vi.fn();
+    const insertMock = vi.fn();
+    const updateMock = vi.fn();
+    const eqAfterUpdateMock = vi.fn();
+    const builder: Record<string, ReturnType<typeof vi.fn>> = {};
+    const chain = ["select", "eq"] as const;
+    for (const method of chain) {
+      builder[method] = vi.fn(() => builder);
+    }
+    builder.maybeSingle = maybeSingleMock;
+    builder.insert = insertMock;
+    return {
+      queryBuilder: builder,
+      maybeSingleMock,
+      insertMock,
+      updateMock,
+      eqAfterUpdateMock,
+      rpcMock: vi.fn()
+    };
+  });
 
 const fromMock = vi.fn(() => queryBuilder);
+
+// updateMyDisplayName 走 .from("profiles").update(payload).eq("id", userId)——
+// eq() 在这条链路上是终止调用，直接 await 它拿 {error}，跟 select/eq/
+// maybeSingle 那条链路里 eq() 只是"继续往下链"的中间调用不一样，不能复用
+// queryBuilder 里那个永远 return this 的 eq mock，单独搭一个 update 专用的
+// builder。
+const updateQueryBuilder = { update: updateMock };
+updateMock.mockReturnValue({ eq: eqAfterUpdateMock });
 
 vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
@@ -24,7 +42,8 @@ import {
   ensureProfileExists,
   getCurrentUserRole,
   getMyProfile,
-  listProfilesForAdmin
+  listProfilesForAdmin,
+  updateMyDisplayName
 } from "./profiles-repository";
 
 describe("getCurrentUserRole", () => {
@@ -228,6 +247,45 @@ describe("createProfile", () => {
     await expect(
       createProfile({ id: "user-1", displayName: "小明" })
     ).rejects.toMatchObject({ code: "PROFILE_CREATE_FAILED" });
+  });
+});
+
+describe("updateMyDisplayName", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    updateMock.mockClear();
+    eqAfterUpdateMock.mockReset();
+  });
+
+  it("updates only the display_name column for the given user id", async () => {
+    eqAfterUpdateMock.mockResolvedValue({ error: null });
+    fromMock.mockReturnValueOnce(updateQueryBuilder);
+
+    await updateMyDisplayName("user-1", "小明");
+
+    expect(fromMock).toHaveBeenCalledWith("profiles");
+    expect(updateMock).toHaveBeenCalledWith({ display_name: "小明" });
+    expect(eqAfterUpdateMock).toHaveBeenCalledWith("id", "user-1");
+  });
+
+  it("throws PROFILE_DISPLAY_NAME_UPDATE_FAILED when the update fails", async () => {
+    eqAfterUpdateMock.mockResolvedValue({
+      error: { message: "network down", code: "500" }
+    });
+    fromMock.mockReturnValueOnce(updateQueryBuilder);
+
+    await expect(
+      updateMyDisplayName("user-1", "小明")
+    ).rejects.toMatchObject({ code: "PROFILE_DISPLAY_NAME_UPDATE_FAILED" });
+  });
+
+  it("does not include role/account_status in the update payload (only display_name is writable from this page)", async () => {
+    eqAfterUpdateMock.mockResolvedValue({ error: null });
+    fromMock.mockReturnValueOnce(updateQueryBuilder);
+
+    await updateMyDisplayName("user-1", "小红");
+
+    expect(Object.keys(updateMock.mock.calls[0][0])).toEqual(["display_name"]);
   });
 });
 

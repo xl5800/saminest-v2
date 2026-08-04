@@ -19,6 +19,7 @@ import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PrivacyPage } from "../pages/privacy/privacy-page";
+import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
@@ -114,6 +115,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ProfilePage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "profile/edit",
+        element: (
+          <RequireAuth>
+            <EditProfilePage />
           </RequireAuth>
         )
       },

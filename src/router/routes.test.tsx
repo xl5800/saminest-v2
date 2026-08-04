@@ -20,6 +20,7 @@ const {
   getCurrentUserRole,
   listProfilesForAdmin,
   getMyProfile,
+  updateMyDisplayName,
   listFavoritedPostIds,
   listFavoritedPosts
 } = vi.hoisted(() => ({
@@ -39,6 +40,7 @@ const {
   getCurrentUserRole: vi.fn(),
   listProfilesForAdmin: vi.fn(),
   getMyProfile: vi.fn(),
+  updateMyDisplayName: vi.fn(),
   listFavoritedPostIds: vi.fn(),
   listFavoritedPosts: vi.fn()
 }));
@@ -77,7 +79,8 @@ vi.mock("../repositories/reports-repository", async () => {
 vi.mock("../repositories/profiles-repository", () => ({
   getCurrentUserRole,
   listProfilesForAdmin,
-  getMyProfile
+  getMyProfile,
+  updateMyDisplayName
 }));
 vi.mock("../repositories/favorites-repository", () => ({
   listFavoritedPostIds,
@@ -103,6 +106,7 @@ import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PrivacyPage } from "../pages/privacy/privacy-page";
+import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
@@ -183,6 +187,14 @@ function renderAt(path: string | string[]) {
             element: (
               <RequireAuth>
                 <ProfilePage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "profile/edit",
+            element: (
+              <RequireAuth>
+                <EditProfilePage />
               </RequireAuth>
             )
           },
@@ -286,6 +298,7 @@ describe("app routes", () => {
     getCurrentUserRole.mockReset();
     listProfilesForAdmin.mockReset();
     getMyProfile.mockReset();
+    updateMyDisplayName.mockReset();
     listFavoritedPostIds.mockReset();
     listFavoritedPosts.mockReset();
     listActiveCategories.mockResolvedValue([
@@ -535,6 +548,24 @@ describe("app routes", () => {
     renderAt("/profile");
 
     expect(await screen.findByRole("heading", { name: "我的" })).toBeInTheDocument();
+  });
+
+  it("redirects /profile/edit to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/profile/edit");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the edit-profile page at /profile/edit when a session exists", async () => {
+    useAuthStore.getState().setSession({
+      user: { id: "user-1", email: "alice@example.com" }
+    } as never);
+
+    renderAt("/profile/edit");
+
+    expect(await screen.findByRole("heading", { name: "编辑昵称" })).toBeInTheDocument();
   });
 
   it("redirects /feedback to /login when there is no session (reuses RequireAuth)", () => {
