@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
+import { ImageLightbox } from "../../components/image-lightbox";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import { formatListingDate, formatPrice } from "../../utils/format";
 
@@ -29,6 +31,24 @@ export function PostDetailPage() {
   const publishSuccessMessage = state?.publishSuccessMessage;
 
   const { data, isPending, isError } = usePostDetailQuery(id ?? "");
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+
+  // 传给 ImageLightbox 的图片数组要先过滤掉 publicUrl 是 null 的项（类型是
+  // string | null），点击某一张缩略图时传的 initialIndex 必须是"过滤后
+  // 数组里的索引"，不能直接用 data.images 里的原始下标——如果中间有图片
+  // publicUrl 是 null 被过滤掉了，两个下标会对不上，点第 3 张缩略图会打开
+  // 另一张图。这里单次遍历同时算出 lightboxImages（喂给 ImageLightbox 的
+  // 纯 URL 数组）和每张缩略图对应的 lightboxIndex（publicUrl 是 null 时
+  // 为 null，缩略图按钮据此禁用，不触发打开查看器）。
+  const lightboxImages: string[] = [];
+  const imagesWithLightboxIndex = (data?.images ?? []).map((image) => {
+    if (image.publicUrl === null) {
+      return { ...image, lightboxIndex: null as number | null };
+    }
+    const indexInLightbox = lightboxImages.length;
+    lightboxImages.push(image.publicUrl);
+    return { ...image, lightboxIndex: indexInLightbox };
+  });
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
@@ -72,13 +92,25 @@ export function PostDetailPage() {
 
           {data.images.length > 0 ? (
             <div className="grid grid-cols-2 gap-2">
-              {data.images.map((image) => (
-                <img
-                  key={image.id}
-                  src={image.publicUrl ?? undefined}
-                  alt={data.title}
-                  className="aspect-[4/3] w-full rounded-lg object-cover"
-                />
+              {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
+                <button
+                  key={imageId}
+                  type="button"
+                  aria-label="查看大图"
+                  disabled={indexInLightbox === null}
+                  onClick={() => {
+                    if (indexInLightbox !== null) {
+                      setLightboxIndex(indexInLightbox);
+                    }
+                  }}
+                  className="block disabled:cursor-default"
+                >
+                  <img
+                    src={publicUrl ?? undefined}
+                    alt={data.title}
+                    className="aspect-[4/3] w-full rounded-lg object-cover"
+                  />
+                </button>
               ))}
             </div>
           ) : null}
@@ -108,6 +140,14 @@ export function PostDetailPage() {
           </Link>
         ) : null}
       </div>
+
+      {lightboxIndex !== null ? (
+        <ImageLightbox
+          images={lightboxImages}
+          initialIndex={lightboxIndex}
+          onClose={() => setLightboxIndex(null)}
+        />
+      ) : null}
     </main>
   );
 }

@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Location } from "react-router-dom";
@@ -157,6 +157,29 @@ describe("PostDetailPage", () => {
     expect(images).toHaveLength(2);
     expect(images[0]).toHaveAttribute("src", "https://img.example.com/1.jpg");
     expect(images[1]).toHaveAttribute("src", "https://img.example.com/2.jpg");
+  });
+
+  it("opens a full-screen lightbox when an image is clicked, and closes it via the close button", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "查看大图" })[0]);
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   it("does not render a contact block when contactMethod/contactValue are null", () => {
