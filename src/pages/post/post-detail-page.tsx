@@ -53,7 +53,7 @@ export function PostDetailPage() {
         <div className="space-y-4">
           <div>
             <h1 className="mb-2 text-xl font-bold text-text">{data.title}</h1>
-            <p className="text-lg font-semibold text-accent">
+            <p className="text-lg font-semibold text-text">
               {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
             </p>
             <div className="mt-1 flex flex-wrap items-center gap-1">

@@ -96,7 +96,7 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
               )}
               <div className="space-y-1 p-3">
                 <p className="line-clamp-2 break-words text-base text-text">{post.title}</p>
-                <p className="text-lg font-semibold text-accent">
+                <p className="text-lg font-semibold text-text">
                   {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
                 </p>
                 <div className="flex flex-wrap items-center gap-1">

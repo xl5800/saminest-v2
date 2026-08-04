@@ -58,7 +58,7 @@ export function FavoritesPage() {
           >
             <Link to={`/post/${post.id}`} className="flex min-w-0 flex-col gap-1">
               <span className="break-words text-sm font-medium text-text">{post.title}</span>
-              <span className="text-sm font-semibold text-accent">
+              <span className="text-sm font-semibold text-text">
                 {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
               </span>
               <span className="text-xs text-text-muted">{post.locationName ?? "地区未填写"}</span>

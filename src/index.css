@@ -15,9 +15,11 @@
  *        页面的 bug，之前专门修过，这里再次强调不要在任何 input/textarea/
  *        select 上使用 text-sm 或更小的字号。
  *   Caption / 次要文字              text-sm（14px） + text-text-muted
- *   Price（价格数字）               text-lg 或 text-xl + font-semibold + text-accent
- *     —— text-accent 现在是黑色（与 --color-text 一致），价格数字跟正文同色，
- *        不再是蓝色强调色；token 名字保留不改，只改了颜色值。
+ *   Price（价格数字）               text-lg 或 text-xl + font-semibold + text-text
+ *     —— 价格数字用 text-text（跟正文同色，黑色），不是 text-accent。
+ *        text-accent/bg-accent 这个 token 站内多处复用（分类选中态、发布
+ *        按钮、底部导航中间按钮），是共享的蓝色强调色，价格改黑色不能改
+ *        这个 token 本身，只单独换价格自己用的 class。
  *   Tag（分类标签等小标签）         text-xs（12px） + font-medium
  *
  * 次要文字色：规范里提到的"次要文字色"就是下面已有的 --color-text-muted，
@@ -26,7 +28,7 @@
 @theme {
   --color-primary: #2563eb;
   --color-primary-hover: #1e40af;
-  --color-accent: #1a1a1a;
+  --color-accent: #1d4ed8;
   --color-bg: #f7f8fa;
   --color-text: #1a1a1a;
   --color-text-muted: #6b7280;
