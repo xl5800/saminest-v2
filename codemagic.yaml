@@ -48,7 +48,12 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
-        auth: integration
+        # 直接引用 app_store_credentials 分组里的环境变量做鉴权，跟上面
+        # environment.groups 用的是同一套变量，不需要在 Codemagic 网站上
+        # 额外配置 Developer Portal 集成。
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
       email:
         recipients:
