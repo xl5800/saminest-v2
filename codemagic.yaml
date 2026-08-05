@@ -1,0 +1,58 @@
+workflows:
+  ios-testflight:
+    name: Saminest iOS TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      groups:
+        # 这个分组名字要在 Codemagic 网站后台手动建（App 设置 -> Environment
+        # variables -> 新建一个叫 app_store_credentials 的分组），往里面加
+        # 三个变量，值从 App Store Connect 生成的 API Key 来：
+        #   APP_STORE_CONNECT_ISSUER_ID      -- Issuer ID
+        #   APP_STORE_CONNECT_KEY_IDENTIFIER -- Key ID
+        #   APP_STORE_CONNECT_PRIVATE_KEY    -- 下载的 .p8 文件内容（整个文件内容粘进去）
+        # 生成入口：App Store Connect -> Users and Access -> Integrations -> App Store Connect API
+        - app_store_credentials
+      vars:
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+        BUNDLE_ID: "com.saminest.app"
+        # App Store Connect 里创建好 App 记录之后，在 App 信息页能看到一个
+        # 数字 ID（Apple ID），填在这里，用于自动查询/递增 TestFlight 版本号。
+        # APP_STORE_APPLE_ID: 0000000000
+      node: 20
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+      - name: Build web app and sync into native iOS project
+        script: npm run build:mobile
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios/App && pod install
+      - name: Set up code signing (Codemagic 会用上面的 App Store Connect API Key 自动申请/下载证书和描述文件)
+        script: |
+          xcode-project use-profiles
+      - name: Build ipa for distribution
+        script: |
+          xcode-project build-ipa --workspace "$XCODE_WORKSPACE" --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+      email:
+        recipients:
+          - xlw0980@gmail.com
+        notify:
+          success: true
+          failure: true
