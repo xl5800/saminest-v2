@@ -114,7 +114,10 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
               </div>
             </Link>
             <div className="flex items-center justify-between px-3 pb-3">
-              <span className="text-xs text-text-muted">♥ {post.favoriteCount}</span>
+              <span className="flex items-center gap-2 text-xs text-text-muted">
+                <span>♥ {post.favoriteCount}</span>
+                <span>💬 {post.commentCount}</span>
+              </span>
               <FavoriteButton postId={post.id} />
             </div>
           </div>

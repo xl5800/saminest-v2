@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
+import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
@@ -140,6 +141,8 @@ export function PostDetailPage() {
           </Link>
         ) : null}
       </div>
+
+      {id ? <CommentSection postId={id} /> : null}
 
       {lightboxIndex !== null ? (
         <ImageLightbox

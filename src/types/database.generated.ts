@@ -50,6 +50,61 @@ export type Database = {
         }
         Relationships: []
       }
+      comments: {
+        Row: {
+          content: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          parent_id: string | null
+          post_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          parent_id?: string | null
+          post_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          parent_id?: string | null
+          post_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_members: {
         Row: {
           conversation_id: string
@@ -518,6 +573,7 @@ export type Database = {
           archived_at: string | null
           author_id: string
           category_id: string
+          comment_count: number
           contact_method: string | null
           contact_value: string | null
           created_at: string
@@ -543,6 +599,7 @@ export type Database = {
           archived_at?: string | null
           author_id: string
           category_id: string
+          comment_count?: number
           contact_method?: string | null
           contact_value?: string | null
           created_at?: string
@@ -568,6 +625,7 @@ export type Database = {
           archived_at?: string | null
           author_id?: string
           category_id?: string
+          comment_count?: number
           contact_method?: string | null
           contact_value?: string | null
           created_at?: string
@@ -774,6 +832,7 @@ export type Database = {
           archived_at: string | null
           author_id: string
           category_id: string
+          comment_count: number
           contact_method: string | null
           contact_value: string | null
           created_at: string
@@ -860,7 +919,7 @@ export type Database = {
 
 type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals["public"]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends

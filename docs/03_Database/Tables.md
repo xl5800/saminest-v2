@@ -1554,3 +1554,82 @@ docs: add initial database design
 ```text
 feat: add favorites storage and update database documentation
 ```
+
+---
+
+# 36. comments
+
+> 本节是 2026-08-04 帖子评论功能新增的表，按第 35 节文档维护规则补充。
+> 顺序上排在文档末尾（没有按主题插回第 9-17 节中间），是为了不重新编号
+> 已有章节、不引入无关改动，不代表这张表在数据模型里的从属关系比其它表
+> 更靠后。
+
+## 36.1 作用
+
+帖子详情页评论。用户可以对帖子发表评论，也可以对已有评论发表回复
+（`parent_id` 自引用，支持真正的无限层级嵌套，不是摊平成两层）。
+
+按第 31 节新模块流程判断：这是"扩展现有 posts 模型"，不是独立的论坛模块
+（那个未来会用 `community_posts`/`community_comments` 这种独立表名），所以
+直接在现有 posts 上加一张关联表。
+
+## 36.2 字段
+
+| 字段 | 类型 | 是否为空 | 默认值 | 说明 |
+|---|---|---:|---|---|
+| `id` | `uuid` | 否 | 自动生成 | 主键 |
+| `post_id` | `uuid` | 否 | 无 | 所属帖子 |
+| `user_id` | `uuid` | 否 | 无 | 评论作者 |
+| `parent_id` | `uuid` | 是 | `null` | 回复的目标评论，`null` 表示顶层评论；自引用 `comments.id` |
+| `content` | `text` | 否 | 无 | 评论内容，1-500 字 |
+| `created_at` | `timestamptz` | 否 | `now()` | 发布时间 |
+| `updated_at` | `timestamptz` | 否 | `now()` | 最后更新时间（目前只有软删除会触发更新，没有开放编辑评论内容） |
+| `deleted_at` | `timestamptz` | 是 | `null` | 软删除时间戳 |
+
+## 36.3 约束
+
+```text
+check (char_length(content) between 1 and 500)
+```
+
+## 36.4 索引
+
+```text
+comments(post_id, created_at asc)
+comments(parent_id)
+comments(user_id)
+```
+
+## 36.5 软删除
+
+评论之间用 `parent_id` 形成回复链，硬删除会让被删评论的子回复变成孤儿
+（`parent_id` 指向不存在的行）。跟 `post_images`/`feedback_images` 一样的
+教训，这张表用软删除：删除只是把 `deleted_at` 设置成当前时间，前端对
+已删除的评论展示占位文字，回复链不断。没有开放"编辑评论内容"的功能。
+
+## 36.6 权限原则
+
+- 所有人（含未登录）可以查看"已审核公开且未软删除"帖子下的评论，以及
+  帖子作者本人任何状态帖子下的评论。
+- 登录用户可以对"自己能看到评论的帖子"发表评论/回复，且账号不能处于
+  受限状态（`is_account_restricted()`）。`parent_id` 如果不为空，必须指向
+  同一个 `post_id` 下的已有评论。
+- 用户只能软删除自己的评论（通过 UPDATE 把 `deleted_at` 设成当前时间），
+  且只能删除还未被删除的评论；除 `deleted_at` 外的所有字段都不能在这次
+  UPDATE 里被顺带改动。
+- 没有硬删除策略，没有"编辑评论内容"策略。
+
+## 36.7 评论数量
+
+`posts.comment_count` 是冗余统计字段（2026-08-04 随本功能一起新增），
+维护方式跟 `favorite_count` 一致：由触发器
+（`sync_post_comment_count`，挂在 `comments` 表的 insert/update 上）同步，
+评论新增时 +1，评论被软删除时 -1；该字段不能由普通客户端直接修改
+（`posts_update_own_or_admin` 策略已同步更新，把这个字段纳入锁定范围，
+跟 `view_count`/`favorite_count` 待遇一致）。
+
+## 36.8 举报评论
+
+复用现有 `reports` 表，`target_type` 的取值范围已放宽为
+`('post', 'comment')`（2026-08-04），其余字段/索引/RLS 策略不变，见
+第 12 节。

@@ -24,6 +24,7 @@ export interface PostFeedItem extends PostListItem {
   authorDisplayName: string;
   coverImageUrl: string | null;
   favoriteCount: number;
+  commentCount: number;
 }
 
 export interface ListApprovedPostsInput {
@@ -52,6 +53,7 @@ interface PostFeedRow {
   currency_code: string;
   created_at: string;
   favorite_count: number;
+  comment_count: number;
   location: { name: string } | null;
   location_text: string | null;
   category: { name_zh: string } | null;
@@ -167,7 +169,7 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     )
     .eq("status", "approved")
     .is("deleted_at", null)
@@ -208,7 +210,8 @@ export async function listApprovedPosts(
       categoryName: row.category?.name_zh ?? "未知分类",
       authorDisplayName: row.author?.display_name ?? "未知用户",
       coverImageUrl: resolveCoverImageUrl(row.post_images),
-      favoriteCount: row.favorite_count
+      favoriteCount: row.favorite_count,
+      commentCount: row.comment_count
     })),
     hasNextPage
   };
@@ -258,6 +261,7 @@ export interface PostDetail {
   contactMethod: string | null;
   contactValue: string | null;
   images: PostDetailImage[];
+  commentCount: number;
 }
 
 interface PostDetailImageRow {
@@ -281,6 +285,7 @@ interface PostDetailRow {
   created_at: string;
   contact_method: string | null;
   contact_value: string | null;
+  comment_count: number;
   location: { name: string } | null;
   category: { name_zh: string } | null;
   author: { display_name: string } | null;
@@ -321,7 +326,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -362,7 +367,8 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     authorDisplayName: data.author?.display_name ?? "未知用户",
     contactMethod: data.contact_method,
     contactValue: data.contact_value,
-    images
+    images,
+    commentCount: data.comment_count
   };
 }
 

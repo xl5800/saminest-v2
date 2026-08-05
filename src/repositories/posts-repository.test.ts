@@ -63,7 +63,7 @@ describe("listApprovedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -176,6 +176,7 @@ describe("listApprovedPosts", () => {
           currency_code: "USD",
           created_at: "2026-07-01T00:00:00.000Z",
           favorite_count: 3,
+          comment_count: 7,
           location: { name: "Rockville" },
           category: { name_zh: "租房" },
           author: { display_name: "Alice" },
@@ -202,7 +203,8 @@ describe("listApprovedPosts", () => {
           categoryName: "租房",
           authorDisplayName: "Alice",
           coverImageUrl: "https://img.example.com/cover.jpg",
-          favoriteCount: 3
+          favoriteCount: 3,
+          commentCount: 7
         }
       ],
       hasNextPage: false
@@ -696,6 +698,7 @@ describe("getPostDetail", () => {
         created_at: "2026-07-01T00:00:00.000Z",
         contact_method: "email",
         contact_value: "a@b.com",
+        comment_count: 4,
         location: { name: "Rockville" },
         category: { name_zh: "租房" },
         author: { display_name: "Alice" },
@@ -717,7 +720,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -745,7 +748,8 @@ describe("getPostDetail", () => {
       images: [
         { id: "img-1", publicUrl: "https://img.example.com/1.jpg", sortOrder: 0 },
         { id: "img-2", publicUrl: "https://img.example.com/2.jpg", sortOrder: 2 }
-      ]
+      ],
+      commentCount: 4
     });
   });
 

@@ -8,13 +8,19 @@ const {
   useToggleFavoriteMutation,
   usePostAuthorQuery,
   useCreateDirectConversationMutation,
-  usePostDetailQuery
+  usePostDetailQuery,
+  usePostCommentsQuery,
+  useCreateCommentMutation,
+  useDeleteCommentMutation
 } = vi.hoisted(() => ({
   useFavoritePostIdsQuery: vi.fn(),
   useToggleFavoriteMutation: vi.fn(),
   usePostAuthorQuery: vi.fn(),
   useCreateDirectConversationMutation: vi.fn(),
-  usePostDetailQuery: vi.fn()
+  usePostDetailQuery: vi.fn(),
+  usePostCommentsQuery: vi.fn(),
+  useCreateCommentMutation: vi.fn(),
+  useDeleteCommentMutation: vi.fn()
 }));
 
 // PostDetailPage renders FavoriteButton and ContactSellerButton, which pull in
@@ -35,6 +41,19 @@ vi.mock("../../features/conversations/use-create-direct-conversation-mutation", 
 }));
 vi.mock("../../features/posts/use-post-detail-query", () => ({
   usePostDetailQuery
+}));
+// PostDetailPage also renders CommentSection (which recursively renders
+// CommentItem for each comment) — mock those hooks too so this file stays
+// focused on the page's own rendering behavior; CommentSection/CommentItem
+// get their own dedicated test files.
+vi.mock("../../features/comments/use-post-comments-query", () => ({
+  usePostCommentsQuery
+}));
+vi.mock("../../features/comments/use-create-comment-mutation", () => ({
+  useCreateCommentMutation
+}));
+vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
+  useDeleteCommentMutation
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -67,7 +86,8 @@ const samplePostDetail = {
   images: [
     { id: "img-1", publicUrl: "https://img.example.com/1.jpg", sortOrder: 0 },
     { id: "img-2", publicUrl: "https://img.example.com/2.jpg", sortOrder: 1 }
-  ]
+  ],
+  commentCount: 0
 };
 
 describe("PostDetailPage", () => {
@@ -81,6 +101,9 @@ describe("PostDetailPage", () => {
     usePostAuthorQuery.mockReset();
     useCreateDirectConversationMutation.mockReset();
     usePostDetailQuery.mockReset();
+    usePostCommentsQuery.mockReset();
+    useCreateCommentMutation.mockReset();
+    useDeleteCommentMutation.mockReset();
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });
     useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
     // 默认查询已解析完成、且作者不是当前登录用户，让 ContactSellerButton
@@ -90,6 +113,12 @@ describe("PostDetailPage", () => {
       mutate: vi.fn(),
       isPending: false
     });
+    // CommentSection 默认没有评论、不在加载中，这个文件的测试只关心
+    // PostDetailPage 自己的渲染行为，评论区的详细行为由
+    // comment-section.test.tsx / comment-item.test.tsx 覆盖。
+    usePostCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    useCreateCommentMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+    useDeleteCommentMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   });
 
   it("shows a loading message while the post detail query is pending", () => {
@@ -100,7 +129,11 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    expect(screen.getByRole("status")).toHaveTextContent("加载中…");
+    // getAllByRole, not getByRole: CommentSection also renders its own
+    // role="status" element (its empty-comments message), so this page can
+    // have more than one status element at once — the first one is this
+    // page's own "加载中…" for the post detail query itself.
+    expect(screen.getAllByRole("status")[0]).toHaveTextContent("加载中…");
   });
 
   it("shows a friendly not-found message, without leaking whether the post exists but is unapproved, when the query resolves to null", () => {
@@ -234,6 +267,23 @@ describe("PostDetailPage", () => {
       "href",
       "/post/post-1/report"
     );
+  });
+
+  it("renders the comment section with the comment count from PostDetail.commentCount", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: { ...samplePostDetail, commentCount: 12 },
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "评论 (12)" })
+    ).toBeInTheDocument();
   });
 
   it("shows the publish success message as its own banner above the real post content", () => {

@@ -40,7 +40,8 @@ const samplePost = {
   categoryName: "租房",
   authorDisplayName: "Alice",
   coverImageUrl: "https://img.example.com/cover.jpg",
-  favoriteCount: 5
+  favoriteCount: 5,
+  commentCount: 2
 };
 
 describe("PostList", () => {
@@ -105,6 +106,15 @@ describe("PostList", () => {
     expect(link).toHaveTextContent("租房");
     expect(link).toHaveTextContent("Alice");
     expect(screen.getByText("♥ 5")).toBeInTheDocument();
+  });
+
+  it("renders the comment count next to the favorite count", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    await screen.findByRole("link");
+    expect(screen.getByText("💬 2")).toBeInTheDocument();
   });
 
   it("renders an <img> with the cover image url when coverImageUrl is present", async () => {
