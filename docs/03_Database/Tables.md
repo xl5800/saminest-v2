@@ -1619,6 +1619,14 @@ comments(user_id)
   UPDATE 里被顺带改动。
 - 没有硬删除策略，没有"编辑评论内容"策略。
 
+> 2026-08-05 修复：`comments_insert_own`/`comments_delete_own` 最初直接用
+> 自引用子查询（`select ... from public.comments where id = ...`）在
+> comments 自己的策略里查 comments 表本身，触发 Postgres
+> `42P17: infinite recursion detected in policy`，导致所有发表评论的
+> 请求失败。修法跟 `posts_update_own_or_admin` 已经验证过的方式一致：
+> 新增 `get_comment_snapshot()`（`SECURITY DEFINER`）取代直接自引用查询，
+> 见 `fix_comments_insert_delete_infinite_recursion` 迁移。
+
 ## 36.7 评论数量
 
 `posts.comment_count` 是冗余统计字段（2026-08-04 随本功能一起新增），
