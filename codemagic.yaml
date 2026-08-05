@@ -20,7 +20,7 @@ workflows:
         # App Store Connect 里创建好 App 记录之后，在 App 信息页能看到一个
         # 数字 ID（Apple ID），填在这里，用于自动查询/递增 TestFlight 版本号。
         # APP_STORE_APPLE_ID: 0000000000
-      node: 20
+      node: 22
       xcode: latest
       cocoapods: default
     triggering:
