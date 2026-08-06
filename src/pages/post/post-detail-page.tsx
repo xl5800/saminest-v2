@@ -5,6 +5,7 @@ import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
+import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import { formatListingDate, formatPrice } from "../../utils/format";
 
@@ -53,6 +54,8 @@ export function PostDetailPage() {
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+      <WechatBrowserBanner />
+
       {publishSuccessMessage ? (
         <p role="status" className="mb-4 text-sm text-text-muted">
           {publishSuccessMessage}
