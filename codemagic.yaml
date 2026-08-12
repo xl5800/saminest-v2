@@ -13,6 +13,16 @@ workflows:
         #   APP_STORE_CONNECT_PRIVATE_KEY    -- 下载的 .p8 文件内容（整个文件内容粘进去）
         # 生成入口：App Store Connect -> Users and Access -> Integrations -> App Store Connect API
         - app_store_credentials
+      # 这一段是让 xcode-project use-profiles 自动去苹果那边生成/下载证书和
+      # 描述文件用的，跟上面 groups 里那三个环境变量是两回事——环境变量只
+      # 给下面 publishing.app_store_connect 那一步（上传到 TestFlight）用。
+      # 这里能生效的前提是：在 Codemagic 网站后台 Team settings ->
+      # Team integrations -> Developer Portal -> Manage keys，把同一个
+      # Issuer ID / Key ID / .p8 文件再录入一次（那是一个单独的入口，不是
+      # 环境变量页面）。
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.saminest.app
       vars:
         # 这个项目的 ios/ 是用 Swift Package Manager 管依赖的（看
         # ios/App/CapApp-SPM 目录），不是 CocoaPods，所以没有 .xcworkspace，
@@ -47,9 +57,11 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
-        # 直接引用 app_store_credentials 分组里的环境变量做鉴权，跟上面
-        # environment.groups 用的是同一套变量，不需要在 Codemagic 网站上
-        # 额外配置 Developer Portal 集成。
+        # 这里直接引用 app_store_credentials 分组里的环境变量做鉴权，上传
+        # ipa 到 TestFlight 这一步只需要这三个变量就够了。注意这跟上面
+        # environment.ios_signing 那段依赖的 Developer Portal 集成是两件
+        # 事：签名生成证书走 Developer Portal 集成，这里上传发布走环境
+        # 变量，两处都要配置好，缺一个都不行。
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
