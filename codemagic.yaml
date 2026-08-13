@@ -53,6 +53,10 @@ workflows:
         script: npm ci
       - name: Build web app and sync into native iOS project
         script: npm run build:mobile
+      - name: Bump iOS build number (CURRENT_PROJECT_VERSION 之前写死是 1，苹果要求每次上传的版本号必须比上一次高，用 Codemagic 自己每次构建递增的 $BUILD_NUMBER 覆盖)
+        script: |
+          cd ios/App
+          sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" App.xcodeproj/project.pbxproj
       - name: Set up code signing (Codemagic 会用上面的 App Store Connect API Key 自动申请/下载证书和描述文件)
         script: |
           xcode-project use-profiles
