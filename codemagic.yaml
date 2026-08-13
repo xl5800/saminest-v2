@@ -30,6 +30,13 @@ workflows:
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.saminest.app"
+        # npm run build:mobile 会跑 vite build，getSupabaseClient() 依赖这
+        # 两个 VITE_ 前缀的变量在构建时就有值（Vite 是构建期写死进 JS 文件
+        # 的，不是运行时读的），之前漏配这两个，导致打出来的 App 一启动
+        # 就因为拿不到 Supabase 连接信息报错崩溃，表现为白屏。anon key 是
+        # 设计给客户端公开使用的，不是敏感信息，直接写在这里没问题。
+        VITE_SUPABASE_URL: "https://kdpzbpapnufvgbfgjgcr.supabase.co"
+        VITE_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtkcHpicGFwbnVmdmdiZmdqZ2NyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNDYxODQsImV4cCI6MjA5OTcyMjE4NH0.CcHXLI1vpFOWcT4T7hoJFIPKoKEjJEXI6R3Sd0tkN7c"
         # App Store Connect 里创建好 App 记录之后，在 App 信息页能看到一个
         # 数字 ID（Apple ID），填在这里，用于自动查询/递增 TestFlight 版本号。
         # APP_STORE_APPLE_ID: 0000000000
