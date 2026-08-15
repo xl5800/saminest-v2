@@ -395,6 +395,53 @@ export async function joinActivity(activityId: string, userId: string): Promise<
   throw new AppError(insertError.message, "ACTIVITY_JOIN_FAILED", insertError);
 }
 
+export interface ActivityParticipant {
+  userId: string;
+  displayName: string;
+}
+
+interface ActivityParticipantRow {
+  user_id: string;
+  user: { display_name: string } | null;
+}
+
+/**
+ * 活动详情页"参与者"区块用（设计文档第 4 节 + 本批任务范围 1）。这里不做
+ * 任何"我有没有权限看"的判断——RLS 已经按身份把可见范围收窄好了：
+ * activity_participants_select_organizer 让发起人查到完整名单，
+ * activity_participants_select_joined 让当前仍报名的用户查到"互相可见"的
+ * 名单，两条都不满足时（路人、或者已经退出的用户查看别人的行）一行都
+ * 查不到。这里只负责查询和字段映射，调用方（activity-detail-page.tsx）
+ * 按"查到就展示、空数组就不展示这个区块，保留原有的汇总人数"处理，不在
+ * 前端重复造一套权限判断。
+ *
+ * `.is("cancelled_at", null)` 这个过滤是内容口径，不是权限判断：
+ * activity_participants_select_joined 只负责"你有没有资格看这张活动下的
+ * 参与者行"，不负责"这一行本身要不要出现在名单里"——已经退出的历史记录
+ * 不应该出现在"参与者"名单里，这跟 participant_count 触发器只统计未取消
+ * 的人是同一个口径。
+ */
+export async function listActivityParticipants(
+  activityId: string
+): Promise<ActivityParticipant[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("activity_participants")
+    .select("user_id, user:profiles(display_name)")
+    .eq("activity_id", activityId)
+    .is("cancelled_at", null)
+    .order("joined_at", { ascending: true })
+    .overrideTypes<ActivityParticipantRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_PARTICIPANTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    userId: row.user_id,
+    displayName: row.user?.display_name ?? "未知用户"
+  }));
+}
+
 /**
  * 退出活动：软删除（把 cancelled_at 设成当前时间），不做真正的 DELETE，
  * 见设计文档 3.2 节。UPDATE 即使被 RLS 过滤掉 0 行也不会报错，照抄这个

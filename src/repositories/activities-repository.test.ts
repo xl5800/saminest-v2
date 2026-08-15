@@ -27,7 +27,8 @@ import {
   isCurrentlyJoined,
   joinActivity,
   leaveActivity,
-  listActivities
+  listActivities,
+  listActivityParticipants
 } from "./activities-repository";
 
 function resetAllMocks(): void {
@@ -498,6 +499,67 @@ describe("leaveActivity", () => {
 
     await expect(leaveActivity("act-1", "user-1")).rejects.toMatchObject({
       code: "ACTIVITY_LEAVE_NOT_FOUND"
+    });
+  });
+});
+
+describe("listActivityParticipants", () => {
+  beforeEach(resetAllMocks);
+
+  it("queries non-cancelled participants for the activity, ordered by joined_at ascending, with a nested profile select", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listActivityParticipants("act-1");
+
+    expect(fromMock).toHaveBeenCalledWith("activity_participants");
+    expect(queryBuilder.select).toHaveBeenCalledWith("user_id, user:profiles(display_name)");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: true });
+  });
+
+  it("maps rows to ActivityParticipant", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        { user_id: "user-1", user: { display_name: "Alice" } },
+        { user_id: "user-2", user: { display_name: "Bob" } }
+      ],
+      error: null
+    });
+
+    const result = await listActivityParticipants("act-1");
+
+    expect(result).toEqual([
+      { userId: "user-1", displayName: "Alice" },
+      { userId: "user-2", displayName: "Bob" }
+    ]);
+  });
+
+  it("falls back to a placeholder display name when the joined profile is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [{ user_id: "user-1", user: null }],
+      error: null
+    });
+
+    const result = await listActivityParticipants("act-1");
+
+    expect(result[0].displayName).toBe("未知用户");
+  });
+
+  it("returns an empty list without throwing when RLS filters out every row (not the organizer, not currently joined)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listActivityParticipants("act-1")).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listActivityParticipants("act-1")).rejects.toMatchObject({
+      code: "ACTIVITY_PARTICIPANTS_LIST_FAILED"
     });
   });
 });

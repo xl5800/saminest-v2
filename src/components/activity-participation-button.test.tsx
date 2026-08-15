@@ -42,7 +42,12 @@ describe("ActivityParticipationButton", () => {
 
   it("shows a login link instead of a button when logged out", () => {
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="open" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
@@ -54,14 +59,25 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="open" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     const button = screen.getByRole("button", { name: "我要报名" });
     fireEvent.click(button);
 
     expect(mutateMock).toHaveBeenCalledWith(
-      { activityId: "act-1", userId: "user-1", isCurrentlyJoined: false },
+      {
+        activityId: "act-1",
+        userId: "user-1",
+        isCurrentlyJoined: false,
+        organizerId: "organizer-1",
+        activityTitle: "周末吃火锅"
+      },
       expect.objectContaining({ onError: expect.any(Function) })
     );
   });
@@ -71,14 +87,25 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReturnValue({ data: true, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="open" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     const button = screen.getByRole("button", { name: "退出活动" });
     fireEvent.click(button);
 
     expect(mutateMock).toHaveBeenCalledWith(
-      { activityId: "act-1", userId: "user-1", isCurrentlyJoined: true },
+      {
+        activityId: "act-1",
+        userId: "user-1",
+        isCurrentlyJoined: true,
+        organizerId: "organizer-1",
+        activityTitle: "周末吃火锅"
+      },
       expect.objectContaining({ onError: expect.any(Function) })
     );
   });
@@ -88,7 +115,12 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="full" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="full"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     const button = screen.getByRole("button", { name: "报名已满" });
@@ -103,7 +135,12 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReturnValue({ data: true, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="full" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="full"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     const button = screen.getByRole("button", { name: "退出活动" });
@@ -119,7 +156,12 @@ describe("ActivityParticipationButton", () => {
     });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="open" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     const button = screen.getByRole("button", { name: "处理中…" });
@@ -134,7 +176,12 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="open" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "我要报名" }));
@@ -156,7 +203,12 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton activityId="act-1" activityStatus="open" />
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
     );
 
     fireEvent.click(screen.getByRole("button", { name: "我要报名" }));

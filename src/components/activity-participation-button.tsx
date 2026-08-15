@@ -17,6 +17,10 @@ const KNOWN_SAFE_ERROR_CODES = new Set(["ACTIVITY_JOIN_FORBIDDEN", "ACTIVITY_LEA
 export interface ActivityParticipationButtonProps {
   activityId: string;
   activityStatus: string;
+  /** 通知消息的收件人——报名/退出成功后要提醒的活动发起人。 */
+  organizerId: string;
+  /** 通知消息文案里要嵌入的活动标题，见 use-toggle-activity-participation-mutation.ts。 */
+  activityTitle: string;
 }
 
 /**
@@ -35,7 +39,9 @@ export interface ActivityParticipationButtonProps {
  */
 export function ActivityParticipationButton({
   activityId,
-  activityStatus
+  activityStatus,
+  organizerId,
+  activityTitle
 }: ActivityParticipationButtonProps) {
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
@@ -65,7 +71,7 @@ export function ActivityParticipationButton({
 
     setError(null);
     toggleParticipation.mutate(
-      { activityId, userId, isCurrentlyJoined: joined },
+      { activityId, userId, isCurrentlyJoined: joined, organizerId, activityTitle },
       {
         onError: (mutationError) => {
           setError(

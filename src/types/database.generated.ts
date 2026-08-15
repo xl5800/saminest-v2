@@ -907,6 +907,10 @@ export type Database = {
     }
     Functions: {
       approve_post: { Args: { target_post_id: string }; Returns: undefined }
+      create_activity_conversation: {
+        Args: { target_activity_id: string }
+        Returns: string
+      }
       create_direct_conversation: {
         Args: { target_post_id: string }
         Returns: string

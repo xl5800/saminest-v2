@@ -133,3 +133,54 @@ export async function createDirectConversation(
 
   return { conversationId: data };
 }
+
+/**
+ * 创建（或获取已有的）"活动报名/退出通知"私聊会话——"一起去"功能第二批
+ * 用（报名/退出活动时提醒发起人，见 activities-repository.ts /
+ * use-toggle-activity-participation-mutation.ts）。
+ *
+ * 不能直接复用上面的 createDirectConversation：那个函数唯一合法入口
+ * create_direct_conversation(target_post_id) 硬绑定 posts 表（函数体内
+ * `select author_id from public.posts where id = target_post_id`），
+ * conversations.post_id 外键也只指向 posts，活动（activities 表）不是
+ * posts，没有任何路径能让那个函数认得"活动的发起人是谁"，传活动 id 进去
+ * 会直接落进它的"post % not found"报错分支。conversations /
+ * conversation_members 两张表又完全没有对 authenticated 角色开放任何
+ * 直接 INSERT 的 RLS 策略（详见 20260716000400_create_messaging_tables.sql
+ * 的说明），所以在不新增数据库对象的前提下，没有办法为活动场景创建会话。
+ *
+ * 这里新增的 create_activity_conversation(target_activity_id) 是一个和
+ * create_direct_conversation 同构的 security definer 函数（见迁移文件
+ * supabase/migrations/20260815070000_create_activity_conversation_function.sql），
+ * 卖家/买家的等价身份（这里是"发起人"/"操作者"）同样固定从函数内部解析，
+ * 不接受调用方指定；这次没有修改/复用 create_direct_conversation 本身
+ * （不给它加"帖子或活动通用"的可选参数），避免让一个只服务 posts 场景的
+ * 函数意外多出一条永远不会触发的判断分支，迁移文件里有更完整的取舍说明。
+ *
+ * 错误处理跟 createDirectConversation 完全一致（同一段账号受限判断文本、
+ * 同一套 AppError 包装方式），只是错误码前缀换成 ACTIVITY_CONVERSATION_
+ * 以区分调用来源，方便日后排查是哪个入口报的错。
+ */
+export async function createActivityConversation(
+  activityId: string
+): Promise<CreateDirectConversationResult> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "create_activity_conversation",
+    { target_activity_id: activityId }
+  );
+
+  if (error) {
+    if (error.message?.includes(ACCOUNT_RESTRICTED_ERROR_TEXT)) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    throw new AppError(error.message, "ACTIVITY_CONVERSATION_CREATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(
+      "创建会话后无法读取会话 ID。",
+      "ACTIVITY_CONVERSATION_CREATE_ID_MISSING"
+    );
+  }
+
+  return { conversationId: data };
+}

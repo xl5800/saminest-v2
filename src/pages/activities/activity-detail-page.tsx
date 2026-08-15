@@ -2,6 +2,7 @@ import { useParams } from "react-router-dom";
 
 import { ActivityParticipationButton } from "../../components/activity-participation-button";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
+import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { getActivityChannelMeta } from "../../repositories/activities-repository";
 import {
   formatActivityParticipantSummary,
@@ -21,6 +22,7 @@ import {
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
+  const { data: participants } = useActivityParticipantsQuery(id ?? "");
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
@@ -70,6 +72,22 @@ export function ActivityDetailPage() {
             {formatActivityParticipantSummary(data.participantCount, data.capacity)}
           </p>
 
+          {participants && participants.length > 0 ? (
+            <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
+              <p className="mb-2 text-text-muted">参与者（{participants.length}）</p>
+              <ul className="flex flex-wrap gap-2">
+                {participants.map((participant) => (
+                  <li
+                    key={participant.userId}
+                    className="rounded-full border border-border bg-white px-2 py-0.5 text-xs text-text"
+                  >
+                    {participant.displayName}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {data.contactMethod && data.contactValue ? (
             <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
               <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
@@ -77,7 +95,12 @@ export function ActivityDetailPage() {
             </div>
           ) : null}
 
-          <ActivityParticipationButton activityId={data.id} activityStatus={data.status} />
+          <ActivityParticipationButton
+            activityId={data.id}
+            activityStatus={data.status}
+            organizerId={data.organizerId}
+            activityTitle={data.title}
+          />
         </div>
       ) : null}
     </main>

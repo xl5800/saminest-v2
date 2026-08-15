@@ -1,15 +1,23 @@
 import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useActivityDetailQuery, useActivityParticipationQuery, useToggleActivityParticipationMutation } =
-  vi.hoisted(() => ({
-    useActivityDetailQuery: vi.fn(),
-    useActivityParticipationQuery: vi.fn(),
-    useToggleActivityParticipationMutation: vi.fn()
-  }));
+const {
+  useActivityDetailQuery,
+  useActivityParticipantsQuery,
+  useActivityParticipationQuery,
+  useToggleActivityParticipationMutation
+} = vi.hoisted(() => ({
+  useActivityDetailQuery: vi.fn(),
+  useActivityParticipantsQuery: vi.fn(),
+  useActivityParticipationQuery: vi.fn(),
+  useToggleActivityParticipationMutation: vi.fn()
+}));
 
 vi.mock("../../features/activities/use-activity-detail-query", () => ({
   useActivityDetailQuery
+}));
+vi.mock("../../features/activities/use-activity-participants-query", () => ({
+  useActivityParticipantsQuery
 }));
 // ActivityDetailPage 渲染 ActivityParticipationButton，那个组件自己有一套
 // hook（跟 PostDetailPage mock FavoriteButton 依赖的 hook 是同一个模式），
@@ -55,9 +63,11 @@ describe("ActivityDetailPage", () => {
   beforeEach(() => {
     useAuthStore.setState(initialAuthState, true);
     useActivityDetailQuery.mockReset();
+    useActivityParticipantsQuery.mockReset();
     useActivityParticipationQuery.mockReset();
     useToggleActivityParticipationMutation.mockReset();
 
+    useActivityParticipantsQuery.mockReturnValue({ data: [] });
     useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
     useToggleActivityParticipationMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
@@ -149,6 +159,45 @@ describe("ActivityDetailPage", () => {
     });
 
     expect(screen.queryByText(/联系方式/)).not.toBeInTheDocument();
+  });
+
+  it("does not render a participants section when the query resolves to an empty list (not visible to this viewer, or nobody joined)", () => {
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+    useActivityParticipantsQuery.mockReturnValue({ data: [] });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    expect(screen.queryByText(/参与者/)).not.toBeInTheDocument();
+  });
+
+  it("renders the participants section with each display name when the query returns a non-empty list", () => {
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+    useActivityParticipantsQuery.mockReturnValue({
+      data: [
+        { userId: "user-1", displayName: "Alice" },
+        { userId: "user-2", displayName: "Bob" }
+      ]
+    });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    expect(screen.getByText("参与者（2）")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
   it("renders the participation button alongside the real content", () => {
