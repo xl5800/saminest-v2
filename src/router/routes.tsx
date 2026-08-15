@@ -1,6 +1,9 @@
 import { createBrowserRouter } from "react-router-dom";
 
 import { AppShell } from "../components/app-shell";
+import { ActivityDetailPage } from "../pages/activities/activity-detail-page";
+import { ActivityListPage } from "../pages/activities/activity-list-page";
+import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
@@ -37,6 +40,22 @@ export const router = createBrowserRouter([
       {
         index: true,
         element: <HomePage />
+      },
+      {
+        path: "activities",
+        element: <ActivityListPage />
+      },
+      {
+        path: "activities/new",
+        element: (
+          <RequireAuth>
+            <CreateActivityPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "activities/:id",
+        element: <ActivityDetailPage />
       },
       {
         path: "category/:slug",

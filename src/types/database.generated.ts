@@ -14,6 +14,123 @@ export type Database = {
   }
   public: {
     Tables: {
+      activities: {
+        Row: {
+          capacity: number | null
+          channel: string
+          contact_method: string | null
+          contact_value: string | null
+          created_at: string
+          deleted_at: string | null
+          description: string
+          id: string
+          is_online: boolean
+          landmark_text: string | null
+          location_id: string | null
+          organizer_id: string
+          participant_count: number
+          start_at: string
+          status: string
+          tag_text: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          capacity?: number | null
+          channel?: string
+          contact_method?: string | null
+          contact_value?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          description: string
+          id?: string
+          is_online?: boolean
+          landmark_text?: string | null
+          location_id?: string | null
+          organizer_id: string
+          participant_count?: number
+          start_at: string
+          status?: string
+          tag_text?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          capacity?: number | null
+          channel?: string
+          contact_method?: string | null
+          contact_value?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          description?: string
+          id?: string
+          is_online?: boolean
+          landmark_text?: string | null
+          location_id?: string | null
+          organizer_id?: string
+          participant_count?: number
+          start_at?: string
+          status?: string
+          tag_text?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activities_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_organizer_id_fkey"
+            columns: ["organizer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_participants: {
+        Row: {
+          activity_id: string
+          cancelled_at: string | null
+          id: string
+          joined_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          cancelled_at?: string | null
+          id?: string
+          joined_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          cancelled_at?: string | null
+          id?: string
+          joined_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_participants_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       categories: {
         Row: {
           created_at: string
@@ -801,6 +918,25 @@ export type Database = {
       dismiss_report: {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined
+      }
+      get_comment_snapshot: {
+        Args: { target_id: string }
+        Returns: {
+          content: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          parent_id: string | null
+          post_id: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "comments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       get_post_image_snapshot: {
         Args: { target_id: string }

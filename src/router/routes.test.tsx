@@ -22,7 +22,10 @@ const {
   getMyProfile,
   updateMyDisplayName,
   listFavoritedPostIds,
-  listFavoritedPosts
+  listFavoritedPosts,
+  listActivities,
+  getActivityDetail,
+  createActivity
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listAllCategoriesForAdmin: vi.fn(),
@@ -42,7 +45,10 @@ const {
   getMyProfile: vi.fn(),
   updateMyDisplayName: vi.fn(),
   listFavoritedPostIds: vi.fn(),
-  listFavoritedPosts: vi.fn()
+  listFavoritedPosts: vi.fn(),
+  listActivities: vi.fn(),
+  getActivityDetail: vi.fn(),
+  createActivity: vi.fn()
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
@@ -86,8 +92,22 @@ vi.mock("../repositories/favorites-repository", () => ({
   listFavoritedPostIds,
   listFavoritedPosts
 }));
+vi.mock("../repositories/activities-repository", async () => {
+  const actual = await vi.importActual<typeof import("../repositories/activities-repository")>(
+    "../repositories/activities-repository"
+  );
+  return {
+    ...actual,
+    listActivities,
+    getActivityDetail,
+    createActivity
+  };
+});
 
 import { AppShell } from "../components/app-shell";
+import { ActivityDetailPage } from "../pages/activities/activity-detail-page";
+import { ActivityListPage } from "../pages/activities/activity-list-page";
+import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
@@ -131,6 +151,16 @@ function renderAt(path: string | string[]) {
         element: <AppShell />,
         children: [
           { index: true, element: <HomePage /> },
+          { path: "activities", element: <ActivityListPage /> },
+          {
+            path: "activities/new",
+            element: (
+              <RequireAuth>
+                <CreateActivityPage />
+              </RequireAuth>
+            )
+          },
+          { path: "activities/:id", element: <ActivityDetailPage /> },
           { path: "category/:slug", element: <CategoryPage /> },
           { path: "categories", element: <CategoriesPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
@@ -301,6 +331,9 @@ describe("app routes", () => {
     updateMyDisplayName.mockReset();
     listFavoritedPostIds.mockReset();
     listFavoritedPosts.mockReset();
+    listActivities.mockReset();
+    getActivityDetail.mockReset();
+    createActivity.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
@@ -317,6 +350,8 @@ describe("app routes", () => {
     getMyProfile.mockResolvedValue({ displayName: "Alice" });
     listFavoritedPostIds.mockResolvedValue([]);
     listFavoritedPosts.mockResolvedValue([]);
+    listActivities.mockResolvedValue([]);
+    getActivityDetail.mockResolvedValue(null);
   });
 
   it("renders the home page at /", () => {
@@ -348,6 +383,40 @@ describe("app routes", () => {
       await screen.findByRole("heading", { name: "帖子未找到" })
     ).toBeInTheDocument();
     expect(getPostDetail).toHaveBeenCalledWith("post-1");
+  });
+
+  it("renders the activity list page at /activities without requiring a session", async () => {
+    renderAt("/activities");
+
+    expect(await screen.findByRole("heading", { name: "🤝 一起去" })).toBeInTheDocument();
+  });
+
+  it("renders the activity detail page at /activities/:id (not-found state when the activity doesn't resolve)", async () => {
+    renderAt("/activities/act-1");
+
+    expect(
+      await screen.findByRole("heading", { name: "活动未找到" })
+    ).toBeInTheDocument();
+    expect(getActivityDetail).toHaveBeenCalledWith("act-1");
+  });
+
+  it("redirects /activities/new to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/activities/new");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the create-activity form at /activities/new when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/activities/new");
+
+    expect(screen.getByRole("heading", { name: "发起一起去" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("option", { name: "Rockville" })
+    ).toBeInTheDocument();
   });
 
   it("renders the login page at /login without the global header/bottom nav chrome", () => {

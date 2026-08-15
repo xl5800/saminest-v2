@@ -26,6 +26,18 @@ describe("HomePage", () => {
     listApprovedPosts.mockReset();
   });
 
+  it("renders a link to /activities for the '🤝 一起去' entry", async () => {
+    listActiveCategories.mockResolvedValue([]);
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+    renderWithProviders(<HomePage />);
+
+    expect(screen.getByRole("link", { name: "🤝 一起去" })).toHaveAttribute(
+      "href",
+      "/activities"
+    );
+  });
+
   it("renders the heading, category nav and post list without crashing on an empty result", async () => {
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }

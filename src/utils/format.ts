@@ -70,6 +70,45 @@ export function formatMessageTimeDivider(createdAt: string, now: Date = new Date
  * 年/月/日，而不是运行设备的本地时区，避免 UTC 午夜附近的时间在美东等
  * 时区被显示成前一天。当前年份也按 UTC 判断，保证规则前后一致。
  */
+/**
+ * "一起去"活动的开始时间：日期+时间（比如 "08-05 14:00"），用本地时区，
+ * 不是 formatListingDate 那种只显示日历日期、故意用 UTC 的做法——那是为了
+ * 避免"帖子发布日期"这种只关心"哪一天"的场景在时区边界上显示错日期；
+ * 活动开始时间用户关心的是具体几点几分要到场，这跟 formatMessageTimeDivider
+ * 展示消息时间用本地时区是同一个道理，不是 formatListingDate 那种场景。
+ */
+export function formatActivityStartAt(startAt: string): string {
+  const date = new Date(startAt);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${month}-${day} ${hours}:${minutes}`;
+}
+
+/**
+ * "还差几人/已有几人"这行文案。capacity 为 null 表示不限人数，只展示
+ * 已报名人数；capacity 有值时优先展示"还差几人"（更能驱动用户报名的
+ * 紧迫感），凑满/超过人数上限（理论上不应该发生，触发器会在满员时把
+ * status 切成 'full' 挡住新报名，但界面上仍然防御性地用 Math.max 兜底，
+ * 不展示负数）时改成"已满员"。
+ */
+export function formatActivityParticipantSummary(
+  participantCount: number,
+  capacity: number | null
+): string {
+  if (capacity === null) {
+    return `已有 ${participantCount} 人报名`;
+  }
+
+  const remaining = Math.max(capacity - participantCount, 0);
+  return remaining > 0
+    ? `还差 ${remaining} 人（${participantCount}/${capacity}）`
+    : `已满员（${participantCount}/${capacity}）`;
+}
+
 export function formatListingDate(createdAt: string | null): string {
   if (!createdAt?.trim()) return "时间未知";
 
