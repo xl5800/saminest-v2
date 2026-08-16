@@ -91,6 +91,16 @@ describe("ProfilePage", () => {
     );
   });
 
+  it("shows the '我的活动' link to /my-activities", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(screen.getByRole("link", { name: "我的活动" })).toHaveAttribute(
+      "href",
+      "/my-activities"
+    );
+  });
+
   it("calls authService.signOut and navigates home when logging out", async () => {
     signOut.mockResolvedValue(undefined);
 

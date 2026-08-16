@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
-import type { TablesInsert } from "../types/database.generated";
+import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 
 /**
@@ -48,6 +48,7 @@ export function getActivityChannelMeta(channel: string): { label: string; emoji:
 
 export interface ActivityListItem {
   id: string;
+  organizerId: string;
   channel: string;
   tagText: string | null;
   title: string;
@@ -67,6 +68,7 @@ export interface ListActivitiesInput {
 
 interface ActivityListRow {
   id: string;
+  organizer_id: string;
   channel: string;
   tag_text: string | null;
   title: string;
@@ -96,6 +98,38 @@ interface ActivityListRow {
  * 的模糊匹配），city 筛选就是"同城市"这个产品要求本身（见设计文档第 5
  * 节问题 2：不做真实地理距离，复用 locations 表的城市粒度）。
  */
+// activities 列表查询共用的 select 列表：activity-list-page.tsx（公开浏览）、
+// my-activities-page.tsx 的"我发起的"/"我报名的"两个 tab 都要展示同一组
+// 卡片字段（频道/标签/标题/地点/时间/人数/状态），三处场景过滤条件不同、
+// 但拿到行之后映射成 ActivityListItem 的逻辑完全一样，抽成一个共享的列
+// 字符串 + 映射函数，不在三个查询函数里各写一遍容易漏改的重复代码。
+//
+// organizer_id 也在这里带出来（不是新开的敏感字段——getActivityDetail
+// 早就在公开返回这一列，activities_select_public 允许任何人读取）：
+// my-activities-page.tsx"我报名的" tab 的退出按钮要用它调
+// useToggleActivityParticipationMutation（跟活动详情页的退出按钮走同一个
+// hook，成功后才会顺带给发起人发私信通知），不然那个 hook 拿不到通知
+// 收件人是谁。
+const ACTIVITY_LIST_SELECT_COLUMNS =
+  "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status";
+
+function mapActivityListRow(row: ActivityListRow): ActivityListItem {
+  return {
+    id: row.id,
+    organizerId: row.organizer_id,
+    channel: row.channel,
+    tagText: row.tag_text,
+    title: row.title,
+    locationName: row.location?.name ?? null,
+    landmarkText: row.landmark_text,
+    isOnline: row.is_online,
+    startAt: row.start_at,
+    capacity: row.capacity,
+    participantCount: row.participant_count,
+    status: row.status
+  };
+}
+
 export async function listActivities(
   input: ListActivitiesInput = {}
 ): Promise<ActivityListItem[]> {
@@ -103,9 +137,7 @@ export async function listActivities(
 
   let query = getSupabaseClient()
     .from("activities")
-    .select(
-      "id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status"
-    )
+    .select(ACTIVITY_LIST_SELECT_COLUMNS)
     .in("status", ["open", "full"])
     .gte("start_at", nowIso)
     .order("start_at", { ascending: true });
@@ -123,19 +155,36 @@ export async function listActivities(
     throw new AppError(error.message, "ACTIVITIES_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    channel: row.channel,
-    tagText: row.tag_text,
-    title: row.title,
-    locationName: row.location?.name ?? null,
-    landmarkText: row.landmark_text,
-    isOnline: row.is_online,
-    startAt: row.start_at,
-    capacity: row.capacity,
-    participantCount: row.participant_count,
-    status: row.status
-  }));
+  return (data ?? []).map(mapActivityListRow);
+}
+
+/**
+ * "我的活动"页面（/my-activities）"我发起的" tab 用：当前用户作为发起人的
+ * 全部活动，不限状态（包括已取消/已结束的历史活动，管理页需要能看到
+ * 完整记录，不只是还在招募中的）。activities_select_own 这条 RLS 早就
+ * 允许发起人查自己任意状态的活动，这里不需要新权限。
+ *
+ * 按 start_at 升序（最快开始的活动排最前面）——跟 listActivities（公开
+ * 列表页）保持一致：用户更关心"下一个要发生的活动是什么时候"，方便记得
+ * 到场或者临时取消，不是"最近发布/更新的排前面"那种 listMyPosts 式的
+ * created_at desc 直觉。之前用过降序，已按反馈改回来跟 listActivities
+ * 统一，不要再改回降序。
+ */
+export async function listMyOrganizedActivities(
+  organizerId: string
+): Promise<ActivityListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("activities")
+    .select(ACTIVITY_LIST_SELECT_COLUMNS)
+    .eq("organizer_id", organizerId)
+    .order("start_at", { ascending: true })
+    .overrideTypes<ActivityListRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_ORGANIZED_ACTIVITIES_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map(mapActivityListRow);
 }
 
 export interface ActivityDetail {
@@ -442,6 +491,49 @@ export async function listActivityParticipants(
   }));
 }
 
+interface MyJoinedActivityRow {
+  activity: ActivityListRow | null;
+}
+
+/**
+ * "我的活动"页面"我报名的" tab 用：当前用户当前仍报名（cancelled_at is
+ * null）的活动，包括活动之后被发起人取消的情况——这正是新增的
+ * activities_select_participant 这条 RLS（见迁移文件
+ * supabase/migrations/20260816172621_add_activities_select_participant_policy.sql）
+ * 要解决的问题：只按 activity_participants 表过滤"我是不是还报名着"，
+ * 活动本身的 status/deleted_at 完全不影响这里能不能查到，交给这条新策略
+ * 兜底，这一层不重复判断。
+ *
+ * 从 activity_participants 出发、内嵌 activities（多对一关系，PostgREST
+ * 按外键返回单个对象而不是数组），而不是反过来从 activities 查——这是这个
+ * tab 的过滤条件（"我当前报名的记录"）天然长在 activity_participants 表上，
+ * 从这张表出发不需要先查一遍参与记录再拿 id 去 activities 表 in()，一次
+ * 查询就够。activity 为 null 的行理论上不应该出现（新策略已经保证只要有
+ * 参与记录就能读到活动本身），但仍然过滤掉、不让页面因为一条意外的 null
+ * 崩掉——跟这个仓库其它"联表可能为 null"的防御性写法一致。
+ *
+ * 按 joined_at 降序（最近报名的排最前面）——这是参与记录本身自带的、
+ * 意义明确的时间字段，不需要像 listMyOrganizedActivities 那样在"用什么
+ * 排序"上纠结。
+ */
+export async function listMyJoinedActivities(userId: string): Promise<ActivityListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("activity_participants")
+    .select(`activity:activities(${ACTIVITY_LIST_SELECT_COLUMNS})`)
+    .eq("user_id", userId)
+    .is("cancelled_at", null)
+    .order("joined_at", { ascending: false })
+    .overrideTypes<MyJoinedActivityRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_JOINED_ACTIVITIES_LIST_FAILED", error);
+  }
+
+  return (data ?? [])
+    .filter((row): row is { activity: ActivityListRow } => row.activity !== null)
+    .map((row) => mapActivityListRow(row.activity));
+}
+
 /**
  * 退出活动：软删除（把 cancelled_at 设成当前时间），不做真正的 DELETE，
  * 见设计文档 3.2 节。UPDATE 即使被 RLS 过滤掉 0 行也不会报错，照抄这个
@@ -468,5 +560,39 @@ export async function leaveActivity(activityId: string, userId: string): Promise
   }
   if (!data) {
     throw new AppError(ACTIVITY_LEAVE_NOT_FOUND_MESSAGE, "ACTIVITY_LEAVE_NOT_FOUND");
+  }
+}
+
+const ACTIVITY_NOT_FOUND_OR_FORBIDDEN_MESSAGE = "活动不存在，或没有权限操作。";
+
+/**
+ * 发起人取消自己的活动（"我的活动"页面"取消活动"操作）：把 status 改成
+ * 'cancelled'。activities_update_own 这条 RLS（`organizer_id = auth.uid()`）
+ * 早就允许发起人自己改 status，不需要新权限，也不在这里重复校验
+ * "当前 status 是不是 open/full"——UI 层（my-activities-page.tsx）只在
+ * status 是 open/full 时才展示这个操作入口，已经把"已取消/已结束的活动
+ * 不该再被取消"这条规则挡住了，这里直接照抄 posts-repository.ts 的
+ * archivePost 那套最简单的"UPDATE + select(id).maybeSingle() 确认改到了
+ * 一行"写法，不需要在数据库这一层再加一层状态前置条件判断。
+ *
+ * 不做"同时通知所有参与者"——这次任务范围只是"发起人能取消"，通知参与者
+ * 是完全独立的另一个功能（需要遍历所有参与者、决定通知内容/渠道等一整套
+ * 设计），任务卡没有要求，不顺带做。
+ */
+export async function cancelActivity(activityId: string): Promise<void> {
+  const payload: TablesUpdate<"activities"> = { status: "cancelled" };
+
+  const { data, error } = await getSupabaseClient()
+    .from("activities")
+    .update(payload)
+    .eq("id", activityId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_CANCEL_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(ACTIVITY_NOT_FOUND_OR_FORBIDDEN_MESSAGE, "ACTIVITY_CANCEL_NOT_FOUND");
   }
 }

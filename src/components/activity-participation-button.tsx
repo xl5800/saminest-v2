@@ -88,13 +88,24 @@ export function ActivityParticipationButton({
   const disabled =
     participationPending || toggleParticipation.isPending || (!joined && activityStatus !== "open");
 
+  // "退出活动"是次要操作（跟"我要报名"这个主要操作分量不一样），改成描边/
+  // 浅色样式区分开，避免两种状态用同一个实心蓝色主按钮、只靠文字变化容易
+  // 让人以为按钮没反应。配色跟这个仓库其它"次要操作"按钮（比如
+  // my-posts-page.tsx 的"查看"/"编辑"、profile-page.tsx 的"退出登录"）
+  // 是同一个 `border border-border text-text hover:bg-bg` 调性，不是新发明
+  // 一套配色。"我要报名"/"报名已满"两种未报名状态维持原来的实心蓝色主
+  // 按钮不变——这次改动只是样式，disabled/点击逻辑完全没动。
+  const buttonClassName = joined
+    ? "w-full rounded-xl border border-border px-4 py-2 font-semibold text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+    : "w-full rounded-xl bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
+
   return (
     <div>
       <button
         type="button"
         disabled={disabled}
         onClick={handleClick}
-        className="w-full rounded-xl bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+        className={buttonClassName}
       >
         {toggleParticipation.isPending
           ? "处理中…"

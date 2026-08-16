@@ -25,7 +25,9 @@ const {
   listFavoritedPosts,
   listActivities,
   getActivityDetail,
-  createActivity
+  createActivity,
+  listMyOrganizedActivities,
+  listMyJoinedActivities
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listAllCategoriesForAdmin: vi.fn(),
@@ -48,7 +50,9 @@ const {
   listFavoritedPosts: vi.fn(),
   listActivities: vi.fn(),
   getActivityDetail: vi.fn(),
-  createActivity: vi.fn()
+  createActivity: vi.fn(),
+  listMyOrganizedActivities: vi.fn(),
+  listMyJoinedActivities: vi.fn()
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
@@ -100,7 +104,9 @@ vi.mock("../repositories/activities-repository", async () => {
     ...actual,
     listActivities,
     getActivityDetail,
-    createActivity
+    createActivity,
+    listMyOrganizedActivities,
+    listMyJoinedActivities
   };
 });
 
@@ -122,6 +128,7 @@ import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
+import { MyActivitiesPage } from "../pages/my-activities/my-activities-page";
 import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
@@ -246,6 +253,14 @@ function renderAt(path: string | string[]) {
             )
           },
           {
+            path: "my-activities",
+            element: (
+              <RequireAuth>
+                <MyActivitiesPage />
+              </RequireAuth>
+            )
+          },
+          {
             path: "admin/posts",
             element: (
               <RequireAuth>
@@ -343,6 +358,8 @@ describe("app routes", () => {
     listActivities.mockReset();
     getActivityDetail.mockReset();
     createActivity.mockReset();
+    listMyOrganizedActivities.mockReset();
+    listMyJoinedActivities.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
@@ -361,6 +378,8 @@ describe("app routes", () => {
     listFavoritedPosts.mockResolvedValue([]);
     listActivities.mockResolvedValue([]);
     getActivityDetail.mockResolvedValue(null);
+    listMyOrganizedActivities.mockResolvedValue([]);
+    listMyJoinedActivities.mockResolvedValue([]);
   });
 
   it("renders the home page at /", () => {
@@ -697,6 +716,24 @@ describe("app routes", () => {
     renderAt("/my-posts");
 
     expect(await screen.findByRole("heading", { name: "我的发布" })).toBeInTheDocument();
+  });
+
+  it("redirects /my-activities to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/my-activities");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the my-activities page at /my-activities when a session exists", async () => {
+    useAuthStore.getState().setSession({
+      user: { id: "user-1", email: "alice@example.com" }
+    } as never);
+
+    renderAt("/my-activities");
+
+    expect(await screen.findByRole("heading", { name: "我的活动" })).toBeInTheDocument();
   });
 
   it("redirects /admin/posts to /login when there is no session (reuses RequireAuth)", () => {

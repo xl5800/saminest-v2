@@ -104,6 +104,12 @@ export function ProfilePage() {
             ›
           </span>
         </Link>
+        <Link to="/my-activities" className={settingsItemClassName}>
+          <span>我的活动</span>
+          <span aria-hidden="true" className={chevronClassName}>
+            ›
+          </span>
+        </Link>
         <Link to="/favorites" className={settingsItemClassName}>
           <span>我的收藏</span>
           <span aria-hidden="true" className={chevronClassName}>

@@ -110,6 +110,41 @@ describe("ActivityParticipationButton", () => {
     );
   });
 
+  it("styles '退出活动' as a secondary (outlined) button, distinct from the primary '我要报名' button", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityParticipationQuery.mockReturnValue({ data: true, isPending: false });
+
+    renderWithProviders(
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
+    );
+
+    const button = screen.getByRole("button", { name: "退出活动" });
+    expect(button.className).toContain("border-border");
+    expect(button.className).not.toContain("bg-primary");
+  });
+
+  it("keeps '我要报名' as the solid primary button", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+
+    renderWithProviders(
+      <ActivityParticipationButton
+        activityId="act-1"
+        activityStatus="open"
+        organizerId="organizer-1"
+        activityTitle="周末吃火锅"
+      />
+    );
+
+    const button = screen.getByRole("button", { name: "我要报名" });
+    expect(button.className).toContain("bg-primary");
+  });
+
   it("disables the join button and shows '报名已满' when the activity is not open and the user has not joined", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });

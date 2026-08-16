@@ -22,13 +22,16 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  cancelActivity,
   createActivity,
   getActivityDetail,
   isCurrentlyJoined,
   joinActivity,
   leaveActivity,
   listActivities,
-  listActivityParticipants
+  listActivityParticipants,
+  listMyJoinedActivities,
+  listMyOrganizedActivities
 } from "./activities-repository";
 
 function resetAllMocks(): void {
@@ -51,7 +54,7 @@ describe("listActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status"
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status"
     );
     expect(queryBuilder.in).toHaveBeenCalledWith("status", ["open", "full"]);
     expect(queryBuilder.gte).toHaveBeenCalledWith("start_at", expect.any(String));
@@ -80,6 +83,7 @@ describe("listActivities", () => {
       data: [
         {
           id: "act-1",
+          organizer_id: "user-1",
           channel: "food",
           tag_text: "火锅",
           title: "周末吃火锅",
@@ -100,6 +104,7 @@ describe("listActivities", () => {
     expect(result).toEqual([
       {
         id: "act-1",
+        organizerId: "user-1",
         channel: "food",
         tagText: "火锅",
         title: "周末吃火锅",
@@ -119,6 +124,7 @@ describe("listActivities", () => {
       data: [
         {
           id: "act-1",
+          organizer_id: "user-1",
           channel: "game",
           tag_text: null,
           title: "线上开黑",
@@ -560,6 +566,203 @@ describe("listActivityParticipants", () => {
 
     await expect(listActivityParticipants("act-1")).rejects.toMatchObject({
       code: "ACTIVITY_PARTICIPANTS_LIST_FAILED"
+    });
+  });
+});
+
+describe("listMyOrganizedActivities", () => {
+  beforeEach(resetAllMocks);
+
+  it("filters to organizer_id = the given user, no status filter, ordered by start_at ascending (matching listActivities)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listMyOrganizedActivities("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("activities");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("organizer_id", "user-1");
+    expect(queryBuilder.in).not.toHaveBeenCalled();
+    expect(queryBuilder.gte).not.toHaveBeenCalled();
+    expect(queryBuilder.order).toHaveBeenCalledWith("start_at", { ascending: true });
+  });
+
+  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "act-1",
+          organizer_id: "user-1",
+          channel: "food",
+          tag_text: "火锅",
+          title: "周末吃火锅",
+          location: { name: "Rockville" },
+          landmark_text: "海底捞",
+          is_online: false,
+          start_at: "2026-08-20T18:00:00.000Z",
+          capacity: 4,
+          participant_count: 2,
+          status: "cancelled"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyOrganizedActivities("user-1");
+
+    expect(result).toEqual([
+      {
+        id: "act-1",
+        organizerId: "user-1",
+        channel: "food",
+        tagText: "火锅",
+        title: "周末吃火锅",
+        locationName: "Rockville",
+        landmarkText: "海底捞",
+        isOnline: false,
+        startAt: "2026-08-20T18:00:00.000Z",
+        capacity: 4,
+        participantCount: 2,
+        status: "cancelled"
+      }
+    ]);
+  });
+
+  it("returns an empty list without throwing when the user has never organized an activity", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listMyOrganizedActivities("user-1")).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listMyOrganizedActivities("user-1")).rejects.toMatchObject({
+      code: "MY_ORGANIZED_ACTIVITIES_LIST_FAILED"
+    });
+  });
+});
+
+describe("listMyJoinedActivities", () => {
+  beforeEach(resetAllMocks);
+
+  it("queries activity_participants for non-cancelled rows of the given user, with a nested activities select, ordered by joined_at descending", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listMyJoinedActivities("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("activity_participants");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status)"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: false });
+  });
+
+  it("maps the nested activity of each row to ActivityListItem (including organizerId), including one whose status is 'cancelled' (the whole point of the new RLS policy)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          activity: {
+            id: "act-1",
+            organizer_id: "organizer-1",
+            channel: "food",
+            tag_text: null,
+            title: "已被取消的活动",
+            location: null,
+            landmark_text: null,
+            is_online: true,
+            start_at: "2026-08-20T18:00:00.000Z",
+            capacity: null,
+            participant_count: 0,
+            status: "cancelled"
+          }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyJoinedActivities("user-1");
+
+    expect(result).toEqual([
+      {
+        id: "act-1",
+        organizerId: "organizer-1",
+        channel: "food",
+        tagText: null,
+        title: "已被取消的活动",
+        locationName: null,
+        landmarkText: null,
+        isOnline: true,
+        startAt: "2026-08-20T18:00:00.000Z",
+        capacity: null,
+        participantCount: 0,
+        status: "cancelled"
+      }
+    ]);
+  });
+
+  it("filters out rows whose nested activity is null, without throwing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [{ activity: null }],
+      error: null
+    });
+
+    await expect(listMyJoinedActivities("user-1")).resolves.toEqual([]);
+  });
+
+  it("returns an empty list without throwing when the user has never joined an activity", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listMyJoinedActivities("user-1")).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listMyJoinedActivities("user-1")).rejects.toMatchObject({
+      code: "MY_JOINED_ACTIVITIES_LIST_FAILED"
+    });
+  });
+});
+
+describe("cancelActivity", () => {
+  beforeEach(resetAllMocks);
+
+  it("updates status to 'cancelled' for the given activity id", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "act-1" }, error: null });
+
+    await cancelActivity("act-1");
+
+    expect(fromMock).toHaveBeenCalledWith("activities");
+    expect(queryBuilder.update).toHaveBeenCalledWith({ status: "cancelled" });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "act-1");
+  });
+
+  it("throws an AppError when the update fails", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "update failed", code: "500" }
+    });
+
+    await expect(cancelActivity("act-1")).rejects.toMatchObject({
+      code: "ACTIVITY_CANCEL_FAILED"
+    });
+  });
+
+  it("throws a not-found/forbidden AppError when no row was affected (not the organizer, or activity doesn't exist)", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(cancelActivity("act-1")).rejects.toMatchObject({
+      code: "ACTIVITY_CANCEL_NOT_FOUND"
     });
   });
 });

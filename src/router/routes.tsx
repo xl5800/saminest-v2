@@ -18,6 +18,7 @@ import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
 import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
+import { MyActivitiesPage } from "../pages/my-activities/my-activities-page";
 import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
@@ -159,6 +160,14 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <MyPostsPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "my-activities",
+        element: (
+          <RequireAuth>
+            <MyActivitiesPage />
           </RequireAuth>
         )
       },
