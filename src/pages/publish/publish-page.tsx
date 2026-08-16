@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type FormEvent, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
@@ -184,6 +184,8 @@ export function PublishPage() {
   const { id: postId } = useParams<{ id: string }>();
   const isEditMode = Boolean(postId);
   const session = useAuthStore((s) => s.session);
+  const [searchParams] = useSearchParams();
+  const presetCategorySlug = searchParams.get("category");
 
   const {
     data: categories,
@@ -245,6 +247,28 @@ export function PublishPage() {
     setContactValue(existingPost.contactValue ?? "");
     setExistingImages(existingPost.images);
   }, [isEditMode, existingPost]);
+
+  // Action Sheet 里"发布租房/求租/二手"三个入口都指向这同一个 PublishPage
+  // （见 publish-action-sheet.tsx 顶部注释：项目里发帖只有一张 posts 表 +
+  // category_id 区分类型，没有三个独立页面），靠 URL 上的 ?category=<slug>
+  // 告诉这个页面要预选哪个分类。只在新建模式（!isEditMode）下生效——编辑
+  // 模式的分类由上面那个 effect 从 existingPost 回填，两者不会同时命中。
+  // 只做一次（presetSeededRef 挡住之后的重复赋值），效果跟 seededRef 是
+  // 同一个模式：用户手动改了下拉之后，categories 如果因为窗口重新聚焦等
+  // 原因在后台重新拉取，不应该把用户已经改动的选择覆盖回预设值。
+  const presetSeededRef = useRef(false);
+
+  useEffect(() => {
+    if (isEditMode || presetSeededRef.current || !presetCategorySlug || !categories) {
+      return;
+    }
+    presetSeededRef.current = true;
+
+    const matched = categories.find((category) => category.slug === presetCategorySlug);
+    if (matched) {
+      setCategoryId(matched.id);
+    }
+  }, [isEditMode, presetCategorySlug, categories]);
 
   const loadingExistingPost = isEditMode && existingPostPending;
   const loadError = isEditMode && !existingPostPending && (existingPostIsError || existingPost === null);

@@ -68,13 +68,9 @@ describe("AppHeader", () => {
     );
   });
 
-  it("renders 发布/收藏/消息/我的 links with the correct hrefs", () => {
+  it("renders 收藏/消息/我的 links with the correct hrefs", () => {
     renderAt(["/"]);
 
-    expect(screen.getByRole("link", { name: "发布" })).toHaveAttribute(
-      "href",
-      "/publish"
-    );
     expect(screen.getByRole("link", { name: "收藏" })).toHaveAttribute(
       "href",
       "/favorites"
@@ -87,5 +83,26 @@ describe("AppHeader", () => {
       "href",
       "/profile"
     );
+  });
+
+  it("renders 发布 as a button (not a direct link) — it's the single global entry point that opens an action sheet", () => {
+    renderAt(["/"]);
+
+    expect(screen.getByRole("button", { name: "发布" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
+  });
+
+  it("opens the publish action sheet when 发布 is clicked, and closes it via its own 取消 button", () => {
+    renderAt(["/"]);
+
+    expect(screen.queryByRole("dialog", { name: "选择发布类型" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    expect(screen.getByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
+    expect(screen.queryByRole("dialog", { name: "选择发布类型" })).not.toBeInTheDocument();
   });
 });

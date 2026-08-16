@@ -151,6 +151,24 @@ describe("PublishPage", () => {
     expect(listActiveLocations).toHaveBeenCalled();
   });
 
+  it("preselects the category from a ?category=<slug> query param (used by the publish action sheet's 发布租房/求租/二手 entries)", async () => {
+    renderWithProviders(<PublishPage />, { initialEntries: ["/publish?category=rent"] });
+
+    await screen.findByRole("option", { name: "租房" });
+
+    expect(screen.getByLabelText("分类")).toHaveValue("cat-1");
+  });
+
+  it("leaves the category blank when ?category=<slug> does not match any loaded category", async () => {
+    renderWithProviders(<PublishPage />, {
+      initialEntries: ["/publish?category=not-a-real-slug"]
+    });
+
+    await screen.findByRole("option", { name: "租房" });
+
+    expect(screen.getByLabelText("分类")).toHaveValue("");
+  });
+
   it("does not render any field for author_id or status", () => {
     renderWithProviders(<PublishPage />);
 

@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+
+import { PublishActionSheet } from "./publish-action-sheet";
 
 /**
  * 全局持久顶部导航栏，由 AppShell 包在每一个路由外层渲染。
@@ -8,10 +11,16 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
  * 这些页面上并不成立。分类浏览天生是页面级的（首页 / 分类页 feed），
  * 已经由 HomePage 和 CategoryPage 共用的 CategoryNav 组件承担，这里不
  * 重复渲染第二套分类链接。
+ *
+ * "发布"不再是直接跳 /publish 的链接：点击打开 PublishActionSheet 选发布
+ * 类型（租房/求租/二手/发起搭子），这是全 App 唯一的发布入口——之前
+ * BottomNav 中间还有一个圆形"发布"按钮，这次跟着底部导航改成 5 个平级
+ * 目的地一起去掉了，避免同一个操作在 App 里出现两个入口。
  */
 export function AppHeader() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [publishSheetOpen, setPublishSheetOpen] = useState(false);
 
   const showBackButton = location.pathname !== "/";
 
@@ -33,12 +42,13 @@ export function AppHeader() {
           Saminest
         </Link>
 
-        <Link
-          to="/publish"
+        <button
+          type="button"
+          onClick={() => setPublishSheetOpen(true)}
           className="ml-auto shrink-0 rounded-xl bg-accent px-4 py-2 font-semibold text-white"
         >
           发布
-        </Link>
+        </button>
 
         <nav aria-label="用户导航" className="hidden items-center gap-4 md:flex">
           <Link to="/favorites" className="text-text hover:text-primary">
@@ -52,6 +62,10 @@ export function AppHeader() {
           </Link>
         </nav>
       </div>
+
+      {publishSheetOpen ? (
+        <PublishActionSheet onClose={() => setPublishSheetOpen(false)} />
+      ) : null}
     </header>
   );
 }

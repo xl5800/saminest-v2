@@ -26,16 +26,14 @@ describe("HomePage", () => {
     listApprovedPosts.mockReset();
   });
 
-  it("renders a link to /activities for the '🤝 一起去' entry", async () => {
+  it("does not render a '一起去'/找搭子 entry on the home page — that's the bottom nav's job now", async () => {
     listActiveCategories.mockResolvedValue([]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByRole("link", { name: "🤝 一起去" })).toHaveAttribute(
-      "href",
-      "/activities"
-    );
+    expect(screen.queryByRole("link", { name: /一起去/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /找搭子/ })).not.toBeInTheDocument();
   });
 
   it("renders the heading, category nav and post list without crashing on an empty result", async () => {

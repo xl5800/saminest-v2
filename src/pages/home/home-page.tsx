@@ -1,18 +1,10 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 
 import { CategoryNav } from "../../features/categories/category-nav";
 import { PostList } from "../../features/posts/post-list";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 
 const SEARCH_DEBOUNCE_MS = 400;
-
-// "一起去"入口沿用 profile-page.tsx 的 Settings List 行样式（h-14 圆角卡片 +
-// 右侧箭头），不是这个页面本来就有的视觉语言，但这是任务要求的固定入口
-// 形式，直接复用现成样式类，不用为首页单独设计一套"入口卡片"。
-const findBuddyEntryClassName =
-  "mb-3 flex h-14 items-center justify-between rounded-2xl bg-white px-4 text-base font-medium text-text shadow-settings-item transition-opacity hover:opacity-90";
-const chevronClassName = "text-[18px] leading-none text-[#999]";
 
 /**
  * 搜索交互模型：防抖实时搜索，不是"输入完点提交/回车"。
@@ -40,12 +32,6 @@ export function HomePage() {
           onChange={(event) => setInputValue(event.target.value)}
           className="h-13 w-full rounded-search border border-border bg-bg px-4 text-base text-text shadow-search"
         />
-        <Link to="/activities" className={`mt-3 ${findBuddyEntryClassName}`}>
-          <span>🤝 一起去</span>
-          <span aria-hidden="true" className={chevronClassName}>
-            ›
-          </span>
-        </Link>
       </div>
       <CategoryNav />
       <PostList key="all" searchQuery={debouncedSearchQuery} />
