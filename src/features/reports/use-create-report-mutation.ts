@@ -4,7 +4,7 @@ import { createReport } from "../../repositories/reports-repository";
 
 export interface CreateReportMutationInput {
   reporterId: string;
-  targetType: "post" | "comment";
+  targetType: "post" | "comment" | "activity";
   targetId: string;
   reasonCode: string;
   description: string | null;

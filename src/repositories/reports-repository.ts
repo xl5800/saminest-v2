@@ -33,7 +33,7 @@ export type ReportReasonCode = (typeof REPORT_REASON_OPTIONS)[number]["value"];
 
 export interface CreateReportInput {
   reporterId: string;
-  targetType: "post" | "comment";
+  targetType: "post" | "comment" | "activity";
   targetId: string;
   reasonCode: string;
   description: string | null;

@@ -285,6 +285,10 @@ export function AdminReportsPage() {
                     <Link to={`/post/${report.targetId}`} className="text-primary hover:underline">
                       {report.targetType} / {report.targetId}
                     </Link>
+                  ) : report.targetType === "activity" ? (
+                    <Link to={`/activities/${report.targetId}`} className="text-primary hover:underline">
+                      {report.targetType} / {report.targetId}
+                    </Link>
                   ) : (
                     `${report.targetType} / ${report.targetId}`
                   )}

@@ -215,4 +215,22 @@ describe("ActivityDetailPage", () => {
 
     expect(screen.getByRole("button", { name: "我要报名" })).toBeInTheDocument();
   });
+
+  it("renders a 举报 link to /activities/:id/report (P0 activity reporting)", () => {
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
+      "href",
+      "/activities/act-1/report"
+    );
+  });
 });

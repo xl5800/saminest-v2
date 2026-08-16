@@ -130,6 +130,7 @@ import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
+import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { TermsPage } from "../pages/terms/terms-page";
@@ -161,6 +162,14 @@ function renderAt(path: string | string[]) {
             )
           },
           { path: "activities/:id", element: <ActivityDetailPage /> },
+          {
+            path: "activities/:id/report",
+            element: (
+              <RequireAuth>
+                <ReportActivityPage />
+              </RequireAuth>
+            )
+          },
           { path: "category/:slug", element: <CategoryPage /> },
           { path: "categories", element: <CategoriesPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
@@ -417,6 +426,22 @@ describe("app routes", () => {
     expect(
       await screen.findByRole("option", { name: "Rockville" })
     ).toBeInTheDocument();
+  });
+
+  it("redirects /activities/:id/report to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/activities/act-1/report");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the report-activity form at /activities/:id/report when a session exists (P0 activity reporting)", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/activities/act-1/report");
+
+    expect(screen.getByRole("heading", { name: "举报活动" })).toBeInTheDocument();
   });
 
   it("renders the login page at /login without the global header/bottom nav chrome", () => {

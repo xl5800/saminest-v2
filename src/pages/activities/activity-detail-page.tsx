@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { ActivityParticipationButton } from "../../components/activity-participation-button";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
@@ -18,6 +18,11 @@ import {
  * 统一渲染同一条文案，不做区分——理由跟 post-detail-page.tsx 完全一致：
  * 区分开来会向未授权的访问者泄露"这个 id 存在，只是被取消了"这种信息，
  * getActivityDetail 已经在 repository 层把这些情况收敛成同一个 null。
+ *
+ * "举报"入口（P0）跟 post-detail-page.tsx 的举报链接用同一个位置和视觉
+ * 权重（`text-sm text-text-muted hover:text-danger hover:underline`，
+ * 放在页面主要操作之后），只是这里没有收藏/联系发布者这类同排的按钮，
+ * 单独占一行，不强行凑一个看起来一样但语义不存在的按钮组。
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -101,6 +106,15 @@ export function ActivityDetailPage() {
             organizerId={data.organizerId}
             activityTitle={data.title}
           />
+
+          <div className="flex items-center gap-4">
+            <Link
+              to={`/activities/${data.id}/report`}
+              className="text-sm text-text-muted hover:text-danger hover:underline"
+            >
+              举报
+            </Link>
+          </div>
         </div>
       ) : null}
     </main>

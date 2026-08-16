@@ -26,6 +26,7 @@ import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
+import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { TermsPage } from "../pages/terms/terms-page";
@@ -56,6 +57,14 @@ export const router = createBrowserRouter([
       {
         path: "activities/:id",
         element: <ActivityDetailPage />
+      },
+      {
+        path: "activities/:id/report",
+        element: (
+          <RequireAuth>
+            <ReportActivityPage />
+          </RequireAuth>
+        )
       },
       {
         path: "category/:slug",

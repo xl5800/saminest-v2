@@ -67,6 +67,50 @@ describe("AdminReportsPage", () => {
     expect(row).toHaveTextContent("post / post-1");
   });
 
+  it("renders the target as a clickable link to /post/:id when target_type is 'post'", async () => {
+    listReportsForModeration.mockResolvedValue([sampleReport]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByRole("link", { name: "post / post-1" })).toHaveAttribute(
+      "href",
+      "/post/post-1"
+    );
+  });
+
+  it("renders the target as a clickable link to /activities/:id when target_type is 'activity' (P0 activity reporting)", async () => {
+    const activityReport = {
+      ...sampleReport,
+      id: "report-activity-1",
+      targetType: "activity",
+      targetId: "act-1"
+    };
+    listReportsForModeration.mockResolvedValue([activityReport]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(
+      await screen.findByRole("link", { name: "activity / act-1" })
+    ).toHaveAttribute("href", "/activities/act-1");
+  });
+
+  it("renders the target as plain (non-clickable) text for any other target_type", async () => {
+    const commentReport = {
+      ...sampleReport,
+      id: "report-comment-1",
+      targetType: "comment",
+      targetId: "comment-1"
+    };
+    listReportsForModeration.mockResolvedValue([commentReport]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByText("comment / comment-1")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "comment / comment-1" })
+    ).not.toBeInTheDocument();
+  });
+
   it("defaults the status filter to pending and requests pending reports", async () => {
     listReportsForModeration.mockResolvedValue([]);
 
