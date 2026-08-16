@@ -108,6 +108,11 @@ export interface AdminReportListItem {
   createdAt: string;
   targetType: string;
   targetId: string;
+  /** 被举报内容的标题（帖子/活动），仅用于列表展示，找不到时（比如
+   *  target_type 是 comment，或标题查询失败）回退成 null，调用方用
+   *  targetId 兜底，不是一个需要报错中断整个列表的情况——见
+   *  fetchTargetTitles 的注释。 */
+  targetTitle: string | null;
   reporterName: string;
 }
 
@@ -119,6 +124,63 @@ interface AdminReportRow {
   target_type: string;
   target_id: string;
   reporter: { display_name: string } | null;
+}
+
+/**
+ * reports.target_id 是多态引用——同一列根据 target_type 指向 posts 或
+ * activities 的 id，数据库层面没有（也不可能有）外键约束，PostgREST 没法用
+ * 嵌套 select 一次性把标题带出来。这里按 target_type 分组，各自去对应的表
+ * 批量查一次 id+title，再在内存里拼回去，跟外键 join 效果等价，只是分两次
+ * 查询。
+ *
+ * posts_select_public_or_own_or_admin 和新增的 activities_select_admin 这两条
+ * RLS 策略都对管理员整表放行，不受 status/deleted_at 限制，所以这里不用
+ * 额外处理"帖子已下架/活动已取消"这种情况——管理员本来就应该能看到。
+ *
+ * 标题只是列表展示的辅助信息，这里查询失败不应该让整个举报列表加载失败——
+ * 跟 use-toggle-activity-participation-mutation.ts 里 notifyOrganizer
+ * 失败只 console.error、不影响报名/退出本身成功判定是同一个"核心数据与
+ * 辅助信息分开判定成败"的原则，查不到就让调用方用 targetId 兜底展示。
+ *
+ * "comment" 及其它未来可能出现的 target_type 直接跳过，不去查任何表。
+ */
+async function fetchTargetTitles(rows: AdminReportRow[]): Promise<Map<string, string>> {
+  const titles = new Map<string, string>();
+  const postIds = rows.filter((row) => row.target_type === "post").map((row) => row.target_id);
+  const activityIds = rows
+    .filter((row) => row.target_type === "activity")
+    .map((row) => row.target_id);
+
+  if (postIds.length === 0 && activityIds.length === 0) {
+    return titles;
+  }
+
+  const client = getSupabaseClient();
+
+  try {
+    if (postIds.length > 0) {
+      const { data, error } = await client.from("posts").select("id, title").in("id", postIds);
+      if (error) throw error;
+      for (const post of data ?? []) {
+        titles.set(`post:${post.id}`, post.title);
+      }
+    }
+
+    if (activityIds.length > 0) {
+      const { data, error } = await client
+        .from("activities")
+        .select("id, title")
+        .in("id", activityIds);
+      if (error) throw error;
+      for (const activity of data ?? []) {
+        titles.set(`activity:${activity.id}`, activity.title);
+      }
+    }
+  } catch (titleLookupError) {
+    console.error("举报目标标题查询失败：", titleLookupError);
+  }
+
+  return titles;
 }
 
 /**
@@ -154,13 +216,17 @@ export async function listReportsForModeration(
     throw new AppError(error.message, "ADMIN_REPORTS_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => ({
+  const rows = data ?? [];
+  const targetTitles = await fetchTargetTitles(rows);
+
+  return rows.map((row) => ({
     id: row.id,
     reasonCode: row.reason_code,
     description: row.description,
     createdAt: row.created_at,
     targetType: row.target_type,
     targetId: row.target_id,
+    targetTitle: targetTitles.get(`${row.target_type}:${row.target_id}`) ?? null,
     reporterName: row.reporter?.display_name ?? "未知用户"
   }));
 }

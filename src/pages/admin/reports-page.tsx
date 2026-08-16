@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { AdminNav } from "../../components/admin-nav";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
 import { useReportsQuery } from "../../features/admin/use-reports-query";
@@ -238,6 +239,7 @@ export function AdminReportsPage() {
   if (isPending) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
         {statusFilter}
         {partialFailureBanner}
@@ -249,6 +251,7 @@ export function AdminReportsPage() {
   if (isError) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
         {statusFilter}
         {partialFailureBanner}
@@ -263,6 +266,7 @@ export function AdminReportsPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <AdminNav />
       <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
       {statusFilter}
       {partialFailureBanner}
@@ -283,11 +287,11 @@ export function AdminReportsPage() {
                 <span className="mr-3 break-words text-sm text-text-muted">
                   {report.targetType === "post" ? (
                     <Link to={`/post/${report.targetId}`} className="text-primary hover:underline">
-                      {report.targetType} / {report.targetId}
+                      {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
                     </Link>
                   ) : report.targetType === "activity" ? (
                     <Link to={`/activities/${report.targetId}`} className="text-primary hover:underline">
-                      {report.targetType} / {report.targetId}
+                      {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
                     </Link>
                   ) : (
                     `${report.targetType} / ${report.targetId}`

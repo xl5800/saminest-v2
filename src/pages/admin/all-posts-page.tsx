@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { AdminNav } from "../../components/admin-nav";
 import { useAllPostsQuery } from "../../features/admin/use-all-posts-query";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import type { AdminPostListItem } from "../../repositories/posts-repository";
@@ -141,6 +142,7 @@ export function AdminAllPostsPage() {
   if (isPending) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">全部帖子</h1>
         {statusFilterControl}
         <p role="status" className="text-sm text-text-muted">加载中…</p>
@@ -151,6 +153,7 @@ export function AdminAllPostsPage() {
   if (isError) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">全部帖子</h1>
         {statusFilterControl}
         <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -164,6 +167,7 @@ export function AdminAllPostsPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <AdminNav />
       <h1 className="mb-4 text-xl font-bold text-text">全部帖子</h1>
       {statusFilterControl}
       {visiblePosts.length === 0 ? (

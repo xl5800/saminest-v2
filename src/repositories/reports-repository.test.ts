@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, insertMock, singleMock, overrideTypesMock } = vi.hoisted(() => {
+const { queryBuilder, insertMock, singleMock, overrideTypesMock, inMock } = vi.hoisted(() => {
   const insertMock = vi.fn();
   const singleMock = vi.fn();
   const overrideTypesMock = vi.fn();
+  // fetchTargetTitles 对 posts/activities 表的查询链路是 select().in()——
+  // in() 直接被 await（本身是个 thenable），不像 select/eq/order 那样返回
+  // builder 继续链式调用，所以单独给它一个 mock，而不是塞进下面的 chain 数组。
+  const inMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   builder.insert = insertMock;
   const chain = ["select", "eq", "order"] as const;
@@ -12,7 +16,8 @@ const { queryBuilder, insertMock, singleMock, overrideTypesMock } = vi.hoisted((
   }
   builder.single = singleMock;
   builder.overrideTypes = overrideTypesMock;
-  return { queryBuilder: builder, insertMock, singleMock, overrideTypesMock };
+  builder.in = inMock;
+  return { queryBuilder: builder, insertMock, singleMock, overrideTypesMock, inMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -140,6 +145,11 @@ describe("listReportsForModeration", () => {
       queryBuilder[key].mockClear();
     }
     overrideTypesMock.mockReset();
+    inMock.mockReset();
+    // 默认没有举报命中 post/activity 分支时 fetchTargetTitles 直接短路返回，
+    // 不会调用 in()；但为了不让没显式设置 inMock 的测试因为"上一个测试留下的
+    // resolved value"而串味，这里给个保底的空结果。
+    inMock.mockResolvedValue({ data: [], error: null });
   });
 
   it("defaults to status = pending, ordered by created_at ascending, with a nested reporter select", async () => {
@@ -189,9 +199,103 @@ describe("listReportsForModeration", () => {
         createdAt: "2026-07-01T00:00:00.000Z",
         targetType: "post",
         targetId: "post-1",
+        targetTitle: null,
         reporterName: "Bob"
       }
     ]);
+  });
+
+  it("looks up and attaches the target post's title", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-1",
+          reason_code: "spam",
+          description: "看起来像广告",
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "post",
+          target_id: "post-1",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+    inMock.mockResolvedValue({ data: [{ id: "post-1", title: "全新沙发出售" }], error: null });
+
+    const result = await listReportsForModeration();
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, title");
+    expect(inMock).toHaveBeenCalledWith("id", ["post-1"]);
+    expect(result[0].targetTitle).toBe("全新沙发出售");
+  });
+
+  it("looks up and attaches the target activity's title", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-2",
+          reason_code: "harassment",
+          description: null,
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "activity",
+          target_id: "act-1",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+    inMock.mockResolvedValue({ data: [{ id: "act-1", title: "周六一起打球" }], error: null });
+
+    const result = await listReportsForModeration();
+
+    expect(fromMock).toHaveBeenCalledWith("activities");
+    expect(inMock).toHaveBeenCalledWith("id", ["act-1"]);
+    expect(result[0].targetTitle).toBe("周六一起打球");
+  });
+
+  it("falls back to a null title, without throwing, when the title lookup query errors", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-1",
+          reason_code: "spam",
+          description: null,
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "post",
+          target_id: "post-1",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+    inMock.mockResolvedValue({ data: null, error: { message: "network down", code: "500" } });
+
+    const result = await listReportsForModeration();
+
+    expect(result[0].targetTitle).toBeNull();
+  });
+
+  it("skips the title lookup entirely for target types other than post/activity", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-1",
+          reason_code: "spam",
+          description: null,
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "comment",
+          target_id: "comment-1",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listReportsForModeration();
+
+    expect(inMock).not.toHaveBeenCalled();
+    expect(result[0].targetTitle).toBeNull();
   });
 
   it("falls back to placeholder text when the joined reporter is missing", async () => {

@@ -95,6 +95,19 @@ describe("AdminReportsPage", () => {
     );
   });
 
+  it("shows the target's title as the link text when it's available, instead of the raw id", async () => {
+    listReportsForModeration.mockResolvedValue([
+      { ...sampleReport, targetTitle: "全新沙发出售" }
+    ]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByRole("link", { name: "全新沙发出售" })).toHaveAttribute(
+      "href",
+      "/post/post-1"
+    );
+  });
+
   it("renders the target as a clickable link to /activities/:id when target_type is 'activity' (P0 activity reporting)", async () => {
     const activityReport = {
       ...sampleReport,

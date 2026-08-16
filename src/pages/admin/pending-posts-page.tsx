@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { AdminNav } from "../../components/admin-nav";
 import { useApprovePostMutation } from "../../features/admin/use-approve-post-mutation";
 import { usePendingPostsQuery } from "../../features/admin/use-pending-posts-query";
 import { useRejectPostMutation } from "../../features/admin/use-reject-post-mutation";
@@ -103,6 +104,7 @@ export function AdminPendingPostsPage() {
   if (isPending) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
         <p role="status" className="text-sm text-text-muted">加载中…</p>
       </main>
@@ -112,6 +114,7 @@ export function AdminPendingPostsPage() {
   if (isError) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
         <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
           帖子加载失败，请稍后重试。
@@ -125,6 +128,7 @@ export function AdminPendingPostsPage() {
   if (visiblePosts.length === 0) {
     return (
       <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+        <AdminNav />
         <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
         <p role="status" className="text-sm text-text-muted">暂无待审核帖子</p>
       </main>
@@ -133,6 +137,7 @@ export function AdminPendingPostsPage() {
 
   return (
     <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+      <AdminNav />
       <h1 className="mb-4 text-xl font-bold text-text">待审核帖子</h1>
       <ul>
         {visiblePosts.map((post) => {
