@@ -1,14 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpcMock, queryBuilder, overrideTypesMock } = vi.hoisted(() => {
+const { rpcMock, queryBuilder, overrideTypesMock, maybeSingleMock } = vi.hoisted(() => {
   const overrideTypesMock = vi.fn();
+  const maybeSingleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  const chain = ["select", "order"] as const;
+  const chain = ["select", "order", "eq", "is", "in"] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
   }
   builder.overrideTypes = overrideTypesMock;
-  return { rpcMock: vi.fn(), queryBuilder: builder, overrideTypesMock };
+  builder.maybeSingle = maybeSingleMock;
+  return { rpcMock: vi.fn(), queryBuilder: builder, overrideTypesMock, maybeSingleMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -20,6 +22,7 @@ vi.mock("../integrations/supabase/client", () => ({
 import {
   createActivityConversation,
   createDirectConversation,
+  findExistingActivityConversation,
   listMyConversations
 } from "./conversations-repository";
 
@@ -120,6 +123,104 @@ describe("createActivityConversation", () => {
     await expect(createActivityConversation("act-1")).rejects.toMatchObject({
       code: "ACTIVITY_CONVERSATION_CREATE_ID_MISSING"
     });
+  });
+});
+
+describe("findExistingActivityConversation", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("queries direct, non-post conversations created by the applicant, then looks for the organizer among their members", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
+    maybeSingleMock.mockResolvedValue({ data: { conversation_id: "conv-1" }, error: null });
+
+    await findExistingActivityConversation({
+      createdByUserId: "applicant-1",
+      otherUserId: "organizer-1"
+    });
+
+    expect(fromMock).toHaveBeenNthCalledWith(1, "conversations");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(1, "id");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("type", "direct");
+    expect(queryBuilder.is).toHaveBeenCalledWith("post_id", null);
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("created_by", "applicant-1");
+
+    expect(fromMock).toHaveBeenNthCalledWith(2, "conversation_members");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(2, "conversation_id");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "organizer-1");
+    expect(queryBuilder.in).toHaveBeenCalledWith("conversation_id", ["conv-1"]);
+  });
+
+  it("returns the conversation id when a matching conversation is found", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
+    maybeSingleMock.mockResolvedValue({ data: { conversation_id: "conv-1" }, error: null });
+
+    await expect(
+      findExistingActivityConversation({
+        createdByUserId: "applicant-1",
+        otherUserId: "organizer-1"
+      })
+    ).resolves.toEqual({ conversationId: "conv-1" });
+  });
+
+  it("returns null without a second query when the applicant has no matching direct/non-post conversations at all", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    const result = await findExistingActivityConversation({
+      createdByUserId: "applicant-1",
+      otherUserId: "organizer-1"
+    });
+
+    expect(result).toBeNull();
+    expect(fromMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null when the applicant has candidate conversations but none include the organizer as a member", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(
+      findExistingActivityConversation({
+        createdByUserId: "applicant-1",
+        otherUserId: "organizer-1"
+      })
+    ).resolves.toBeNull();
+  });
+
+  it("throws an AppError when the first (conversations) query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(
+      findExistingActivityConversation({
+        createdByUserId: "applicant-1",
+        otherUserId: "organizer-1"
+      })
+    ).rejects.toMatchObject({ code: "ACTIVITY_CONVERSATION_LOOKUP_FAILED" });
+  });
+
+  it("throws an AppError when the second (conversation_members) query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
+    maybeSingleMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(
+      findExistingActivityConversation({
+        createdByUserId: "applicant-1",
+        otherUserId: "organizer-1"
+      })
+    ).rejects.toMatchObject({ code: "ACTIVITY_CONVERSATION_LOOKUP_FAILED" });
   });
 });
 

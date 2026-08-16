@@ -54,7 +54,8 @@ const baseInput = {
   activityId: "act-1",
   userId: "user-1",
   organizerId: "organizer-1",
-  activityTitle: "周末吃火锅"
+  activityTitle: "周末吃火锅",
+  requiresApproval: false
 };
 
 describe("useToggleActivityParticipationMutation", () => {
@@ -82,8 +83,23 @@ describe("useToggleActivityParticipationMutation", () => {
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(joinActivity).toHaveBeenCalledWith("act-1", "user-1");
+    expect(joinActivity).toHaveBeenCalledWith("act-1", "user-1", false);
     expect(leaveActivity).not.toHaveBeenCalled();
+  });
+
+  it("passes requiresApproval through to joinActivity", async () => {
+    joinActivity.mockResolvedValue(undefined);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useToggleActivityParticipationMutation(), {
+      wrapper: createWrapper(queryClient)
+    });
+
+    act(() => {
+      result.current.mutate({ ...baseInput, isCurrentlyJoined: false, requiresApproval: true });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(joinActivity).toHaveBeenCalledWith("act-1", "user-1", true);
   });
 
   it("calls leaveActivity (not joinActivity) when isCurrentlyJoined is true", async () => {
@@ -119,6 +135,25 @@ describe("useToggleActivityParticipationMutation", () => {
       conversationId: "conv-1",
       senderId: "user-1",
       body: "Alice 报名了你的活动《周末吃火锅》"
+    });
+  });
+
+  it("notifies the organizer with a '申请加入…去处理一下吧' message when requiresApproval is true (not '报名了')", async () => {
+    joinActivity.mockResolvedValue(undefined);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useToggleActivityParticipationMutation(), {
+      wrapper: createWrapper(queryClient)
+    });
+
+    act(() => {
+      result.current.mutate({ ...baseInput, isCurrentlyJoined: false, requiresApproval: true });
+    });
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalled());
+    expect(sendMessage).toHaveBeenCalledWith({
+      conversationId: "conv-1",
+      senderId: "user-1",
+      body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。"
     });
   });
 

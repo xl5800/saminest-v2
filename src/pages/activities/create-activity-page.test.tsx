@@ -146,11 +146,28 @@ describe("CreateActivityPage", () => {
         startAt: new Date("2099-01-01T10:00").toISOString(),
         capacity: 4,
         contactMethod: "wechat",
-        contactValue: "abc123"
+        contactValue: "abc123",
+        requiresApproval: false
       });
     });
 
     expect(navigateMock).toHaveBeenCalledWith("/activities/act-999", { replace: true });
+  });
+
+  it("submits requiresApproval: true when the '需要我同意才能加入' checkbox is checked", async () => {
+    createActivity.mockResolvedValue({ id: "act-999" });
+    renderWithProviders(<CreateActivityPage />);
+    await screen.findByRole("option", { name: "Rockville" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByLabelText(/需要我同意才能加入/));
+    fireEvent.click(screen.getByRole("button", { name: "发布活动" }));
+
+    await waitFor(() => {
+      expect(createActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ requiresApproval: true })
+      );
+    });
   });
 
   it("shows a generic error message and does not navigate when createActivity fails", async () => {

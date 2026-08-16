@@ -105,6 +105,7 @@ export function ActivityDetailPage() {
             activityStatus={data.status}
             organizerId={data.organizerId}
             activityTitle={data.title}
+            requiresApproval={data.requiresApproval}
           />
 
           <div className="flex items-center gap-4">

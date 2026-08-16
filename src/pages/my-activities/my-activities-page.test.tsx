@@ -6,7 +6,11 @@ const {
   listMyJoinedActivities,
   cancelActivity,
   leaveActivity,
+  listPendingActivityParticipants,
+  approveActivityParticipant,
+  rejectActivityParticipant,
   createActivityConversation,
+  findExistingActivityConversation,
   sendMessage,
   getMyProfile
 } = vi.hoisted(() => ({
@@ -14,7 +18,11 @@ const {
   listMyJoinedActivities: vi.fn(),
   cancelActivity: vi.fn(),
   leaveActivity: vi.fn(),
+  listPendingActivityParticipants: vi.fn(),
+  approveActivityParticipant: vi.fn(),
+  rejectActivityParticipant: vi.fn(),
   createActivityConversation: vi.fn(),
+  findExistingActivityConversation: vi.fn(),
   sendMessage: vi.fn(),
   getMyProfile: vi.fn()
 }));
@@ -26,15 +34,21 @@ vi.mock("../../repositories/activities-repository", async (importOriginal) => {
     listMyOrganizedActivities,
     listMyJoinedActivities,
     cancelActivity,
-    leaveActivity
+    leaveActivity,
+    listPendingActivityParticipants,
+    approveActivityParticipant,
+    rejectActivityParticipant
   };
 });
 // "退出"这个 tab 现在走 useToggleActivityParticipationMutation（真实实现，
 // 没有 mock 掉这个 hook 本身）——那个 hook 除了 leaveActivity 还会尝试给
-// 发起人发一条私信通知，依赖这三个仓库函数，这里一并 mock 掉，避免测试
-// 时真的打到 Supabase。
+// 发起人发一条私信通知，依赖这几个仓库函数，这里一并 mock 掉，避免测试
+// 时真的打到 Supabase。findExistingActivityConversation 是
+// useModerateActivityParticipantMutation（同意/拒绝申请后反向通知申请人）
+// 依赖的查找函数，同一个原因需要 mock。
 vi.mock("../../repositories/conversations-repository", () => ({
-  createActivityConversation
+  createActivityConversation,
+  findExistingActivityConversation
 }));
 vi.mock("../../repositories/messages-repository", () => ({
   sendMessage
@@ -61,14 +75,23 @@ const sampleOrganizedActivity = {
   startAt: "2099-08-20T18:00:00.000Z",
   capacity: 4,
   participantCount: 2,
-  status: "open"
+  status: "open",
+  requiresApproval: false
 };
 
 const sampleJoinedActivity = {
   ...sampleOrganizedActivity,
   id: "act-2",
   organizerId: "organizer-1",
-  title: "别人发起的活动"
+  title: "别人发起的活动",
+  participationStatus: "approved" as const
+};
+
+const samplePendingApplicant = {
+  participantId: "participant-1",
+  activityId: "act-1",
+  userId: "applicant-1",
+  displayName: "Bob"
 };
 
 describe("MyActivitiesPage", () => {
@@ -83,15 +106,21 @@ describe("MyActivitiesPage", () => {
     listMyJoinedActivities.mockReset();
     cancelActivity.mockReset();
     leaveActivity.mockReset();
+    listPendingActivityParticipants.mockReset();
+    approveActivityParticipant.mockReset();
+    rejectActivityParticipant.mockReset();
     createActivityConversation.mockReset();
+    findExistingActivityConversation.mockReset();
     sendMessage.mockReset();
     getMyProfile.mockReset();
     // 两个 tab 背后是两个独立查询，默认都给一个已解决的空结果，避免每个
     // 只关心其中一个 tab 的用例都要重复 mock 另一个。
     listMyOrganizedActivities.mockResolvedValue([]);
     listMyJoinedActivities.mockResolvedValue([]);
+    listPendingActivityParticipants.mockResolvedValue([]);
     getMyProfile.mockResolvedValue({ displayName: "Alice", avatarUrl: null });
     createActivityConversation.mockResolvedValue({ conversationId: "conv-1" });
+    findExistingActivityConversation.mockResolvedValue({ conversationId: "conv-1" });
     sendMessage.mockResolvedValue({ id: "msg-1" });
   });
 
@@ -260,6 +289,27 @@ describe("MyActivitiesPage", () => {
     expect(await screen.findByText("发起人已取消此活动")).toBeInTheDocument();
   });
 
+  it("shows '申请中，等待发起人同意' for a joined activity whose participationStatus is 'pending'", async () => {
+    listMyJoinedActivities.mockResolvedValue([
+      { ...sampleJoinedActivity, participationStatus: "pending" }
+    ]);
+
+    renderWithProviders(<MyActivitiesPage />);
+    fireEvent.click(screen.getByRole("button", { name: "我报名的" }));
+
+    expect(await screen.findByText("申请中，等待发起人同意")).toBeInTheDocument();
+  });
+
+  it("does not show the pending note for an approved participation", async () => {
+    listMyJoinedActivities.mockResolvedValue([sampleJoinedActivity]);
+
+    renderWithProviders(<MyActivitiesPage />);
+    fireEvent.click(screen.getByRole("button", { name: "我报名的" }));
+    await screen.findByText(/别人发起的活动/);
+
+    expect(screen.queryByText("申请中，等待发起人同意")).not.toBeInTheDocument();
+  });
+
   it("shows a '退出' button on the joined tab, with no confirmation dialog, that removes the row on success", async () => {
     listMyJoinedActivities.mockResolvedValue([sampleJoinedActivity]);
     leaveActivity.mockResolvedValue(undefined);
@@ -314,5 +364,159 @@ describe("MyActivitiesPage", () => {
       "操作失败，请稍后重试。"
     );
     expect(screen.getByText(/别人发起的活动/)).toBeInTheDocument();
+  });
+
+  it("shows a '待审核申请（N）' panel only for a requires_approval activity that has pending applicants", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+
+    renderWithProviders(<MyActivitiesPage />);
+
+    expect(await screen.findByText("待审核申请（1）")).toBeInTheDocument();
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+  });
+
+  it("does not show a pending-applicants panel for an activity that does not require approval", async () => {
+    listMyOrganizedActivities.mockResolvedValue([sampleOrganizedActivity]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText(/周末吃火锅/);
+
+    expect(screen.queryByText(/待审核申请/)).not.toBeInTheDocument();
+  });
+
+  it("calls approveActivityParticipant on 同意, removes the applicant from the panel, and bumps participantCount locally", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 2, capacity: 4 }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    approveActivityParticipant.mockResolvedValue(undefined);
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "同意" }));
+
+    await waitFor(() => {
+      expect(approveActivityParticipant).toHaveBeenCalledWith("participant-1");
+    });
+    expect(screen.queryByText("Bob")).not.toBeInTheDocument();
+    expect(await screen.findByText("还差 1 人（3/4）")).toBeInTheDocument();
+  });
+
+  it("flips an organized activity to '已满员' locally when an approval fills the last spot", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 3, capacity: 4 }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    approveActivityParticipant.mockResolvedValue(undefined);
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "同意" }));
+
+    expect(await screen.findByText("已满员")).toBeInTheDocument();
+  });
+
+  it("calls rejectActivityParticipant on 拒绝, removes the applicant, and leaves participantCount unchanged", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 2, capacity: 4 }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    rejectActivityParticipant.mockResolvedValue(undefined);
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
+
+    await waitFor(() => {
+      expect(rejectActivityParticipant).toHaveBeenCalledWith("participant-1");
+    });
+    expect(screen.queryByText("Bob")).not.toBeInTheDocument();
+    expect(screen.getByText("还差 2 人（2/4）")).toBeInTheDocument();
+  });
+
+  it("sends a '被同意了' notification to the applicant via findExistingActivityConversation + sendMessage when approving", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    approveActivityParticipant.mockResolvedValue(undefined);
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "同意" }));
+
+    await waitFor(() => {
+      expect(sendMessage).toHaveBeenCalled();
+    });
+    expect(findExistingActivityConversation).toHaveBeenCalledWith({
+      createdByUserId: "applicant-1",
+      otherUserId: "user-1"
+    });
+    expect(sendMessage).toHaveBeenCalledWith({
+      conversationId: "conv-1",
+      senderId: "user-1",
+      body: "你申请加入的《周末吃火锅》被同意了"
+    });
+  });
+
+  it("sends a '被拒绝了' notification to the applicant when rejecting", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    rejectActivityParticipant.mockResolvedValue(undefined);
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
+
+    await waitFor(() => {
+      expect(sendMessage).toHaveBeenCalledWith({
+        conversationId: "conv-1",
+        senderId: "user-1",
+        body: "你申请加入的《周末吃火锅》被拒绝了"
+      });
+    });
+  });
+
+  it("shows a row-level error and keeps the applicant in the panel when approveActivityParticipant fails", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    approveActivityParticipant.mockRejectedValue(new Error("failed"));
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "同意" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
+    expect(screen.getByText("Bob")).toBeInTheDocument();
+  });
+
+  it("shows a row-level error and keeps the applicant in the panel when rejectActivityParticipant fails", async () => {
+    listMyOrganizedActivities.mockResolvedValue([
+      { ...sampleOrganizedActivity, requiresApproval: true }
+    ]);
+    listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+    rejectActivityParticipant.mockRejectedValue(new Error("failed"));
+
+    renderWithProviders(<MyActivitiesPage />);
+    await screen.findByText("待审核申请（1）");
+
+    fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
+    expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 });

@@ -59,6 +59,7 @@ export interface ActivityListItem {
   capacity: number | null;
   participantCount: number;
   status: string;
+  requiresApproval: boolean;
 }
 
 export interface ListActivitiesInput {
@@ -79,6 +80,7 @@ interface ActivityListRow {
   capacity: number | null;
   participant_count: number;
   status: string;
+  requires_approval: boolean;
 }
 
 /**
@@ -110,8 +112,14 @@ interface ActivityListRow {
 // useToggleActivityParticipationMutation（跟活动详情页的退出按钮走同一个
 // hook，成功后才会顺带给发起人发私信通知），不然那个 hook 拿不到通知
 // 收件人是谁。
+//
+// requires_approval 同理（P2 报名审核制）：卡片本身不展示这个字段，但
+// my-activities-page.tsx"我发起的" tab 要靠它判断某张卡片要不要展示
+// "待审核申请"这个展开区块，ActivityParticipationButton 也要靠它决定
+// 报名按钮文案是"我要报名"还是"申请加入"——同一个"给字段加到共享 select
+// 列"的模式，参照上次给 organizerId 加字段那次改动，不新建一套查询。
 const ACTIVITY_LIST_SELECT_COLUMNS =
-  "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status";
+  "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval";
 
 function mapActivityListRow(row: ActivityListRow): ActivityListItem {
   return {
@@ -126,7 +134,8 @@ function mapActivityListRow(row: ActivityListRow): ActivityListItem {
     startAt: row.start_at,
     capacity: row.capacity,
     participantCount: row.participant_count,
-    status: row.status
+    status: row.status,
+    requiresApproval: row.requires_approval
   };
 }
 
@@ -205,6 +214,7 @@ export interface ActivityDetail {
   contactMethod: string | null;
   contactValue: string | null;
   status: string;
+  requiresApproval: boolean;
 }
 
 interface ActivityDetailRow {
@@ -223,6 +233,7 @@ interface ActivityDetailRow {
   contact_method: string | null;
   contact_value: string | null;
   status: string;
+  requires_approval: boolean;
   location: { name: string } | null;
   organizer: { display_name: string } | null;
 }
@@ -245,7 +256,7 @@ export async function getActivityDetail(activityId: string): Promise<ActivityDet
   const { data, error } = await getSupabaseClient()
     .from("activities")
     .select(
-      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, location:locations(name), organizer:profiles(display_name)"
+      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name)"
     )
     .eq("id", activityId)
     .maybeSingle()
@@ -276,7 +287,8 @@ export async function getActivityDetail(activityId: string): Promise<ActivityDet
     participantCount: data.participant_count,
     contactMethod: data.contact_method,
     contactValue: data.contact_value,
-    status: data.status
+    status: data.status,
+    requiresApproval: data.requires_approval
   };
 }
 
@@ -293,6 +305,7 @@ export interface CreateActivityInput {
   capacity: number | null;
   contactMethod: string | null;
   contactValue: string | null;
+  requiresApproval: boolean;
 }
 
 export interface CreateActivityResult {
@@ -318,6 +331,12 @@ const ACCOUNT_RESTRICTED_MESSAGE =
  * 不带这一列——跟 createPost 把 status 硬编码成 'pending'、不接受表单
  * 传入是同一个"系统状态字段不能由用户直接摆布"的原则，只是这里更进一步，
  * 连硬编码赋值都不需要，交给列默认值。
+ *
+ * requiresApproval（P2）是唯一一个真正由发起人在表单上选择、直接写入的
+ * 新字段——跟 status 不同，这不是系统维护的字段，是产品明确要求的"per
+ * -activity 开关"，创建之后不能改（这批任务没有编辑活动的入口，见
+ * create-activity-page.tsx），所以不需要考虑"发布后改开关会不会打乱正在
+ * 进行中的报名审核流程"这种问题。
  */
 export async function createActivity(
   input: CreateActivityInput
@@ -334,7 +353,8 @@ export async function createActivity(
     start_at: input.startAt,
     capacity: input.capacity,
     contact_method: input.contactMethod,
-    contact_value: input.contactValue
+    contact_value: input.contactValue,
+    requires_approval: input.requiresApproval
   };
 
   const { data, error } = await getSupabaseClient()
@@ -356,54 +376,96 @@ export async function createActivity(
   return { id: data.id };
 }
 
+export type ActivityParticipationStatus = "pending" | "approved" | "rejected" | null;
+
 /**
- * 判断当前用户是否"正在报名"这场活动（用来决定详情页按钮显示"报名"还是
- * "退出"）。查不到行时统一当成"未报名"处理，不区分"从来没报名过"和
- * "报名过又退出了"——activity_participants_select_joined 这条 RLS 策略
- * 要求"自己当前有一条 cancelled_at is null 的记录"才能 select 到这场
- * 活动下的任何行，退出之后连自己那条已取消的记录都查不到了，应用层本来
- * 就没有能力区分这两种情况，也没有必要区分：按钮只需要知道"现在是不是
- * 报名状态"，不需要知道"历史上有没有报名过"。
+ * 当前用户对这场活动的报名状态（P2 报名审核制上线后，从单纯的布尔"是否
+ * 已报名"扩成四态：null=未参与、pending=申请中待发起人处理、approved=
+ * 已报名/已通过、rejected=申请被拒绝）——ActivityParticipationButton 和
+ * my-activities-page.tsx"我报名的" tab 都要靠这个状态渲染不同的文案/
+ * 可用操作，之前的布尔版本（isCurrentlyJoined）已经不够表达这几种情况，
+ * 直接改造成同一个函数返回更丰富的状态，而不是新增一个函数、让调用方
+ * 自己再拼一遍"查两次、合并结果"的逻辑。
+ *
+ * 查不到行、或者查到但已经退出（cancelled_at 不为空）时统一返回
+ * null——不区分"从来没申请过"和"申请过又退出了"，理由跟原来的
+ * isCurrentlyJoined 完全一样：activity_participants_select_joined 这条
+ * RLS 策略要求"自己当前有一条 cancelled_at is null 的记录"才能 select 到
+ * 这场活动下的任何行，但 activity_participants_select_own（user_id =
+ * auth.uid()，不看 cancelled_at/status）保证用户永远能读到自己这一行，
+ * 所以这里始终查得到、只是要在 JS 里过滤"已经不算数"的历史行。
  */
-export async function isCurrentlyJoined(activityId: string, userId: string): Promise<boolean> {
+export async function getActivityParticipationStatus(
+  activityId: string,
+  userId: string
+): Promise<ActivityParticipationStatus> {
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select("id")
+    .select("status, cancelled_at")
     .eq("activity_id", activityId)
     .eq("user_id", userId)
-    .is("cancelled_at", null)
     .maybeSingle();
 
   if (error) {
     throw new AppError(error.message, "ACTIVITY_PARTICIPATION_CHECK_FAILED", error);
   }
 
-  return data !== null;
+  if (!data || data.cancelled_at !== null) {
+    return null;
+  }
+
+  return data.status as "pending" | "approved" | "rejected";
 }
 
 const UNIQUE_VIOLATION_CODE = "23505";
 const ACTIVITY_JOIN_FORBIDDEN_MESSAGE = "报名失败，这个活动可能已满员或已结束，请刷新后重试。";
+const ACTIVITY_JOIN_REJECTED_MESSAGE = "你的申请已被发起人拒绝，无法重新加入。";
 const ACTIVITY_LEAVE_NOT_FOUND_MESSAGE = "你还没有报名这个活动，或者已经退出了。";
 
 /**
- * 报名一个活动。设计文档 3.2 节："退出后重新报名靠把 cancelled_at 置回
- * null（应用层 upsert 逻辑），不插入新行"——但这个"先查一下有没有旧行"
- * 的直觉写法在这里行不通：activity_participants_select_joined 这条 RLS
- * 策略要求"自己当前有一条 cancelled_at is null 的记录"才能 select 到这场
- * 活动下的任何行，一个刚退出的用户此时恰好没有这样一条记录，所以退出后
- * 他自己那条已取消的历史记录对他自己来说也是不可见的——先 select 判断
- * "是不是已经报名过"这一步在这个场景下永远查不到东西，没法用来分支。
+ * 报名/申请加入一个活动。P2 报名审核制上线后，INSERT 这一行必须带上正确
+ * 的 status，不能再省略、交给列默认值：activity_participants_insert_own
+ * 这条 RLS 的 with check 要求 `requires_approval = false` 时插入的行必须
+ * 是 'approved'、`requires_approval = true` 时必须是 'pending'，插反了
+ * 直接 42501——所以这个函数现在需要调用方提前告诉它目标活动是不是要审核
+ * （activity-participation-button.tsx / use-toggle-activity-participation-mutation.ts
+ * 从已经查到的 ActivityDetail.requiresApproval 传进来，不在这里为了拿到
+ * 这一个字段再单独查一次 activities 表）。
+ *
+ * 设计文档 3.2 节："退出后重新报名靠把 cancelled_at 置回 null（应用层
+ * upsert 逻辑），不插入新行"——但这个"先查一下有没有旧行"的直觉写法在这里
+ * 行不通：activity_participants_select_joined 这条 RLS 策略要求"自己当前
+ * 有一条 cancelled_at is null 的记录"才能 select 到这场活动下的任何行，
+ * 一个刚退出的用户此时恰好没有这样一条记录，所以退出后他自己那条已取消
+ * 的历史记录对他自己来说也是不可见的——先 select 判断"是不是已经报名过"
+ * 这一步在这个场景下永远查不到东西，没法用来分支。
  *
  * 所以这里反过来：先直接尝试 insert，让 unique(activity_id, user_id)
- * 这条唯一约束替我们判断"是不是已经有一行了"——插入成功就是第一次报名；
- * 撞上 23505 唯一冲突，说明那一行还在（大概率是之前报名又退出留下的
- * cancelled_at 不为 null 的记录，也可能是另一个标签页并发插入），再补一次
- * UPDATE 把 cancelled_at 置回 null，这才是真正的"重新报名"分支。
+ * 这条唯一约束替我们判断"是不是已经有一行了"——插入成功就是第一次报名/
+ * 申请；撞上 23505 唯一冲突，说明那一行还在（大概率是之前报名/申请又退出
+ * 留下的 cancelled_at 不为 null 的记录，也可能是另一个标签页并发插入）。
+ *
+ * P2 新增的一步：撞冲突之后不能直接尝试 UPDATE 把 cancelled_at 置回
+ * null——如果那一行的 status 是 'rejected'（发起人已经拒绝过这次申请），
+ * activity_participants_update_own 这条 RLS 的 with check 会挡住这次
+ * UPDATE（明确要求 status <> 'rejected' 才允许重新激活），拿到的会是一个
+ * 分不清具体原因的 42501（因为同一条 with check 里"活动不再 open"也会
+ * 触发一模一样的错误码，见下面这段的详细说明）。为了给用户一条准确、不
+ * 过度归因的提示，这里先用 activity_participants_select_own（user_id =
+ * auth.uid()，不受 cancelled_at/status 限制）查一下这一行现在的 status：
+ * 如果是 'rejected'，直接返回专门的错误文案，不再尝试注定会失败的
+ * UPDATE；如果不是（说明这次 42501 大概率是"活动已经不再 open"），走
+ * UPDATE 本身失败时的通用兜底文案，不谎称是"被拒绝了"。
  */
-export async function joinActivity(activityId: string, userId: string): Promise<void> {
+export async function joinActivity(
+  activityId: string,
+  userId: string,
+  requiresApproval: boolean
+): Promise<void> {
   const payload: TablesInsert<"activity_participants"> = {
     activity_id: activityId,
-    user_id: userId
+    user_id: userId,
+    status: requiresApproval ? "pending" : "approved"
   };
 
   const { error: insertError } = await getSupabaseClient()
@@ -415,6 +477,20 @@ export async function joinActivity(activityId: string, userId: string): Promise<
   }
 
   if (insertError.code === UNIQUE_VIOLATION_CODE) {
+    const { data: existingRow, error: selectError } = await getSupabaseClient()
+      .from("activity_participants")
+      .select("status")
+      .eq("activity_id", activityId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (selectError) {
+      throw new AppError(selectError.message, "ACTIVITY_JOIN_FAILED", selectError);
+    }
+    if (existingRow?.status === "rejected") {
+      throw new AppError(ACTIVITY_JOIN_REJECTED_MESSAGE, "ACTIVITY_JOIN_REJECTED");
+    }
+
     const { error: updateError } = await getSupabaseClient()
       .from("activity_participants")
       .update({ cancelled_at: null })
@@ -432,12 +508,16 @@ export async function joinActivity(activityId: string, userId: string): Promise<
   }
 
   if (insertError.code === RLS_VIOLATION_CODE) {
-    // activity_participants_insert_own 的 with check 有三个独立条件
-    // （账号未受限、user_id = auth.uid()、活动 status = 'open'），42501
-    // 分不清具体是哪一个——跟 comments-repository.ts 的 createComment 是
-    // 同一个情况："活动已满员/已结束"是真实会在正常使用中触发的场景
-    // （比如两个人同时点最后一个名额），不能像 createActivity 那样简单
-    // 归因于账号受限，统一包装成一条通用失败提示。
+    // activity_participants_insert_own 的 with check 有四个独立条件
+    // （账号未受限、user_id = auth.uid()、活动 status = 'open'、插入的
+    // status 跟活动的 requires_approval 是否匹配），42501 分不清具体是
+    // 哪一个——跟 comments-repository.ts 的 createComment 是同一个情况：
+    // "活动已满员/已结束"是真实会在正常使用中触发的场景（比如两个人同时
+    // 点最后一个名额），不能像 createActivity 那样简单归因于账号受限，
+    // 统一包装成一条通用失败提示。"status 跟 requires_approval 不匹配"
+    // 这一条理论上不会在正常调用路径上触发（这个函数自己根据传入的
+    // requiresApproval 决定 status，两者必然一致），只有调用方传错
+    // requiresApproval 时才会撞上，同样归进这条通用提示，不单独区分。
     throw new AppError(ACTIVITY_JOIN_FORBIDDEN_MESSAGE, "ACTIVITY_JOIN_FORBIDDEN", insertError);
   }
 
@@ -491,18 +571,36 @@ export async function listActivityParticipants(
   }));
 }
 
+export interface MyJoinedActivityItem extends ActivityListItem {
+  /** 这次报名/申请本身的状态（不是活动的 status）——pending 时前端要
+   *  展示"申请中，等待发起人同意"，跟活动本身被取消是两件独立的事。
+   *  rejected 不会出现在这里，见下面 listMyJoinedActivities 的过滤说明。 */
+  participationStatus: "pending" | "approved";
+}
+
 interface MyJoinedActivityRow {
   activity: ActivityListRow | null;
+  status: string;
 }
 
 /**
- * "我的活动"页面"我报名的" tab 用：当前用户当前仍报名（cancelled_at is
- * null）的活动，包括活动之后被发起人取消的情况——这正是新增的
- * activities_select_participant 这条 RLS（见迁移文件
+ * "我的活动"页面"我报名的" tab 用：当前用户当前仍报名/申请中
+ * （cancelled_at is null）的活动，包括活动之后被发起人取消的情况——这正是
+ * 新增的 activities_select_participant 这条 RLS（见迁移文件
  * supabase/migrations/20260816172621_add_activities_select_participant_policy.sql）
  * 要解决的问题：只按 activity_participants 表过滤"我是不是还报名着"，
  * 活动本身的 status/deleted_at 完全不影响这里能不能查到，交给这条新策略
  * 兜底，这一层不重复判断。
+ *
+ * P2 报名审核制上线后加了一条 `.neq("status", "rejected")` 过滤——status
+ * 列出现之前，"cancelled_at is null"就等于"还算报名中"；现在一条被发起人
+ * 拒绝的申请，cancelled_at 依然是 null（拒绝不会碰 cancelled_at，只改
+ * status），如果不过滤掉，会在这个列表里显示成一张跟正常已报名活动没有
+ * 区别的卡片、还带着一个能点的"退出"按钮，这是明显错的——一条已经被拒绝
+ * 的申请不应该出现在"我报名的"里，用户应该去详情页看到"申请已被拒绝"这个
+ * 明确的结论，不是在管理列表里假装自己还报名着。pending 的申请仍然保留
+ * 在这个列表里（用 participationStatus 字段标出来，卡片上加一行"申请中"
+ * 提示），因为撤回一条待处理的申请（点"退出"）依然是一个有意义的操作。
  *
  * 从 activity_participants 出发、内嵌 activities（多对一关系，PostgREST
  * 按外键返回单个对象而不是数组），而不是反过来从 activities 查——这是这个
@@ -516,12 +614,13 @@ interface MyJoinedActivityRow {
  * 意义明确的时间字段，不需要像 listMyOrganizedActivities 那样在"用什么
  * 排序"上纠结。
  */
-export async function listMyJoinedActivities(userId: string): Promise<ActivityListItem[]> {
+export async function listMyJoinedActivities(userId: string): Promise<MyJoinedActivityItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select(`activity:activities(${ACTIVITY_LIST_SELECT_COLUMNS})`)
+    .select(`status, activity:activities(${ACTIVITY_LIST_SELECT_COLUMNS})`)
     .eq("user_id", userId)
     .is("cancelled_at", null)
+    .neq("status", "rejected")
     .order("joined_at", { ascending: false })
     .overrideTypes<MyJoinedActivityRow[]>();
 
@@ -530,8 +629,13 @@ export async function listMyJoinedActivities(userId: string): Promise<ActivityLi
   }
 
   return (data ?? [])
-    .filter((row): row is { activity: ActivityListRow } => row.activity !== null)
-    .map((row) => mapActivityListRow(row.activity));
+    .filter(
+      (row): row is { activity: ActivityListRow; status: string } => row.activity !== null
+    )
+    .map((row) => ({
+      ...mapActivityListRow(row.activity),
+      participationStatus: row.status as "pending" | "approved"
+    }));
 }
 
 /**
@@ -594,5 +698,96 @@ export async function cancelActivity(activityId: string): Promise<void> {
   }
   if (!data) {
     throw new AppError(ACTIVITY_NOT_FOUND_OR_FORBIDDEN_MESSAGE, "ACTIVITY_CANCEL_NOT_FOUND");
+  }
+}
+
+export interface PendingActivityParticipant {
+  participantId: string;
+  activityId: string;
+  userId: string;
+  displayName: string;
+}
+
+interface PendingActivityParticipantRow {
+  id: string;
+  activity_id: string;
+  user_id: string;
+  user: { display_name: string } | null;
+}
+
+/**
+ * "我的活动"页面"我发起的" tab 用：一次性查出多场活动（同一个发起人的
+ * 全部 requires_approval = true 的活动）下所有待处理的申请，不是"每张卡片
+ * 单独发一次请求"——批一次查，用 activityId 字段在页面里按活动分组，
+ * 避免 N+1（这个仓库目前没有其它地方需要这种"批量查多个父资源各自的子
+ * 列表"场景，这里选择"传一批 id 进来，一条 .in() 查询"这个最直接的做法，
+ * 不是过度设计）。
+ *
+ * activity_participants_select_organizer 这条 RLS（`exists (select 1 from
+ * activities a where a.id = activity_participants.activity_id and
+ * a.organizer_id = auth.uid())`）保证只会查到调用者自己发起的活动下的
+ * 参与者行，即使调用方不小心传了别人的活动 id 进来，也只是查不到那部分
+ * 数据，不会越权读到别的发起人的申请。
+ */
+export async function listPendingActivityParticipants(
+  activityIds: string[]
+): Promise<PendingActivityParticipant[]> {
+  if (activityIds.length === 0) {
+    return [];
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .from("activity_participants")
+    .select("id, activity_id, user_id, user:profiles(display_name)")
+    .in("activity_id", activityIds)
+    .eq("status", "pending")
+    .order("joined_at", { ascending: true })
+    .overrideTypes<PendingActivityParticipantRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_PENDING_PARTICIPANTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    participantId: row.id,
+    activityId: row.activity_id,
+    userId: row.user_id,
+    displayName: row.user?.display_name ?? "未知用户"
+  }));
+}
+
+/**
+ * 发起人同意一条报名申请：把 activity_participants.status 从 'pending'
+ * 改成 'approved'。这一列客户端不能直接 UPDATE（`revoke update (status)`，
+ * 见迁移文件 20260816175611_activity_join_approval.sql），只能走这个
+ * security definer 函数——函数内部会校验调用者是不是这场活动的发起人、
+ * 这条记录当前是不是 pending，两个条件都不满足会抛异常，这里不重复校验，
+ * 直接把数据库的失败原因包装成 AppError。
+ *
+ * approve/reject 都不区分"是不是 pending"这类具体失败原因，统一用一条
+ * 通用错误码——跟 cancelActivity 的错误处理力度一致：这两个函数是这批
+ * 任务新增的、还没有别的地方需要更细的错误分支，等真的需要再细化。
+ */
+export async function approveActivityParticipant(participantId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("approve_activity_participant", {
+    target_participant_id: participantId
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_PARTICIPANT_APPROVE_FAILED", error);
+  }
+}
+
+/**
+ * 发起人拒绝一条报名申请：把 status 改成 'rejected'。同上，只能走
+ * security definer 函数，不能直接 UPDATE。
+ */
+export async function rejectActivityParticipant(participantId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("reject_activity_participant", {
+    target_participant_id: participantId
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_PARTICIPANT_REJECT_FAILED", error);
   }
 }

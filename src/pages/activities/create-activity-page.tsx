@@ -33,6 +33,10 @@ const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
  * 读取，用户没有任何方式在表单上编辑或伪造它——跟 publish-page.tsx 的
  * author_id 是同一个安全边界。
  *
+ * "需要我同意才能加入"（P2 报名审核制）默认关闭，是唯一一个发布后不能再
+ * 改的开关（这批任务没有编辑活动的入口）——发起人发布前需要想清楚要不要
+ * 开审核，不是可以随时切换的设置。
+ *
  * 没有走 useMutation：直接 await createActivity(...)，不包一层
  * useCreateActivityMutation——照抄 publish-page.tsx 里 createPost() 的
  * 调用方式，这个仓库对"新建之后直接跳转到详情页，当前页面不需要展示
@@ -58,6 +62,9 @@ export function CreateActivityPage() {
   const [capacity, setCapacity] = useState("");
   const [contactMethod, setContactMethod] = useState("");
   const [contactValue, setContactValue] = useState("");
+  // P2 报名审核制：默认关闭，保持现在"秒进"的报名体验，发起人要主动打开
+  // 才会多出审核这一步。
+  const [requiresApproval, setRequiresApproval] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -84,7 +91,8 @@ export function CreateActivityPage() {
       startAt,
       capacity,
       contactMethod,
-      contactValue
+      contactValue,
+      requiresApproval
     });
     if (!validation.success) {
       setError(validation.error.message);
@@ -105,7 +113,8 @@ export function CreateActivityPage() {
         startAt: validation.data.startAt,
         capacity: validation.data.capacity,
         contactMethod: validation.data.contactMethod,
-        contactValue: validation.data.contactValue
+        contactValue: validation.data.contactValue,
+        requiresApproval: validation.data.requiresApproval
       });
       navigate(`/activities/${created.id}`, { replace: true });
     } catch (submitError) {
@@ -273,6 +282,16 @@ export function CreateActivityPage() {
               onChange={(event) => setContactValue(event.target.value)}
               className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
+          </label>
+
+          <label className="mb-4 flex items-center gap-2 text-sm font-medium text-text">
+            <input
+              type="checkbox"
+              checked={requiresApproval}
+              onChange={(event) => setRequiresApproval(event.target.checked)}
+              className="h-4 w-4 rounded border-border text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            需要我同意才能加入（默认关闭）
           </label>
 
           <button

@@ -40,6 +40,10 @@ export interface ActivityFormInput {
   capacity: string;
   contactMethod: string;
   contactValue: string;
+  // P2 报名审核制开关，来自表单的复选框，本身就是 boolean（跟 isOnline
+  // 是同一种输入方式），不需要 trim/长度校验这类字符串字段才有的处理，
+  // 原样透传进 ActivityFormData。
+  requiresApproval: boolean;
 }
 
 export interface ActivityFormData {
@@ -54,6 +58,7 @@ export interface ActivityFormData {
   capacity: number | null;
   contactMethod: string | null;
   contactValue: string | null;
+  requiresApproval: boolean;
 }
 
 export interface ActivityValidationError {
@@ -164,7 +169,8 @@ export function validateActivityInput(input: ActivityFormInput): ActivityValidat
       startAt: startAtDate.toISOString(),
       capacity,
       contactMethod: contactMethod || null,
-      contactValue: contactValue || null
+      contactValue: contactValue || null,
+      requiresApproval: input.requiresApproval
     },
     error: null
   };

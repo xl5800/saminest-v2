@@ -11,6 +11,14 @@ export interface ToggleActivityParticipationInput {
   isCurrentlyJoined: boolean;
   organizerId: string;
   activityTitle: string;
+  /** 目标活动是不是需要发起人审核——决定 joinActivity 插入的行是
+   *  'approved' 还是 'pending'，也决定通知发起人的消息文案用"报名了"还是
+   *  "申请加入"。退出方向（isCurrentlyJoined=true）不会用到这个字段，但
+   *  两个方向共用同一个输入类型，调用方（ActivityParticipationButton /
+   *  my-activities-page.tsx）反正手上都有 ActivityListItem/ActivityDetail
+   *  里现成的 requiresApproval，统一必填不加可选问号，比"退出方向可以
+   *  不传"这种分叉类型定义更简单。 */
+  requiresApproval: boolean;
 }
 
 const DEFAULT_ACTOR_LABEL = "有人";
@@ -19,6 +27,11 @@ const DEFAULT_ACTOR_LABEL = "有人";
  * 报名/退出通知发起人：给这次操作者本人和发起人之间的私聊会话发一条消息，
  * 发送人是操作者本人（不是虚拟系统账号），这样发起人可以直接在同一个
  * 对话里回复——设计文档第 7 节"第二批"要求，措辞用任务给的参考文案。
+ *
+ * P2 报名审核制加了第三种文案：requiresApproval = true 时，joinActivity
+ * 插入的是一条 pending 申请，不是"报名成功"，"报名了"这个措辞会误导发起人
+ * 以为不需要再处理——改成"申请加入…去处理一下"，提示发起人这条需要他
+ * 采取行动，跟真正报名成功（不需要审核）区分开。
  *
  * 发起人自己报名/退出自己的活动这种边界情况（正常 UI 不会出现这个按钮，
  * 这里只是防御）不发通知——不需要、也不应该给自己发私信。
@@ -34,13 +47,18 @@ async function notifyOrganizer(input: ToggleActivityParticipationInput): Promise
 
   const actorProfile = await getMyProfile(input.userId);
   const actorDisplayName = actorProfile?.displayName ?? DEFAULT_ACTOR_LABEL;
-  const verb = input.isCurrentlyJoined ? "退出了" : "报名了";
+
+  const body = input.isCurrentlyJoined
+    ? `${actorDisplayName} 退出了你的活动《${input.activityTitle}》`
+    : input.requiresApproval
+      ? `${actorDisplayName} 申请加入你的活动《${input.activityTitle}》，去处理一下吧。`
+      : `${actorDisplayName} 报名了你的活动《${input.activityTitle}》`;
 
   const { conversationId } = await createActivityConversation(input.activityId);
   await sendMessage({
     conversationId,
     senderId: input.userId,
-    body: `${actorDisplayName} ${verb}你的活动《${input.activityTitle}》`
+    body
   });
 }
 
@@ -59,8 +77,8 @@ async function notifyOrganizer(input: ToggleActivityParticipationInput): Promise
  * invalidate 四个 queryKey，让页面重新拉取权威数据：
  * - ["activity-detail", activityId]：详情页头部的 participant_count 汇总
  *   数字由数据库触发器同步，要重新拉才能看到最新值。
- * - ["activity-participation", activityId, userId]：按钮自己"是否已报名"
- *   的状态。
+ * - ["activity-participation", activityId, userId]：按钮自己的报名状态
+ *   （P2 起是四态，不只是布尔）。
  * - ["activities"]：列表页（前缀匹配，覆盖所有筛选条件组合）的
  *   participant_count/status（满员会从 open 变成 full）也可能变了。
  * - ["activity-participants", activityId]：第二批新增的"参与者"名单区块，
@@ -74,7 +92,7 @@ export function useToggleActivityParticipationMutation() {
       if (input.isCurrentlyJoined) {
         await leaveActivity(input.activityId, input.userId);
       } else {
-        await joinActivity(input.activityId, input.userId);
+        await joinActivity(input.activityId, input.userId, input.requiresApproval);
       }
 
       try {

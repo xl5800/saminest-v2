@@ -135,6 +135,96 @@ export async function createDirectConversation(
 }
 
 /**
+ * 查找发起人和某个申请人之间"因为一起去活动而建立"的已有会话（P2 报名
+ * 审核制：发起人同意/拒绝申请时要反过来通知申请人，见
+ * use-moderate-activity-participant-mutation.ts）。
+ *
+ * 为什么不能像 createActivityConversation 那样直接调一个 RPC 拿到/建出
+ * 会话——create_activity_conversation(target_activity_id) 内部固定把
+ * "对方"解析成这场活动的 organizer_id，调用者是谁就把谁和 organizer_id
+ * 连起来。申请人申请加入时調用它没问题（调用者是申请人，对方解析成
+ * 发起人）；但发起人同意/拒绝申请时如果也调这个函数，调用者（auth.uid()）
+ * 和函数内部解析出来的"对方"会是同一个人（发起人自己的活动），直接撞上
+ * 函数里"不能和自己建会话"的防御检查而报错——这个函数的设计就没打算支持
+ * "发起人主动联系某个参与者"这个方向，仿造一个新 RPC 专门支持这个方向、
+ * 或者放宽现有 RPC 接受任意目标用户 id，都会重新打开"可以拉任意用户建
+ * 私聊"这个在 P0 阶段特意堵上的口子（见 create_activity_conversation 那份
+ * 迁移文件的说明），这次任务明确"数据库已完成，不用碰"，不新增数据库
+ * 对象，所以这里换一个不需要新 RPC 的思路：
+ *
+ * 申请人申请加入时触发的 notifyOrganizer 已经用
+ * create_activity_conversation 建好了一条"申请人 created_by、post_id
+ * 为空"的会话，并把发起人也拉进了 conversation_members（该 RPC 内部一次
+ * 完成两步）。这条会话本来就存在，发起人已经是成员，可以直接用
+ * sendMessage() 往里面发消息（messages_insert_own_as_active_member 这条
+ * RLS 只要求 sender_id = auth.uid() 且是这个会话的活跃成员，不要求
+ * sender 是会话创建者）——不需要新建会话，只需要"找到"它。
+ *
+ * 查找方式：conversations 表只记录了 created_by（申请人），没有直接存
+ * "对方是谁"这一列，所以分两步：
+ *   1. 查所有 created_by = 申请人、type=direct、post_id 为空（排除跟帖子
+ *      绑定的会话，避免误把一个不相关的二手交易私聊当成活动会话）的会话
+ *      id——申请人可能对不同发起人分别建过这类会话，所以可能不止一条。
+ *   2. 在这批候选会话里，找一条发起人也是成员的——conversation_members_
+ *      select_of_own_conversations 这条 RLS（"能看到同一会话里的其它
+ *      成员，不只是自己那一行"）保证发起人能读到自己所在会话的其它成员，
+ *      这一步能查到。
+ * create_activity_conversation 自己的"获取或创建"逻辑保证同一对（申请人,
+ * 发起人）之间最多只有一条这类会话，所以第 2 步用 .maybeSingle() 是安全
+ * 的，不会因为命中多行而报错。
+ *
+ * 找不到时返回 null（不抛错）——调用方把这个当成"没有已有会话可以发通知"，
+ * 静默跳过，不阻塞同意/拒绝这个核心操作本身，见
+ * use-moderate-activity-participant-mutation.ts 的 notifyApplicant。
+ * 这是这个实现方式的已知局限：如果申请人当初申请时，
+ * create_activity_conversation 那一步因为网络问题失败了（notifyOrganizer
+ * 本身是 best-effort、失败只 console.error，不会重试），这里就找不到
+ * 会话，发起人处理申请时也就发不出"被同意/拒绝了"这条通知——这个概率
+ * 很低（申请这个核心操作和建会话这个副作用几乎总是一起成功或都还没
+ * 发生网络问题的中间状态），但不是不可能，比起为了这个边缘情况新增一个
+ * RPC，选择接受这个已知的小概率静默失败。
+ */
+export async function findExistingActivityConversation(input: {
+  createdByUserId: string;
+  otherUserId: string;
+}): Promise<{ conversationId: string } | null> {
+  const { data: candidates, error: candidatesError } = await getSupabaseClient()
+    .from("conversations")
+    .select("id")
+    .eq("type", "direct")
+    .is("post_id", null)
+    .is("deleted_at", null)
+    .eq("created_by", input.createdByUserId)
+    .overrideTypes<{ id: string }[]>();
+
+  if (candidatesError) {
+    throw new AppError(
+      candidatesError.message,
+      "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
+      candidatesError
+    );
+  }
+
+  const candidateIds = (candidates ?? []).map((row) => row.id);
+  if (candidateIds.length === 0) {
+    return null;
+  }
+
+  const { data: member, error: memberError } = await getSupabaseClient()
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", input.otherUserId)
+    .in("conversation_id", candidateIds)
+    .maybeSingle();
+
+  if (memberError) {
+    throw new AppError(memberError.message, "ACTIVITY_CONVERSATION_LOOKUP_FAILED", memberError);
+  }
+
+  return member ? { conversationId: member.conversation_id } : null;
+}
+
+/**
  * 创建（或获取已有的）"活动报名/退出通知"私聊会话——"一起去"功能第二批
  * 用（报名/退出活动时提醒发起人，见 activities-repository.ts /
  * use-toggle-activity-participation-mutation.ts）。

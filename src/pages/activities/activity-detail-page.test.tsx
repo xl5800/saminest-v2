@@ -52,7 +52,8 @@ const sampleActivityDetail = {
   participantCount: 2,
   contactMethod: "wechat",
   contactValue: "abc123",
-  status: "open"
+  status: "open",
+  requiresApproval: false
 };
 
 describe("ActivityDetailPage", () => {
@@ -68,7 +69,7 @@ describe("ActivityDetailPage", () => {
     useToggleActivityParticipationMutation.mockReset();
 
     useActivityParticipantsQuery.mockReturnValue({ data: [] });
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
     useToggleActivityParticipationMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
@@ -214,6 +215,22 @@ describe("ActivityDetailPage", () => {
     });
 
     expect(screen.getByRole("button", { name: "我要报名" })).toBeInTheDocument();
+  });
+
+  it("shows '申请加入' instead of '我要报名' when the activity's requiresApproval is true (P2), wiring ActivityDetail.requiresApproval through to the button", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityDetailQuery.mockReturnValue({
+      data: { ...sampleActivityDetail, requiresApproval: true },
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    expect(screen.getByRole("button", { name: "申请加入" })).toBeInTheDocument();
   });
 
   it("renders a 举报 link to /activities/:id/report (P0 activity reporting)", () => {

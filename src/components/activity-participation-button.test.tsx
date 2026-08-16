@@ -22,6 +22,14 @@ import { ActivityParticipationButton } from "./activity-participation-button";
 
 const initialAuthState = useAuthStore.getState();
 
+const defaultProps = {
+  activityId: "act-1",
+  activityStatus: "open",
+  organizerId: "organizer-1",
+  activityTitle: "周末吃火锅",
+  requiresApproval: false
+};
+
 describe("ActivityParticipationButton", () => {
   afterEach(() => {
     cleanup();
@@ -33,7 +41,7 @@ describe("ActivityParticipationButton", () => {
     useActivityParticipationQuery.mockReset();
     useToggleActivityParticipationMutation.mockReset();
 
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
     useToggleActivityParticipationMutation.mockReturnValue({
       mutate: mutateMock,
       isPending: false
@@ -41,31 +49,17 @@ describe("ActivityParticipationButton", () => {
   });
 
   it("shows a login link instead of a button when logged out", () => {
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
   });
 
-  it("calls the mutation to join when logged in, not yet joined, and the activity is open", () => {
+  it("calls the mutation to join (isCurrentlyJoined: false) when logged in, not participating, and the activity is open", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
 
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     const button = screen.getByRole("button", { name: "我要报名" });
     fireEvent.click(button);
@@ -76,24 +70,62 @@ describe("ActivityParticipationButton", () => {
         userId: "user-1",
         isCurrentlyJoined: false,
         organizerId: "organizer-1",
-        activityTitle: "周末吃火锅"
+        activityTitle: "周末吃火锅",
+        requiresApproval: false
       },
       expect.objectContaining({ onError: expect.any(Function) })
     );
   });
 
-  it("calls the mutation to leave when logged in and already joined", () => {
+  it("shows '申请加入' instead of '我要报名' when the activity requires approval and the user has not applied", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: true, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
+      <ActivityParticipationButton {...defaultProps} requiresApproval={true} />
     );
+
+    const button = screen.getByRole("button", { name: "申请加入" });
+    fireEvent.click(button);
+
+    expect(mutateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ isCurrentlyJoined: false, requiresApproval: true }),
+      expect.objectContaining({ onError: expect.any(Function) })
+    );
+  });
+
+  it("shows a disabled '申请中，等待发起人同意' button and does not call the mutation when participationStatus is 'pending'", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityParticipationQuery.mockReturnValue({ data: "pending", isPending: false });
+
+    renderWithProviders(
+      <ActivityParticipationButton {...defaultProps} requiresApproval={true} />
+    );
+
+    const button = screen.getByRole("button", { name: "申请中，等待发起人同意" });
+    expect(button).toBeDisabled();
+
+    fireEvent.click(button);
+    expect(mutateMock).not.toHaveBeenCalled();
+  });
+
+  it("shows plain text '申请已被拒绝' with no button at all when participationStatus is 'rejected'", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityParticipationQuery.mockReturnValue({ data: "rejected", isPending: false });
+
+    renderWithProviders(
+      <ActivityParticipationButton {...defaultProps} requiresApproval={true} />
+    );
+
+    expect(screen.getByText("申请已被拒绝")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
+  it("calls the mutation to leave (isCurrentlyJoined: true) when participationStatus is 'approved'", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityParticipationQuery.mockReturnValue({ data: "approved", isPending: false });
+
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     const button = screen.getByRole("button", { name: "退出活动" });
     fireEvent.click(button);
@@ -104,7 +136,8 @@ describe("ActivityParticipationButton", () => {
         userId: "user-1",
         isCurrentlyJoined: true,
         organizerId: "organizer-1",
-        activityTitle: "周末吃火锅"
+        activityTitle: "周末吃火锅",
+        requiresApproval: false
       },
       expect.objectContaining({ onError: expect.any(Function) })
     );
@@ -112,16 +145,9 @@ describe("ActivityParticipationButton", () => {
 
   it("styles '退出活动' as a secondary (outlined) button, distinct from the primary '我要报名' button", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: true, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: "approved", isPending: false });
 
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     const button = screen.getByRole("button", { name: "退出活动" });
     expect(button.className).toContain("border-border");
@@ -130,32 +156,20 @@ describe("ActivityParticipationButton", () => {
 
   it("keeps '我要报名' as the solid primary button", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
 
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     const button = screen.getByRole("button", { name: "我要报名" });
     expect(button.className).toContain("bg-primary");
   });
 
-  it("disables the join button and shows '报名已满' when the activity is not open and the user has not joined", () => {
+  it("disables the join button and shows '报名已满' when the activity is not open and the user has not participated", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="full"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
+      <ActivityParticipationButton {...defaultProps} activityStatus="full" />
     );
 
     const button = screen.getByRole("button", { name: "报名已满" });
@@ -165,17 +179,12 @@ describe("ActivityParticipationButton", () => {
     expect(mutateMock).not.toHaveBeenCalled();
   });
 
-  it("still allows leaving when the activity is not open but the user is joined", () => {
+  it("still allows leaving when the activity is not open but the user is approved", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: true, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: "approved", isPending: false });
 
     renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="full"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
+      <ActivityParticipationButton {...defaultProps} activityStatus="full" />
     );
 
     const button = screen.getByRole("button", { name: "退出活动" });
@@ -184,20 +193,13 @@ describe("ActivityParticipationButton", () => {
 
   it("disables the button and shows '处理中…' while the mutation is pending", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
     useToggleActivityParticipationMutation.mockReturnValue({
       mutate: mutateMock,
       isPending: true
     });
 
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     const button = screen.getByRole("button", { name: "处理中…" });
     expect(button).toBeDisabled();
@@ -208,16 +210,9 @@ describe("ActivityParticipationButton", () => {
 
   it("shows the error message for a known-safe error code (ACTIVITY_JOIN_FORBIDDEN)", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
 
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     fireEvent.click(screen.getByRole("button", { name: "我要报名" }));
 
@@ -233,18 +228,29 @@ describe("ActivityParticipationButton", () => {
     );
   });
 
+  it("shows the error message for the known-safe ACTIVITY_JOIN_REJECTED error code", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
+
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "我要报名" }));
+
+    const { onError } = mutateMock.mock.calls[0][1];
+    act(() => {
+      onError(new AppError("你的申请已被发起人拒绝，无法重新加入。", "ACTIVITY_JOIN_REJECTED"));
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "你的申请已被发起人拒绝，无法重新加入。"
+    );
+  });
+
   it("falls back to the generic error message for an unrecognized error code (does not leak raw DB error text)", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useActivityParticipationQuery.mockReturnValue({ data: false, isPending: false });
+    useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
 
-    renderWithProviders(
-      <ActivityParticipationButton
-        activityId="act-1"
-        activityStatus="open"
-        organizerId="organizer-1"
-        activityTitle="周末吃火锅"
-      />
-    );
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
 
     fireEvent.click(screen.getByRole("button", { name: "我要报名" }));
 

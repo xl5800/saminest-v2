@@ -29,6 +29,7 @@ export type Database = {
           location_id: string | null
           organizer_id: string
           participant_count: number
+          requires_approval: boolean
           start_at: string
           status: string
           tag_text: string | null
@@ -49,6 +50,7 @@ export type Database = {
           location_id?: string | null
           organizer_id: string
           participant_count?: number
+          requires_approval?: boolean
           start_at: string
           status?: string
           tag_text?: string | null
@@ -69,6 +71,7 @@ export type Database = {
           location_id?: string | null
           organizer_id?: string
           participant_count?: number
+          requires_approval?: boolean
           start_at?: string
           status?: string
           tag_text?: string | null
@@ -98,6 +101,7 @@ export type Database = {
           cancelled_at: string | null
           id: string
           joined_at: string
+          status: string
           user_id: string
         }
         Insert: {
@@ -105,6 +109,7 @@ export type Database = {
           cancelled_at?: string | null
           id?: string
           joined_at?: string
+          status?: string
           user_id: string
         }
         Update: {
@@ -112,6 +117,7 @@ export type Database = {
           cancelled_at?: string | null
           id?: string
           joined_at?: string
+          status?: string
           user_id?: string
         }
         Relationships: [
@@ -906,6 +912,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      approve_activity_participant: {
+        Args: { target_participant_id: string }
+        Returns: undefined
+      }
       approve_post: { Args: { target_post_id: string }; Returns: undefined }
       create_activity_conversation: {
         Args: { target_activity_id: string }
@@ -1022,6 +1032,10 @@ export type Database = {
           id: string
           role: string
         }[]
+      }
+      reject_activity_participant: {
+        Args: { target_participant_id: string }
+        Returns: undefined
       }
       reject_post: {
         Args: { rejection_note: string; target_post_id: string }

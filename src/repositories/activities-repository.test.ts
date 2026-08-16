@@ -5,7 +5,17 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
   const singleMock = vi.fn();
   const maybeSingleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  const chain = ["select", "eq", "is", "in", "gte", "order", "insert", "update"] as const;
+  const chain = [
+    "select",
+    "eq",
+    "neq",
+    "is",
+    "in",
+    "gte",
+    "order",
+    "insert",
+    "update"
+  ] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
   }
@@ -16,26 +26,31 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
 });
 
 const fromMock = vi.fn(() => queryBuilder);
+const rpcMock = vi.fn();
 
 vi.mock("../integrations/supabase/client", () => ({
-  getSupabaseClient: () => ({ from: fromMock })
+  getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
 import {
+  approveActivityParticipant,
   cancelActivity,
   createActivity,
   getActivityDetail,
-  isCurrentlyJoined,
+  getActivityParticipationStatus,
   joinActivity,
   leaveActivity,
   listActivities,
   listActivityParticipants,
   listMyJoinedActivities,
-  listMyOrganizedActivities
+  listMyOrganizedActivities,
+  listPendingActivityParticipants,
+  rejectActivityParticipant
 } from "./activities-repository";
 
 function resetAllMocks(): void {
   fromMock.mockClear();
+  rpcMock.mockReset();
   for (const key of Object.keys(queryBuilder)) {
     queryBuilder[key].mockClear();
   }
@@ -54,7 +69,7 @@ describe("listActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status"
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval"
     );
     expect(queryBuilder.in).toHaveBeenCalledWith("status", ["open", "full"]);
     expect(queryBuilder.gte).toHaveBeenCalledWith("start_at", expect.any(String));
@@ -78,7 +93,7 @@ describe("listActivities", () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith("location_id", "loc-1");
   });
 
-  it("maps rows to ActivityListItem, resolving the joined location name", async () => {
+  it("maps rows to ActivityListItem, resolving the joined location name and requiresApproval", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -93,7 +108,8 @@ describe("listActivities", () => {
           start_at: "2026-08-20T18:00:00.000Z",
           capacity: 4,
           participant_count: 2,
-          status: "open"
+          status: "open",
+          requires_approval: true
         }
       ],
       error: null
@@ -114,7 +130,8 @@ describe("listActivities", () => {
         startAt: "2026-08-20T18:00:00.000Z",
         capacity: 4,
         participantCount: 2,
-        status: "open"
+        status: "open",
+        requiresApproval: true
       }
     ]);
   });
@@ -134,7 +151,8 @@ describe("listActivities", () => {
           start_at: "2026-08-20T18:00:00.000Z",
           capacity: null,
           participant_count: 1,
-          status: "open"
+          status: "open",
+          requires_approval: false
         }
       ],
       error: null
@@ -176,14 +194,14 @@ describe("getActivityDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, location:locations(name), organizer:profiles(display_name)"
+      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "act-1");
     expect(queryBuilder.eq).not.toHaveBeenCalledWith("status", expect.anything());
     expect(queryBuilder.is).not.toHaveBeenCalled();
   });
 
-  it("maps a full row to ActivityDetail", async () => {
+  it("maps a full row to ActivityDetail, including requiresApproval", async () => {
     overrideTypesMock.mockResolvedValue({
       data: {
         id: "act-1",
@@ -201,6 +219,7 @@ describe("getActivityDetail", () => {
         contact_method: "wechat",
         contact_value: "abc123",
         status: "open",
+        requires_approval: true,
         location: { name: "Rockville" },
         organizer: { display_name: "Alice" }
       },
@@ -226,7 +245,8 @@ describe("getActivityDetail", () => {
       participantCount: 2,
       contactMethod: "wechat",
       contactValue: "abc123",
-      status: "open"
+      status: "open",
+      requiresApproval: true
     });
   });
 
@@ -248,6 +268,7 @@ describe("getActivityDetail", () => {
         contact_method: null,
         contact_value: null,
         status: "open",
+        requires_approval: false,
         location: null,
         organizer: null
       },
@@ -293,7 +314,8 @@ describe("createActivity", () => {
     startAt: "2026-08-20T18:00:00.000Z",
     capacity: 4,
     contactMethod: "wechat",
-    contactValue: "abc123"
+    contactValue: "abc123",
+    requiresApproval: false
   };
 
   it("inserts an activity without a status field (defers to the DB default) and returns the new id", async () => {
@@ -314,12 +336,23 @@ describe("createActivity", () => {
       start_at: "2026-08-20T18:00:00.000Z",
       capacity: 4,
       contact_method: "wechat",
-      contact_value: "abc123"
+      contact_value: "abc123",
+      requires_approval: false
     });
     const insertedPayload = queryBuilder.insert.mock.calls[0][0];
     expect(insertedPayload).not.toHaveProperty("status");
     expect(queryBuilder.select).toHaveBeenCalledWith("id");
     expect(result).toEqual({ id: "act-1" });
+  });
+
+  it("passes requiresApproval: true through to requires_approval in the insert payload", async () => {
+    singleMock.mockResolvedValue({ data: { id: "act-1" }, error: null });
+
+    await createActivity({ ...validInput, requiresApproval: true });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ requires_approval: true })
+    );
   });
 
   it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message on an RLS violation (42501)", async () => {
@@ -357,31 +390,51 @@ describe("createActivity", () => {
   });
 });
 
-describe("isCurrentlyJoined", () => {
+describe("getActivityParticipationStatus", () => {
   beforeEach(resetAllMocks);
 
-  it("queries for a non-cancelled participation row matching activity and user", async () => {
-    maybeSingleMock.mockResolvedValue({ data: { id: "row-1" }, error: null });
+  it("queries status/cancelled_at for the given activity and user (no cancelled_at filter — RLS lets a user always read their own row)", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { status: "approved", cancelled_at: null }, error: null });
 
-    await isCurrentlyJoined("act-1", "user-1");
+    await getActivityParticipationStatus("act-1", "user-1");
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
-    expect(queryBuilder.select).toHaveBeenCalledWith("id");
+    expect(queryBuilder.select).toHaveBeenCalledWith("status, cancelled_at");
     expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
     expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
-    expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
   });
 
-  it("returns true when a matching row is found", async () => {
-    maybeSingleMock.mockResolvedValue({ data: { id: "row-1" }, error: null });
+  it("returns 'approved' when the row is approved and not cancelled", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { status: "approved", cancelled_at: null }, error: null });
 
-    await expect(isCurrentlyJoined("act-1", "user-1")).resolves.toBe(true);
+    await expect(getActivityParticipationStatus("act-1", "user-1")).resolves.toBe("approved");
   });
 
-  it("returns false when no matching row is found", async () => {
+  it("returns 'pending' when the row is pending and not cancelled", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { status: "pending", cancelled_at: null }, error: null });
+
+    await expect(getActivityParticipationStatus("act-1", "user-1")).resolves.toBe("pending");
+  });
+
+  it("returns 'rejected' when the row is rejected and not cancelled", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { status: "rejected", cancelled_at: null }, error: null });
+
+    await expect(getActivityParticipationStatus("act-1", "user-1")).resolves.toBe("rejected");
+  });
+
+  it("returns null when no row is found", async () => {
     maybeSingleMock.mockResolvedValue({ data: null, error: null });
 
-    await expect(isCurrentlyJoined("act-1", "user-1")).resolves.toBe(false);
+    await expect(getActivityParticipationStatus("act-1", "user-1")).resolves.toBeNull();
+  });
+
+  it("returns null when the row exists but has been left (cancelled_at is not null), regardless of its stored status", async () => {
+    maybeSingleMock.mockResolvedValue({
+      data: { status: "approved", cancelled_at: "2026-08-01T00:00:00.000Z" },
+      error: null
+    });
+
+    await expect(getActivityParticipationStatus("act-1", "user-1")).resolves.toBeNull();
   });
 
   it("throws an AppError when the query fails", async () => {
@@ -390,7 +443,7 @@ describe("isCurrentlyJoined", () => {
       error: { message: "network down", code: "500" }
     });
 
-    await expect(isCurrentlyJoined("act-1", "user-1")).rejects.toMatchObject({
+    await expect(getActivityParticipationStatus("act-1", "user-1")).rejects.toMatchObject({
       code: "ACTIVITY_PARTICIPATION_CHECK_FAILED"
     });
   });
@@ -399,57 +452,104 @@ describe("isCurrentlyJoined", () => {
 describe("joinActivity", () => {
   beforeEach(resetAllMocks);
 
-  it("inserts a fresh participation row and returns on success (first-time join)", async () => {
+  it("inserts a fresh row with status 'approved' when requiresApproval is false", async () => {
     queryBuilder.insert.mockResolvedValueOnce({ error: null });
 
-    await joinActivity("act-1", "user-1");
+    await joinActivity("act-1", "user-1", false);
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     expect(queryBuilder.insert).toHaveBeenCalledWith({
       activity_id: "act-1",
-      user_id: "user-1"
+      user_id: "user-1",
+      status: "approved"
     });
     // 第一次 insert 就成功时，不应该再走 update 分支。
     expect(queryBuilder.update).not.toHaveBeenCalled();
   });
 
-  it("on a unique-violation (23505), re-joins by updating cancelled_at back to null", async () => {
+  it("inserts a fresh row with status 'pending' when requiresApproval is true", async () => {
+    queryBuilder.insert.mockResolvedValueOnce({ error: null });
+
+    await joinActivity("act-1", "user-1", true);
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith({
+      activity_id: "act-1",
+      user_id: "user-1",
+      status: "pending"
+    });
+  });
+
+  it("on a unique-violation (23505), checks the existing row's status first, then re-joins by updating cancelled_at back to null when it's not rejected", async () => {
     queryBuilder.insert.mockResolvedValueOnce({
       error: { message: "duplicate key", code: "23505" }
     });
-    maybeSingleMock.mockResolvedValue({ data: { id: "row-1" }, error: null });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { status: "approved" }, error: null })
+      .mockResolvedValueOnce({ data: { id: "row-1" }, error: null });
 
-    await joinActivity("act-1", "user-1");
+    await joinActivity("act-1", "user-1", false);
 
+    expect(queryBuilder.select).toHaveBeenCalledWith("status");
     expect(queryBuilder.update).toHaveBeenCalledWith({ cancelled_at: null });
     expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
     expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("throws a distinct ACTIVITY_JOIN_REJECTED AppError, without attempting the update, when the existing row's status is 'rejected'", async () => {
+    queryBuilder.insert.mockResolvedValueOnce({
+      error: { message: "duplicate key", code: "23505" }
+    });
+    maybeSingleMock.mockResolvedValueOnce({ data: { status: "rejected" }, error: null });
+
+    await expect(joinActivity("act-1", "user-1", false)).rejects.toMatchObject({
+      code: "ACTIVITY_JOIN_REJECTED",
+      message: "你的申请已被发起人拒绝，无法重新加入。"
+    });
+    expect(queryBuilder.update).not.toHaveBeenCalled();
+  });
+
+  it("throws ACTIVITY_JOIN_FAILED when the pre-check select itself fails", async () => {
+    queryBuilder.insert.mockResolvedValueOnce({
+      error: { message: "duplicate key", code: "23505" }
+    });
+    maybeSingleMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "select failed", code: "500" }
+    });
+
+    await expect(joinActivity("act-1", "user-1", false)).rejects.toMatchObject({
+      code: "ACTIVITY_JOIN_FAILED"
+    });
   });
 
   it("treats a no-op update after a 23505 (row already re-joined, e.g. by a concurrent request) as success", async () => {
     queryBuilder.insert.mockResolvedValueOnce({
       error: { message: "duplicate key", code: "23505" }
     });
-    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { status: "approved" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
 
-    await expect(joinActivity("act-1", "user-1")).resolves.toBeUndefined();
+    await expect(joinActivity("act-1", "user-1", false)).resolves.toBeUndefined();
   });
 
   it("throws ACTIVITY_JOIN_FAILED when the re-join update itself fails", async () => {
     queryBuilder.insert.mockResolvedValueOnce({
       error: { message: "duplicate key", code: "23505" }
     });
-    maybeSingleMock.mockResolvedValue({
-      data: null,
-      error: { message: "update failed", code: "500" }
-    });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { status: "approved" }, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "update failed", code: "500" }
+      });
 
-    await expect(joinActivity("act-1", "user-1")).rejects.toMatchObject({
+    await expect(joinActivity("act-1", "user-1", false)).rejects.toMatchObject({
       code: "ACTIVITY_JOIN_FAILED"
     });
   });
 
-  it("throws a generic ACTIVITY_JOIN_FORBIDDEN AppError (not ACCOUNT_RESTRICTED) on an RLS violation (42501), since multiple causes are possible", async () => {
+  it("throws a generic ACTIVITY_JOIN_FORBIDDEN AppError (not ACCOUNT_RESTRICTED) on an RLS violation (42501) at insert time, since multiple causes are possible", async () => {
     queryBuilder.insert.mockResolvedValueOnce({
       error: {
         message: "new row violates row-level security policy for table \"activity_participants\"",
@@ -457,7 +557,7 @@ describe("joinActivity", () => {
       }
     });
 
-    await expect(joinActivity("act-1", "user-1")).rejects.toMatchObject({
+    await expect(joinActivity("act-1", "user-1", false)).rejects.toMatchObject({
       code: "ACTIVITY_JOIN_FORBIDDEN"
     });
   });
@@ -467,7 +567,7 @@ describe("joinActivity", () => {
       error: { message: "network down", code: "500" }
     });
 
-    await expect(joinActivity("act-1", "user-1")).rejects.toMatchObject({
+    await expect(joinActivity("act-1", "user-1", false)).rejects.toMatchObject({
       code: "ACTIVITY_JOIN_FAILED"
     });
   });
@@ -580,7 +680,7 @@ describe("listMyOrganizedActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status"
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("organizer_id", "user-1");
     expect(queryBuilder.in).not.toHaveBeenCalled();
@@ -588,7 +688,7 @@ describe("listMyOrganizedActivities", () => {
     expect(queryBuilder.order).toHaveBeenCalledWith("start_at", { ascending: true });
   });
 
-  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId", async () => {
+  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId/requiresApproval", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -603,7 +703,8 @@ describe("listMyOrganizedActivities", () => {
           start_at: "2026-08-20T18:00:00.000Z",
           capacity: 4,
           participant_count: 2,
-          status: "cancelled"
+          status: "cancelled",
+          requires_approval: true
         }
       ],
       error: null
@@ -624,7 +725,8 @@ describe("listMyOrganizedActivities", () => {
         startAt: "2026-08-20T18:00:00.000Z",
         capacity: 4,
         participantCount: 2,
-        status: "cancelled"
+        status: "cancelled",
+        requiresApproval: true
       }
     ]);
   });
@@ -650,24 +752,26 @@ describe("listMyOrganizedActivities", () => {
 describe("listMyJoinedActivities", () => {
   beforeEach(resetAllMocks);
 
-  it("queries activity_participants for non-cancelled rows of the given user, with a nested activities select, ordered by joined_at descending", async () => {
+  it("queries activity_participants for non-cancelled, non-rejected rows of the given user, with status + nested activities select, ordered by joined_at descending", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listMyJoinedActivities("user-1");
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status)"
+      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
+    expect(queryBuilder.neq).toHaveBeenCalledWith("status", "rejected");
     expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: false });
   });
 
-  it("maps the nested activity of each row to ActivityListItem (including organizerId), including one whose status is 'cancelled' (the whole point of the new RLS policy)", async () => {
+  it("maps the nested activity of each row to MyJoinedActivityItem (including organizerId + participationStatus), including one whose activity status is 'cancelled' (the whole point of the new RLS policy)", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
+          status: "approved",
           activity: {
             id: "act-1",
             organizer_id: "organizer-1",
@@ -680,7 +784,8 @@ describe("listMyJoinedActivities", () => {
             start_at: "2026-08-20T18:00:00.000Z",
             capacity: null,
             participant_count: 0,
-            status: "cancelled"
+            status: "cancelled",
+            requires_approval: false
           }
         }
       ],
@@ -702,14 +807,46 @@ describe("listMyJoinedActivities", () => {
         startAt: "2026-08-20T18:00:00.000Z",
         capacity: null,
         participantCount: 0,
-        status: "cancelled"
+        status: "cancelled",
+        requiresApproval: false,
+        participationStatus: "approved"
       }
     ]);
   });
 
+  it("maps a pending row's participationStatus as 'pending'", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          status: "pending",
+          activity: {
+            id: "act-1",
+            organizer_id: "organizer-1",
+            channel: "food",
+            tag_text: null,
+            title: "需要审核的活动",
+            location: null,
+            landmark_text: null,
+            is_online: true,
+            start_at: "2026-08-20T18:00:00.000Z",
+            capacity: null,
+            participant_count: 0,
+            status: "open",
+            requires_approval: true
+          }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyJoinedActivities("user-1");
+
+    expect(result[0].participationStatus).toBe("pending");
+  });
+
   it("filters out rows whose nested activity is null, without throwing", async () => {
     overrideTypesMock.mockResolvedValue({
-      data: [{ activity: null }],
+      data: [{ status: "approved", activity: null }],
       error: null
     });
 
@@ -763,6 +900,126 @@ describe("cancelActivity", () => {
 
     await expect(cancelActivity("act-1")).rejects.toMatchObject({
       code: "ACTIVITY_CANCEL_NOT_FOUND"
+    });
+  });
+});
+
+describe("listPendingActivityParticipants", () => {
+  beforeEach(resetAllMocks);
+
+  it("returns an empty list without querying at all when given an empty array of activity ids", async () => {
+    const result = await listPendingActivityParticipants([]);
+
+    expect(result).toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("queries pending participants across the given activity ids, ordered by joined_at ascending, with a nested profile select", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listPendingActivityParticipants(["act-1", "act-2"]);
+
+    expect(fromMock).toHaveBeenCalledWith("activity_participants");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, activity_id, user_id, user:profiles(display_name)"
+    );
+    expect(queryBuilder.in).toHaveBeenCalledWith("activity_id", ["act-1", "act-2"]);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
+    expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: true });
+  });
+
+  it("maps rows to PendingActivityParticipant, including which activity each applicant belongs to", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "participant-1",
+          activity_id: "act-1",
+          user_id: "user-1",
+          user: { display_name: "Alice" }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listPendingActivityParticipants(["act-1"]);
+
+    expect(result).toEqual([
+      {
+        participantId: "participant-1",
+        activityId: "act-1",
+        userId: "user-1",
+        displayName: "Alice"
+      }
+    ]);
+  });
+
+  it("falls back to a placeholder display name when the joined profile is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [{ id: "participant-1", activity_id: "act-1", user_id: "user-1", user: null }],
+      error: null
+    });
+
+    const result = await listPendingActivityParticipants(["act-1"]);
+
+    expect(result[0].displayName).toBe("未知用户");
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listPendingActivityParticipants(["act-1"])).rejects.toMatchObject({
+      code: "ACTIVITY_PENDING_PARTICIPANTS_LIST_FAILED"
+    });
+  });
+});
+
+describe("approveActivityParticipant", () => {
+  beforeEach(resetAllMocks);
+
+  it("calls the approve_activity_participant RPC with the given participant id", async () => {
+    rpcMock.mockResolvedValue({ error: null });
+
+    await approveActivityParticipant("participant-1");
+
+    expect(rpcMock).toHaveBeenCalledWith("approve_activity_participant", {
+      target_participant_id: "participant-1"
+    });
+  });
+
+  it("throws an AppError when the RPC fails (e.g. not the organizer, or not pending)", async () => {
+    rpcMock.mockResolvedValue({
+      error: { message: "only the activity organizer can approve participants" }
+    });
+
+    await expect(approveActivityParticipant("participant-1")).rejects.toMatchObject({
+      code: "ACTIVITY_PARTICIPANT_APPROVE_FAILED"
+    });
+  });
+});
+
+describe("rejectActivityParticipant", () => {
+  beforeEach(resetAllMocks);
+
+  it("calls the reject_activity_participant RPC with the given participant id", async () => {
+    rpcMock.mockResolvedValue({ error: null });
+
+    await rejectActivityParticipant("participant-1");
+
+    expect(rpcMock).toHaveBeenCalledWith("reject_activity_participant", {
+      target_participant_id: "participant-1"
+    });
+  });
+
+  it("throws an AppError when the RPC fails (e.g. not the organizer, or not pending)", async () => {
+    rpcMock.mockResolvedValue({
+      error: { message: "participant is not pending" }
+    });
+
+    await expect(rejectActivityParticipant("participant-1")).rejects.toMatchObject({
+      code: "ACTIVITY_PARTICIPANT_REJECT_FAILED"
     });
   });
 });

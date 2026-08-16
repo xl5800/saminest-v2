@@ -14,7 +14,8 @@ const validInput: ActivityFormInput = {
   startAt: "2099-01-01T10:00",
   capacity: "4",
   contactMethod: "wechat",
-  contactValue: "abc123"
+  contactValue: "abc123",
+  requiresApproval: false
 };
 
 describe("validateActivityInput", () => {
@@ -34,8 +35,17 @@ describe("validateActivityInput", () => {
       startAt: new Date("2099-01-01T10:00").toISOString(),
       capacity: 4,
       contactMethod: "wechat",
-      contactValue: "abc123"
+      contactValue: "abc123",
+      requiresApproval: false
     });
+  });
+
+  it("passes requiresApproval through unchanged when true", () => {
+    const result = validateActivityInput({ ...validInput, requiresApproval: true });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.requiresApproval).toBe(true);
   });
 
   it("fails when channel is empty", () => {
