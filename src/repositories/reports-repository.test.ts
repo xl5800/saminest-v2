@@ -149,7 +149,7 @@ describe("listReportsForModeration", () => {
 
     expect(fromMock).toHaveBeenCalledWith("reports");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, reason_code, created_at, target_type, target_id, reporter:profiles!reports_reporter_id_fkey(display_name)"
+      "id, reason_code, description, created_at, target_type, target_id, reporter:profiles!reports_reporter_id_fkey(display_name)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
@@ -169,6 +169,7 @@ describe("listReportsForModeration", () => {
         {
           id: "report-1",
           reason_code: "spam",
+          description: "看起来像广告",
           created_at: "2026-07-01T00:00:00.000Z",
           target_type: "post",
           target_id: "post-1",
@@ -184,6 +185,7 @@ describe("listReportsForModeration", () => {
       {
         id: "report-1",
         reasonCode: "spam",
+        description: "看起来像广告",
         createdAt: "2026-07-01T00:00:00.000Z",
         targetType: "post",
         targetId: "post-1",

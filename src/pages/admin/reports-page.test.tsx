@@ -30,6 +30,7 @@ import { AdminReportsPage } from "./reports-page";
 const sampleReport = {
   id: "report-1",
   reasonCode: "spam",
+  description: "看起来像广告",
   createdAt: "2026-07-01T00:00:00.000Z",
   targetType: "post",
   targetId: "post-1",
@@ -65,6 +66,22 @@ describe("AdminReportsPage", () => {
     const row = item.closest("li");
     expect(row).toHaveTextContent("Bob");
     expect(row).toHaveTextContent("post / post-1");
+  });
+
+  it("renders the reporter's description text so admins can see what was reported", async () => {
+    listReportsForModeration.mockResolvedValue([sampleReport]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByText("看起来像广告")).toBeInTheDocument();
+  });
+
+  it("shows a placeholder when the reporter left no description", async () => {
+    listReportsForModeration.mockResolvedValue([{ ...sampleReport, description: null }]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByText("（举报人未填写补充说明）")).toBeInTheDocument();
   });
 
   it("renders the target as a clickable link to /post/:id when target_type is 'post'", async () => {

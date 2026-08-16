@@ -104,6 +104,7 @@ export async function createReport(
 export interface AdminReportListItem {
   id: string;
   reasonCode: string;
+  description: string | null;
   createdAt: string;
   targetType: string;
   targetId: string;
@@ -113,6 +114,7 @@ export interface AdminReportListItem {
 interface AdminReportRow {
   id: string;
   reason_code: string;
+  description: string | null;
   created_at: string;
   target_type: string;
   target_id: string;
@@ -142,7 +144,7 @@ export async function listReportsForModeration(
   const { data, error } = await getSupabaseClient()
     .from("reports")
     .select(
-      "id, reason_code, created_at, target_type, target_id, reporter:profiles!reports_reporter_id_fkey(display_name)"
+      "id, reason_code, description, created_at, target_type, target_id, reporter:profiles!reports_reporter_id_fkey(display_name)"
     )
     .eq("status", status)
     .order("created_at", { ascending: true })
@@ -155,6 +157,7 @@ export async function listReportsForModeration(
   return (data ?? []).map((row) => ({
     id: row.id,
     reasonCode: row.reason_code,
+    description: row.description,
     createdAt: row.created_at,
     targetType: row.target_type,
     targetId: row.target_id,

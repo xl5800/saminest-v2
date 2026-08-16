@@ -294,6 +294,9 @@ export function AdminReportsPage() {
                   )}
                 </span>
                 <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(report.createdAt)}</span>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-text">
+                  {report.description ? report.description : "（举报人未填写补充说明）"}
+                </p>
                 {rowErrors[report.id] ? (
                   <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                     {rowErrors[report.id]}
