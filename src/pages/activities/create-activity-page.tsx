@@ -1,7 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { useLocationsQuery } from "../../features/locations/use-locations-query";
+import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import {
   ACTIVITY_CHANNEL_OPTIONS,
   createActivity
@@ -48,8 +48,8 @@ export function CreateActivityPage() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
 
-  const { data: locations, isPending: locationsPending, isError: locationsError } =
-    useLocationsQuery();
+  const { data: regions, isPending: regionsPending, isError: regionsError } =
+    useActivityRegionsQuery();
 
   const [channel, setChannel] = useState("");
   const [tagText, setTagText] = useState("");
@@ -171,7 +171,7 @@ export function CreateActivityPage() {
             />
           </label>
 
-          <label className="mb-4 block text-sm font-medium text-text">
+          <label className="mb-1 block text-sm font-medium text-text">
             标题
             <input
               type="text"
@@ -181,6 +181,9 @@ export function CreateActivityPage() {
               className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
           </label>
+          <p className="mb-4 text-xs text-text-muted">
+            具体位置可以写进标题里，比如"Arlington 周末爬山搭子"。
+          </p>
 
           <label className="mb-4 block text-sm font-medium text-text">
             说明（人数、AA、性别偏好等都可以写在这里）
@@ -199,28 +202,28 @@ export function CreateActivityPage() {
               onChange={(event) => setIsOnline(event.target.checked)}
               className="h-4 w-4 rounded border-border text-primary focus:outline-none focus:ring-1 focus:ring-primary"
             />
-            线上活动（不需要选城市）
+            线上活动（不需要选州）
           </label>
 
           <label className="mb-1 block text-sm font-medium text-text">
-            城市{isOnline ? "（可选）" : ""}
+            州{isOnline ? "（可选）" : ""}
             <select
               value={locationId}
               onChange={(event) => setLocationId(event.target.value)}
-              disabled={locationsPending}
+              disabled={regionsPending}
               className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
             >
-              <option value="">{isOnline ? "不选择城市" : "请选择城市"}</option>
-              {(locations ?? []).map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
+              <option value="">{isOnline ? "不选择州" : "请选择州"}</option>
+              {(regions ?? []).map((region) => (
+                <option key={region.id} value={region.id}>
+                  {region.name}
                 </option>
               ))}
             </select>
           </label>
-          {locationsError ? (
+          {regionsError ? (
             <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              城市加载失败，请刷新页面重试。
+              州加载失败，请刷新页面重试。
             </p>
           ) : (
             <div className="mb-4" />

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { useActivitiesQuery } from "../../features/activities/use-activities-query";
-import { useLocationsQuery } from "../../features/locations/use-locations-query";
+import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import {
   ACTIVITY_CHANNEL_OPTIONS,
   getActivityChannelMeta
@@ -24,9 +24,10 @@ import {
  * 一步到位的东西）。
  *
  * 频道筛选用 ACTIVITY_CHANNEL_OPTIONS 渲染成一排 pill（复用
- * category-nav.tsx 的视觉风格：h-11 圆角胶囊 + 选中态 bg-accent），城市
- * 筛选复用现有的 useLocationsQuery（发布表单也在用同一个 hook/下拉数据），
- * 不是真实地理距离，是设计文档第 5 节明确说的"同城市"筛选。
+ * category-nav.tsx 的视觉风格：h-11 圆角胶囊 + 选中态 bg-accent），地区
+ * 筛选用 useActivityRegionsQuery——只到"州"这一级（DC/VA/MD），不是具体
+ * 城市；发布表单也不再选城市，改成发起人自己把具体位置写进标题，见
+ * create-activity-page.tsx 和 docs/01_Product/FindBuddy-Design.md。
  */
 export function ActivityListPage() {
   const [channel, setChannel] = useState<string>("");
@@ -36,7 +37,7 @@ export function ActivityListPage() {
     channel: channel || undefined,
     locationId: locationId || undefined
   });
-  const { data: locations } = useLocationsQuery();
+  const { data: regions } = useActivityRegionsQuery();
 
   const inactivePillClassName =
     "flex h-11 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
@@ -70,16 +71,16 @@ export function ActivityListPage() {
       </nav>
 
       <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-        城市
+        州
         <select
           value={locationId}
           onChange={(event) => setLocationId(event.target.value)}
           className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
         >
-          <option value="">全部城市</option>
-          {(locations ?? []).map((location) => (
-            <option key={location.id} value={location.id}>
-              {location.name}
+          <option value="">全部地区</option>
+          {(regions ?? []).map((region) => (
+            <option key={region.id} value={region.id}>
+              {region.name}
             </option>
           ))}
         </select>

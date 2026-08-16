@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActivities, listActiveLocations } = vi.hoisted(() => ({
+const { listActivities, listActiveActivityRegions } = vi.hoisted(() => ({
   listActivities: vi.fn(),
-  listActiveLocations: vi.fn()
+  listActiveActivityRegions: vi.fn()
 }));
 
 vi.mock("../../repositories/activities-repository", async (importOriginal) => {
@@ -11,7 +11,7 @@ vi.mock("../../repositories/activities-repository", async (importOriginal) => {
   return { ...actual, listActivities };
 });
 vi.mock("../../repositories/locations-repository", () => ({
-  listActiveLocations
+  listActiveActivityRegions
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -38,8 +38,8 @@ describe("ActivityListPage", () => {
 
   beforeEach(() => {
     listActivities.mockReset();
-    listActiveLocations.mockReset();
-    listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
+    listActiveActivityRegions.mockReset();
+    listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA" }]);
   });
 
   it("shows a loading message before the query resolves", () => {
@@ -90,7 +90,7 @@ describe("ActivityListPage", () => {
     expect(link).toHaveTextContent("线上");
   });
 
-  it("queries with no channel/city filter by default", async () => {
+  it("queries with no channel/region filter by default", async () => {
     listActivities.mockResolvedValue([]);
 
     renderWithProviders(<ActivityListPage />);
@@ -114,14 +114,14 @@ describe("ActivityListPage", () => {
     });
   });
 
-  it("re-queries with the selected city when the city dropdown changes", async () => {
+  it("re-queries with the selected region when the region dropdown changes", async () => {
     listActivities.mockResolvedValue([]);
 
     renderWithProviders(<ActivityListPage />);
     await waitFor(() => expect(listActivities).toHaveBeenCalled());
     listActivities.mockClear();
 
-    const select = await screen.findByLabelText("城市");
+    const select = await screen.findByLabelText("州");
     fireEvent.change(select, { target: { value: "loc-1" } });
 
     await waitFor(() => {

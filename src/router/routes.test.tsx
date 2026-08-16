@@ -7,6 +7,7 @@ const {
   listActiveCategories,
   listAllCategoriesForAdmin,
   listActiveLocations,
+  listActiveActivityRegions,
   listApprovedPosts,
   listPendingPosts,
   listAllPosts,
@@ -32,6 +33,7 @@ const {
   listActiveCategories: vi.fn(),
   listAllCategoriesForAdmin: vi.fn(),
   listActiveLocations: vi.fn(),
+  listActiveActivityRegions: vi.fn(),
   listApprovedPosts: vi.fn(),
   listPendingPosts: vi.fn(),
   listAllPosts: vi.fn(),
@@ -60,7 +62,8 @@ vi.mock("../repositories/categories-repository", () => ({
   listAllCategoriesForAdmin
 }));
 vi.mock("../repositories/locations-repository", () => ({
-  listActiveLocations
+  listActiveLocations,
+  listActiveActivityRegions
 }));
 vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
@@ -340,6 +343,7 @@ describe("app routes", () => {
     listActiveCategories.mockReset();
     listAllCategoriesForAdmin.mockReset();
     listActiveLocations.mockReset();
+    listActiveActivityRegions.mockReset();
     listApprovedPosts.mockReset();
     listPendingPosts.mockReset();
     listAllPosts.mockReset();
@@ -365,6 +369,7 @@ describe("app routes", () => {
     ]);
     listAllCategoriesForAdmin.mockResolvedValue([]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
+    listActiveActivityRegions.mockResolvedValue([{ id: "region-1", name: "VA" }]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
     getPostDetail.mockResolvedValue(null);
     listPendingPosts.mockResolvedValue([]);
@@ -443,7 +448,7 @@ describe("app routes", () => {
 
     expect(screen.getByRole("heading", { name: "发起一起去" })).toBeInTheDocument();
     expect(
-      await screen.findByRole("option", { name: "Rockville" })
+      await screen.findByRole("option", { name: "VA" })
     ).toBeInTheDocument();
   });
 

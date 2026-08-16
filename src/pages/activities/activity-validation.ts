@@ -110,12 +110,14 @@ export function validateActivityInput(input: ActivityFormInput): ActivityValidat
     );
   }
 
-  // 线下活动（!isOnline）城市必选；线上活动可以跳过，见设计文档 3.1 节
+  // 线下活动（!isOnline）州必选；线上活动可以跳过，见设计文档 3.1 节
   // "is_online = false 时 location_id 不能为空，应用层校验"——数据库不会
   // 用 check 约束强制这条规则（跟 posts 的 price_amount/price_label 互斥
-  // 关系一样不做数据库层强制），这里是唯一挡这条规则的地方。
+  // 关系一样不做数据库层强制），这里是唯一挡这条规则的地方。locationId
+  // 字段名不变，含义也还是外键指向 locations.id，只是现在指向的是
+  // type = 'state' 的行（DC/VA/MD），不再是具体城市。
   if (!input.isOnline && !locationIdRaw) {
-    return fail("ACTIVITY_LOCATION_REQUIRED", "线下活动请选择城市。");
+    return fail("ACTIVITY_LOCATION_REQUIRED", "线下活动请选择州。");
   }
   const locationId = locationIdRaw || null;
 

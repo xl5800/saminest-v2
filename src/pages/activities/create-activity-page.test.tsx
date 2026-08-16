@@ -1,14 +1,14 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActiveLocations, createActivity, navigateMock } = vi.hoisted(() => ({
-  listActiveLocations: vi.fn(),
+const { listActiveActivityRegions, createActivity, navigateMock } = vi.hoisted(() => ({
+  listActiveActivityRegions: vi.fn(),
   createActivity: vi.fn(),
   navigateMock: vi.fn()
 }));
 
 vi.mock("../../repositories/locations-repository", () => ({
-  listActiveLocations
+  listActiveActivityRegions
 }));
 vi.mock("../../repositories/activities-repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../repositories/activities-repository")>();
@@ -34,7 +34,7 @@ function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/说明/), {
     target: { value: "一起吃火锅，AA制" }
   });
-  fireEvent.change(screen.getByLabelText(/^城市/), { target: { value: "loc-1" } });
+  fireEvent.change(screen.getByLabelText(/^州/), { target: { value: "loc-1" } });
   fireEvent.change(screen.getByLabelText(/开始时间/), {
     target: { value: "2099-01-01T10:00" }
   });
@@ -47,19 +47,19 @@ describe("CreateActivityPage", () => {
 
   beforeEach(() => {
     useAuthStore.setState(initialAuthState, true);
-    listActiveLocations.mockReset();
+    listActiveActivityRegions.mockReset();
     createActivity.mockReset();
     navigateMock.mockReset();
 
-    listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
+    listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA" }]);
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
   });
 
-  it("renders location options loaded from the database, not hardcoded", async () => {
+  it("renders region options loaded from the database, not hardcoded", async () => {
     renderWithProviders(<CreateActivityPage />);
 
-    expect(await screen.findByRole("option", { name: "Rockville" })).toBeInTheDocument();
-    expect(listActiveLocations).toHaveBeenCalled();
+    expect(await screen.findByRole("option", { name: "VA" })).toBeInTheDocument();
+    expect(listActiveActivityRegions).toHaveBeenCalled();
   });
 
   it("does not render any field for organizer_id or status", () => {
@@ -71,13 +71,13 @@ describe("CreateActivityPage", () => {
 
   it("blocks submission and shows the validation message when the title is empty", async () => {
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fireEvent.change(screen.getByLabelText(/频道/), { target: { value: "food" } });
     fireEvent.change(screen.getByLabelText(/说明/), {
       target: { value: "一起吃火锅，AA制" }
     });
-    fireEvent.change(screen.getByLabelText(/^城市/), { target: { value: "loc-1" } });
+    fireEvent.change(screen.getByLabelText(/^州/), { target: { value: "loc-1" } });
     fireEvent.change(screen.getByLabelText(/开始时间/), {
       target: { value: "2099-01-01T10:00" }
     });
@@ -87,22 +87,22 @@ describe("CreateActivityPage", () => {
     expect(createActivity).not.toHaveBeenCalled();
   });
 
-  it("blocks submission when the activity is offline and no city is selected", async () => {
+  it("blocks submission when the activity is offline and no region is selected", async () => {
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fillRequiredFields();
-    fireEvent.change(screen.getByLabelText(/^城市/), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/^州/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "发布活动" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("线下活动请选择城市。");
+    expect(await screen.findByRole("alert")).toHaveTextContent("线下活动请选择州。");
     expect(createActivity).not.toHaveBeenCalled();
   });
 
-  it("allows submission without a city when '线上活动' is checked", async () => {
+  it("allows submission without a region when '线上活动' is checked", async () => {
     createActivity.mockResolvedValue({ id: "act-999" });
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fireEvent.change(screen.getByLabelText(/频道/), { target: { value: "food" } });
     fireEvent.change(screen.getByLabelText(/标题/), { target: { value: "线上小聚" } });
@@ -123,7 +123,7 @@ describe("CreateActivityPage", () => {
   it("submits organizerId from the auth store, maps all fields through createActivity, and navigates to the new activity's detail page", async () => {
     createActivity.mockResolvedValue({ id: "act-999" });
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fillRequiredFields();
     fireEvent.change(screen.getByLabelText(/细分标签/), { target: { value: "火锅" } });
@@ -157,7 +157,7 @@ describe("CreateActivityPage", () => {
   it("submits requiresApproval: true when the '需要我同意才能加入' checkbox is checked", async () => {
     createActivity.mockResolvedValue({ id: "act-999" });
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByLabelText(/需要我同意才能加入/));
@@ -173,7 +173,7 @@ describe("CreateActivityPage", () => {
   it("shows a generic error message and does not navigate when createActivity fails", async () => {
     createActivity.mockRejectedValue(new Error("insert failed"));
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布活动" }));
@@ -190,7 +190,7 @@ describe("CreateActivityPage", () => {
       )
     );
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "Rockville" });
+    await screen.findByRole("option", { name: "VA" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布活动" }));
