@@ -9,13 +9,6 @@ export const config = {
   matcher: "/post/:id"
 };
 
-// 不止匹配"微信爬虫"，也故意匹配真实用户在微信/Facebook/Twitter/WhatsApp
-// 内置浏览器里正常打开这个链接的请求——这些内置浏览器生成分享预览卡片时
-// 走的也是同一条"抓取时不执行 JS"的路径，需要同样的服务端注入。真人在
-// 这些内置浏览器里点开链接后，SPA 照常跑起来，用户体验完全不受影响
-// （见下面对 originHtml 的处理方式）。
-const SOCIAL_UA_MARKERS = ["MicroMessenger", "facebookexternalhit", "Twitterbot", "WhatsApp"];
-
 const DESCRIPTION_MAX_LENGTH = 200;
 
 interface PostImageRow {
@@ -74,20 +67,18 @@ function truncate(text: string, maxLength: number): string {
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
 }
 
-function isSocialUserAgent(userAgent: string): boolean {
-  const lowerUserAgent = userAgent.toLowerCase();
-  return SOCIAL_UA_MARKERS.some((marker) => lowerUserAgent.includes(marker.toLowerCase()));
-}
-
+// 原来这里有一道"只认微信/Facebook/Twitter/WhatsApp 这几个 User-Agent
+// 关键字才查数据库注入 OG 标签，其余请求直接放行"的前置判断，是为了给
+// 普通用户请求省一次数据库查询。但这个判断依赖一份人工维护的关键字名单
+// （SOCIAL_UA_MARKERS），微信生成分享卡片实际用的是另一个后台抓取
+// 机器人，跟人在微信里点开链接时浏览器上报的 `MicroMessenger` 不是
+// 同一个 UA——分享出去的卡片没有标题/图片，就是因为这个机器人的真实 UA
+// 没在名单里，请求被直接放行、拿到手的是没有任何 OG 标签的默认页面。
+// 腾讯没有公开这个抓取机器人的 UA 字符串，而且不排除以后还会变，与其
+// 继续猜名单，不如干脆去掉这道判断——`/post/:id` 这一条路由现在的访问量
+// 不大，每次请求多查一次数据库这点开销完全可以接受，用"总是正确"换掉
+// "省一次查询但可能漏掉没见过的爬虫"。
 export default async function middleware(request: Request): Promise<Response> {
-  const userAgent = request.headers.get("user-agent") ?? "";
-
-  // 最重要的一步优化放在最前面：普通用户请求直接放行，不产生任何额外的
-  // 数据库查询开销。
-  if (!isSocialUserAgent(userAgent)) {
-    return next();
-  }
-
   const url = new URL(request.url);
   const postId = url.pathname.match(/^\/post\/([^/]+)\/?$/)?.[1];
   if (!postId) {
