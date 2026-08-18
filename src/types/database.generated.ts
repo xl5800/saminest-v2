@@ -280,6 +280,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           last_message_at: string | null
+          last_message_preview: string | null
           origin_type: string
           post_id: string | null
           type: string
@@ -291,6 +292,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           last_message_at?: string | null
+          last_message_preview?: string | null
           origin_type: string
           post_id?: string | null
           type?: string
@@ -302,6 +304,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           last_message_at?: string | null
+          last_message_preview?: string | null
           origin_type?: string
           post_id?: string | null
           type?: string
@@ -341,24 +344,34 @@ export type Database = {
       }
       favorites: {
         Row: {
+          activity_id: string | null
           created_at: string
           id: string
-          post_id: string
+          post_id: string | null
           user_id: string
         }
         Insert: {
+          activity_id?: string | null
           created_at?: string
           id?: string
-          post_id: string
+          post_id?: string | null
           user_id: string
         }
         Update: {
+          activity_id?: string | null
           created_at?: string
           id?: string
-          post_id?: string
+          post_id?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "favorites_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "favorites_post_id_fkey"
             columns: ["post_id"]
@@ -1027,9 +1040,17 @@ export type Database = {
         Args: { target_conversation_id: string }
         Returns: boolean
       }
+      is_activity_participant: {
+        Args: { target_activity_id: string }
+        Returns: boolean
+      }
       is_admin: { Args: never; Returns: boolean }
       is_conversation_member: {
         Args: { target_conversation_id: string }
+        Returns: boolean
+      }
+      is_fellow_activity_participant: {
+        Args: { target_activity_id: string }
         Returns: boolean
       }
       list_profiles_for_admin: {

@@ -194,7 +194,7 @@ describe("getActivityDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name)"
+      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "act-1");
     expect(queryBuilder.eq).not.toHaveBeenCalledWith("status", expect.anything());
@@ -221,7 +221,7 @@ describe("getActivityDetail", () => {
         status: "open",
         requires_approval: true,
         location: { name: "Rockville" },
-        organizer: { display_name: "Alice" }
+        organizer: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" }
       },
       error: null
     });
@@ -232,6 +232,7 @@ describe("getActivityDetail", () => {
       id: "act-1",
       organizerId: "user-1",
       organizerDisplayName: "Alice",
+      organizerAvatarUrl: "https://img.example.com/alice.jpg",
       channel: "food",
       tagText: "火锅",
       title: "周末吃火锅",
@@ -278,6 +279,7 @@ describe("getActivityDetail", () => {
     const result = await getActivityDetail("act-1");
 
     expect(result?.organizerDisplayName).toBe("未知用户");
+    expect(result?.organizerAvatarUrl).toBeNull();
     expect(result?.locationName).toBeNull();
   });
 
@@ -612,23 +614,32 @@ describe("leaveActivity", () => {
 describe("listActivityParticipants", () => {
   beforeEach(resetAllMocks);
 
-  it("queries non-cancelled participants for the activity, ordered by joined_at ascending, with a nested profile select", async () => {
+  it("queries non-cancelled, approved participants for the activity, ordered by joined_at ascending, with a nested profile select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listActivityParticipants("act-1");
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
-    expect(queryBuilder.select).toHaveBeenCalledWith("user_id, user:profiles(display_name)");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "user_id, user:profiles(display_name, avatar_url)"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
+    // 顺手修的 bug：过滤掉 pending/rejected，只保留已确认参与者，跟
+    // sync_activity_participant_count() 触发器统计 participant_count 时
+    // 的口径一致。
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
     expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: true });
   });
 
-  it("maps rows to ActivityParticipant", async () => {
+  it("maps rows to ActivityParticipant, including avatarUrl", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
-        { user_id: "user-1", user: { display_name: "Alice" } },
-        { user_id: "user-2", user: { display_name: "Bob" } }
+        {
+          user_id: "user-1",
+          user: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" }
+        },
+        { user_id: "user-2", user: { display_name: "Bob", avatar_url: null } }
       ],
       error: null
     });
@@ -636,12 +647,12 @@ describe("listActivityParticipants", () => {
     const result = await listActivityParticipants("act-1");
 
     expect(result).toEqual([
-      { userId: "user-1", displayName: "Alice" },
-      { userId: "user-2", displayName: "Bob" }
+      { userId: "user-1", displayName: "Alice", avatarUrl: "https://img.example.com/alice.jpg" },
+      { userId: "user-2", displayName: "Bob", avatarUrl: null }
     ]);
   });
 
-  it("falls back to a placeholder display name when the joined profile is missing", async () => {
+  it("falls back to a placeholder display name and a null avatarUrl when the joined profile is missing", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [{ user_id: "user-1", user: null }],
       error: null
@@ -650,6 +661,7 @@ describe("listActivityParticipants", () => {
     const result = await listActivityParticipants("act-1");
 
     expect(result[0].displayName).toBe("未知用户");
+    expect(result[0].avatarUrl).toBeNull();
   });
 
   it("returns an empty list without throwing when RLS filters out every row (not the organizer, not currently joined)", async () => {

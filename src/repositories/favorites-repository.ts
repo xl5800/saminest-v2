@@ -28,6 +28,15 @@ export interface RemoveFavoriteInput {
 /**
  * 返回某个用户收藏的所有帖子 id，用来判断某个帖子是否已被当前用户收藏。
  * 越权保护交给 favorites 表自己的 RLS（favorites_select_own），这里不重复判断。
+ *
+ * `post_id` 这一列在收藏活动这批改动（add_activity_favorites_support
+ * 迁移）之后从 not null 变成了可空——这个函数只关心收藏帖子的行，
+ * 数据库层面的 favorites_target_check 约束保证一行不可能同时
+ * post_id/activity_id 都为空，但这个函数查出来的行理论上可能混入收藏
+ * 活动的行（activity_id 不为空、post_id 为空），所以这里要按
+ * `row.post_id !== null` 过滤一遍，不能直接假设查到的每一行 post_id
+ * 都有值——这跟 listFavoritedActivityIds 反过来过滤 activity_id 是同一个
+ * 道理。
  */
 export async function listFavoritedPostIds(userId: string): Promise<string[]> {
   const { data, error } = await getSupabaseClient()
@@ -39,7 +48,9 @@ export async function listFavoritedPostIds(userId: string): Promise<string[]> {
     throw new AppError(error.message, "FAVORITES_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => row.post_id);
+  return (data ?? [])
+    .map((row) => row.post_id)
+    .filter((postId): postId is string => postId !== null);
 }
 
 /**
@@ -91,6 +102,90 @@ export async function removeFavorite(input: RemoveFavoriteInput): Promise<void> 
 
   if (error) {
     throw new AppError(error.message, "FAVORITE_REMOVE_FAILED", error);
+  }
+}
+
+export interface AddActivityFavoriteInput {
+  userId: string;
+  activityId: string;
+}
+
+export interface RemoveActivityFavoriteInput {
+  userId: string;
+  activityId: string;
+}
+
+/**
+ * 收藏活动这一批（活动详情页头像堆叠改版）：跟上面的帖子收藏三件套
+ * （listFavoritedPostIds/addFavorite/removeFavorite）是同一套读写逻辑，
+ * 只是换成 activity_id 那一列。故意保持三个独立函数，不写成一个
+ * "target: 'post' | 'activity'"的多态函数——这个仓库里已经有
+ * createDirectConversation/createActivityConversation/
+ * createProfileConversation 三个各自独立、不共享一个多态入口的先例（见
+ * conversations-repository.ts），这里延续同一个风格：调用方（
+ * FavoriteButton / ActivityFavoriteButton）本来就是两个不同的组件，各自
+ * 清楚自己要收藏的是帖子还是活动，不需要一个多态函数替它们做判断。
+ *
+ * "我的收藏"页面展示完整活动信息的 listFavoritedActivities 这次不做——
+ * 跟 listFavoritedPosts 是同一个用途，但那是一个独立的产品入口（收藏列表
+ * 页），这次任务卡只要求"收藏按钮能读/写"，不要求收藏列表页也支持活动，
+ * 范围之外的东西不顺带做。
+ */
+export async function listFavoritedActivityIds(userId: string): Promise<string[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("favorites")
+    .select("activity_id")
+    .eq("user_id", userId)
+    .not("activity_id", "is", null);
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_FAVORITES_LIST_FAILED", error);
+  }
+
+  return (data ?? [])
+    .map((row) => row.activity_id)
+    .filter((activityId): activityId is string => activityId !== null);
+}
+
+/**
+ * 收藏一个活动。favorites_user_id_activity_id_key 唯一约束（见迁移文件
+ * add_activity_favorites_support.sql）保证同一用户不会重复收藏同一活动；
+ * 撞上这个约束（23505）当成"已经收藏成功"处理，跟上面的 addFavorite 是
+ * 同一个处理方式。
+ */
+export async function addActivityFavorite(input: AddActivityFavoriteInput): Promise<void> {
+  const payload: TablesInsert<"favorites"> = {
+    user_id: input.userId,
+    activity_id: input.activityId
+  };
+
+  const { error } = await getSupabaseClient().from("favorites").insert(payload);
+
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION_CODE) {
+      return;
+    }
+    // 跟 addFavorite 同一个归因逻辑：activity_id 只可能来自当前登录用户
+    // 自己收藏自己能看到的活动（唯一调用方 use-toggle-activity-favorite
+    // -mutation.ts 只会传 session.user.id），42501 只可能是账号被限制。
+    if (error.code === RLS_VIOLATION_CODE) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    throw new AppError(error.message, "ACTIVITY_FAVORITE_ADD_FAILED", error);
+  }
+}
+
+/**
+ * 取消收藏活动。同上面的 removeFavorite，物理删除对应行。
+ */
+export async function removeActivityFavorite(input: RemoveActivityFavoriteInput): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from("favorites")
+    .delete()
+    .match({ user_id: input.userId, activity_id: input.activityId });
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_FAVORITE_REMOVE_FAILED", error);
   }
 }
 

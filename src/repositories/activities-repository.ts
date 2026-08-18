@@ -200,6 +200,7 @@ export interface ActivityDetail {
   id: string;
   organizerId: string;
   organizerDisplayName: string;
+  organizerAvatarUrl: string | null;
   channel: string;
   tagText: string | null;
   title: string;
@@ -235,7 +236,7 @@ interface ActivityDetailRow {
   status: string;
   requires_approval: boolean;
   location: { name: string } | null;
-  organizer: { display_name: string } | null;
+  organizer: { display_name: string; avatar_url: string | null } | null;
 }
 
 /**
@@ -256,7 +257,7 @@ export async function getActivityDetail(activityId: string): Promise<ActivityDet
   const { data, error } = await getSupabaseClient()
     .from("activities")
     .select(
-      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name)"
+      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name, avatar_url)"
     )
     .eq("id", activityId)
     .maybeSingle()
@@ -274,6 +275,7 @@ export async function getActivityDetail(activityId: string): Promise<ActivityDet
     id: data.id,
     organizerId: data.organizer_id,
     organizerDisplayName: data.organizer?.display_name ?? "未知用户",
+    organizerAvatarUrl: data.organizer?.avatar_url ?? null,
     channel: data.channel,
     tagText: data.tag_text,
     title: data.title,
@@ -527,11 +529,12 @@ export async function joinActivity(
 export interface ActivityParticipant {
   userId: string;
   displayName: string;
+  avatarUrl: string | null;
 }
 
 interface ActivityParticipantRow {
   user_id: string;
-  user: { display_name: string } | null;
+  user: { display_name: string; avatar_url: string | null } | null;
 }
 
 /**
@@ -549,14 +552,30 @@ interface ActivityParticipantRow {
  * 参与者行"，不负责"这一行本身要不要出现在名单里"——已经退出的历史记录
  * 不应该出现在"参与者"名单里，这跟 participant_count 触发器只统计未取消
  * 的人是同一个口径。
+ *
+ * `.eq("status", "approved")` 是这次头像堆叠改版顺手修的一个独立 bug：
+ * P2 报名审核制上线后，一条 activity_participants 行可能是 pending/
+ * approved/rejected 三种 status 中的任意一种，但这里之前只按
+ * cancelled_at 过滤，没有排除 pending/rejected——一个还在等发起人处理的
+ * 申请，会被这个函数当成"已确认参与者"返回，跟头像堆叠/参与者列表想展示
+ * 的"已经在活动里的人"不是一回事，也跟 participant_count 的口径不一致
+ * （sync_activity_participant_count() 触发器只统计
+ * status = 'approved' and cancelled_at is null 的行，见迁移文件
+ * 20260816175611_activity_join_approval.sql）。加上这条过滤后两者口径
+ * 才是一致的。
+ *
+ * 联表多选一列 avatar_url——头像堆叠（ActivityParticipantAvatars）需要
+ * 展示参与者的头像，跟 display_name 是同一张 profiles 表、同一次联表，
+ * 不需要额外查询。
  */
 export async function listActivityParticipants(
   activityId: string
 ): Promise<ActivityParticipant[]> {
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select("user_id, user:profiles(display_name)")
+    .select("user_id, user:profiles(display_name, avatar_url)")
     .eq("activity_id", activityId)
+    .eq("status", "approved")
     .is("cancelled_at", null)
     .order("joined_at", { ascending: true })
     .overrideTypes<ActivityParticipantRow[]>();
@@ -567,7 +586,8 @@ export async function listActivityParticipants(
 
   return (data ?? []).map((row) => ({
     userId: row.user_id,
-    displayName: row.user?.display_name ?? "未知用户"
+    displayName: row.user?.display_name ?? "未知用户",
+    avatarUrl: row.user?.avatar_url ?? null
   }));
 }
 

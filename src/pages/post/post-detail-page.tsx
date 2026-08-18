@@ -9,17 +9,12 @@ import { ImageLightbox } from "../../components/image-lightbox";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import type { PostDetail } from "../../repositories/posts-repository";
+import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatListingDate, formatPrice } from "../../utils/format";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
 }
-
-// 生产域名写死在这里，不能用 window.location.origin 拼——capacitor.config.ts
-// 没配 server.url，App 里跑的时候 location.origin 是 Capacitor 本地资源地址
-// （Android 是 https://localhost，见该配置文件的 androidScheme），不是
-// https://www.saminest.com，拿这个拼分享链接对方点了打不开。
-const PRODUCTION_ORIGIN = "https://www.saminest.com";
 
 /**
  * 发布表单提交成功后会带着 location.state.publishSuccessMessage 跳转到

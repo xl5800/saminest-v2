@@ -1,40 +1,81 @@
-import { useState } from "react";
 import { Link } from "react-router-dom";
 
-import { useActivityParticipationQuery } from "../features/activities/use-activity-participation-query";
-import { useToggleActivityParticipationMutation } from "../features/activities/use-toggle-activity-participation-mutation";
-import { useAuthStore } from "../store/auth-store";
-import { AppError } from "../utils/app-error";
+import {
+  useActivityParticipationAction,
+  type UseActivityParticipationActionInput
+} from "../features/activities/use-activity-participation-action";
 
-const DEFAULT_ERROR_MESSAGE = "操作失败，请稍后重试。";
-
-// joinActivity/leaveActivity 抛出的这几个错误码自带已经写好的、安全的
-// 用户提示文案，可以直接展示；其它错误码（比如 ACTIVITY_JOIN_FAILED，
-// 它的 message 是原始的 Supabase 报错）一律回退到本地这条通用文案，不
-// 把底层错误细节露给用户——跟 comment-item.tsx 处理举报错误是同一个模式。
-// ACTIVITY_JOIN_REJECTED（P2 新增：撞上一条已被拒绝的历史申请，见
-// activities-repository.ts 的 joinActivity 注释）也在这个白名单里。
-const KNOWN_SAFE_ERROR_CODES = new Set([
-  "ACTIVITY_JOIN_FORBIDDEN",
-  "ACTIVITY_JOIN_REJECTED",
-  "ACTIVITY_LEAVE_NOT_FOUND"
-]);
-
-const SECONDARY_BUTTON_CLASS_NAME =
+export const SECONDARY_BUTTON_CLASS_NAME =
   "w-full rounded-xl border border-border px-4 py-2 font-semibold text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60";
-const PRIMARY_BUTTON_CLASS_NAME =
+export const PRIMARY_BUTTON_CLASS_NAME =
   "w-full rounded-xl bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
 
-export interface ActivityParticipationButtonProps {
-  activityId: string;
-  activityStatus: string;
-  /** 通知消息的收件人——报名/退出成功后要提醒的活动发起人。 */
-  organizerId: string;
-  /** 通知消息文案里要嵌入的活动标题，见 use-toggle-activity-participation-mutation.ts。 */
-  activityTitle: string;
-  /** 这场活动要不要发起人审核才能加入（P2）——决定按钮文案是"我要报名"
-   *  还是"申请加入"，以及 joinActivity 插入的行是 approved 还是 pending。 */
-  requiresApproval: boolean;
+export type ActivityParticipationButtonProps = UseActivityParticipationActionInput;
+
+export type ActivityParticipationAction = ReturnType<typeof useActivityParticipationAction>;
+
+/**
+ * useActivityParticipationAction 返回值的纯渲染部分——不调用任何 hook，
+ * 只负责把状态渲染成 UI。抽出来的原因：活动详情页（ActivityDetailPage）
+ * 头像堆叠的"空位"点击必须跟"参加活动"按钮共享完全同一份状态/mutation
+ * 实例（任务卡的硬性要求），如果详情页直接渲染 <ActivityParticipationButton
+ * activityId=.../>，这个组件会在内部再调一次
+ * useActivityParticipationAction，产生第二个独立的 hook 实例（各自的
+ * pending/disabled 状态互不相通）——两处入口就会分裂成两套判断，正是
+ * 任务卡明确要避免的问题。
+ *
+ * 所以详情页改成：自己调用一次 useActivityParticipationAction，把同一个
+ * `action` 对象分别传给这个纯渲染组件（渲染按钮本身）和
+ * ActivityParticipantAvatars 的 onTapEmptySlot/canTapEmptySlot（驱动空位
+ * 点击）——两处画面背后是同一个 React state、同一个 mutation 对象，点
+ * 按钮和点空位在数据层面是同一个操作，不可能出现"一个觉得能点、另一个
+ * 觉得已经在处理"的不一致。ActivityParticipationButton（下面）作为独立
+ * 组件继续存在，供其它可能只需要单独一个按钮、不需要头像堆叠联动的场景
+ * 使用，内部也只是调一次 hook 再交给这个纯渲染组件，跟详情页是同一套
+ * 渲染逻辑，不是重复实现。
+ */
+export function ActivityParticipationButtonView({ action }: { action: ActivityParticipationAction }) {
+  if (action.loggedOut) {
+    return (
+      <p className="text-sm text-text-muted">
+        <Link to="/login" className="text-primary hover:underline">
+          登录
+        </Link>
+        后可以报名
+      </p>
+    );
+  }
+
+  const errorBanner = action.error ? (
+    <p role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+      {action.error}
+    </p>
+  ) : null;
+
+  if (action.isRejected) {
+    return (
+      <div>
+        <p className="w-full rounded-xl border border-border px-4 py-2 text-center text-sm text-text-muted">
+          申请已被拒绝
+        </p>
+        {errorBanner}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        disabled={action.disabled}
+        onClick={action.handleClick}
+        className={action.isApproved ? SECONDARY_BUTTON_CLASS_NAME : PRIMARY_BUTTON_CLASS_NAME}
+      >
+        {action.label}
+      </button>
+      {errorBanner}
+    </div>
+  );
 }
 
 /**
@@ -46,133 +87,19 @@ export interface ActivityParticipationButtonProps {
  * 未登录态的处理是同一个思路。
  *
  * P2 报名审核制上线后，报名状态从布尔"是否已报名"扩成四态
- * （getActivityParticipationStatus 的返回值），按钮要表达五种界面状态：
- * - 未参与、不需要审核：实心蓝"我要报名"，点击 → 直接 approved。
- * - 未参与、需要审核：实心蓝"申请加入"，点击 → 落地为 pending。
- * - pending：不可点的状态提示"申请中，等待发起人同意"（仍然渲染成一个
- *   disabled 的按钮，跟原来"报名已满"的处理方式一致，不是纯文字）。
- * - approved：跟原来一样的描边次要样式"退出活动"。
- * - rejected：不渲染任何 <button>，只显示一行"申请已被拒绝"的纯文字——
- *   跟 pending 刻意用不同的呈现方式（disabled 按钮 vs 纯文字）：pending
- *   至少还是个"正在进行中的操作"，保留按钮的视觉语言合理；rejected 是一个
- *   终态，不可能再有任何点击行为通向它，用纯文字更准确地传达"这里没有
- *   可操作的东西"，不是"这里有个操作但暂时不能点"。
+ * （getActivityParticipationStatus 的返回值），按钮要表达五种界面状态
+ * （未参与不需审核/未参与需审核/pending/approved/rejected），具体每种
+ * 状态对应的文案和可点性见 useActivityParticipationAction 的注释。
  *
- * activityStatus 不是 'open' 且当前未参与时禁用"报名/申请"操作——
- * activity_participants_insert_own 这条 RLS 策略本身也只在 status = 'open'
- * 时放行插入，这里在 UI 层提前判断，尽量在前端先挡住，不要让用户点了却
- * 看到一个"活动已满员"这种服务端才知道的报错。"退出"不受这个限制：已经
- * 报名/申请中的人不管活动之后变成什么状态，都应该能退出/撤回。
+ * 头像堆叠改版：这个组件的状态机 + 提交逻辑已经整体搬到
+ * useActivityParticipationAction 这个 hook 里，渲染逻辑搬到上面的
+ * ActivityParticipationButtonView——这里现在只是"调一次 hook，把结果交给
+ * 纯渲染组件"，对外的 props/行为跟改造前完全一样，纯内部重构。活动详情页
+ * 不使用这个组件本身（见 ActivityParticipationButtonView 的注释），而是
+ * 自己调用同一个 hook、复用同一个 View，为的是让头像堆叠的空位点击和这个
+ * 按钮共享同一个 hook 实例。
  */
-export function ActivityParticipationButton({
-  activityId,
-  activityStatus,
-  organizerId,
-  activityTitle,
-  requiresApproval
-}: ActivityParticipationButtonProps) {
-  const session = useAuthStore((s) => s.session);
-  const userId = session?.user.id;
-
-  const { data: participationStatus, isPending: participationPending } =
-    useActivityParticipationQuery(activityId, userId);
-  const toggleParticipation = useToggleActivityParticipationMutation();
-  const [error, setError] = useState<string | null>(null);
-
-  if (!userId) {
-    return (
-      <p className="text-sm text-text-muted">
-        <Link to="/login" className="text-primary hover:underline">
-          登录
-        </Link>
-        后可以报名
-      </p>
-    );
-  }
-
-  const isApproved = participationStatus === "approved";
-  const isPendingApplication = participationStatus === "pending";
-  const isRejected = participationStatus === "rejected";
-
-  function handleClick(): void {
-    if (
-      toggleParticipation.isPending ||
-      participationPending ||
-      !userId ||
-      isPendingApplication ||
-      isRejected
-    ) {
-      return;
-    }
-
-    setError(null);
-    toggleParticipation.mutate(
-      {
-        activityId,
-        userId,
-        isCurrentlyJoined: isApproved,
-        organizerId,
-        activityTitle,
-        requiresApproval
-      },
-      {
-        onError: (mutationError) => {
-          setError(
-            mutationError instanceof AppError && KNOWN_SAFE_ERROR_CODES.has(mutationError.code)
-              ? mutationError.message
-              : DEFAULT_ERROR_MESSAGE
-          );
-        }
-      }
-    );
-  }
-
-  const errorBanner = error ? (
-    <p role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-      {error}
-    </p>
-  ) : null;
-
-  if (isRejected) {
-    return (
-      <div>
-        <p className="w-full rounded-xl border border-border px-4 py-2 text-center text-sm text-text-muted">
-          申请已被拒绝
-        </p>
-        {errorBanner}
-      </div>
-    );
-  }
-
-  const disabled =
-    participationPending ||
-    toggleParticipation.isPending ||
-    isPendingApplication ||
-    (!isApproved && activityStatus !== "open");
-
-  const label = toggleParticipation.isPending
-    ? "处理中…"
-    : isPendingApplication
-      ? "申请中，等待发起人同意"
-      : isApproved
-        ? "退出活动"
-        : activityStatus !== "open"
-          ? "报名已满"
-          : requiresApproval
-            ? "申请加入"
-            : "我要报名";
-
-  return (
-    <div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={handleClick}
-        className={isApproved ? SECONDARY_BUTTON_CLASS_NAME : PRIMARY_BUTTON_CLASS_NAME}
-      >
-        {label}
-      </button>
-      {errorBanner}
-    </div>
-  );
+export function ActivityParticipationButton(props: ActivityParticipationButtonProps) {
+  const action = useActivityParticipationAction(props);
+  return <ActivityParticipationButtonView action={action} />;
 }

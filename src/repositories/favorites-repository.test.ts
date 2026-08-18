@@ -1,19 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, eqMock, insertMock, matchMock, overrideTypesMock } = vi.hoisted(() => {
-  const eqMock = vi.fn();
-  const insertMock = vi.fn();
-  const matchMock = vi.fn();
-  const overrideTypesMock = vi.fn();
-  const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  builder.select = vi.fn(() => builder);
-  builder.eq = eqMock;
-  builder.insert = insertMock;
-  builder.delete = vi.fn(() => builder);
-  builder.match = matchMock;
-  builder.overrideTypes = overrideTypesMock;
-  return { queryBuilder: builder, eqMock, insertMock, matchMock, overrideTypesMock };
-});
+const { queryBuilder, eqMock, notMock, insertMock, matchMock, overrideTypesMock } = vi.hoisted(
+  () => {
+    const eqMock = vi.fn();
+    const notMock = vi.fn();
+    const insertMock = vi.fn();
+    const matchMock = vi.fn();
+    const overrideTypesMock = vi.fn();
+    const builder: Record<string, ReturnType<typeof vi.fn>> = {};
+    builder.select = vi.fn(() => builder);
+    builder.eq = eqMock;
+    builder.not = notMock;
+    builder.insert = insertMock;
+    builder.delete = vi.fn(() => builder);
+    builder.match = matchMock;
+    builder.overrideTypes = overrideTypesMock;
+    return { queryBuilder: builder, eqMock, notMock, insertMock, matchMock, overrideTypesMock };
+  }
+);
 
 const fromMock = vi.fn(() => queryBuilder);
 
@@ -22,9 +26,12 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  addActivityFavorite,
   addFavorite,
+  listFavoritedActivityIds,
   listFavoritedPostIds,
   listFavoritedPosts,
+  removeActivityFavorite,
   removeFavorite
 } from "./favorites-repository";
 
@@ -278,5 +285,147 @@ describe("removeFavorite", () => {
     await expect(
       removeFavorite({ userId: "user-1", postId: "post-1" })
     ).rejects.toMatchObject({ code: "FAVORITE_REMOVE_FAILED" });
+  });
+});
+
+describe("listFavoritedActivityIds", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.delete.mockClear();
+    eqMock.mockReset();
+    notMock.mockReset();
+    insertMock.mockReset();
+    matchMock.mockReset();
+    // select().eq() 之后还要链式调用 .not()，跟 listFavoritedPosts 需要
+    // eq() 返回 builder 本身是同一个道理。
+    eqMock.mockReturnValue(queryBuilder);
+  });
+
+  it("returns the activity ids favorited by the given user, filtering out rows whose activity_id is null (post favorites)", async () => {
+    notMock.mockResolvedValue({
+      data: [{ activity_id: "act-1" }, { activity_id: "act-2" }],
+      error: null
+    });
+
+    const result = await listFavoritedActivityIds("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(queryBuilder.select).toHaveBeenCalledWith("activity_id");
+    expect(eqMock).toHaveBeenCalledWith("user_id", "user-1");
+    expect(notMock).toHaveBeenCalledWith("activity_id", "is", null);
+    expect(result).toEqual(["act-1", "act-2"]);
+  });
+
+  it("returns an empty array when the user has no favorited activities", async () => {
+    notMock.mockResolvedValue({ data: [], error: null });
+
+    expect(await listFavoritedActivityIds("user-1")).toEqual([]);
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    notMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listFavoritedActivityIds("user-1")).rejects.toMatchObject({
+      code: "ACTIVITY_FAVORITES_LIST_FAILED"
+    });
+  });
+});
+
+describe("addActivityFavorite", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.delete.mockClear();
+    eqMock.mockReset();
+    notMock.mockReset();
+    insertMock.mockReset();
+    matchMock.mockReset();
+  });
+
+  it("inserts a favorites row for the given user and activity", async () => {
+    insertMock.mockResolvedValue({ error: null });
+
+    await addActivityFavorite({ userId: "user-1", activityId: "act-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(insertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      activity_id: "act-1"
+    });
+  });
+
+  it("treats a unique-violation error (favorites_user_id_activity_id_key) as an idempotent success", async () => {
+    insertMock.mockResolvedValue({
+      error: { message: "duplicate key value", code: "23505" }
+    });
+
+    await expect(
+      addActivityFavorite({ userId: "user-1", activityId: "act-1" })
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws an AppError for any other insert failure", async () => {
+    insertMock.mockResolvedValue({
+      error: { message: "insert failed", code: "500" }
+    });
+
+    await expect(
+      addActivityFavorite({ userId: "user-1", activityId: "act-1" })
+    ).rejects.toMatchObject({ code: "ACTIVITY_FAVORITE_ADD_FAILED" });
+  });
+
+  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message on an RLS violation (42501)", async () => {
+    insertMock.mockResolvedValue({
+      error: {
+        message: "new row violates row-level security policy for table \"favorites\"",
+        code: "42501"
+      }
+    });
+
+    await expect(
+      addActivityFavorite({ userId: "user-1", activityId: "act-1" })
+    ).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
+});
+
+describe("removeActivityFavorite", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.delete.mockClear();
+    eqMock.mockReset();
+    notMock.mockReset();
+    insertMock.mockReset();
+    matchMock.mockReset();
+  });
+
+  it("deletes the favorites row matching the user and activity", async () => {
+    matchMock.mockResolvedValue({ error: null });
+
+    await removeActivityFavorite({ userId: "user-1", activityId: "act-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(queryBuilder.delete).toHaveBeenCalled();
+    expect(matchMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      activity_id: "act-1"
+    });
+  });
+
+  it("throws an AppError when the delete fails", async () => {
+    matchMock.mockResolvedValue({
+      error: { message: "delete failed", code: "500" }
+    });
+
+    await expect(
+      removeActivityFavorite({ userId: "user-1", activityId: "act-1" })
+    ).rejects.toMatchObject({ code: "ACTIVITY_FAVORITE_REMOVE_FAILED" });
   });
 });
