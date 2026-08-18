@@ -1,9 +1,12 @@
-import { Fragment, type FormEvent, useState } from "react";
+import { Bell } from "lucide-react";
+import { Fragment, type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
 import { useMessagesQuery } from "../../features/messages/use-messages-query";
 import { useSendMessageMutation } from "../../features/messages/use-send-message-mutation";
+import { markConversationAsRead } from "../../repositories/conversations-repository";
+import type { NotificationPayload } from "../../repositories/messages-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
@@ -16,6 +19,8 @@ const SESSION_EXPIRED_MESSAGE = "登录状态已失效，请重新登录后再�
 const EMPTY_CONVERSATION_MESSAGE = "还没有消息，发一条打个招呼吧。";
 const LOAD_ERROR_MESSAGE = "消息加载失败，请刷新页面重试。";
 const DEFAULT_OTHER_PARTY_LABEL = "对方";
+const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
+const SYSTEM_NOTIFICATION_SUBTITLE = "官方通知";
 
 interface AvatarProps {
   avatarUrl: string | null;
@@ -45,6 +50,46 @@ function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
     >
       {initial}
     </span>
+  );
+}
+
+interface SystemNotificationCardProps {
+  payload: NotificationPayload;
+  createdAt: string;
+}
+
+/**
+ * 系统通知消息（message.senderId === null）的卡片渲染——不走聊天气泡那套
+ * "isMine 左右 + 头像/占位对齐"逻辑，图标 + 标题（加粗）+ 摘要（小字）+
+ * 时间，整张卡片占满可用宽度（不是 75% 那种气泡宽度）。有 link 时整张
+ * 卡片是一个 <Link>，点击跳转；没有 link 就是纯展示，不可点——用
+ * `payload.link != null` 判断，跟 null/undefined 都不算"有链接"。
+ */
+function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardProps) {
+  const content = (
+    <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-white p-3">
+      <div
+        aria-hidden="true"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+      >
+        <Bell size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-text">{payload.title}</p>
+        {payload.summary ? (
+          <p className="mt-0.5 text-xs text-text-muted">{payload.summary}</p>
+        ) : null}
+        <p className="mt-1 text-xs text-text-muted">{formatMessageTimeDivider(createdAt)}</p>
+      </div>
+    </div>
+  );
+
+  return payload.link != null ? (
+    <Link to={payload.link} className="block w-full">
+      {content}
+    </Link>
+  ) : (
+    content
   );
 }
 
@@ -83,6 +128,22 @@ function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
  * 页面标题的无障碍语义。conversation?.otherUserId 为 null 时（对方已经
  * 退出会话这种边界情况）退回纯展示，不渲染任何链接。消息气泡旁边那些
  * 小头像不在这次范围内，不加链接。
+ *
+ * 系统通知（conversation?.originType === 'system'）是一整套独立的展示
+ * 分支，不是简单复用"otherUserId 为 null"那条兜底：
+ * - header 头像换成 Bell 图标，标题固定"Saminest 通知"，副标题固定
+ *   "官方通知"（不是 conversation.postTitle 拼出来的 conversationContext，
+ *   系统通知会话本来就不挂在任何帖子下）。
+ * - 消息列表里 message.senderId === null（等价于
+ *   message.notificationPayload !== null）的消息不走气泡+头像分组那套
+ *   逻辑，单独渲染成 SystemNotificationCard；isConsecutiveFromSameSender
+ *   的判断显式排除这类消息（加了 !isSystemMessage 条件），否则它们会被
+ *   误判成"对方发的普通消息"进而套用头像/spacer 逻辑。
+ * - 输入框（整个 <form data-testid="conversation-composer">）不渲染——
+ *   没有人会收到回复，不应该让用户以为可以对系统说话。
+ * - 挂载时（确认是系统会话之后）调用 markConversationAsRead 标记已读，
+ *   驱动底部导航红点消失；失败只 console.error，不影响页面正常使用——
+ *   标记已读是次要副作用，不应该因为它失败就让整个页面报错。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -104,10 +165,23 @@ export function MessageConversationPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const conversation = conversations?.find((item) => item.id === conversationId);
-  const otherPartyLabel = conversation?.otherDisplayName ?? DEFAULT_OTHER_PARTY_LABEL;
-  const conversationContext = conversation?.postTitle
-    ? `关于 ${conversation.postTitle}`
-    : "私信会话";
+  const isSystemConversation = conversation?.originType === "system";
+  const otherPartyLabel = isSystemConversation
+    ? SYSTEM_NOTIFICATION_LABEL
+    : conversation?.otherDisplayName ?? DEFAULT_OTHER_PARTY_LABEL;
+  const conversationContext = isSystemConversation
+    ? SYSTEM_NOTIFICATION_SUBTITLE
+    : conversation?.postTitle
+      ? `关于 ${conversation.postTitle}`
+      : "私信会话";
+
+  useEffect(() => {
+    if (!conversationId || !currentUserId || !isSystemConversation) return;
+
+    markConversationAsRead(conversationId, currentUserId).catch((error) => {
+      console.error("标记系统通知会话已读失败：", error);
+    });
+  }, [conversationId, isSystemConversation, currentUserId]);
 
   function handleBack(): void {
     if (location.key === "default") {
@@ -157,6 +231,20 @@ export function MessageConversationPage() {
 
   const messageList = messages ?? [];
   const sendDisabled = sendMessageMutation.isPending || body.trim().length === 0;
+  const headerAvatarElement = isSystemConversation ? (
+    <div
+      aria-hidden="true"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+    >
+      <Bell size={18} />
+    </div>
+  ) : (
+    <Avatar
+      avatarUrl={conversation?.otherAvatarUrl ?? null}
+      initial={otherPartyLabel.charAt(0)}
+      sizeClassName="h-9 w-9"
+    />
+  );
 
   return (
     <main className="mx-auto grid h-dvh w-full max-w-2xl grid-rows-[3.5rem_minmax(0,1fr)_auto] overflow-hidden bg-bg">
@@ -173,18 +261,10 @@ export function MessageConversationPage() {
         <div className="flex min-w-0 items-center justify-center gap-2 px-2">
           {conversation?.otherUserId ? (
             <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
-              <Avatar
-                avatarUrl={conversation.otherAvatarUrl}
-                initial={otherPartyLabel.charAt(0)}
-                sizeClassName="h-9 w-9"
-              />
+              {headerAvatarElement}
             </Link>
           ) : (
-            <Avatar
-              avatarUrl={conversation?.otherAvatarUrl ?? null}
-              initial={otherPartyLabel.charAt(0)}
-              sizeClassName="h-9 w-9"
-            />
+            headerAvatarElement
           )}
           <div className="min-w-0 text-left">
             <h1 className="truncate text-base font-semibold text-text">
@@ -237,11 +317,15 @@ export function MessageConversationPage() {
                 previousMessage ? previousMessage.createdAt : null
               );
               const isMine = message.senderId === currentUserId;
+              const isSystemMessage = message.notificationPayload !== null;
               // 同一人连续发的消息只在第一条旁边显示头像：上一条存在、
               // 发送者跟这一条相同、且中间没有插入时间分隔线，就算作
-              // "连续消息的非第一条"，不重复显示头像。
+              // "连续消息的非第一条"，不重复显示头像。系统通知消息
+              // （senderId 为 null）显式排除在外——它们不走这套气泡+
+              // 头像分组逻辑，不能被误判成"对方发的普通消息"。
               const isConsecutiveFromSameSender =
                 !isMine &&
+                !isSystemMessage &&
                 previousMessage !== undefined &&
                 previousMessage.senderId === message.senderId &&
                 !showTimeDivider;
@@ -257,35 +341,48 @@ export function MessageConversationPage() {
                       </time>
                     </li>
                   ) : null}
-                  <li
-                    data-message-owner={isMine ? "self" : "other"}
-                    aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
-                    className={isMine ? "flex justify-end" : "flex items-start justify-start gap-2"}
-                  >
-                    {!isMine ? (
-                      isConsecutiveFromSameSender ? (
-                        <div aria-hidden="true" data-testid="message-avatar-spacer" className="h-7 w-7 shrink-0" />
-                      ) : (
-                        <Avatar
-                          avatarUrl={conversation?.otherAvatarUrl ?? null}
-                          initial={otherPartyLabel.charAt(0)}
-                          sizeClassName="h-7 w-7"
-                          testId="message-avatar"
-                        />
-                      )
-                    ) : null}
-                    <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
-                      <div
-                        className={
-                          isMine
-                            ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
-                            : "min-w-0 whitespace-pre-wrap rounded-2xl bg-white px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
-                        }
-                      >
-                        {message.body}
+                  {isSystemMessage ? (
+                    <li
+                      data-message-owner="system"
+                      aria-label="系统通知"
+                      className="flex justify-center"
+                    >
+                      <SystemNotificationCard
+                        payload={message.notificationPayload as NotificationPayload}
+                        createdAt={message.createdAt}
+                      />
+                    </li>
+                  ) : (
+                    <li
+                      data-message-owner={isMine ? "self" : "other"}
+                      aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
+                      className={isMine ? "flex justify-end" : "flex items-start justify-start gap-2"}
+                    >
+                      {!isMine ? (
+                        isConsecutiveFromSameSender ? (
+                          <div aria-hidden="true" data-testid="message-avatar-spacer" className="h-7 w-7 shrink-0" />
+                        ) : (
+                          <Avatar
+                            avatarUrl={conversation?.otherAvatarUrl ?? null}
+                            initial={otherPartyLabel.charAt(0)}
+                            sizeClassName="h-7 w-7"
+                            testId="message-avatar"
+                          />
+                        )
+                      ) : null}
+                      <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+                        <div
+                          className={
+                            isMine
+                              ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
+                              : "min-w-0 whitespace-pre-wrap rounded-2xl bg-white px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
+                          }
+                        >
+                          {message.body}
+                        </div>
                       </div>
-                    </div>
-                  </li>
+                    </li>
+                  )}
                 </Fragment>
               );
             })}
@@ -293,43 +390,45 @@ export function MessageConversationPage() {
         ) : null}
       </section>
 
-      <form
-        onSubmit={handleSubmit}
-        noValidate
-        data-testid="conversation-composer"
-        className="sticky bottom-0 z-10 flex shrink-0 flex-col gap-2 border-t border-border bg-white px-4 pt-3"
-        style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
-      >
-        {validationError ? (
-          <p role="alert" className="rounded-xl border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            {validationError}
-          </p>
-        ) : null}
-        {submitError ? (
-          <p role="alert" className="rounded-xl border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            {submitError}
-          </p>
-        ) : null}
-        <div className="flex min-w-0 items-center gap-2">
-          <label className="min-w-0 flex-1">
-            <span className="sr-only">消息内容</span>
-            <textarea
-              value={body}
-              onChange={(event) => setBody(event.target.value)}
-              rows={1}
-              placeholder="输入消息"
-              className="h-12 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-bg px-4 py-3 text-base leading-6 text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={sendDisabled}
-            className="h-12 shrink-0 rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sendMessageMutation.isPending ? "发送中…" : "发送"}
-          </button>
-        </div>
-      </form>
+      {!isSystemConversation ? (
+        <form
+          onSubmit={handleSubmit}
+          noValidate
+          data-testid="conversation-composer"
+          className="sticky bottom-0 z-10 flex shrink-0 flex-col gap-2 border-t border-border bg-white px-4 pt-3"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          {validationError ? (
+            <p role="alert" className="rounded-xl border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {validationError}
+            </p>
+          ) : null}
+          {submitError ? (
+            <p role="alert" className="rounded-xl border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {submitError}
+            </p>
+          ) : null}
+          <div className="flex min-w-0 items-center gap-2">
+            <label className="min-w-0 flex-1">
+              <span className="sr-only">消息内容</span>
+              <textarea
+                value={body}
+                onChange={(event) => setBody(event.target.value)}
+                rows={1}
+                placeholder="输入消息"
+                className="h-12 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-bg px-4 py-3 text-base leading-6 text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={sendDisabled}
+              className="h-12 shrink-0 rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sendMessageMutation.isPending ? "发送中…" : "发送"}
+            </button>
+          </div>
+        </form>
+      ) : null}
     </main>
   );
 }

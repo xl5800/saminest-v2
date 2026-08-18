@@ -1,11 +1,18 @@
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useMessagesQuery, useSendMessageMutation, useMyConversationsQuery, mutateAsyncMock } = vi.hoisted(() => ({
+const {
+  useMessagesQuery,
+  useSendMessageMutation,
+  useMyConversationsQuery,
+  mutateAsyncMock,
+  markConversationAsRead
+} = vi.hoisted(() => ({
   useMessagesQuery: vi.fn(),
   useSendMessageMutation: vi.fn(),
   useMyConversationsQuery: vi.fn(),
-  mutateAsyncMock: vi.fn()
+  mutateAsyncMock: vi.fn(),
+  markConversationAsRead: vi.fn()
 }));
 
 vi.mock("../../features/messages/use-messages-query", () => ({
@@ -16,6 +23,12 @@ vi.mock("../../features/messages/use-send-message-mutation", () => ({
 }));
 vi.mock("../../features/conversations/use-my-conversations-query", () => ({
   useMyConversationsQuery
+}));
+// markConversationAsRead 是页面直接调用仓库函数（不经过 mutation hook），
+// 见 conversation-page.tsx 挂载时的 useEffect，这里单独 mock 掉，避免
+// 系统通知会话的测试真的打到 Supabase。
+vi.mock("../../repositories/conversations-repository", () => ({
+  markConversationAsRead
 }));
 
 import { useAuthStore } from "../../store/auth-store";
@@ -45,6 +58,8 @@ describe("MessageConversationPage", () => {
     useMessagesQuery.mockReset();
     useSendMessageMutation.mockReset();
     useMyConversationsQuery.mockReset();
+    markConversationAsRead.mockReset();
+    markConversationAsRead.mockResolvedValue(undefined);
 
     useMessagesQuery.mockReturnValue({
       data: [],
@@ -61,6 +76,7 @@ describe("MessageConversationPage", () => {
           id: "conversation-1",
           postId: "post-1",
           postTitle: "木桌",
+          originType: "post",
           otherUserId: "seller-1",
           otherDisplayName: "Bob",
           otherAvatarUrl: null,
@@ -88,6 +104,7 @@ describe("MessageConversationPage", () => {
           id: "conversation-1",
           postId: "post-1",
           postTitle: "木桌",
+          originType: "post",
           otherUserId: null,
           otherDisplayName: null,
           otherAvatarUrl: null,
@@ -120,6 +137,7 @@ describe("MessageConversationPage", () => {
           id: "conversation-1",
           postId: "post-1",
           postTitle: "木桌",
+          originType: "post",
           otherUserId: null,
           otherDisplayName: null,
           otherAvatarUrl: null,
@@ -142,6 +160,7 @@ describe("MessageConversationPage", () => {
           id: "conversation-1",
           postId: "post-1",
           postTitle: "木桌",
+          originType: "post",
           otherUserId: "seller-1",
           otherDisplayName: "Bob",
           otherAvatarUrl: "https://img.example.com/bob.jpg",
@@ -167,12 +186,14 @@ describe("MessageConversationPage", () => {
           id: "message-1",
           senderId: "user-1",
           body: "你好",
+          notificationPayload: null,
           createdAt: "2026-07-20T12:00:00.000Z"
         },
         {
           id: "message-2",
           senderId: "seller-1",
           body: "在的",
+          notificationPayload: null,
           createdAt: "2026-07-20T12:01:00.000Z"
         }
       ],
@@ -197,9 +218,9 @@ describe("MessageConversationPage", () => {
   it("only shows a time divider before the first message of a tightly-spaced run", () => {
     useMessagesQuery.mockReturnValue({
       data: [
-        { id: "message-1", senderId: "user-1", body: "第一条", createdAt: "2026-07-20T12:00:00.000Z" },
-        { id: "message-2", senderId: "seller-1", body: "第二条", createdAt: "2026-07-20T12:02:00.000Z" },
-        { id: "message-3", senderId: "user-1", body: "第三条", createdAt: "2026-07-20T12:04:00.000Z" }
+        { id: "message-1", senderId: "user-1", body: "第一条", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "第二条", notificationPayload: null, createdAt: "2026-07-20T12:02:00.000Z" },
+        { id: "message-3", senderId: "user-1", body: "第三条", notificationPayload: null, createdAt: "2026-07-20T12:04:00.000Z" }
       ],
       isPending: false,
       isError: false
@@ -220,10 +241,10 @@ describe("MessageConversationPage", () => {
   it("shows the avatar only on the first message of a consecutive run from the same sender, uses a spacer on later ones, and never renders an avatar for the current user's own messages", () => {
     useMessagesQuery.mockReturnValue({
       data: [
-        { id: "message-1", senderId: "user-1", body: "我的第一条", createdAt: "2026-07-20T12:00:00.000Z" },
-        { id: "message-2", senderId: "seller-1", body: "对方第一条", createdAt: "2026-07-20T12:01:00.000Z" },
-        { id: "message-3", senderId: "seller-1", body: "对方第二条", createdAt: "2026-07-20T12:02:00.000Z" },
-        { id: "message-4", senderId: "user-1", body: "我的第二条", createdAt: "2026-07-20T12:03:00.000Z" }
+        { id: "message-1", senderId: "user-1", body: "我的第一条", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "对方第一条", notificationPayload: null, createdAt: "2026-07-20T12:01:00.000Z" },
+        { id: "message-3", senderId: "seller-1", body: "对方第二条", notificationPayload: null, createdAt: "2026-07-20T12:02:00.000Z" },
+        { id: "message-4", senderId: "user-1", body: "我的第二条", notificationPayload: null, createdAt: "2026-07-20T12:03:00.000Z" }
       ],
       isPending: false,
       isError: false
@@ -241,8 +262,8 @@ describe("MessageConversationPage", () => {
   it("inserts a new time divider after a gap of more than 5 minutes", () => {
     useMessagesQuery.mockReturnValue({
       data: [
-        { id: "message-1", senderId: "user-1", body: "早一点的消息", createdAt: "2026-07-20T12:00:00.000Z" },
-        { id: "message-2", senderId: "seller-1", body: "十分钟后的消息", createdAt: "2026-07-20T12:10:00.000Z" }
+        { id: "message-1", senderId: "user-1", body: "早一点的消息", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "十分钟后的消息", notificationPayload: null, createdAt: "2026-07-20T12:10:00.000Z" }
       ],
       isPending: false,
       isError: false
@@ -261,8 +282,8 @@ describe("MessageConversationPage", () => {
 
     useMessagesQuery.mockReturnValue({
       data: [
-        { id: "message-1", senderId: "user-1", body: "昨晚的消息", createdAt: justBeforeMidnight },
-        { id: "message-2", senderId: "seller-1", body: "今天凌晨的消息", createdAt: justAfterMidnight }
+        { id: "message-1", senderId: "user-1", body: "昨晚的消息", notificationPayload: null, createdAt: justBeforeMidnight },
+        { id: "message-2", senderId: "seller-1", body: "今天凌晨的消息", notificationPayload: null, createdAt: justAfterMidnight }
       ],
       isPending: false,
       isError: false
@@ -349,6 +370,7 @@ describe("MessageConversationPage", () => {
           id: "message-long",
           senderId: "seller-1",
           body: longMessage,
+          notificationPayload: null,
           createdAt: "2026-07-20T12:00:00.000Z"
         }
       ],
@@ -412,5 +434,158 @@ describe("MessageConversationPage", () => {
       "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
     );
     expect(screen.getByLabelText("消息内容")).toHaveValue("这条消息发不出去");
+  });
+
+  describe("system notification conversations (originType: 'system')", () => {
+    function mockSystemConversation() {
+      useMyConversationsQuery.mockReturnValue({
+        data: [
+          {
+            id: "conversation-1",
+            postId: null,
+            postTitle: null,
+            originType: "system",
+            otherUserId: null,
+            otherDisplayName: null,
+            otherAvatarUrl: null,
+            lastActivityAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+    }
+
+    it("shows 'Saminest 通知' + '官方通知' in the header instead of otherDisplayName/postTitle, with a Bell icon (not an avatar/initial)", () => {
+      mockSystemConversation();
+
+      const { container } = renderPage();
+
+      expect(screen.getByRole("heading", { name: "Saminest 通知" })).toBeInTheDocument();
+      expect(screen.getByText("官方通知")).toBeInTheDocument();
+      expect(container.querySelector("header svg.lucide-bell")).toBeInTheDocument();
+      expect(container.querySelector("header img")).not.toBeInTheDocument();
+    });
+
+    it("does not render a /users/:id profile link in the header for a system conversation", () => {
+      mockSystemConversation();
+
+      renderPage();
+
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("does not render the composer form for a system conversation", () => {
+      mockSystemConversation();
+
+      renderPage();
+
+      expect(screen.queryByTestId("conversation-composer")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("消息内容")).not.toBeInTheDocument();
+    });
+
+    it("renders a system notification message as a card (icon + title + summary + time), not a chat bubble, and does not treat it as a consecutive message needing an avatar/spacer", () => {
+      mockSystemConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。",
+            notificationPayload: {
+              title: "帖子审核通过",
+              summary: "你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。",
+              link: "/post/post-1"
+            },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      expect(screen.getByText("帖子审核通过")).toBeInTheDocument();
+      expect(
+        screen.getByText("你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。")
+      ).toBeInTheDocument();
+      const systemRow = container.querySelector('[data-message-owner="system"]');
+      expect(systemRow).toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="other"]')).not.toBeInTheDocument();
+      expect(screen.queryByTestId("message-avatar")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("message-avatar-spacer")).not.toBeInTheDocument();
+    });
+
+    it("wraps the system notification card in a link to notificationPayload.link when it is present", () => {
+      mockSystemConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "你的帖子审核通过。",
+            notificationPayload: {
+              title: "帖子审核通过",
+              summary: null,
+              link: "/post/post-1"
+            },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("link", { name: /帖子审核通过/ })).toHaveAttribute(
+        "href",
+        "/post/post-1"
+      );
+    });
+
+    it("does not wrap the system notification card in a link when notificationPayload.link is null", () => {
+      mockSystemConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "你的帖子未通过审核。",
+            notificationPayload: {
+              title: "帖子审核未通过",
+              summary: "违反社区规范。",
+              link: null
+            },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByText("帖子审核未通过")).toBeInTheDocument();
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    });
+
+    it("calls markConversationAsRead with the conversation and current user ids for a system conversation", async () => {
+      mockSystemConversation();
+
+      renderPage();
+
+      await waitFor(() => {
+        expect(markConversationAsRead).toHaveBeenCalledWith("conversation-1", "user-1");
+      });
+    });
+
+    it("does not call markConversationAsRead for a non-system conversation", async () => {
+      renderPage();
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(markConversationAsRead).not.toHaveBeenCalled();
+    });
   });
 });

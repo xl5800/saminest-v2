@@ -538,8 +538,9 @@ export type Database = {
           edited_at: string | null
           id: string
           message_type: string
+          notification_payload: Json | null
           reply_to_id: string | null
-          sender_id: string
+          sender_id: string | null
         }
         Insert: {
           body?: string | null
@@ -549,8 +550,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           message_type?: string
+          notification_payload?: Json | null
           reply_to_id?: string | null
-          sender_id: string
+          sender_id?: string | null
         }
         Update: {
           body?: string | null
@@ -560,8 +562,9 @@ export type Database = {
           edited_at?: string | null
           id?: string
           message_type?: string
+          notification_payload?: Json | null
           reply_to_id?: string | null
-          sender_id?: string
+          sender_id?: string | null
         }
         Relationships: [
           {
@@ -1039,6 +1042,15 @@ export type Database = {
           id: string
           role: string
         }[]
+      }
+      notify_user: {
+        Args: {
+          link?: string
+          summary: string
+          target_user_id: string
+          title: string
+        }
+        Returns: string
       }
       reject_activity_participant: {
         Args: { target_participant_id: string }

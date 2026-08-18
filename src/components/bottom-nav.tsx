@@ -1,6 +1,8 @@
 import { Handshake, Home, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
+import { useHasUnreadSystemNotificationQuery } from "../features/conversations/use-has-unread-system-notification-query";
+
 interface NavItem {
   to: string;
   label: string;
@@ -51,9 +53,17 @@ function isActivePath(pathname: string, to: string): boolean {
  * `calc(0.75rem + env(safe-area-inset-bottom))` 处理过，这里用等价的
  * Tailwind 任意值写法表达同一个 calc()，不新建自定义 spacing token（这里
  * 只有这一处用得到，不值得为它单独定义一个 --spacing-* 变量）。
+ *
+ * "消息"这一项的图标右上角有一个未读系统通知的小红点（
+ * useHasUnreadSystemNotificationQuery），只在这一项渲染，用
+ * to === "/messages" 判断，不是给所有 5 个目的地都加这个能力——目前只有
+ * 系统通知这一种未读概念，没有理由为其它 4 项也预留同一套逻辑。红点是
+ * aria-hidden，"消息"这个文字标签本身已经是可访问名称，红点只是纯视觉
+ * 强调，不需要额外的无障碍文案（比如"有未读消息"）。
  */
 export function BottomNav() {
   const location = useLocation();
+  const { data: hasUnread } = useHasUnreadSystemNotificationQuery();
 
   return (
     <nav
@@ -62,6 +72,7 @@ export function BottomNav() {
     >
       {NAV_ITEMS.map(({ to, label, Icon }) => {
         const active = isActivePath(location.pathname, to);
+        const showUnreadDot = to === "/messages" && hasUnread === true;
         return (
           <Link
             key={to}
@@ -71,7 +82,16 @@ export function BottomNav() {
               active ? "font-semibold text-primary" : "text-text-muted"
             }`}
           >
-            <Icon aria-hidden="true" size={22} strokeWidth={active ? 2.5 : 2} />
+            <span className="relative">
+              <Icon aria-hidden="true" size={22} strokeWidth={active ? 2.5 : 2} />
+              {showUnreadDot ? (
+                <span
+                  aria-hidden="true"
+                  data-testid="unread-dot"
+                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger"
+                />
+              ) : null}
+            </span>
             {label}
           </Link>
         );

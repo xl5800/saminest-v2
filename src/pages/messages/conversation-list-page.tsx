@@ -1,3 +1,4 @@
+import { Bell } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
@@ -5,6 +6,7 @@ import { formatPublishedAt } from "../../utils/format";
 
 const EMPTY_LIST_MESSAGE = "暂无消息";
 const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
+const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
 
 /**
  * 会话列表页（/messages），登录态鉴权统一由路由层的 RequireAuth 包裹实现
@@ -29,6 +31,15 @@ const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
  * 那部分指向 /messages/:id，视觉上还是同一张卡片，只是点不同区域跳转到
  * 不同目的地。otherUserId 为 null 时（对方已退出会话这种边界情况）头像/
  * 昵称退回纯展示，不渲染任何链接——没有 userId 也没有页面可以跳。
+ *
+ * 系统通知（origin_type === 'system'）是另一种、原因完全不同的
+ * "otherUserId 为 null"——不是"对方退出了"，是这类会话本来就没有"对方"这
+ * 个概念（只有接收者自己一个成员）。不能沿用上面那条"otherUserId 为 null
+ * 就退回纯展示"的判断去处理这种情况，否则会显示成一个昵称是 null、退回
+ * "对方"文案的普通会话，跟真的"对方退出了"混在一起分不清——必须显式用
+ * originType === 'system' 识别，头像换成 Bell 图标（不是 img/首字母
+ * 占位），昵称固定显示"Saminest 通知"，同样不包 /users/:id 链接（没有
+ * 用户可以跳）。
  */
 export function ConversationListPage() {
   const { data: conversations, isPending, isError } = useMyConversationsQuery();
@@ -48,10 +59,20 @@ export function ConversationListPage() {
       {!isPending && !isError && conversations && conversations.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {conversations.map((conversation) => {
+            const isSystemConversation = conversation.originType === "system";
             const avatarInitial =
               conversation.otherDisplayName?.trim().charAt(0).toUpperCase() || "?";
-            const nickname = conversation.otherDisplayName ?? "对方";
-            const avatarElement = conversation.otherAvatarUrl ? (
+            const nickname = isSystemConversation
+              ? SYSTEM_NOTIFICATION_LABEL
+              : conversation.otherDisplayName ?? "对方";
+            const avatarElement = isSystemConversation ? (
+              <div
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+              >
+                <Bell size={18} />
+              </div>
+            ) : conversation.otherAvatarUrl ? (
               <img
                 src={conversation.otherAvatarUrl}
                 alt=""
@@ -65,13 +86,14 @@ export function ConversationListPage() {
                 {avatarInitial}
               </div>
             );
+            const showProfileLink = !isSystemConversation && conversation.otherUserId;
 
             return (
               <li
                 key={conversation.id}
                 className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 hover:border-primary"
               >
-                {conversation.otherUserId ? (
+                {showProfileLink ? (
                   <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
                     {avatarElement}
                   </Link>
@@ -79,7 +101,7 @@ export function ConversationListPage() {
                   avatarElement
                 )}
                 <div className="min-w-0 flex-1">
-                  {conversation.otherUserId ? (
+                  {showProfileLink ? (
                     <Link
                       to={`/users/${conversation.otherUserId}`}
                       className="block truncate text-sm font-medium text-text hover:underline"

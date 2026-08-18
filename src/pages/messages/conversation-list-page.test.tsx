@@ -66,6 +66,7 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: "post-1",
           postTitle: "Sunny room",
+          originType: "post",
           otherUserId: "user-2",
           otherDisplayName: "Bob",
           otherAvatarUrl: null,
@@ -75,6 +76,7 @@ describe("ConversationListPage", () => {
           id: "conv-2",
           postId: "post-2",
           postTitle: "Used sofa",
+          originType: "post",
           otherUserId: "user-3",
           otherDisplayName: "Carol",
           otherAvatarUrl: null,
@@ -105,6 +107,7 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: null,
           postTitle: null,
+          originType: "post",
           otherUserId: null,
           otherDisplayName: null,
           otherAvatarUrl: null,
@@ -123,6 +126,40 @@ describe("ConversationListPage", () => {
     expect(screen.getByTestId("conversation-link")).toHaveAttribute("href", "/messages/conv-1");
   });
 
+  it("renders a system-notification row (originType: 'system') with 'Saminest 通知' + a Bell icon instead of otherDisplayName/avatar, and no /users/:id link", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conv-system-1",
+          postId: null,
+          postTitle: null,
+          originType: "system",
+          otherUserId: null,
+          otherDisplayName: null,
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-08-18T00:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    const { container } = renderWithProviders(<ConversationListPage />);
+
+    expect(screen.getByText("Saminest 通知")).toBeInTheDocument();
+    // Bell 图标是 lucide-react 渲染出的 <svg>，不是 <img>，也不是首字母
+    // 占位文字——用 class 名里的 lucide-bell 断言图标类型确实是 Bell。
+    expect(container.querySelector("svg.lucide-bell")).toBeInTheDocument();
+    expect(container.querySelector("img")).not.toBeInTheDocument();
+    // 只剩指向会话的那一个 Link，没有任何指向 /users/ 的链接——系统通知
+    // 没有"对方"，没有公开主页可以跳。
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByTestId("conversation-link")).toHaveAttribute(
+      "href",
+      "/messages/conv-system-1"
+    );
+  });
+
   it("renders an <img> avatar when otherAvatarUrl is present, and a nickname-initial placeholder (no <img>) when it is absent", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
@@ -130,6 +167,7 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: null,
           postTitle: null,
+          originType: "post",
           otherUserId: "user-2",
           otherDisplayName: "Bob",
           otherAvatarUrl: "https://img.example.com/bob.jpg",
@@ -139,6 +177,7 @@ describe("ConversationListPage", () => {
           id: "conv-2",
           postId: null,
           postTitle: null,
+          originType: "post",
           otherUserId: "user-3",
           otherDisplayName: "carol",
           otherAvatarUrl: null,
@@ -168,6 +207,7 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: null,
           postTitle: null,
+          originType: "post",
           otherUserId: "user-2",
           otherDisplayName: "Bob",
           otherAvatarUrl: null,
@@ -191,6 +231,7 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: null,
           postTitle: null,
+          originType: "post",
           otherUserId: "user-2",
           otherDisplayName: "Bob",
           otherAvatarUrl: null,

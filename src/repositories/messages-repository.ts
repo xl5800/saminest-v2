@@ -9,17 +9,31 @@ const RLS_VIOLATION_CODE = "42501";
 const ACCOUNT_RESTRICTED_MESSAGE =
   "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
 
+export interface NotificationPayload {
+  title: string;
+  summary: string | null;
+  link: string | null;
+}
+
 export interface MessageListItem {
   id: string;
-  senderId: string;
+  /** 系统通知消息（见 notify_user() 那份迁移）没有真实发送者，是 null——
+   *  isMine 判断（conversation-page.tsx）和"连续消息头像分组"逻辑都要
+   *  排除这种消息，不能假设它一定是某个用户发的。 */
+  senderId: string | null;
   body: string | null;
+  /** 只有 senderId 为 null 的系统通知消息才会有值（跟 messages 表的
+   *  messages_sender_or_notification_check 约束一一对应），页面据此判断
+   *  要不要渲染成通知卡片而不是聊天气泡。 */
+  notificationPayload: NotificationPayload | null;
   createdAt: string;
 }
 
 interface MessageRow {
   id: string;
-  sender_id: string;
+  sender_id: string | null;
   body: string | null;
+  notification_payload: NotificationPayload | null;
   created_at: string;
 }
 
@@ -32,7 +46,7 @@ interface MessageRow {
 export async function listMessages(conversationId: string): Promise<MessageListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("messages")
-    .select("id, sender_id, body, created_at")
+    .select("id, sender_id, body, notification_payload, created_at")
     .eq("conversation_id", conversationId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -46,6 +60,7 @@ export async function listMessages(conversationId: string): Promise<MessageListI
     id: row.id,
     senderId: row.sender_id,
     body: row.body,
+    notificationPayload: row.notification_payload ?? null,
     createdAt: row.created_at
   }));
 }

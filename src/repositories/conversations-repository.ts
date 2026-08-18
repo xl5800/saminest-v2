@@ -29,8 +29,15 @@ export interface ConversationListItem {
   id: string;
   postId: string | null;
   postTitle: string | null;
+  /** 会话是从哪个入口创建的，见 conversations.origin_type 那份迁移。
+   *  'system' 这一种没有"对方"（otherUserId 恒为 null，但原因跟"对方已
+   *  退出会话"完全不同）——页面侧必须靠这个字段识别系统通知会话，不能
+   *  沿用"otherUserId 为 null 就显示'对方'"那条兜底逻辑，两者是不同的
+   *  产品含义。 */
+  originType: "post" | "activity" | "profile" | "system";
   /** 对方的 user_id；正常情况下（direct 会话恰好两个活跃成员）能唯一
-   *  确定，找不到（比如对方已经退出会话）时是 null。 */
+   *  确定，找不到（比如对方已经退出会话，或者本来就是 originType ===
+   *  'system' 这种没有对方的会话）时是 null。 */
   otherUserId: string | null;
   otherDisplayName: string | null;
   otherAvatarUrl: string | null;
@@ -41,6 +48,7 @@ export interface ConversationListItem {
 interface ConversationListRow {
   id: string;
   post_id: string | null;
+  origin_type: string;
   last_message_at: string | null;
   created_at: string;
   // 未加别名，字段名跟着嵌套查询里的表名 posts 走（跟
@@ -175,7 +183,7 @@ export async function listMyConversations(
 ): Promise<ConversationListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("conversations")
-    .select("id, post_id, last_message_at, created_at, posts(title)")
+    .select("id, post_id, origin_type, last_message_at, created_at, posts(title)")
     .order("created_at", { ascending: false })
     .overrideTypes<ConversationListRow[]>();
 
@@ -195,6 +203,7 @@ export async function listMyConversations(
       id: row.id,
       postId: row.post_id,
       postTitle: row.posts?.title ?? null,
+      originType: row.origin_type as ConversationListItem["originType"],
       otherUserId: otherParty?.userId ?? null,
       otherDisplayName: otherParty?.displayName ?? null,
       otherAvatarUrl: otherParty?.avatarUrl ?? null,
@@ -431,4 +440,91 @@ export async function createProfileConversation(
   }
 
   return { conversationId: data };
+}
+
+/**
+ * 标记某个会话"已读"——目前只给系统通知会话用（见 conversation-page.tsx
+ * 挂载时的 useEffect），不是给所有会话通用的已读系统，这次范围只做到
+ * "消息 tab 有没有未读系统通知"这一个粒度，不做每条会话的未读计数。
+ * conversation_members_update_self 这条已有 RLS 允许用户自己更新
+ * last_read_at，不需要新迁移。
+ */
+export async function markConversationAsRead(
+  conversationId: string,
+  userId: string
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from("conversation_members")
+    .update({ last_read_at: new Date().toISOString() })
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new AppError(error.message, "CONVERSATION_MARK_READ_FAILED", error);
+  }
+}
+
+interface SystemConversationRow {
+  id: string;
+  last_message_at: string | null;
+}
+
+/**
+ * 底部导航"消息"图标未读红点用：当前用户的系统通知会话是否有比
+ * last_read_at 更新的消息。没有系统通知会话（从来没收到过一条系统通知）
+ * 时算"没有未读"，不是异常。
+ *
+ * 拆成两次简单查询（会话本身 + 对应的 conversation_members 那一行），
+ * 没有照抄任务卡里 `conversation_members!inner(last_read_at)` 那种单次
+ * 嵌套查询——嵌套 embed 在"一对多"方向（一个会话理论上可以有多个成员）
+ * 上，PostgREST 返回的是数组还是对象要看具体版本/关系推断，这里没有一个
+ * 已登录用户的真实 session 能实际跑一遍确认返回形状；拆成两次都是这个
+ * 仓库里已经反复用过的简单形状（.maybeSingle() 拿单行），跟
+ * findExistingActivityConversation()/fetchOtherParties() 是同一个"拆成
+ * 多个无歧义的简单查询"风格，不需要猜 PostgREST 嵌套 select 的返回结构，
+ * 多一次查询的成本对这个"只在底部导航渲染时查一次"的场景可以接受。
+ */
+export async function hasUnreadSystemNotification(userId: string): Promise<boolean> {
+  const client = getSupabaseClient();
+
+  const { data: conversation, error: conversationError } = await client
+    .from("conversations")
+    .select("id, last_message_at")
+    .eq("origin_type", "system")
+    .eq("created_by", userId)
+    .is("deleted_at", null)
+    .maybeSingle()
+    .overrideTypes<SystemConversationRow>();
+
+  if (conversationError) {
+    throw new AppError(
+      conversationError.message,
+      "UNREAD_SYSTEM_NOTIFICATION_CHECK_FAILED",
+      conversationError
+    );
+  }
+  if (!conversation || !conversation.last_message_at) {
+    return false;
+  }
+
+  const { data: member, error: memberError } = await client
+    .from("conversation_members")
+    .select("last_read_at")
+    .eq("conversation_id", conversation.id)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (memberError) {
+    throw new AppError(
+      memberError.message,
+      "UNREAD_SYSTEM_NOTIFICATION_CHECK_FAILED",
+      memberError
+    );
+  }
+
+  const lastReadAt = member?.last_read_at ?? null;
+  if (!lastReadAt) {
+    return true;
+  }
+  return new Date(conversation.last_message_at).getTime() > new Date(lastReadAt).getTime();
 }

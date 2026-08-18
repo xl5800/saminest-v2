@@ -1,5 +1,13 @@
 import { cleanup, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const { useHasUnreadSystemNotificationQuery } = vi.hoisted(() => ({
+  useHasUnreadSystemNotificationQuery: vi.fn()
+}));
+
+vi.mock("../features/conversations/use-has-unread-system-notification-query", () => ({
+  useHasUnreadSystemNotificationQuery
+}));
 
 import { renderWithProviders } from "../test/render-with-providers";
 import { BottomNav } from "./bottom-nav";
@@ -7,6 +15,11 @@ import { BottomNav } from "./bottom-nav";
 describe("BottomNav", () => {
   afterEach(() => {
     cleanup();
+  });
+
+  beforeEach(() => {
+    useHasUnreadSystemNotificationQuery.mockReset();
+    useHasUnreadSystemNotificationQuery.mockReturnValue({ data: false });
   });
 
   it("renders exactly 5 flat destination links, with no separate publish button", () => {
@@ -106,5 +119,21 @@ describe("BottomNav", () => {
 
     const nav = screen.getByRole("navigation", { name: "底部导航" });
     expect(nav.className).toContain("env(safe-area-inset-bottom)");
+  });
+
+  it("shows an unread dot on '消息' when there is an unread system notification", () => {
+    useHasUnreadSystemNotificationQuery.mockReturnValue({ data: true });
+
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    expect(screen.getByTestId("unread-dot")).toBeInTheDocument();
+  });
+
+  it("does not show an unread dot on '消息' when there is no unread system notification", () => {
+    useHasUnreadSystemNotificationQuery.mockReturnValue({ data: false });
+
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    expect(screen.queryByTestId("unread-dot")).not.toBeInTheDocument();
   });
 });

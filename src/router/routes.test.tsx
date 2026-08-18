@@ -16,6 +16,8 @@ const {
   getPostDetail,
   listMessages,
   sendMessage,
+  markConversationAsRead,
+  hasUnreadSystemNotification,
   listMyConversations,
   listReportsForModeration,
   getCurrentUserRole,
@@ -45,6 +47,8 @@ const {
   getPostDetail: vi.fn(),
   listMessages: vi.fn(),
   sendMessage: vi.fn(),
+  markConversationAsRead: vi.fn(),
+  hasUnreadSystemNotification: vi.fn(),
   listMyConversations: vi.fn(),
   listReportsForModeration: vi.fn(),
   getCurrentUserRole: vi.fn(),
@@ -85,7 +89,9 @@ vi.mock("../repositories/messages-repository", () => ({
 }));
 vi.mock("../repositories/conversations-repository", () => ({
   listMyConversations,
-  createProfileConversation
+  createProfileConversation,
+  markConversationAsRead,
+  hasUnreadSystemNotification
 }));
 vi.mock("../repositories/reports-repository", async () => {
   const actual = await vi.importActual<typeof import("../repositories/reports-repository")>(
@@ -362,6 +368,8 @@ describe("app routes", () => {
     getPostDetail.mockReset();
     listMessages.mockReset();
     sendMessage.mockReset();
+    markConversationAsRead.mockReset();
+    hasUnreadSystemNotification.mockReset();
     listMyConversations.mockReset();
     listReportsForModeration.mockReset();
     getCurrentUserRole.mockReset();
@@ -389,6 +397,8 @@ describe("app routes", () => {
     listPendingPosts.mockResolvedValue([]);
     listAllPosts.mockResolvedValue([]);
     listMessages.mockResolvedValue([]);
+    markConversationAsRead.mockResolvedValue(undefined);
+    hasUnreadSystemNotification.mockResolvedValue(false);
     listMyConversations.mockResolvedValue([]);
     listReportsForModeration.mockResolvedValue([]);
     listProfilesForAdmin.mockResolvedValue([]);
@@ -635,6 +645,7 @@ describe("app routes", () => {
         id: "conversation-1",
         postId: "post-1",
         postTitle: "木桌",
+        originType: "post",
         otherUserId: "seller-1",
         otherDisplayName: "Bob",
         otherAvatarUrl: null,

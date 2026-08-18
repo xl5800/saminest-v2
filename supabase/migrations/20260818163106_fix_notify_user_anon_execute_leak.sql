@@ -1,0 +1,30 @@
+-- Migration: 紧急修正——notify_user() 之前误留了 anon 角色的执行权限
+--
+-- 为什么改：
+--   上一份迁移（create_notify_user_function）只写了
+--   `revoke execute ... from public` 和 `from authenticated`，漏了
+--   `anon`。用 get_advisors 的安全检查 + 直接查
+--   information_schema.routine_privileges 确认：这个项目里新建函数默认
+--   会给 anon 角色单独授予 EXECUTE（很可能是这个 Supabase 项目的
+--   schema 级默认权限设置，`revoke ... from public` 不会撤销这种单独
+--   授予给具体角色的权限，两者是独立的）。
+--
+--   这个漏洞是真实可利用的，跟 create_activity_conversation/
+--   create_profile_conversation 那种"anon 技术上能调用，但函数内部会
+--   因为 auth.uid() 是 null 直接报错拒绝"不是同一个风险等级——notify_user
+--   完全没有检查调用者身份（它本来就不该关心调用者是谁，只关心业务函数
+--   传进来的 target_user_id），如果 anon 真的保留着执行权限，任何未登录
+--   的人都能直接调 /rest/v1/rpc/notify_user 伪造一条"系统通知"发给任意
+--   用户——必须马上收回。
+--
+-- 影响哪些表：
+--   不涉及表，只收回一个函数的执行权限。
+--
+-- 是否影响现有数据：
+--   不影响。
+--
+-- 是否需要回滚方案：
+--   不需要——收回一个从一开始就不该给出去的权限，没有"回滚回漏洞状态"
+--   的理由。
+
+revoke execute on function public.notify_user(uuid, text, text, text) from anon;

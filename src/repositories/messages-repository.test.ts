@@ -38,7 +38,7 @@ describe("listMessages", () => {
 
     expect(fromMock).toHaveBeenCalledWith("messages");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, sender_id, body, created_at"
+      "id, sender_id, body, notification_payload, created_at"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith(
       "conversation_id",
@@ -50,13 +50,14 @@ describe("listMessages", () => {
     });
   });
 
-  it("maps rows to MessageListItem", async () => {
+  it("maps a regular (user-sent) row to MessageListItem with notificationPayload: null", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
           id: "message-1",
           sender_id: "user-1",
           body: "你好",
+          notification_payload: null,
           created_at: "2026-07-17T00:00:00.000Z"
         }
       ],
@@ -70,6 +71,42 @@ describe("listMessages", () => {
         id: "message-1",
         senderId: "user-1",
         body: "你好",
+        notificationPayload: null,
+        createdAt: "2026-07-17T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("maps a system notification row (sender_id: null) to MessageListItem with its notificationPayload", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "message-2",
+          sender_id: null,
+          body: "你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。",
+          notification_payload: {
+            title: "帖子审核通过",
+            summary: "你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。",
+            link: "/post/post-1"
+          },
+          created_at: "2026-07-17T00:00:00.000Z"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMessages("conversation-1");
+
+    expect(result).toEqual([
+      {
+        id: "message-2",
+        senderId: null,
+        body: "你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。",
+        notificationPayload: {
+          title: "帖子审核通过",
+          summary: "你的帖子《周末吃火锅》审核通过，现在可以在首页看到啦。",
+          link: "/post/post-1"
+        },
         createdAt: "2026-07-17T00:00:00.000Z"
       }
     ]);

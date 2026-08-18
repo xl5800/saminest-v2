@@ -1,6 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { rpcMock, queryBuilder, overrideTypesMock, maybeSingleMock } = vi.hoisted(() => {
+const {
+  rpcMock,
+  queryBuilder,
+  overrideTypesMock,
+  maybeSingleMock,
+  markReadUpdateMock,
+  markReadFirstEqMock,
+  markReadSecondEqMock
+} = vi.hoisted(() => {
   const overrideTypesMock = vi.fn();
   const maybeSingleMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -10,8 +18,31 @@ const { rpcMock, queryBuilder, overrideTypesMock, maybeSingleMock } = vi.hoisted
   }
   builder.overrideTypes = overrideTypesMock;
   builder.maybeSingle = maybeSingleMock;
-  return { rpcMock: vi.fn(), queryBuilder: builder, overrideTypesMock, maybeSingleMock };
+
+  // markConversationAsRead 走 .update(payload).eq(...).eq(...)，两次
+  // .eq() 链式调用后直接 await 整个表达式拿 {error}，没有 .select()/
+  // .maybeSingle() 这种终止调用——跟 profiles-repository.test.ts 里
+  // updateMyProfile 的 mock 方式同一个道理（update 链路的 eq 跟
+  // select/eq/maybeSingle 那条链路的 eq 语义不一样，不能复用共享的
+  // queryBuilder），只是这里链了两层 eq，需要两层 mock 对象。
+  const markReadUpdateMock = vi.fn();
+  const markReadFirstEqMock = vi.fn();
+  const markReadSecondEqMock = vi.fn();
+  markReadUpdateMock.mockReturnValue({ eq: markReadFirstEqMock });
+  markReadFirstEqMock.mockReturnValue({ eq: markReadSecondEqMock });
+
+  return {
+    rpcMock: vi.fn(),
+    queryBuilder: builder,
+    overrideTypesMock,
+    maybeSingleMock,
+    markReadUpdateMock,
+    markReadFirstEqMock,
+    markReadSecondEqMock
+  };
 });
+
+const markReadQueryBuilder = { update: markReadUpdateMock };
 
 const fromMock = vi.fn(() => queryBuilder);
 
@@ -24,7 +55,9 @@ import {
   createDirectConversation,
   createProfileConversation,
   findExistingActivityConversation,
-  listMyConversations
+  hasUnreadSystemNotification,
+  listMyConversations,
+  markConversationAsRead
 } from "./conversations-repository";
 
 describe("createDirectConversation", () => {
@@ -306,7 +339,7 @@ describe("listMyConversations", () => {
     expect(fromMock).toHaveBeenCalledTimes(1);
     expect(fromMock).toHaveBeenCalledWith("conversations");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, last_message_at, created_at, posts(title)"
+      "id, post_id, origin_type, last_message_at, created_at, posts(title)"
     );
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
@@ -318,6 +351,7 @@ describe("listMyConversations", () => {
           {
             id: "conv-1",
             post_id: "post-1",
+            origin_type: "post",
             last_message_at: "2026-07-10T00:00:00.000Z",
             created_at: "2026-07-01T00:00:00.000Z",
             posts: { title: "Sunny room" }
@@ -353,6 +387,7 @@ describe("listMyConversations", () => {
         id: "conv-1",
         postId: "post-1",
         postTitle: "Sunny room",
+        originType: "post",
         otherUserId: "user-2",
         otherDisplayName: "Bob",
         otherAvatarUrl: "https://img.example.com/bob.jpg",
@@ -368,6 +403,7 @@ describe("listMyConversations", () => {
           {
             id: "conv-1",
             post_id: null,
+            origin_type: "post",
             last_message_at: null,
             created_at: "2026-07-01T00:00:00.000Z",
             posts: null
@@ -393,6 +429,7 @@ describe("listMyConversations", () => {
         id: "conv-1",
         postId: null,
         postTitle: null,
+        originType: "post",
         otherUserId: null,
         otherDisplayName: null,
         otherAvatarUrl: null,
@@ -407,6 +444,7 @@ describe("listMyConversations", () => {
         {
           id: "conv-1",
           post_id: null,
+          origin_type: "post",
           last_message_at: null,
           created_at: "2026-07-01T00:00:00.000Z",
           posts: null
@@ -427,6 +465,7 @@ describe("listMyConversations", () => {
         {
           id: "conv-1",
           post_id: "post-hidden",
+          origin_type: "post",
           last_message_at: null,
           created_at: "2026-07-01T00:00:00.000Z",
           posts: null
@@ -447,6 +486,7 @@ describe("listMyConversations", () => {
         {
           id: "conv-1",
           post_id: null,
+          origin_type: "post",
           last_message_at: null,
           created_at: "2026-07-05T00:00:00.000Z",
           posts: null
@@ -466,6 +506,7 @@ describe("listMyConversations", () => {
         {
           id: "conv-oldest-activity",
           post_id: null,
+          origin_type: "post",
           last_message_at: "2026-07-02T00:00:00.000Z",
           created_at: "2026-07-09T00:00:00.000Z",
           posts: null
@@ -473,6 +514,7 @@ describe("listMyConversations", () => {
         {
           id: "conv-newest-activity-null-last-message",
           post_id: null,
+          origin_type: "post",
           last_message_at: null,
           created_at: "2026-07-15T00:00:00.000Z",
           posts: null
@@ -480,6 +522,7 @@ describe("listMyConversations", () => {
         {
           id: "conv-middle-activity",
           post_id: null,
+          origin_type: "post",
           last_message_at: "2026-07-08T00:00:00.000Z",
           created_at: "2026-07-01T00:00:00.000Z",
           posts: null
@@ -515,6 +558,7 @@ describe("listMyConversations", () => {
           {
             id: "conv-1",
             post_id: null,
+            origin_type: "post",
             last_message_at: null,
             created_at: "2026-07-01T00:00:00.000Z",
             posts: null
@@ -539,6 +583,7 @@ describe("listMyConversations", () => {
           {
             id: "conv-1",
             post_id: null,
+            origin_type: "post",
             last_message_at: null,
             created_at: "2026-07-01T00:00:00.000Z",
             posts: null
@@ -562,5 +607,183 @@ describe("listMyConversations", () => {
 
   it("returns an empty list without throwing when the user has no conversations", async () => {
     await expect(listMyConversations("user-1")).resolves.toEqual([]);
+  });
+
+  it("maps origin_type: 'system' through as originType, with otherUserId null (no 'other party' concept for system notification conversations)", async () => {
+    overrideTypesMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "conv-system-1",
+            post_id: null,
+            origin_type: "system",
+            last_message_at: "2026-08-18T00:00:00.000Z",
+            created_at: "2026-08-18T00:00:00.000Z",
+            posts: null
+          }
+        ],
+        error: null
+      })
+      // 系统通知会话只有接收者自己一个成员，fetchOtherParties 里
+      // user_id !== currentUserId 这条过滤会把这一行排掉，不会再发第三次
+      // profiles 查询。
+      .mockResolvedValueOnce({
+        data: [{ conversation_id: "conv-system-1", user_id: "user-1" }],
+        error: null
+      });
+
+    const result = await listMyConversations("user-1");
+
+    expect(result).toEqual([
+      {
+        id: "conv-system-1",
+        postId: null,
+        postTitle: null,
+        originType: "system",
+        otherUserId: null,
+        otherDisplayName: null,
+        otherAvatarUrl: null,
+        lastActivityAt: "2026-08-18T00:00:00.000Z"
+      }
+    ]);
+  });
+});
+
+describe("markConversationAsRead", () => {
+  beforeEach(() => {
+    markReadUpdateMock.mockClear();
+    markReadFirstEqMock.mockClear();
+    markReadSecondEqMock.mockReset();
+    fromMock.mockClear();
+  });
+
+  it("updates last_read_at for the given conversation/user pair", async () => {
+    markReadSecondEqMock.mockResolvedValue({ error: null });
+    fromMock.mockReturnValueOnce(markReadQueryBuilder);
+
+    await markConversationAsRead("conv-1", "user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("conversation_members");
+    expect(markReadUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ last_read_at: expect.any(String) })
+    );
+    expect(markReadFirstEqMock).toHaveBeenCalledWith("conversation_id", "conv-1");
+    expect(markReadSecondEqMock).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("throws CONVERSATION_MARK_READ_FAILED when the update fails", async () => {
+    markReadSecondEqMock.mockResolvedValue({
+      error: { message: "network down", code: "500" }
+    });
+    fromMock.mockReturnValueOnce(markReadQueryBuilder);
+
+    await expect(markConversationAsRead("conv-1", "user-1")).rejects.toMatchObject({
+      code: "CONVERSATION_MARK_READ_FAILED"
+    });
+  });
+});
+
+describe("hasUnreadSystemNotification", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  it("returns false without a second query when the user has no system-notification conversation at all", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({ data: null, error: null });
+
+    const result = await hasUnreadSystemNotification("user-1");
+
+    expect(fromMock).toHaveBeenCalledTimes(1);
+    expect(fromMock).toHaveBeenCalledWith("conversations");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("origin_type", "system");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("created_by", "user-1");
+    expect(result).toBe(false);
+  });
+
+  it("returns false when the system conversation exists but has never had a message (last_message_at is null)", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: { id: "conv-system-1", last_message_at: null },
+      error: null
+    });
+
+    await expect(hasUnreadSystemNotification("user-1")).resolves.toBe(false);
+    expect(fromMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns true when last_read_at has never been set but there is at least one message", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: { id: "conv-system-1", last_message_at: "2026-08-18T00:00:00.000Z" },
+      error: null
+    });
+    maybeSingleMock.mockResolvedValueOnce({ data: { last_read_at: null }, error: null });
+
+    const result = await hasUnreadSystemNotification("user-1");
+
+    expect(fromMock).toHaveBeenNthCalledWith(2, "conversation_members");
+    expect(result).toBe(true);
+  });
+
+  it("returns true when last_message_at is more recent than last_read_at", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: { id: "conv-system-1", last_message_at: "2026-08-18T12:00:00.000Z" },
+      error: null
+    });
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { last_read_at: "2026-08-18T00:00:00.000Z" },
+      error: null
+    });
+
+    await expect(hasUnreadSystemNotification("user-1")).resolves.toBe(true);
+  });
+
+  it("returns false when last_read_at is at or after last_message_at", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: { id: "conv-system-1", last_message_at: "2026-08-18T00:00:00.000Z" },
+      error: null
+    });
+    maybeSingleMock.mockResolvedValueOnce({
+      data: { last_read_at: "2026-08-18T12:00:00.000Z" },
+      error: null
+    });
+
+    await expect(hasUnreadSystemNotification("user-1")).resolves.toBe(false);
+  });
+
+  it("throws UNREAD_SYSTEM_NOTIFICATION_CHECK_FAILED when the conversation query fails", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(hasUnreadSystemNotification("user-1")).rejects.toMatchObject({
+      code: "UNREAD_SYSTEM_NOTIFICATION_CHECK_FAILED"
+    });
+  });
+
+  it("throws UNREAD_SYSTEM_NOTIFICATION_CHECK_FAILED when the conversation_members query fails", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: { id: "conv-system-1", last_message_at: "2026-08-18T00:00:00.000Z" },
+      error: null
+    });
+    maybeSingleMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(hasUnreadSystemNotification("user-1")).rejects.toMatchObject({
+      code: "UNREAD_SYSTEM_NOTIFICATION_CHECK_FAILED"
+    });
   });
 });
