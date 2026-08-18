@@ -1,3 +1,4 @@
+import { Share } from "@capacitor/share";
 import { type UIEvent, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
@@ -7,11 +8,18 @@ import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
+import type { PostDetail } from "../../repositories/posts-repository";
 import { formatListingDate, formatPrice } from "../../utils/format";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
 }
+
+// 生产域名写死在这里，不能用 window.location.origin 拼——capacitor.config.ts
+// 没配 server.url，App 里跑的时候 location.origin 是 Capacitor 本地资源地址
+// （Android 是 https://localhost，见该配置文件的 androidScheme），不是
+// https://www.saminest.com，拿这个拼分享链接对方点了打不开。
+const PRODUCTION_ORIGIN = "https://www.saminest.com";
 
 /**
  * 发布表单提交成功后会带着 location.state.publishSuccessMessage 跳转到
@@ -39,6 +47,14 @@ interface PostDetailLocationState {
  * （分类/地区/发布时间/作者，字号调小、加大行间距——这几项对买家来说
  * 是"看一眼图和价格就能判断感不感兴趣"之外的次要信息，不需要跟标题挤在
  * 最上面）。联系方式/收藏/举报按钮和评论区顺序不变，仍然在这块之后。
+ *
+ * "分享"按钮用官方 @capacitor/share 插件调系统原生分享面板，不接入微信
+ * SDK；这个插件在纯浏览器环境下会自动降级用标准 Web Share API
+ * （navigator.share()），网页版访问详情页也能用同一个按钮，不用写
+ * App/网页两套逻辑。分享链接见上面 PRODUCTION_ORIGIN 的注释——不能用
+ * window.location.origin 拼。这一批只做"分享到微信/更多应用"这一个
+ * 入口，站内分享给好友（比如分享进站内私信）不在这次范围内，等这个上线
+ * 后再单独出任务卡。
  */
 export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -76,6 +92,25 @@ export function PostDetailPage() {
     if (container.clientWidth === 0) return;
     const index = Math.round(container.scrollLeft / container.clientWidth);
     setCurrentImageIndex(index);
+  }
+
+  // 用户主动关掉系统分享面板（没选任何 App）也会让这个 promise reject，
+  // 但 Android/iOS/Web Share API 三端 reject 的时机和错误信息不完全一致，
+  // 没法可靠区分"用户取消"和"插件真的调用失败"——按任务卡的指示，宁可把
+  // 两种情况都静默吞掉（只 console.error，不弹用户可见的错误提示），也不
+  // 要因为一次正常的取消分享给用户看一个莫名其妙的"分享失败"提示。
+  async function handleShare(post: PostDetail): Promise<void> {
+    if (!id) return;
+    try {
+      await Share.share({
+        title: post.title,
+        text: formatPrice(post.priceAmount, post.priceLabel, post.currencyCode),
+        url: `${PRODUCTION_ORIGIN}/post/${id}`,
+        dialogTitle: "分享"
+      });
+    } catch (error) {
+      console.error("分享失败：", error);
+    }
   }
 
   return (
@@ -178,6 +213,15 @@ export function PostDetailPage() {
           >
             举报
           </Link>
+        ) : null}
+        {id && data ? (
+          <button
+            type="button"
+            onClick={() => void handleShare(data)}
+            className="text-sm text-text-muted hover:text-primary hover:underline"
+          >
+            分享
+          </button>
         ) : null}
       </div>
 

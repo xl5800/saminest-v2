@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Location } from "react-router-dom";
@@ -11,7 +11,8 @@ const {
   usePostDetailQuery,
   usePostCommentsQuery,
   useCreateCommentMutation,
-  useDeleteCommentMutation
+  useDeleteCommentMutation,
+  shareMock
 } = vi.hoisted(() => ({
   useFavoritePostIdsQuery: vi.fn(),
   useToggleFavoriteMutation: vi.fn(),
@@ -20,7 +21,8 @@ const {
   usePostDetailQuery: vi.fn(),
   usePostCommentsQuery: vi.fn(),
   useCreateCommentMutation: vi.fn(),
-  useDeleteCommentMutation: vi.fn()
+  useDeleteCommentMutation: vi.fn(),
+  shareMock: vi.fn()
 }));
 
 // PostDetailPage renders FavoriteButton and ContactSellerButton, which pull in
@@ -54,6 +56,9 @@ vi.mock("../../features/comments/use-create-comment-mutation", () => ({
 }));
 vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
   useDeleteCommentMutation
+}));
+vi.mock("@capacitor/share", () => ({
+  Share: { share: shareMock }
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -104,6 +109,8 @@ describe("PostDetailPage", () => {
     usePostCommentsQuery.mockReset();
     useCreateCommentMutation.mockReset();
     useDeleteCommentMutation.mockReset();
+    shareMock.mockReset();
+    shareMock.mockResolvedValue(undefined);
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });
     useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
     // 默认查询已解析完成、且作者不是当前登录用户，让 ContactSellerButton
@@ -326,6 +333,57 @@ describe("PostDetailPage", () => {
       "href",
       "/post/post-1/report"
     );
+    expect(screen.getByRole("button", { name: "分享" })).toBeInTheDocument();
+  });
+
+  it("calls Share.share with the post title, formatted price, and the hardcoded production domain (not window.location.origin) when 分享 is clicked", async () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "分享" }));
+
+    await waitFor(() => {
+      expect(shareMock).toHaveBeenCalledWith({
+        title: "Sunny room near metro",
+        text: "USD 1,200",
+        url: "https://www.saminest.com/post/post-1",
+        dialogTitle: "分享"
+      });
+    });
+  });
+
+  // 用户主动关掉系统分享面板也会让 Share.share() reject——这跟真的调用
+  // 失败没法可靠区分，按设计应该静默吞掉，不弹任何用户可见的错误提示。
+  it("does not show any error message when Share.share rejects (e.g. the user dismissed the native share sheet)", async () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+    shareMock.mockRejectedValue(new Error("Share canceled"));
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "分享" }));
+
+    await waitFor(() => {
+      expect(shareMock).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    consoleErrorSpy.mockRestore();
   });
 
   it("renders the comment section with the comment count from PostDetail.commentCount", () => {
