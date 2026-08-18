@@ -333,18 +333,18 @@ describe("listMyConversations", () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
   });
 
-  it("queries conversations with a nested posts(title) select, ordered by created_at desc, and skips the member/profile queries when there are no conversations", async () => {
+  it("queries conversations with a nested posts(title) select (including last_message_preview), ordered by created_at desc, and skips the member/profile queries when there are no conversations", async () => {
     await listMyConversations("user-1");
 
     expect(fromMock).toHaveBeenCalledTimes(1);
     expect(fromMock).toHaveBeenCalledWith("conversations");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, origin_type, last_message_at, created_at, posts(title)"
+      "id, post_id, origin_type, last_message_at, last_message_preview, created_at, posts(title)"
     );
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
-  it("batch-queries conversation_members (excluding left_at) then profiles, and maps a row with a post title + the other party's identity", async () => {
+  it("batch-queries conversation_members (excluding left_at, including last_read_at) then profiles, and maps a row with a post title + the other party's identity + preview/unread", async () => {
     overrideTypesMock
       .mockResolvedValueOnce({
         data: [
@@ -353,6 +353,7 @@ describe("listMyConversations", () => {
             post_id: "post-1",
             origin_type: "post",
             last_message_at: "2026-07-10T00:00:00.000Z",
+            last_message_preview: "在的，什么事？",
             created_at: "2026-07-01T00:00:00.000Z",
             posts: { title: "Sunny room" }
           }
@@ -361,8 +362,12 @@ describe("listMyConversations", () => {
       })
       .mockResolvedValueOnce({
         data: [
-          { conversation_id: "conv-1", user_id: "user-1" },
-          { conversation_id: "conv-1", user_id: "user-2" }
+          // 当前用户自己（user-1）的 last_read_at 早于 last_message_at，
+          // 这一行同时验证了这次改动的两件事：能从同一批
+          // conversation_members 行里挑出自己那条算 isUnread，而不是
+          // 只挑对方那条算身份。
+          { conversation_id: "conv-1", user_id: "user-1", last_read_at: "2026-07-09T00:00:00.000Z" },
+          { conversation_id: "conv-1", user_id: "user-2", last_read_at: "2026-07-10T00:00:00.000Z" }
         ],
         error: null
       })
@@ -374,7 +379,7 @@ describe("listMyConversations", () => {
     const result = await listMyConversations("user-1");
 
     expect(fromMock).toHaveBeenNthCalledWith(2, "conversation_members");
-    expect(queryBuilder.select).toHaveBeenNthCalledWith(2, "conversation_id, user_id");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(2, "conversation_id, user_id, last_read_at");
     expect(queryBuilder.in).toHaveBeenCalledWith("conversation_id", ["conv-1"]);
     expect(queryBuilder.is).toHaveBeenCalledWith("left_at", null);
 
@@ -391,7 +396,9 @@ describe("listMyConversations", () => {
         otherUserId: "user-2",
         otherDisplayName: "Bob",
         otherAvatarUrl: "https://img.example.com/bob.jpg",
-        lastActivityAt: "2026-07-10T00:00:00.000Z"
+        lastActivityAt: "2026-07-10T00:00:00.000Z",
+        lastMessagePreview: "在的，什么事？",
+        isUnread: true
       }
     ]);
   });
@@ -405,6 +412,7 @@ describe("listMyConversations", () => {
             post_id: null,
             origin_type: "post",
             last_message_at: null,
+            last_message_preview: null,
             created_at: "2026-07-01T00:00:00.000Z",
             posts: null
           }
@@ -415,7 +423,7 @@ describe("listMyConversations", () => {
       // conversation_members 这次查询（.is("left_at", null) 已经把对方
       // 那一行过滤掉）就只会返回这一条。
       .mockResolvedValueOnce({
-        data: [{ conversation_id: "conv-1", user_id: "user-1" }],
+        data: [{ conversation_id: "conv-1", user_id: "user-1", last_read_at: null }],
         error: null
       });
 
@@ -433,7 +441,11 @@ describe("listMyConversations", () => {
         otherUserId: null,
         otherDisplayName: null,
         otherAvatarUrl: null,
-        lastActivityAt: "2026-07-01T00:00:00.000Z"
+        lastActivityAt: "2026-07-01T00:00:00.000Z",
+        lastMessagePreview: null,
+        // 从来没有过消息（last_message_at 为空），不管 last_read_at 是什么
+        // 都不算未读。
+        isUnread: false
       }
     ]);
   });
@@ -618,17 +630,19 @@ describe("listMyConversations", () => {
             post_id: null,
             origin_type: "system",
             last_message_at: "2026-08-18T00:00:00.000Z",
+            last_message_preview: "你的帖子审核通过，现在可以在首页看到啦。",
             created_at: "2026-08-18T00:00:00.000Z",
             posts: null
           }
         ],
         error: null
       })
-      // 系统通知会话只有接收者自己一个成员，fetchOtherParties 里
-      // user_id !== currentUserId 这条过滤会把这一行排掉，不会再发第三次
-      // profiles 查询。
+      // 系统通知会话只有接收者自己一个成员，fetchConversationMemberInfo
+      // 里 user_id !== currentUserId 这条过滤会把这一行排掉（不会再发
+      // 第三次 profiles 查询），但 user_id === currentUserId 这一条现在
+      // 会被用来算 isUnread。
       .mockResolvedValueOnce({
-        data: [{ conversation_id: "conv-system-1", user_id: "user-1" }],
+        data: [{ conversation_id: "conv-system-1", user_id: "user-1", last_read_at: null }],
         error: null
       });
 
@@ -643,9 +657,130 @@ describe("listMyConversations", () => {
         otherUserId: null,
         otherDisplayName: null,
         otherAvatarUrl: null,
-        lastActivityAt: "2026-08-18T00:00:00.000Z"
+        lastActivityAt: "2026-08-18T00:00:00.000Z",
+        lastMessagePreview: "你的帖子审核通过，现在可以在首页看到啦。",
+        isUnread: true
       }
     ]);
+  });
+
+  describe("isUnread computation", () => {
+    // 每个用例都只放一条 conversation_members 行（当前用户自己），不涉及
+    // "对方是谁"这条支线逻辑，专门验证 computeIsUnread 通过
+    // fetchConversationMemberInfo 接到 listMyConversations 之后的行为。
+
+    it("is false when the conversation has never had a message (last_message_at is null), regardless of last_read_at", async () => {
+      overrideTypesMock
+        .mockResolvedValueOnce({
+          data: [
+            {
+              id: "conv-1",
+              post_id: null,
+              origin_type: "post",
+              last_message_at: null,
+              last_message_preview: null,
+              created_at: "2026-07-01T00:00:00.000Z",
+              posts: null
+            }
+          ],
+          error: null
+        })
+        .mockResolvedValueOnce({
+          data: [
+            {
+              conversation_id: "conv-1",
+              user_id: "user-1",
+              last_read_at: "2026-06-01T00:00:00.000Z"
+            }
+          ],
+          error: null
+        });
+
+      const result = await listMyConversations("user-1");
+
+      expect(result[0].isUnread).toBe(false);
+    });
+
+    it("is true when there is a message but the user has never read this conversation (last_read_at is null)", async () => {
+      overrideTypesMock
+        .mockResolvedValueOnce({
+          data: [
+            {
+              id: "conv-1",
+              post_id: null,
+              origin_type: "post",
+              last_message_at: "2026-07-10T00:00:00.000Z",
+              last_message_preview: "hi",
+              created_at: "2026-07-01T00:00:00.000Z",
+              posts: null
+            }
+          ],
+          error: null
+        })
+        .mockResolvedValueOnce({
+          data: [{ conversation_id: "conv-1", user_id: "user-1", last_read_at: null }],
+          error: null
+        });
+
+      const result = await listMyConversations("user-1");
+
+      expect(result[0].isUnread).toBe(true);
+    });
+
+    it("is false when last_read_at is at or after last_message_at", async () => {
+      overrideTypesMock
+        .mockResolvedValueOnce({
+          data: [
+            {
+              id: "conv-1",
+              post_id: null,
+              origin_type: "post",
+              last_message_at: "2026-07-10T00:00:00.000Z",
+              last_message_preview: "hi",
+              created_at: "2026-07-01T00:00:00.000Z",
+              posts: null
+            }
+          ],
+          error: null
+        })
+        .mockResolvedValueOnce({
+          data: [
+            {
+              conversation_id: "conv-1",
+              user_id: "user-1",
+              last_read_at: "2026-07-10T12:00:00.000Z"
+            }
+          ],
+          error: null
+        });
+
+      const result = await listMyConversations("user-1");
+
+      expect(result[0].isUnread).toBe(false);
+    });
+
+    it("falls back to isUnread: false (never-read treated the same as no data) when the current user's own row is missing from the conversation_members batch for some reason", async () => {
+      overrideTypesMock
+        .mockResolvedValueOnce({
+          data: [
+            {
+              id: "conv-1",
+              post_id: null,
+              origin_type: "post",
+              last_message_at: null,
+              last_message_preview: null,
+              created_at: "2026-07-01T00:00:00.000Z",
+              posts: null
+            }
+          ],
+          error: null
+        })
+        .mockResolvedValueOnce({ data: [], error: null });
+
+      const result = await listMyConversations("user-1");
+
+      expect(result[0].isUnread).toBe(false);
+    });
   });
 });
 

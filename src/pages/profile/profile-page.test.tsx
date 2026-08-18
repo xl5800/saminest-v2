@@ -51,14 +51,38 @@ describe("ProfilePage", () => {
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
   });
 
-  it("shows an '编辑' link next to the display name pointing to /profile/edit", async () => {
+  it("shows a '编辑资料' button pointing to /profile/edit", async () => {
     renderWithProviders(<ProfilePage />);
 
     await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "编辑" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
       "href",
       "/profile/edit"
     );
+  });
+
+  it("shows the city and bio when the profile has them, matching the public profile page's ProfileSummary display", async () => {
+    getMyProfile.mockResolvedValue({
+      displayName: "Alice",
+      bio: "Hi there, I like hiking.",
+      avatarUrl: null,
+      locationName: "Rockville"
+    });
+
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(screen.getByText("Rockville")).toBeInTheDocument();
+    expect(screen.getByText("Hi there, I like hiking.")).toBeInTheDocument();
+  });
+
+  it("does not show a city/bio section when the profile has neither", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    // getMyProfile 这次只 mock 了 displayName（beforeEach 里
+    // { displayName: "Alice" }），bio/locationName 都是 undefined。
+    expect(screen.queryByText(/暂无简介/)).not.toBeInTheDocument();
   });
 
   it("shows the '我的收藏' link to /favorites", async () => {

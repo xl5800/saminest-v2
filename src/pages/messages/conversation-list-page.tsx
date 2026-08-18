@@ -14,14 +14,24 @@ const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
  *
  * 每一行改成左边头像 + 右边信息列，显示对方的真实头像/昵称，不再是"买家/
  * 卖家"这种身份标签——头像有图用 <img>，没有就用昵称首字母圆形占位，跟
- * profile-page.tsx 现有的头像展示逻辑是同一套写法。项目目前没有头像上传
- * 功能，profiles.avatar_url 实际上恒为 null（同一条注释见
- * profile-page.tsx），所以这次改完之后，在头像上传功能上线前，用户看到
- * 的对方头像大概率还是昵称首字母占位，不是真实图片——这是当前产品阶段的
- * 已知限制，不是这次任务没做完。
+ * profile-page.tsx 现有的头像展示逻辑是同一套写法。
  *
- * 这一轮仍然不展示"最后一条消息预览"文字，只做时间排序（产品要求里消息
- * 预览是可选项，这次没有做，保持范围聚焦）。
+ * 最后一条消息预览 + 未读标记：`lastMessagePreview`/`isUnread` 都已经在
+ * listMyConversations() 里算好，这一层只负责展示，不重复判断——系统通知
+ * 会话的预览文字走的是同一个字段（触发器已经把 notification_payload 的
+ * summary/title 归一成同一列），不需要为系统会话单独取一份文案。
+ * `lastMessagePreview` 为 null（这条会话从来没有过消息）时不展示这一行，
+ * 不用"暂无消息"这种占位文案去填一个本来就没有内容的位置。预览文字必须
+ * 单行截断（truncate），长消息不能把卡片撑高。
+ *
+ * 未读的视觉区分选择"昵称/预览文字加粗 + 行尾一个小红点"，跟系统通知
+ * 现有的 Bell 图标视觉语言保持同一个克制的调性（不用醒目的数字徽标或者
+ * 大色块）——红点用 aria-hidden，未读状态本身已经靠加粗的文字传达给
+ * 屏幕阅读器，不需要额外语义。
+ *
+ * 这一轮之前"仍然不展示最后一条消息预览文字"的限制已经解除；社交资料页
+ * 第一批留下的"整行拆成头像/昵称 Link → /users/:userId、标题/时间 Link →
+ * /messages/:id"这个双 Link 结构不变，理由见下面各注释块。
  *
  * 社交资料页第一批：头像和昵称各自包一层指向公开个人主页的
  * `<Link to={`/users/${otherUserId}`}>`——不能把整行卡片继续做成一个大
@@ -87,6 +97,12 @@ export function ConversationListPage() {
               </div>
             );
             const showProfileLink = !isSystemConversation && conversation.otherUserId;
+            const nicknameClassName = conversation.isUnread
+              ? "block truncate text-sm font-bold text-text"
+              : "block truncate text-sm font-medium text-text";
+            const previewClassName = conversation.isUnread
+              ? "mt-0.5 truncate whitespace-nowrap text-xs font-semibold text-text"
+              : "mt-0.5 truncate whitespace-nowrap text-xs text-text-muted";
 
             return (
               <li
@@ -104,14 +120,12 @@ export function ConversationListPage() {
                   {showProfileLink ? (
                     <Link
                       to={`/users/${conversation.otherUserId}`}
-                      className="block truncate text-sm font-medium text-text hover:underline"
+                      className={`${nicknameClassName} hover:underline`}
                     >
                       {nickname}
                     </Link>
                   ) : (
-                    <span className="block truncate text-sm font-medium text-text">
-                      {nickname}
-                    </span>
+                    <span className={nicknameClassName}>{nickname}</span>
                   )}
                   <Link
                     to={`/messages/${conversation.id}`}
@@ -123,11 +137,23 @@ export function ConversationListPage() {
                         关于：{conversation.postTitle}
                       </span>
                     ) : null}
+                    {conversation.lastMessagePreview ? (
+                      <span data-testid="conversation-preview" className={previewClassName}>
+                        {conversation.lastMessagePreview}
+                      </span>
+                    ) : null}
                     <span className="mt-0.5 block text-xs text-text-muted">
                       {formatPublishedAt(conversation.lastActivityAt)}
                     </span>
                   </Link>
                 </div>
+                {conversation.isUnread ? (
+                  <span
+                    aria-hidden="true"
+                    data-testid="unread-dot"
+                    className="h-2 w-2 shrink-0 rounded-full bg-danger"
+                  />
+                ) : null}
               </li>
             );
           })}

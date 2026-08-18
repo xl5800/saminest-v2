@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
+import { ProfileSummary } from "../../components/profile-summary";
 import { useCreateProfileConversationMutation } from "../../features/conversations/use-create-profile-conversation-mutation";
 import { usePublicProfileQuery } from "../../features/profile/use-public-profile-query";
 import { useAuthStore } from "../../store/auth-store";
@@ -33,6 +34,11 @@ const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
  * 用户点了之后才从后端报错，跟 contact-seller-button.tsx 对帖子作者本人
  * 隐藏按钮是同一个原则。未登录访客不算"自己"，仍然会看到按钮，点击后
  * 跳转登录页，不在这里就隐藏掉。
+ *
+ * 头像/姓名/城市/简介这一段展示逻辑抽成了共享组件 ProfileSummary（"我的"
+ * 页 profile-page.tsx 也在用，两个页面头部视觉这次统一），这里只把"发
+ * 消息"按钮（连同它自己的错误提示）作为 children 传进去——ProfileSummary
+ * 只负责摆放，不关心 children 具体是发消息按钮还是别的东西。
  */
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -77,7 +83,6 @@ export function UserProfilePage() {
   }
 
   const isOwnProfile = !!currentUserId && currentUserId === userId;
-  const avatarInitial = data?.displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <main className="mx-auto max-w-md px-4 py-6 pb-20 md:pb-6">
@@ -106,32 +111,12 @@ export function UserProfilePage() {
       ) : null}
 
       {!isPending && !isError && data ? (
-        <div className="flex flex-col items-center text-center">
-          {data.avatarUrl ? (
-            <img
-              src={data.avatarUrl}
-              alt=""
-              className="h-24 w-24 rounded-full object-cover"
-            />
-          ) : (
-            <div
-              aria-hidden="true"
-              className="flex h-24 w-24 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted"
-            >
-              {avatarInitial}
-            </div>
-          )}
-
-          <h1 className="mt-3 break-words text-xl font-bold text-text">{data.displayName}</h1>
-
-          {data.locationName ? (
-            <p className="mt-1 text-sm text-text-muted">{data.locationName}</p>
-          ) : null}
-
-          {data.bio ? (
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">{data.bio}</p>
-          ) : null}
-
+        <ProfileSummary
+          displayName={data.displayName}
+          avatarUrl={data.avatarUrl}
+          locationName={data.locationName}
+          bio={data.bio}
+        >
           {error ? (
             <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
               {error}
@@ -148,7 +133,7 @@ export function UserProfilePage() {
               {createConversation.isPending ? "创建会话中…" : "发消息"}
             </button>
           ) : null}
-        </div>
+        </ProfileSummary>
       ) : null}
     </main>
   );

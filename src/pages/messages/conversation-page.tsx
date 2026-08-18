@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
 import { Fragment, type FormEvent, useEffect, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
@@ -141,14 +142,24 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  *   误判成"对方发的普通消息"进而套用头像/spacer 逻辑。
  * - 输入框（整个 <form data-testid="conversation-composer">）不渲染——
  *   没有人会收到回复，不应该让用户以为可以对系统说话。
- * - 挂载时（确认是系统会话之后）调用 markConversationAsRead 标记已读，
- *   驱动底部导航红点消失；失败只 console.error，不影响页面正常使用——
- *   标记已读是次要副作用，不应该因为它失败就让整个页面报错。
+ *
+ * 会话列表未读标记：挂载时对任意会话（不再限定 originType === 'system'）
+ * 调用 markConversationAsRead 标记已读——markConversationAsRead 本身早就
+ * 是通用实现（只是更新 conversation_members.last_read_at），之前只在系统
+ * 会话分支调用是范围限制，不是这个函数只支持系统会话。标记成功后
+ * invalidate 会话列表用到的 ["conversations", currentUserId] 这个 query
+ * key，这样返回 /messages 列表页时能立刻看到这条会话的未读红点/加粗消失，
+ * 不用等到下一次 refetchOnWindowFocus 才刷新——底部导航"消息"图标的未读
+ * 红点（hasUnreadSystemNotification，只反映系统通知）这次不跟着改，继续
+ * 靠它自己原来的 refetchOnWindowFocus 机制，范围说明里已经写明这是独立
+ * 的另一个改动，这次不做。失败只 console.error，不影响页面正常使用——
+ * 标记已读是次要副作用，不应该因为它失败就让整个页面报错。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const session = useAuthStore((s) => s.session);
   const currentUserId = session?.user.id;
 
@@ -176,12 +187,16 @@ export function MessageConversationPage() {
       : "私信会话";
 
   useEffect(() => {
-    if (!conversationId || !currentUserId || !isSystemConversation) return;
+    if (!conversationId || !currentUserId) return;
 
-    markConversationAsRead(conversationId, currentUserId).catch((error) => {
-      console.error("标记系统通知会话已读失败：", error);
-    });
-  }, [conversationId, isSystemConversation, currentUserId]);
+    markConversationAsRead(conversationId, currentUserId)
+      .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ["conversations", currentUserId] });
+      })
+      .catch((error) => {
+        console.error("标记会话已读失败：", error);
+      });
+  }, [conversationId, currentUserId, queryClient]);
 
   function handleBack(): void {
     if (location.key === "default") {

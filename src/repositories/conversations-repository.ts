@@ -43,6 +43,14 @@ export interface ConversationListItem {
   otherAvatarUrl: string | null;
   /** last_message_at 为空时退回 created_at，用作列表排序的依据。 */
   lastActivityAt: string;
+  /** 最后一条消息的预览文字（普通消息用 body，系统通知用
+   *  notification_payload 的 summary/title），会话从来没有过消息时为
+   *  null——见 add_conversation_last_message_preview 迁移文件里
+   *  sync_conversation_last_message_at() 触发器的维护逻辑。 */
+  lastMessagePreview: string | null;
+  /** 当前用户有没有读过这条会话的最新消息，见下面 computeIsUnread 的
+   *  判断逻辑。 */
+  isUnread: boolean;
 }
 
 interface ConversationListRow {
@@ -50,6 +58,7 @@ interface ConversationListRow {
   post_id: string | null;
   origin_type: string;
   last_message_at: string | null;
+  last_message_preview: string | null;
   created_at: string;
   // 未加别名，字段名跟着嵌套查询里的表名 posts 走（跟
   // posts-repository.ts 里 location:locations(name) 那种带别名的写法
@@ -64,6 +73,7 @@ interface ConversationListRow {
 interface ConversationMemberRow {
   conversation_id: string;
   user_id: string;
+  last_read_at: string | null;
 }
 
 interface OtherPartyProfileRow {
@@ -78,38 +88,58 @@ interface OtherParty {
   avatarUrl: string | null;
 }
 
+interface ConversationMemberInfo {
+  otherPartyByConversation: Map<string, OtherParty>;
+  /** 当前用户自己在每个会话里的 last_read_at，供 listMyConversations 算
+   *  isUnread 用。找不到（比如这批会话根本没有查到任何活跃成员行——理论
+   *  上不会发生，当前用户自己必然是活跃成员）时不在这个 Map 里出现，调用
+   *  方按"当成从没读过"处理，跟 computeIsUnread 的判断口径一致。 */
+  ownLastReadAtByConversation: Map<string, string | null>;
+}
+
 /**
- * 批量查出这批会话各自的"对方是谁"，按 conversation_id 拼成一个 Map，
- * 跟 reports-repository.ts 的 fetchTargetTitles() 是同一个"批量查 +
- * Map 拼装"模式（避免每个会话单独查一次，N+1）。但这里查询失败时选择
- * 往外抛 AppError，不像 fetchTargetTitles 那样 try/catch 静默吞掉——
- * 标题在举报队列里只是辅助展示信息，查不到不影响核心功能；而"对方是谁"
- * 是这个消息列表的核心内容，查询失败应该让整个列表进入错误态，不应该
- * 悄悄显示一屏"未知用户"。
+ * 批量查出这批会话各自的"对方是谁"+当前用户自己的 last_read_at，按
+ * conversation_id 拼成两个 Map，跟 reports-repository.ts 的
+ * fetchTargetTitles() 是同一个"批量查 + Map 拼装"模式（避免每个会话单独
+ * 查一次，N+1）。但这里查询失败时选择往外抛 AppError，不像
+ * fetchTargetTitles 那样 try/catch 静默吞掉——标题在举报队列里只是辅助
+ * 展示信息，查不到不影响核心功能；而"对方是谁"/"有没有未读"是这个消息
+ * 列表的核心内容，查询失败应该让整个列表进入错误态，不应该悄悄显示一屏
+ * "未知用户"或者错误的未读状态。
+ *
+ * 会话列表加未读标记之前，这个函数只关心 user_id !== currentUserId 的那
+ * 一条（用于确定对方身份）；conversation_members 这批行里其实本来就带着
+ * user_id === currentUserId 的那一条（当前用户自己），之前的实现直接把它
+ * 过滤掉了——现在未读判断需要当前用户自己的 last_read_at，这一条正好就在
+ * 同一批已经查到的行里，没有理由为了多拿这一列再单独发一次查询，所以这次
+ * 把函数改成一次查询、两个 Map 都从这批行里建。
  *
  * 分两步：
  * 1. 查这批会话的 conversation_members（排除 left_at 不为空、已经退出
- *    的），按 conversation_id 分组，找出 user_id !== currentUserId 的
- *    那一条——V1 的 direct 会话正常情况下只有两个活跃成员，这样能唯一
- *    确定对方。找不到（比如对方已经退出）就不在结果 Map 里出现，调用方
- *    据此把 otherUserId 等字段展示成 null，不抛错，这不是一种失败。
+ *    的），按 conversation_id 分组：user_id !== currentUserId 的那一条
+ *    进 otherPartyByConversation 对应的候选 id（V1 的 direct 会话正常情况
+ *    下只有两个活跃成员，这样能唯一确定对方；找不到就不在结果 Map 里
+ *    出现，调用方据此把 otherUserId 等字段展示成 null，不抛错，这不是
+ *    一种失败）；user_id === currentUserId 的那一条直接进
+ *    ownLastReadAtByConversation。
  * 2. 收集第 1 步算出的所有 otherUserId，去重后一次性查 profiles，按 id
  *    建索引，再跟第 1 步的结果拼起来。
  */
-async function fetchOtherParties(
+async function fetchConversationMemberInfo(
   conversationIds: string[],
   currentUserId: string
-): Promise<Map<string, OtherParty>> {
+): Promise<ConversationMemberInfo> {
   const otherUserIdByConversation = new Map<string, string>();
+  const ownLastReadAtByConversation = new Map<string, string | null>();
   if (conversationIds.length === 0) {
-    return new Map();
+    return { otherPartyByConversation: new Map(), ownLastReadAtByConversation };
   }
 
   const client = getSupabaseClient();
 
   const { data: memberRows, error: memberError } = await client
     .from("conversation_members")
-    .select("conversation_id, user_id")
+    .select("conversation_id, user_id, last_read_at")
     .in("conversation_id", conversationIds)
     .is("left_at", null)
     .overrideTypes<ConversationMemberRow[]>();
@@ -119,14 +149,16 @@ async function fetchOtherParties(
   }
 
   for (const row of memberRows ?? []) {
-    if (row.user_id !== currentUserId) {
+    if (row.user_id === currentUserId) {
+      ownLastReadAtByConversation.set(row.conversation_id, row.last_read_at);
+    } else {
       otherUserIdByConversation.set(row.conversation_id, row.user_id);
     }
   }
 
   const otherUserIds = [...new Set(otherUserIdByConversation.values())];
   if (otherUserIds.length === 0) {
-    return new Map();
+    return { otherPartyByConversation: new Map(), ownLastReadAtByConversation };
   }
 
   const { data: profileRows, error: profileError } = await client
@@ -141,16 +173,30 @@ async function fetchOtherParties(
 
   const profileById = new Map((profileRows ?? []).map((row) => [row.id, row]));
 
-  const result = new Map<string, OtherParty>();
+  const otherPartyByConversation = new Map<string, OtherParty>();
   for (const [conversationId, otherUserId] of otherUserIdByConversation) {
     const profile = profileById.get(otherUserId);
-    result.set(conversationId, {
+    otherPartyByConversation.set(conversationId, {
       userId: otherUserId,
       displayName: profile?.display_name ?? null,
       avatarUrl: profile?.avatar_url ?? null
     });
   }
-  return result;
+  return { otherPartyByConversation, ownLastReadAtByConversation };
+}
+
+/**
+ * 会话"未读"判断，跟 hasUnreadSystemNotification() 尾部的判断逐字一致
+ * （抽成共享函数，避免同一段"没有消息就不算未读，没读过就算未读，比
+ * 上次读的时间晚才算未读"的三段判断在文件里写两遍）：
+ * - 没有最后一条消息（会话从来没人发过消息）→ 不算未读。
+ * - 有消息但从来没读过（last_read_at 为空）→ 算未读。
+ * - 否则按时间比较：最后一条消息晚于上次读取时间才算未读。
+ */
+function computeIsUnread(lastMessageAt: string | null, lastReadAt: string | null): boolean {
+  if (!lastMessageAt) return false;
+  if (!lastReadAt) return true;
+  return new Date(lastMessageAt).getTime() > new Date(lastReadAt).getTime();
 }
 
 /**
@@ -162,7 +208,7 @@ async function fetchOtherParties(
  * 成员的会话，这里不需要再显式 join/过滤 conversation_members。
  *
  * 对方是谁（otherUserId/otherDisplayName/otherAvatarUrl）交给
- * fetchOtherParties() 批量查，不逐条现查——这一版之前用 created_by 跟
+ * fetchConversationMemberInfo() 批量查，不逐条现查——这一版之前用 created_by 跟
  * currentUserId 比较推出"对方是买家还是卖家"，现在要展示真实身份就必须
  * 知道对方的 user_id，created_by 已经不够用了（它只是会话的发起者，不是
  * "对方"本身），所以这里从 1 次查询变成最多 3 次（会话数为 0 时后面两次
@@ -183,7 +229,9 @@ export async function listMyConversations(
 ): Promise<ConversationListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("conversations")
-    .select("id, post_id, origin_type, last_message_at, created_at, posts(title)")
+    .select(
+      "id, post_id, origin_type, last_message_at, last_message_preview, created_at, posts(title)"
+    )
     .order("created_at", { ascending: false })
     .overrideTypes<ConversationListRow[]>();
 
@@ -192,13 +240,12 @@ export async function listMyConversations(
   }
 
   const rows = data ?? [];
-  const otherPartyByConversation = await fetchOtherParties(
-    rows.map((row) => row.id),
-    currentUserId
-  );
+  const { otherPartyByConversation, ownLastReadAtByConversation } =
+    await fetchConversationMemberInfo(rows.map((row) => row.id), currentUserId);
 
   const items: ConversationListItem[] = rows.map((row) => {
     const otherParty = otherPartyByConversation.get(row.id) ?? null;
+    const ownLastReadAt = ownLastReadAtByConversation.get(row.id) ?? null;
     return {
       id: row.id,
       postId: row.post_id,
@@ -207,7 +254,9 @@ export async function listMyConversations(
       otherUserId: otherParty?.userId ?? null,
       otherDisplayName: otherParty?.displayName ?? null,
       otherAvatarUrl: otherParty?.avatarUrl ?? null,
-      lastActivityAt: row.last_message_at ?? row.created_at
+      lastActivityAt: row.last_message_at ?? row.created_at,
+      lastMessagePreview: row.last_message_preview,
+      isUnread: computeIsUnread(row.last_message_at, ownLastReadAt)
     };
   });
 
@@ -443,10 +492,9 @@ export async function createProfileConversation(
 }
 
 /**
- * 标记某个会话"已读"——目前只给系统通知会话用（见 conversation-page.tsx
- * 挂载时的 useEffect），不是给所有会话通用的已读系统，这次范围只做到
- * "消息 tab 有没有未读系统通知"这一个粒度，不做每条会话的未读计数。
- * conversation_members_update_self 这条已有 RLS 允许用户自己更新
+ * 标记某个会话"已读"——conversation-page.tsx 挂载时对任意会话调用（不再
+ * 限定系统通知会话，见该文件顶部注释），驱动会话列表每一行的 isUnread
+ * 标记。conversation_members_update_self 这条已有 RLS 允许用户自己更新
  * last_read_at，不需要新迁移。
  */
 export async function markConversationAsRead(
@@ -480,9 +528,12 @@ interface SystemConversationRow {
  * 上，PostgREST 返回的是数组还是对象要看具体版本/关系推断，这里没有一个
  * 已登录用户的真实 session 能实际跑一遍确认返回形状；拆成两次都是这个
  * 仓库里已经反复用过的简单形状（.maybeSingle() 拿单行），跟
- * findExistingActivityConversation()/fetchOtherParties() 是同一个"拆成
- * 多个无歧义的简单查询"风格，不需要猜 PostgREST 嵌套 select 的返回结构，
- * 多一次查询的成本对这个"只在底部导航渲染时查一次"的场景可以接受。
+ * findExistingActivityConversation()/fetchConversationMemberInfo() 是同一个
+ * "拆成多个无歧义的简单查询"风格，不需要猜 PostgREST 嵌套 select 的返回
+ * 结构，多一次查询的成本对这个"只在底部导航渲染时查一次"的场景可以接受。
+ *
+ * "有没有比上次读取时间更新的消息"这段判断跟 listMyConversations 给每条
+ * 会话算 isUnread 是同一套逻辑，抽成了上面的 computeIsUnread 共享。
  */
 export async function hasUnreadSystemNotification(userId: string): Promise<boolean> {
   const client = getSupabaseClient();
@@ -522,9 +573,5 @@ export async function hasUnreadSystemNotification(userId: string): Promise<boole
     );
   }
 
-  const lastReadAt = member?.last_read_at ?? null;
-  if (!lastReadAt) {
-    return true;
-  }
-  return new Date(conversation.last_message_at).getTime() > new Date(lastReadAt).getTime();
+  return computeIsUnread(conversation.last_message_at, member?.last_read_at ?? null);
 }

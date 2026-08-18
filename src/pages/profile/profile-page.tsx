@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { ProfileSummary } from "../../components/profile-summary";
 import { useIsAdminQuery } from "../../features/admin/use-is-admin-query";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { authService } from "../../services/auth/auth-service";
@@ -25,6 +26,21 @@ const chevronClassName = "text-[18px] leading-none text-[#999]";
  *
  * 是否管理员复用现有的 useIsAdminQuery（RequireAdmin 也在用同一个
  * hook），不重新实现一遍角色判断逻辑。
+ *
+ * 头部视觉统一：原来是 56px 头像 + 昵称 + 内联"编辑"文字链接 + 邮箱的小
+ * 横条卡片，跟公开主页（user-profile-page.tsx）96px 大头像居中 + 昵称 +
+ * 城市 + 简介的展示完全是两套视觉语言——用户自己看不到"我在别人眼里主页
+ * 长什么样"，也看不到自己填的城市/简介有没有生效（这里之前压根没展示
+ * 这两个字段）。现在改成用共享组件 ProfileSummary 渲染头像/昵称/城市/
+ * 简介，两个页面头部手感一致；数据来自现有的 useMyProfileQuery()，
+ * MyProfile 早就带了 bio/locationName，不需要新查询。
+ *
+ * 邮箱是这个页面独有的展示项（公开主页从来不展示邮箱——这是隐私信息，
+ * ProfileSummary 不应该知道"邮箱"这个概念），跟"编辑资料"按钮一起作为
+ * children 传给 ProfileSummary，渲染在头像/昵称/城市/简介下面同一个
+ * 操作区里，不塞进共享组件的 props。原来内联的"编辑"文字链接去掉，统一
+ * 换成这个按钮，视觉重量参考 user-profile-page.tsx 的"发消息"按钮，两个
+ * 页面手感一致。
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -50,10 +66,6 @@ export function ProfilePage() {
     }
   }
 
-  // 目前 v2 没有头像上传功能，avatar_url 实际上总是 null——没有头像时退化
-  // 成"昵称首字母"占位圆形，而不是留空，理由同下面头像 <img>/占位分支。
-  const avatarInitial = profile?.displayName?.trim().charAt(0).toUpperCase() || "?";
-
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 py-6 pb-20 md:pb-6">
       <h1 className="mb-4 text-xl font-bold text-text">我的</h1>
@@ -65,37 +77,24 @@ export function ProfilePage() {
         </p>
       ) : null}
 
-      <div className="mb-6 flex h-23 items-center gap-4 rounded-profile-card border border-border bg-white px-4 shadow-card">
-        {!isPending && !isError ? (
-          profile?.avatarUrl ? (
-            <img
-              src={profile.avatarUrl}
-              alt=""
-              className="h-14 w-14 shrink-0 rounded-full object-cover"
-            />
-          ) : (
-            <div
-              aria-hidden="true"
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-bg text-lg font-semibold text-text-muted"
+      {!isPending && !isError ? (
+        <div className="mb-6">
+          <ProfileSummary
+            displayName={profile?.displayName ?? null}
+            avatarUrl={profile?.avatarUrl ?? null}
+            locationName={profile?.locationName}
+            bio={profile?.bio}
+          >
+            <Link
+              to="/profile/edit"
+              className="mt-4 rounded bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
             >
-              {avatarInitial}
-            </div>
-          )
-        ) : (
-          <div aria-hidden="true" className="h-14 w-14 shrink-0 rounded-full bg-bg" />
-        )}
-        <div className="min-w-0">
-          {!isPending && !isError ? (
-            <div className="flex items-center gap-2">
-              <p className="break-words text-lg font-medium text-text">{profile?.displayName ?? "未知用户"}</p>
-              <Link to="/profile/edit" className="shrink-0 text-sm text-primary hover:underline">
-                编辑
-              </Link>
-            </div>
-          ) : null}
-          <p className="break-words text-sm text-text-muted">{email}</p>
+              编辑资料
+            </Link>
+            <p className="mt-2 break-words text-sm text-text-muted">{email}</p>
+          </ProfileSummary>
         </div>
-      </div>
+      ) : null}
 
       <nav aria-label="我的功能" className="mb-6">
         <Link to="/my-posts" className={settingsItemClassName}>

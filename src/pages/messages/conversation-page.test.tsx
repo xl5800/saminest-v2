@@ -1,3 +1,4 @@
+import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -580,12 +581,46 @@ describe("MessageConversationPage", () => {
         expect(markConversationAsRead).toHaveBeenCalledWith("conversation-1", "user-1");
       });
     });
+  });
 
-    it("does not call markConversationAsRead for a non-system conversation", async () => {
-      renderPage();
+  // 未读标记不再只服务系统通知会话——markConversationAsRead 本身早就是
+  // 通用实现，之前只在 system 分支调用是范围限制，不是这个函数的能力
+  // 限制，这次把这个限制去掉。
+  it("calls markConversationAsRead for a non-system (regular) conversation too", async () => {
+    renderPage();
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(markConversationAsRead).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(markConversationAsRead).toHaveBeenCalledWith("conversation-1", "user-1");
     });
+  });
+
+  it("invalidates the conversations list query (['conversations', userId]) after markConversationAsRead succeeds, so the list reflects the read state when the user navigates back", async () => {
+    const invalidateQueriesSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({ queryKey: ["conversations", "user-1"] });
+    });
+
+    invalidateQueriesSpy.mockRestore();
+  });
+
+  it("does not invalidate the conversations list query when markConversationAsRead fails", async () => {
+    markConversationAsRead.mockRejectedValue(new Error("network down"));
+    const invalidateQueriesSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(markConversationAsRead).toHaveBeenCalled();
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: ["conversations", "user-1"]
+    });
+
+    invalidateQueriesSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 });

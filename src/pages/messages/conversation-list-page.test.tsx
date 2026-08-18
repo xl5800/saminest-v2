@@ -224,6 +224,91 @@ describe("ConversationListPage", () => {
     expect(link).not.toHaveTextContent("关于");
   });
 
+  it("renders the last message preview text truncated to a single line, and omits the row entirely when there is no preview yet", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conv-1",
+          postId: null,
+          postTitle: null,
+          originType: "post",
+          otherUserId: "user-2",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-10T00:00:00.000Z",
+          lastMessagePreview: "在的，什么事？",
+          isUnread: false
+        },
+        {
+          id: "conv-2",
+          postId: null,
+          postTitle: null,
+          originType: "post",
+          otherUserId: "user-3",
+          otherDisplayName: "Carol",
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-09T00:00:00.000Z",
+          lastMessagePreview: null,
+          isUnread: false
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<ConversationListPage />);
+
+    const previews = screen.getAllByTestId("conversation-preview");
+    expect(previews).toHaveLength(1);
+    expect(previews[0]).toHaveTextContent("在的，什么事？");
+    expect(previews[0]).toHaveClass("truncate", "whitespace-nowrap");
+    // 第二条 lastMessagePreview 为 null，不展示"暂无消息"这类占位文案。
+    expect(screen.queryByText(/暂无消息/)).not.toBeInTheDocument();
+  });
+
+  it("shows a red dot and bolds the nickname/preview for an unread conversation, but not for a read one", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conv-unread",
+          postId: null,
+          postTitle: null,
+          originType: "post",
+          otherUserId: "user-2",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-10T00:00:00.000Z",
+          lastMessagePreview: "在的，什么事？",
+          isUnread: true
+        },
+        {
+          id: "conv-read",
+          postId: null,
+          postTitle: null,
+          originType: "post",
+          otherUserId: "user-3",
+          otherDisplayName: "Carol",
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-09T00:00:00.000Z",
+          lastMessagePreview: "好的，谢谢",
+          isUnread: false
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<ConversationListPage />);
+
+    expect(screen.getAllByTestId("unread-dot")).toHaveLength(1);
+    expect(screen.getByRole("link", { name: "Bob" })).toHaveClass("font-bold");
+    const bobPreview = screen.getByText("在的，什么事？");
+    expect(bobPreview).toHaveClass("font-semibold");
+    expect(screen.getByRole("link", { name: "Carol" })).not.toHaveClass("font-bold");
+    const carolPreview = screen.getByText("好的，谢谢");
+    expect(carolPreview).not.toHaveClass("font-semibold");
+  });
+
   it("renders a formatted date for lastActivityAt using the shared formatter", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
