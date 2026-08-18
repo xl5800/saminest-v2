@@ -1,31 +1,41 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, maybeSingleMock, insertMock, updateMock, eqAfterUpdateMock, rpcMock } =
-  vi.hoisted(() => {
-    const maybeSingleMock = vi.fn();
-    const insertMock = vi.fn();
-    const updateMock = vi.fn();
-    const eqAfterUpdateMock = vi.fn();
-    const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-    const chain = ["select", "eq"] as const;
-    for (const method of chain) {
-      builder[method] = vi.fn(() => builder);
-    }
-    builder.maybeSingle = maybeSingleMock;
-    builder.insert = insertMock;
-    return {
-      queryBuilder: builder,
-      maybeSingleMock,
-      insertMock,
-      updateMock,
-      eqAfterUpdateMock,
-      rpcMock: vi.fn()
-    };
-  });
+const {
+  queryBuilder,
+  maybeSingleMock,
+  overrideTypesMock,
+  insertMock,
+  updateMock,
+  eqAfterUpdateMock,
+  rpcMock
+} = vi.hoisted(() => {
+  const maybeSingleMock = vi.fn();
+  const overrideTypesMock = vi.fn();
+  const insertMock = vi.fn();
+  const updateMock = vi.fn();
+  const eqAfterUpdateMock = vi.fn();
+  const builder: Record<string, ReturnType<typeof vi.fn>> = {};
+  const chain = ["select", "eq"] as const;
+  for (const method of chain) {
+    builder[method] = vi.fn(() => builder);
+  }
+  builder.maybeSingle = maybeSingleMock;
+  builder.overrideTypes = overrideTypesMock;
+  builder.insert = insertMock;
+  return {
+    queryBuilder: builder,
+    maybeSingleMock,
+    overrideTypesMock,
+    insertMock,
+    updateMock,
+    eqAfterUpdateMock,
+    rpcMock: vi.fn()
+  };
+});
 
 const fromMock = vi.fn(() => queryBuilder);
 
-// updateMyDisplayName 走 .from("profiles").update(payload).eq("id", userId)——
+// updateMyProfile/updateMyAvatarUrl 走 .from("profiles").update(payload).eq("id", userId)——
 // eq() 在这条链路上是终止调用，直接 await 它拿 {error}，跟 select/eq/
 // maybeSingle 那条链路里 eq() 只是"继续往下链"的中间调用不一样，不能复用
 // queryBuilder 里那个永远 return this 的 eq mock，单独搭一个 update 专用的
@@ -42,8 +52,10 @@ import {
   ensureProfileExists,
   getCurrentUserRole,
   getMyProfile,
+  getPublicProfile,
   listProfilesForAdmin,
-  updateMyDisplayName
+  updateMyAvatarUrl,
+  updateMyProfile
 } from "./profiles-repository";
 
 describe("getCurrentUserRole", () => {
@@ -91,47 +103,159 @@ describe("getMyProfile", () => {
       queryBuilder[key].mockClear();
     }
     maybeSingleMock.mockReset();
+    overrideTypesMock.mockReset();
+    // getMyProfile 在 .maybeSingle() 之后还链式调用 .overrideTypes()，让
+    // maybeSingle 返回共享的 queryBuilder 本身，再由 overrideTypesMock
+    // 提供最终 resolve 的 {data, error}——跟 activities-repository.test.ts
+    // 里 getActivityDetail 的 mock 方式是同一个模式。
+    maybeSingleMock.mockReturnValue(queryBuilder);
   });
 
-  it("returns the display name and avatar url when the profile row exists", async () => {
-    maybeSingleMock.mockResolvedValue({
-      data: { display_name: "Alice", avatar_url: "https://example.com/avatar.png" },
+  it("returns display name/avatar/bio/locationId/locationName when the profile row exists", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        display_name: "Alice",
+        avatar_url: "https://example.com/avatar.png",
+        bio: "Hi there",
+        location_id: "loc-1",
+        location: { name: "Rockville" }
+      },
       error: null
     });
 
     const result = await getMyProfile("user-1");
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
-    expect(queryBuilder.select).toHaveBeenCalledWith("display_name, avatar_url");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "display_name, avatar_url, bio, location_id, location:locations(name)"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-1");
-    expect(result).toEqual({ displayName: "Alice", avatarUrl: "https://example.com/avatar.png" });
+    expect(result).toEqual({
+      displayName: "Alice",
+      avatarUrl: "https://example.com/avatar.png",
+      bio: "Hi there",
+      locationId: "loc-1",
+      locationName: "Rockville"
+    });
   });
 
-  it("returns a null avatar url when the profile has no avatar", async () => {
-    maybeSingleMock.mockResolvedValue({
-      data: { display_name: "Alice", avatar_url: null },
+  it("returns null avatar/bio/locationId/locationName when those fields are unset", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        display_name: "Alice",
+        avatar_url: null,
+        bio: null,
+        location_id: null,
+        location: null
+      },
       error: null
     });
 
     const result = await getMyProfile("user-1");
 
-    expect(result).toEqual({ displayName: "Alice", avatarUrl: null });
+    expect(result).toEqual({
+      displayName: "Alice",
+      avatarUrl: null,
+      bio: null,
+      locationId: null,
+      locationName: null
+    });
   });
 
   it("returns null without throwing when there is no matching profile row", async () => {
-    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    overrideTypesMock.mockResolvedValue({ data: null, error: null });
 
     await expect(getMyProfile("missing-user")).resolves.toBeNull();
   });
 
   it("throws an AppError when the query fails", async () => {
-    maybeSingleMock.mockResolvedValue({
+    overrideTypesMock.mockResolvedValue({
       data: null,
       error: { message: "network down", code: "500" }
     });
 
     await expect(getMyProfile("user-1")).rejects.toMatchObject({
       code: "MY_PROFILE_FETCH_FAILED"
+    });
+  });
+});
+
+describe("getPublicProfile", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    maybeSingleMock.mockReset();
+    overrideTypesMock.mockReset();
+    maybeSingleMock.mockReturnValue(queryBuilder);
+  });
+
+  it("returns id/displayName/bio/avatarUrl/locationName when the profile row exists", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        id: "user-2",
+        display_name: "Bob",
+        bio: "Hi there",
+        avatar_url: "https://example.com/bob.jpg",
+        location: { name: "Rockville" }
+      },
+      error: null
+    });
+
+    const result = await getPublicProfile("user-2");
+
+    expect(fromMock).toHaveBeenCalledWith("profiles");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, display_name, bio, avatar_url, location:locations(name)"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-2");
+    expect(result).toEqual({
+      id: "user-2",
+      displayName: "Bob",
+      bio: "Hi there",
+      avatarUrl: "https://example.com/bob.jpg",
+      locationName: "Rockville"
+    });
+  });
+
+  it("returns null bio/avatarUrl/locationName when those fields are unset", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        id: "user-2",
+        display_name: "Bob",
+        bio: null,
+        avatar_url: null,
+        location: null
+      },
+      error: null
+    });
+
+    const result = await getPublicProfile("user-2");
+
+    expect(result).toEqual({
+      id: "user-2",
+      displayName: "Bob",
+      bio: null,
+      avatarUrl: null,
+      locationName: null
+    });
+  });
+
+  it("returns null without throwing when there is no matching profile row (e.g. a nonexistent :userId)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(getPublicProfile("missing-user")).resolves.toBeNull();
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(getPublicProfile("user-2")).rejects.toMatchObject({
+      code: "PUBLIC_PROFILE_FETCH_FAILED"
     });
   });
 });
@@ -250,42 +374,97 @@ describe("createProfile", () => {
   });
 });
 
-describe("updateMyDisplayName", () => {
+describe("updateMyProfile", () => {
   beforeEach(() => {
     fromMock.mockClear();
     updateMock.mockClear();
     eqAfterUpdateMock.mockReset();
   });
 
-  it("updates only the display_name column for the given user id", async () => {
+  it("updates display_name/bio/location_id together for the given user id", async () => {
     eqAfterUpdateMock.mockResolvedValue({ error: null });
     fromMock.mockReturnValueOnce(updateQueryBuilder);
 
-    await updateMyDisplayName("user-1", "小明");
+    await updateMyProfile("user-1", {
+      displayName: "小明",
+      bio: "你好",
+      locationId: "loc-1"
+    });
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
-    expect(updateMock).toHaveBeenCalledWith({ display_name: "小明" });
+    expect(updateMock).toHaveBeenCalledWith({
+      display_name: "小明",
+      bio: "你好",
+      location_id: "loc-1"
+    });
     expect(eqAfterUpdateMock).toHaveBeenCalledWith("id", "user-1");
   });
 
-  it("throws PROFILE_DISPLAY_NAME_UPDATE_FAILED when the update fails", async () => {
+  it("passes bio: null and locationId: null through unchanged (caller is responsible for the empty-string-to-null coercion)", async () => {
+    eqAfterUpdateMock.mockResolvedValue({ error: null });
+    fromMock.mockReturnValueOnce(updateQueryBuilder);
+
+    await updateMyProfile("user-1", { displayName: "小明", bio: null, locationId: null });
+
+    expect(updateMock).toHaveBeenCalledWith({
+      display_name: "小明",
+      bio: null,
+      location_id: null
+    });
+  });
+
+  it("throws PROFILE_UPDATE_FAILED when the update fails", async () => {
     eqAfterUpdateMock.mockResolvedValue({
       error: { message: "network down", code: "500" }
     });
     fromMock.mockReturnValueOnce(updateQueryBuilder);
 
     await expect(
-      updateMyDisplayName("user-1", "小明")
-    ).rejects.toMatchObject({ code: "PROFILE_DISPLAY_NAME_UPDATE_FAILED" });
+      updateMyProfile("user-1", { displayName: "小明", bio: null, locationId: null })
+    ).rejects.toMatchObject({ code: "PROFILE_UPDATE_FAILED" });
   });
 
-  it("does not include role/account_status in the update payload (only display_name is writable from this page)", async () => {
+  it("does not include role/account_status/avatar_url in the update payload (those are not writable from this page)", async () => {
     eqAfterUpdateMock.mockResolvedValue({ error: null });
     fromMock.mockReturnValueOnce(updateQueryBuilder);
 
-    await updateMyDisplayName("user-1", "小红");
+    await updateMyProfile("user-1", { displayName: "小红", bio: null, locationId: null });
 
-    expect(Object.keys(updateMock.mock.calls[0][0])).toEqual(["display_name"]);
+    expect(Object.keys(updateMock.mock.calls[0][0]).sort()).toEqual(
+      ["bio", "display_name", "location_id"].sort()
+    );
+  });
+});
+
+describe("updateMyAvatarUrl", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    updateMock.mockClear();
+    eqAfterUpdateMock.mockReset();
+  });
+
+  it("updates only the avatar_url column for the given user id", async () => {
+    eqAfterUpdateMock.mockResolvedValue({ error: null });
+    fromMock.mockReturnValueOnce(updateQueryBuilder);
+
+    await updateMyAvatarUrl("user-1", "https://example.com/new-avatar.webp");
+
+    expect(fromMock).toHaveBeenCalledWith("profiles");
+    expect(updateMock).toHaveBeenCalledWith({
+      avatar_url: "https://example.com/new-avatar.webp"
+    });
+    expect(eqAfterUpdateMock).toHaveBeenCalledWith("id", "user-1");
+  });
+
+  it("throws PROFILE_AVATAR_UPDATE_FAILED when the update fails", async () => {
+    eqAfterUpdateMock.mockResolvedValue({
+      error: { message: "network down", code: "500" }
+    });
+    fromMock.mockReturnValueOnce(updateQueryBuilder);
+
+    await expect(
+      updateMyAvatarUrl("user-1", "https://example.com/new-avatar.webp")
+    ).rejects.toMatchObject({ code: "PROFILE_AVATAR_UPDATE_FAILED" });
   });
 });
 

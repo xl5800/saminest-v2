@@ -280,6 +280,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           last_message_at: string | null
+          origin_type: string
           post_id: string | null
           type: string
           updated_at: string
@@ -290,6 +291,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           last_message_at?: string | null
+          origin_type: string
           post_id?: string | null
           type?: string
           updated_at?: string
@@ -300,6 +302,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           last_message_at?: string | null
+          origin_type?: string
           post_id?: string | null
           type?: string
           updated_at?: string
@@ -923,6 +926,10 @@ export type Database = {
       }
       create_direct_conversation: {
         Args: { target_post_id: string }
+        Returns: string
+      }
+      create_profile_conversation: {
+        Args: { target_user_id: string }
         Returns: string
       }
       delete_post: {

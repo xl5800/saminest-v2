@@ -89,32 +89,67 @@ export async function ensureProfileExists(
   }
 }
 
+export interface UpdateMyProfileInput {
+  displayName: string;
+  bio: string | null;
+  locationId: string | null;
+}
+
 /**
- * 用户在"编辑昵称"页面（/profile/edit）主动修改自己的 display_name。
- * profiles_update_self 这条 RLS UPDATE 策略（见
+ * 用户在"编辑资料"页面（/profile/edit）主动修改自己的 display_name/bio/
+ * location_id 这三个字段，一次 update 全部写完，不分三次网络请求各改一个
+ * 字段。profiles_update_self 这条 RLS UPDATE 策略（见
  * supabase/migrations/20260715220000_create_profiles_table.sql 第
  * 127-138 行）允许用户更新自己整行 profiles 记录，WITH CHECK 只锁死了
- * role/account_status 必须跟数据库里已有的值一致，display_name 没有被
- * 锁——这里直接 update 即可，不需要新的 migration，也不用碰 RLS。
+ * role/account_status 必须跟数据库里已有的值一致，这三个字段都没有被锁
+ * ——这里直接 update 即可，不需要新的 migration，也不用碰 RLS。
  *
- * 调用方负责传入已经 trim 过、校验过的 displayName，这里不做空值兜底
- * ——跟 createProfile 的默认值兜底不是同一个场景：createProfile 是给
- * "从来没填过昵称"的账号兜底一个占位值，这里是用户主动编辑，不应该在
- * 用户没填的时候悄悄换成一个他没输入过的默认值，那属于校验阶段该挡住的
- * 情况（见 pages/profile/edit-profile-validation.ts）。
+ * 这个函数取代了原来只改 display_name 一列的 updateMyDisplayName——
+ * grep 确认过 updateMyDisplayName 在这次改动前只有编辑资料页这一个调用方
+ * （连同它专属的 use-update-display-name-mutation.ts hook），继续保留一个
+ * 单列版本会变成没有其它调用方在用的重复代码，所以直接替换成这个三字段
+ * 版本，没有在旁边保留旧函数。
+ *
+ * 调用方负责传入已经 trim/校验过的 displayName，以及已经把空字符串转成
+ * null 的 bio/locationId（见 pages/profile/edit-profile-validation.ts）——
+ * 这里不做这层归一化，职责跟 createProfile 的默认值兜底不是同一个场景：
+ * 这是用户主动编辑，不应该在仓库层悄悄改写调用方传来的值。
  */
-export async function updateMyDisplayName(
+export async function updateMyProfile(
   userId: string,
-  displayName: string
+  input: UpdateMyProfileInput
 ): Promise<void> {
-  const payload: TablesUpdate<"profiles"> = { display_name: displayName };
+  const payload: TablesUpdate<"profiles"> = {
+    display_name: input.displayName,
+    bio: input.bio,
+    location_id: input.locationId
+  };
   const { error } = await getSupabaseClient()
     .from("profiles")
     .update(payload)
     .eq("id", userId);
 
   if (error) {
-    throw new AppError(error.message, "PROFILE_DISPLAY_NAME_UPDATE_FAILED", error);
+    throw new AppError(error.message, "PROFILE_UPDATE_FAILED", error);
+  }
+}
+
+/**
+ * 头像上传成功后单独调用——跟 updateMyProfile 分开，不合并成同一次
+ * update：头像上传（avatar-picker.tsx 选中新文件 → 上传 Storage → 拿到
+ * publicUrl → 写库）是编辑资料页里一个独立触发、独立成败的子流程，不是
+ * 跟着"保存"按钮一起提交的表单字段，写成单独的函数职责更清楚，也方便
+ * 以后其它页面（如果有）复用"换头像"这一个动作而不用连带传一整份资料。
+ */
+export async function updateMyAvatarUrl(userId: string, avatarUrl: string): Promise<void> {
+  const payload: TablesUpdate<"profiles"> = { avatar_url: avatarUrl };
+  const { error } = await getSupabaseClient()
+    .from("profiles")
+    .update(payload)
+    .eq("id", userId);
+
+  if (error) {
+    throw new AppError(error.message, "PROFILE_AVATAR_UPDATE_FAILED", error);
   }
 }
 
@@ -150,20 +185,34 @@ export async function getCurrentUserRole(userId: string): Promise<string | null>
 export interface MyProfile {
   displayName: string;
   avatarUrl: string | null;
+  bio: string | null;
+  /** 外键，指向 locations.id——编辑资料页的城市下拉框选的是这个，不是
+   *  locationName。 */
+  locationId: string | null;
+  /** 嵌套 select 顺带查出来的地区名字，只用来回填编辑资料页下拉框当前
+   *  选中项的展示文字，不是权威数据源（权威数据源是 locationId）。 */
+  locationName: string | null;
+}
+
+interface MyProfileRow {
+  display_name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  location_id: string | null;
+  location: { name: string } | null;
 }
 
 /**
- * 只读当前登录用户自己的 display_name + avatar_url，供 /profile 页面
- * 展示用（跟 getCurrentUserRole 只取 role 一列是同一个"按需只选一列"的
- * 原则，不复用同一个函数——两者用途不同、以后各自演化的字段也可能不同，
- * 没必要为了省一个函数而耦合在一起）。
+ * 只读当前登录用户自己的 display_name/avatar_url/bio/location_id（+嵌套
+ * 带出 location 名字），供 /profile 展示页和 /profile/edit 编辑页共用
+ * （跟 getCurrentUserRole 只取 role 一列是同一个"按需只选一列"的原则，
+ * 不复用同一个函数——两者用途不同、以后各自演化的字段也可能不同，没必要
+ * 为了省一个函数而耦合在一起）。
  *
- * avatar_url 这次一并带出来，是这版"我的"页面视觉规范要求展示一个头像
- * 位——profiles 表本来就有这一列（v1 遗留字段），但整个 v2 目前没有任何
- * 头像上传功能，所以这一列现在总是 null，页面侧要按"没有头像时显示
- * 首字母占位"处理，不能假设它一定有值。真正的头像上传功能是另一个独立
- * 任务，这次只是把已经存在的这一列读出来、把展示位置做对，不在这里顺带
- * 做上传。
+ * avatar_url 现在是真的可能有值了（社交资料页第一批加了头像上传，见
+ * avatar-picker.tsx/avatar-storage-service.ts），但没有头像的账号这一列
+ * 仍然是 null，页面侧仍然要按"没有头像时显示首字母占位"处理，不能假设
+ * 一定有值。
  *
  * profiles_select_public_or_self 这条已有的 RLS 策略保证任何登录用户都能
  * 读到自己的 profile 行（见上面 getCurrentUserRole 的注释），不需要新增
@@ -175,15 +224,75 @@ export interface MyProfile {
 export async function getMyProfile(userId: string): Promise<MyProfile | null> {
   const { data, error } = await getSupabaseClient()
     .from("profiles")
-    .select("display_name, avatar_url")
+    .select("display_name, avatar_url, bio, location_id, location:locations(name)")
     .eq("id", userId)
-    .maybeSingle();
+    .maybeSingle()
+    .overrideTypes<MyProfileRow>();
 
   if (error) {
     throw new AppError(error.message, "MY_PROFILE_FETCH_FAILED", error);
   }
 
-  return data ? { displayName: data.display_name, avatarUrl: data.avatar_url } : null;
+  return data
+    ? {
+        displayName: data.display_name,
+        avatarUrl: data.avatar_url,
+        bio: data.bio,
+        locationId: data.location_id,
+        locationName: data.location?.name ?? null
+      }
+    : null;
+}
+
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  bio: string | null;
+  avatarUrl: string | null;
+  locationName: string | null;
+}
+
+interface PublicProfileRow {
+  id: string;
+  display_name: string;
+  bio: string | null;
+  avatar_url: string | null;
+  location: { name: string } | null;
+}
+
+/**
+ * 公开个人主页（/users/:userId，不用 RequireAuth 包裹，游客也能看）用：
+ * 只选展示需要的这几列，不带 email/role/account_status 这些不该公开的
+ * 字段。profiles_select_public_or_self 这条已有的 RLS 策略本身就允许
+ * 任何人（含未登录游客）读取任意用户的 profile 行，不需要新 RLS——见
+ * 该策略定义（supabase/migrations/20260715220000_create_profiles_table.sql）
+ * 的命名，"public_or_self" 本来就是为了区分"这几列所有人都能看"和"完整
+ * 一行只有本人能看"两种场景设计的，这次只是第一次真正用到"public"这半边。
+ *
+ * 用户不存在（比如访问了一个不存在的 :userId）时返回 null，不抛错——
+ * 页面侧展示"用户未找到"，不是一种真正的查询失败。
+ */
+export async function getPublicProfile(userId: string): Promise<PublicProfile | null> {
+  const { data, error } = await getSupabaseClient()
+    .from("profiles")
+    .select("id, display_name, bio, avatar_url, location:locations(name)")
+    .eq("id", userId)
+    .maybeSingle()
+    .overrideTypes<PublicProfileRow>();
+
+  if (error) {
+    throw new AppError(error.message, "PUBLIC_PROFILE_FETCH_FAILED", error);
+  }
+
+  return data
+    ? {
+        id: data.id,
+        displayName: data.display_name,
+        bio: data.bio,
+        avatarUrl: data.avatar_url,
+        locationName: data.location?.name ?? null
+      }
+    : null;
 }
 
 export interface AdminProfileListItem {

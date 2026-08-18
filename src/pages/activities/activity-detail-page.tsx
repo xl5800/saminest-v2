@@ -23,6 +23,13 @@ import {
  * 权重（`text-sm text-text-muted hover:text-danger hover:underline`，
  * 放在页面主要操作之后），只是这里没有收藏/联系发布者这类同排的按钮，
  * 单独占一行，不强行凑一个看起来一样但语义不存在的按钮组。
+ *
+ * 社交资料页第一批："发起人：{名字}"和参与者 pill 都包了一层
+ * `<Link to={`/users/${userId}`}>`，点进去是公开个人主页——这两处本来就
+ * 已经在渲染 organizerId/participant.userId，只是加一层链接，不需要额外
+ * 查询或改动这个页面查到的数据结构。没有顺带给这个页面加头像列表（现在
+ * 名字/pill 本身也没有头像展示），这次范围只是"把现有的名字/pill 变成
+ * 可点链接"，不扩大范围。
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -59,7 +66,12 @@ export function ActivityDetailPage() {
               ) : null}
             </div>
             <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
-              <span>发起人：{data.organizerDisplayName}</span>
+              <span>
+                发起人：
+                <Link to={`/users/${data.organizerId}`} className="text-primary hover:underline">
+                  {data.organizerDisplayName}
+                </Link>
+              </span>
               <span>{formatActivityStartAt(data.startAt)}</span>
             </div>
           </div>
@@ -82,11 +94,13 @@ export function ActivityDetailPage() {
               <p className="mb-2 text-text-muted">参与者（{participants.length}）</p>
               <ul className="flex flex-wrap gap-2">
                 {participants.map((participant) => (
-                  <li
-                    key={participant.userId}
-                    className="rounded-full border border-border bg-white px-2 py-0.5 text-xs text-text"
-                  >
-                    {participant.displayName}
+                  <li key={participant.userId}>
+                    <Link
+                      to={`/users/${participant.userId}`}
+                      className="block rounded-full border border-border bg-white px-2 py-0.5 text-xs text-text hover:border-primary"
+                    >
+                      {participant.displayName}
+                    </Link>
                   </li>
                 ))}
               </ul>

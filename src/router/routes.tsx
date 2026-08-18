@@ -25,6 +25,7 @@ import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PrivacyPage } from "../pages/privacy/privacy-page";
 import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
+import { UserProfilePage } from "../pages/profile/user-profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
@@ -154,6 +155,10 @@ export const router = createBrowserRouter([
             <EditProfilePage />
           </RequireAuth>
         )
+      },
+      {
+        path: "users/:userId",
+        element: <UserProfilePage />
       },
       {
         path: "my-posts",

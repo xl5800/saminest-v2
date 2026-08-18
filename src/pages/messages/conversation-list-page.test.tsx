@@ -59,7 +59,7 @@ describe("ConversationListPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("暂无消息");
   });
 
-  it("renders the other party's nickname and post titles, linking to /messages/:id", () => {
+  it("renders the other party's nickname/avatar linking to /users/:id, and post title/time linking to /messages/:id", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
         {
@@ -87,19 +87,18 @@ describe("ConversationListPage", () => {
 
     renderWithProviders(<ConversationListPage />);
 
-    const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Bob" })).toHaveAttribute("href", "/users/user-2");
+    expect(screen.getByRole("link", { name: "Carol" })).toHaveAttribute("href", "/users/user-3");
 
-    expect(links[0]).toHaveAttribute("href", "/messages/conv-1");
-    expect(links[0]).toHaveTextContent("Bob");
-    expect(links[0]).toHaveTextContent("关于：Sunny room");
-
-    expect(links[1]).toHaveAttribute("href", "/messages/conv-2");
-    expect(links[1]).toHaveTextContent("Carol");
-    expect(links[1]).toHaveTextContent("关于：Used sofa");
+    const conversationLinks = screen.getAllByTestId("conversation-link");
+    expect(conversationLinks).toHaveLength(2);
+    expect(conversationLinks[0]).toHaveAttribute("href", "/messages/conv-1");
+    expect(conversationLinks[0]).toHaveTextContent("关于：Sunny room");
+    expect(conversationLinks[1]).toHaveAttribute("href", "/messages/conv-2");
+    expect(conversationLinks[1]).toHaveTextContent("关于：Used sofa");
   });
 
-  it("falls back to '对方' when otherDisplayName is null (e.g. the other party has left the conversation)", () => {
+  it("falls back to '对方' when otherDisplayName is null, and does not render a profile link when otherUserId is null (e.g. the other party has left the conversation)", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
         {
@@ -118,7 +117,10 @@ describe("ConversationListPage", () => {
 
     renderWithProviders(<ConversationListPage />);
 
-    expect(screen.getByRole("link")).toHaveTextContent("对方");
+    expect(screen.getByText("对方")).toBeInTheDocument();
+    // 只剩指向会话的那一个 Link，没有任何指向 /users/ 的链接。
+    expect(screen.getAllByRole("link")).toHaveLength(1);
+    expect(screen.getByTestId("conversation-link")).toHaveAttribute("href", "/messages/conv-1");
   });
 
   it("renders an <img> avatar when otherAvatarUrl is present, and a nickname-initial placeholder (no <img>) when it is absent", () => {
@@ -178,7 +180,7 @@ describe("ConversationListPage", () => {
 
     renderWithProviders(<ConversationListPage />);
 
-    const link = screen.getByRole("link");
+    const link = screen.getByTestId("conversation-link");
     expect(link).not.toHaveTextContent("关于");
   });
 
@@ -201,7 +203,7 @@ describe("ConversationListPage", () => {
 
     renderWithProviders(<ConversationListPage />);
 
-    expect(screen.getByRole("link")).toHaveTextContent(
+    expect(screen.getByTestId("conversation-link")).toHaveTextContent(
       new Date("2026-07-10T00:00:00.000Z").toLocaleDateString("zh-CN")
     );
   });

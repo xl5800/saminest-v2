@@ -22,6 +22,7 @@ vi.mock("../integrations/supabase/client", () => ({
 import {
   createActivityConversation,
   createDirectConversation,
+  createProfileConversation,
   findExistingActivityConversation,
   listMyConversations
 } from "./conversations-repository";
@@ -122,6 +123,68 @@ describe("createActivityConversation", () => {
 
     await expect(createActivityConversation("act-1")).rejects.toMatchObject({
       code: "ACTIVITY_CONVERSATION_CREATE_ID_MISSING"
+    });
+  });
+});
+
+describe("createProfileConversation", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls create_profile_conversation with target_user_id and returns the conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: "conversation-1", error: null });
+
+    const result = await createProfileConversation("user-2");
+
+    expect(rpcMock).toHaveBeenCalledWith("create_profile_conversation", {
+      target_user_id: "user-2"
+    });
+    expect(result).toEqual({ conversationId: "conversation-1" });
+  });
+
+  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message when the account is restricted", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: "restricted accounts cannot start a direct conversation"
+      }
+    });
+
+    await expect(createProfileConversation("user-2")).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
+
+  it("throws a distinct PROFILE_CONVERSATION_DAILY_LIMIT_REACHED AppError with a friendly Chinese message when the daily limit is reached", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "daily new conversation limit reached" }
+    });
+
+    await expect(createProfileConversation("user-2")).rejects.toMatchObject({
+      code: "PROFILE_CONVERSATION_DAILY_LIMIT_REACHED",
+      message: "你今天主动私信的新用户数量已经达到上限，请明天再试。"
+    });
+  });
+
+  it("throws a generic PROFILE_CONVERSATION_CREATE_FAILED AppError for any other error (e.g. messaging yourself, target not found)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "cannot start a direct conversation with yourself" }
+    });
+
+    await expect(createProfileConversation("user-2")).rejects.toMatchObject({
+      code: "PROFILE_CONVERSATION_CREATE_FAILED"
+    });
+  });
+
+  it("throws an AppError when the RPC succeeds but returns no conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(createProfileConversation("user-2")).rejects.toMatchObject({
+      code: "PROFILE_CONVERSATION_CREATE_ID_MISSING"
     });
   });
 });

@@ -5,6 +5,12 @@ import {
   useState
 } from "react";
 
+import {
+  ACCEPTED_IMAGE_MIME_TYPES,
+  describeUnsupportedImageMimeType,
+  isAcceptedImageMimeType
+} from "../utils/image-mime-validation";
+
 /**
  * 发布表单图片上传的选择/预览组件（第一阶段，见
  * docs/02_SystemDesign/Architecture.md 15 节图片上传架构）。
@@ -26,25 +32,11 @@ import {
 export const MAX_POST_IMAGES = 9;
 export const MAX_POST_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
 const MAX_POST_IMAGE_SIZE_MB = MAX_POST_IMAGE_SIZE_BYTES / (1024 * 1024);
-export const ACCEPTED_POST_IMAGE_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp"
-] as const;
-
-// iPhone 相机默认就拍 HEIC，这是用户真实会撞上的最常见"不支持格式"场景，
-// 给一句能让用户自己动手解决的具体提示，比笼统的"只支持 JPEG/PNG/WEBP"
-// 更有用——不确定 file.type 本身是不是 100% 可靠地报告成这两个字符串
-// （不同浏览器/系统对 HEIC 的 MIME 类型上报本来就不完全一致），但这里
-// 只处理这两个已确认的字面值，不为了覆盖更多不确定的情况去猜测别的
-// 检测方式。
-const HEIC_MIME_TYPES = ["image/heic", "image/heif"];
-
-type AcceptedMimeType = (typeof ACCEPTED_POST_IMAGE_MIME_TYPES)[number];
-
-function isAcceptedMimeType(type: string): type is AcceptedMimeType {
-  return (ACCEPTED_POST_IMAGE_MIME_TYPES as readonly string[]).includes(type);
-}
+// MIME 类型判断（含 HEIC 专属提示文案）挪到 image-mime-validation.ts，
+// avatar-picker.tsx 头像选择组件共用同一份逻辑，不各自维护一份——见那个
+// 文件顶部的说明。这里保留 ACCEPTED_POST_IMAGE_MIME_TYPES 这个导出名字
+// （给下面 <input accept={...}> 用），值直接来自共享模块。
+export const ACCEPTED_POST_IMAGE_MIME_TYPES = ACCEPTED_IMAGE_MIME_TYPES;
 
 function isSameFile(a: File, b: File): boolean {
   return a.name === b.name && a.size === b.size;
@@ -71,14 +63,8 @@ function validateIncomingFiles(
   const validated: File[] = [];
 
   for (const file of candidateFiles) {
-    if (!isAcceptedMimeType(file.type)) {
-      if (HEIC_MIME_TYPES.includes(file.type)) {
-        errors.push(
-          `${file.name}：iPhone 拍摄的 HEIC 格式暂不支持，请在系统设置里把拍照格式改成"兼容性最好"（设置 → 相机 → 格式），或从相册选择时选择 JPEG 格式后再试。`
-        );
-      } else {
-        errors.push(`${file.name}：只支持 JPEG、PNG 或 WEBP 格式的图片。`);
-      }
+    if (!isAcceptedImageMimeType(file.type)) {
+      errors.push(describeUnsupportedImageMimeType(file));
       continue;
     }
     if (file.size === 0) {

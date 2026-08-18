@@ -14,6 +14,13 @@ const ACCOUNT_RESTRICTED_ERROR_TEXT =
 const ACCOUNT_RESTRICTED_MESSAGE =
   "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
 
+// create_profile_conversation() 达到每日新建会话上限时抛出的异常文本，
+// 跟 supabase/migrations/20260818070309_create_profile_conversation_function.sql
+// 里 `raise exception 'daily new conversation limit reached'` 逐字一致——
+// 这段英文本身不是给用户看的，纯粹是给这里的 includes() 判断用的标识符。
+const DAILY_LIMIT_ERROR_TEXT = "daily new conversation limit reached";
+const DAILY_LIMIT_MESSAGE = "你今天主动私信的新用户数量已经达到上限，请明天再试。";
+
 export interface CreateDirectConversationResult {
   conversationId: string;
 }
@@ -376,6 +383,50 @@ export async function createActivityConversation(
     throw new AppError(
       "创建会话后无法读取会话 ID。",
       "ACTIVITY_CONVERSATION_CREATE_ID_MISSING"
+    );
+  }
+
+  return { conversationId: data };
+}
+
+/**
+ * 创建（或获取已有的）"个人主页点头像发消息"私聊会话——社交资料页第一批
+ * 新入口，跟 createDirectConversation（绑定帖子）/createActivityConversation
+ * （绑定活动）不同，这里可以对任意其它用户发起，所以数据库那侧
+ * （create_profile_conversation，见迁移文件
+ * supabase/migrations/20260818070309_create_profile_conversation_function.sql）
+ * 带了每日新建会话限流，这里额外识别这个限流错误、换成对用户友好的中文
+ * 提示，不直接把 'daily new conversation limit reached' 这段英文抛给用户看。
+ *
+ * 结构照抄 createActivityConversation（同一套 rpc 调用 + AppError 包装
+ * 方式），错误处理在账号受限判断旁边多一段限流判断，其它未知失败原因
+ * 统一落到通用的 PROFILE_CONVERSATION_CREATE_FAILED。
+ */
+export async function createProfileConversation(
+  targetUserId: string
+): Promise<CreateDirectConversationResult> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "create_profile_conversation",
+    { target_user_id: targetUserId }
+  );
+
+  if (error) {
+    if (error.message?.includes(ACCOUNT_RESTRICTED_ERROR_TEXT)) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    if (error.message?.includes(DAILY_LIMIT_ERROR_TEXT)) {
+      throw new AppError(
+        DAILY_LIMIT_MESSAGE,
+        "PROFILE_CONVERSATION_DAILY_LIMIT_REACHED",
+        error
+      );
+    }
+    throw new AppError(error.message, "PROFILE_CONVERSATION_CREATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(
+      "创建会话后无法读取会话 ID。",
+      "PROFILE_CONVERSATION_CREATE_ID_MISSING"
     );
   }
 

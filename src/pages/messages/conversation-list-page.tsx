@@ -20,6 +20,15 @@ const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
  *
  * 这一轮仍然不展示"最后一条消息预览"文字，只做时间排序（产品要求里消息
  * 预览是可选项，这次没有做，保持范围聚焦）。
+ *
+ * 社交资料页第一批：头像和昵称各自包一层指向公开个人主页的
+ * `<Link to={`/users/${otherUserId}`}>`——不能把整行卡片继续做成一个大
+ * `<Link to="/messages/:id">`再把头像/昵称嵌套一层 Link 进去（`<a>` 不能
+ * 嵌套 `<a>`，浏览器会打断/产生非法 DOM），所以这里把原来"整行一个大
+ * Link"拆成两个独立的 Link：头像+昵称指向 /users/:userId，帖子标题+时间
+ * 那部分指向 /messages/:id，视觉上还是同一张卡片，只是点不同区域跳转到
+ * 不同目的地。otherUserId 为 null 时（对方已退出会话这种边界情况）头像/
+ * 昵称退回纯展示，不渲染任何链接——没有 userId 也没有页面可以跳。
  */
 export function ConversationListPage() {
   const { data: conversations, isPending, isError } = useMyConversationsQuery();
@@ -41,30 +50,52 @@ export function ConversationListPage() {
           {conversations.map((conversation) => {
             const avatarInitial =
               conversation.otherDisplayName?.trim().charAt(0).toUpperCase() || "?";
+            const nickname = conversation.otherDisplayName ?? "对方";
+            const avatarElement = conversation.otherAvatarUrl ? (
+              <img
+                src={conversation.otherAvatarUrl}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
+              >
+                {avatarInitial}
+              </div>
+            );
+
             return (
-              <li key={conversation.id}>
-                <Link
-                  to={`/messages/${conversation.id}`}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 hover:border-primary"
-                >
-                  {conversation.otherAvatarUrl ? (
-                    <img
-                      src={conversation.otherAvatarUrl}
-                      alt=""
-                      className="h-10 w-10 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div
-                      aria-hidden="true"
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
+              <li
+                key={conversation.id}
+                className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 hover:border-primary"
+              >
+                {conversation.otherUserId ? (
+                  <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
+                    {avatarElement}
+                  </Link>
+                ) : (
+                  avatarElement
+                )}
+                <div className="min-w-0 flex-1">
+                  {conversation.otherUserId ? (
+                    <Link
+                      to={`/users/${conversation.otherUserId}`}
+                      className="block truncate text-sm font-medium text-text hover:underline"
                     >
-                      {avatarInitial}
-                    </div>
-                  )}
-                  <div className="min-w-0 flex-1">
+                      {nickname}
+                    </Link>
+                  ) : (
                     <span className="block truncate text-sm font-medium text-text">
-                      {conversation.otherDisplayName ?? "对方"}
+                      {nickname}
                     </span>
+                  )}
+                  <Link
+                    to={`/messages/${conversation.id}`}
+                    data-testid="conversation-link"
+                    className="block"
+                  >
                     {conversation.postTitle ? (
                       <span className="mt-0.5 block truncate text-xs text-text-muted">
                         关于：{conversation.postTitle}
@@ -73,8 +104,8 @@ export function ConversationListPage() {
                     <span className="mt-0.5 block text-xs text-text-muted">
                       {formatPublishedAt(conversation.lastActivityAt)}
                     </span>
-                  </div>
-                </Link>
+                  </Link>
+                </div>
               </li>
             );
           })}

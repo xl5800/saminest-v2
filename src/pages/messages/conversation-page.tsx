@@ -1,5 +1,5 @@
 import { Fragment, type FormEvent, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
 import { useMessagesQuery } from "../../features/messages/use-messages-query";
@@ -76,6 +76,13 @@ function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
  * 重复显示一个头像，效果上接近小红书聊天页那种排布。头像来源是
  * conversation?.otherAvatarUrl（会话级别取一次，不是每条消息单独查），
  * 因为一个会话里"对方"只有一个人。
+ *
+ * 社交资料页第一批：header 里的头像和 <h1> 昵称各自包一层指向公开个人
+ * 主页的 <Link to={`/users/${otherUserId}`}>——昵称仍然保持 <h1> 标签
+ * 不变（Link 嵌在 <h1> 内部），不能让 <h1> 本身变成 <a>，否则会丢失这个
+ * 页面标题的无障碍语义。conversation?.otherUserId 为 null 时（对方已经
+ * 退出会话这种边界情况）退回纯展示，不渲染任何链接。消息气泡旁边那些
+ * 小头像不在这次范围内，不加链接。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -164,13 +171,31 @@ export function MessageConversationPage() {
         </button>
 
         <div className="flex min-w-0 items-center justify-center gap-2 px-2">
-          <Avatar
-            avatarUrl={conversation?.otherAvatarUrl ?? null}
-            initial={otherPartyLabel.charAt(0)}
-            sizeClassName="h-9 w-9"
-          />
+          {conversation?.otherUserId ? (
+            <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
+              <Avatar
+                avatarUrl={conversation.otherAvatarUrl}
+                initial={otherPartyLabel.charAt(0)}
+                sizeClassName="h-9 w-9"
+              />
+            </Link>
+          ) : (
+            <Avatar
+              avatarUrl={conversation?.otherAvatarUrl ?? null}
+              initial={otherPartyLabel.charAt(0)}
+              sizeClassName="h-9 w-9"
+            />
+          )}
           <div className="min-w-0 text-left">
-            <h1 className="truncate text-base font-semibold text-text">{otherPartyLabel}</h1>
+            <h1 className="truncate text-base font-semibold text-text">
+              {conversation?.otherUserId ? (
+                <Link to={`/users/${conversation.otherUserId}`} className="hover:underline">
+                  {otherPartyLabel}
+                </Link>
+              ) : (
+                otherPartyLabel
+              )}
+            </h1>
             <p className="truncate text-xs text-text-muted">{conversationContext}</p>
           </div>
         </div>

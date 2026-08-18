@@ -21,7 +21,10 @@ const {
   getCurrentUserRole,
   listProfilesForAdmin,
   getMyProfile,
-  updateMyDisplayName,
+  updateMyProfile,
+  updateMyAvatarUrl,
+  getPublicProfile,
+  createProfileConversation,
   listFavoritedPostIds,
   listFavoritedPosts,
   listActivities,
@@ -47,7 +50,10 @@ const {
   getCurrentUserRole: vi.fn(),
   listProfilesForAdmin: vi.fn(),
   getMyProfile: vi.fn(),
-  updateMyDisplayName: vi.fn(),
+  updateMyProfile: vi.fn(),
+  updateMyAvatarUrl: vi.fn(),
+  getPublicProfile: vi.fn(),
+  createProfileConversation: vi.fn(),
   listFavoritedPostIds: vi.fn(),
   listFavoritedPosts: vi.fn(),
   listActivities: vi.fn(),
@@ -78,7 +84,8 @@ vi.mock("../repositories/messages-repository", () => ({
   sendMessage
 }));
 vi.mock("../repositories/conversations-repository", () => ({
-  listMyConversations
+  listMyConversations,
+  createProfileConversation
 }));
 vi.mock("../repositories/reports-repository", async () => {
   const actual = await vi.importActual<typeof import("../repositories/reports-repository")>(
@@ -93,7 +100,9 @@ vi.mock("../repositories/profiles-repository", () => ({
   getCurrentUserRole,
   listProfilesForAdmin,
   getMyProfile,
-  updateMyDisplayName
+  updateMyProfile,
+  updateMyAvatarUrl,
+  getPublicProfile
 }));
 vi.mock("../repositories/favorites-repository", () => ({
   listFavoritedPostIds,
@@ -138,6 +147,7 @@ import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PrivacyPage } from "../pages/privacy/privacy-page";
 import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
+import { UserProfilePage } from "../pages/profile/user-profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
@@ -247,6 +257,7 @@ function renderAt(path: string | string[]) {
               </RequireAuth>
             )
           },
+          { path: "users/:userId", element: <UserProfilePage /> },
           {
             path: "my-posts",
             element: (
@@ -356,7 +367,10 @@ describe("app routes", () => {
     getCurrentUserRole.mockReset();
     listProfilesForAdmin.mockReset();
     getMyProfile.mockReset();
-    updateMyDisplayName.mockReset();
+    updateMyProfile.mockReset();
+    updateMyAvatarUrl.mockReset();
+    getPublicProfile.mockReset();
+    createProfileConversation.mockReset();
     listFavoritedPostIds.mockReset();
     listFavoritedPosts.mockReset();
     listActivities.mockReset();
@@ -378,7 +392,14 @@ describe("app routes", () => {
     listMyConversations.mockResolvedValue([]);
     listReportsForModeration.mockResolvedValue([]);
     listProfilesForAdmin.mockResolvedValue([]);
-    getMyProfile.mockResolvedValue({ displayName: "Alice" });
+    getMyProfile.mockResolvedValue({
+      displayName: "Alice",
+      avatarUrl: null,
+      bio: null,
+      locationId: null,
+      locationName: null
+    });
+    getPublicProfile.mockResolvedValue(null);
     listFavoritedPostIds.mockResolvedValue([]);
     listFavoritedPosts.mockResolvedValue([]);
     listActivities.mockResolvedValue([]);
@@ -622,7 +643,10 @@ describe("app routes", () => {
     ]);
 
     const { router } = renderAt("/messages");
-    fireEvent.click(await screen.findByRole("link", { name: /Bob/ }));
+    // 头像/昵称现在各自是指向 /users/:id 的独立链接，点进会话本体要用
+    // conversation-link 这个 testid（帖子标题+时间那部分），不能再靠
+    // 昵称文字 "Bob" 找链接——那个链接现在指向的是公开个人主页。
+    fireEvent.click(await screen.findByTestId("conversation-link"));
 
     expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
@@ -685,7 +709,21 @@ describe("app routes", () => {
 
     renderAt("/profile/edit");
 
-    expect(await screen.findByRole("heading", { name: "编辑昵称" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "编辑资料" })).toBeInTheDocument();
+  });
+
+  it("renders the public user-profile page at /users/:userId without requiring a session", async () => {
+    getPublicProfile.mockResolvedValue({
+      id: "user-2",
+      displayName: "Bob",
+      bio: null,
+      avatarUrl: null,
+      locationName: null
+    });
+
+    renderAt("/users/user-2");
+
+    expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
   });
 
   it("redirects /feedback to /login when there is no session (reuses RequireAuth)", () => {

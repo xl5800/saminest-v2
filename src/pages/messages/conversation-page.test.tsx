@@ -103,6 +103,38 @@ describe("MessageConversationPage", () => {
     expect(screen.getByRole("heading", { name: "对方" })).toBeInTheDocument();
   });
 
+  it("wraps the header avatar and nickname in a link to /users/:otherUserId", () => {
+    const { container } = renderPage();
+
+    const nicknameLink = screen.getByRole("link", { name: "Bob" });
+    expect(nicknameLink).toHaveAttribute("href", "/users/seller-1");
+
+    const headerAvatarLink = container.querySelector('header a[href="/users/seller-1"]');
+    expect(headerAvatarLink).toBeInTheDocument();
+  });
+
+  it("does not render a profile link in the header when otherUserId is null", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conversation-1",
+          postId: "post-1",
+          postTitle: "木桌",
+          otherUserId: null,
+          otherDisplayName: null,
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-20T12:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
   it("renders an <img> avatar in the header when otherAvatarUrl is present, and a nickname-initial placeholder when it is absent", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [

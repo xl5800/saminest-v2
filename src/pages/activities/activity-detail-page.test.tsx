@@ -124,7 +124,11 @@ describe("ActivityDetailPage", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("吃饭搭子")).toBeInTheDocument();
     expect(screen.getByText("火锅")).toBeInTheDocument();
-    expect(screen.getByText("发起人：Alice")).toBeInTheDocument();
+    expect(screen.getByText(/发起人：/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Alice" })).toHaveAttribute(
+      "href",
+      "/users/user-1"
+    );
     expect(screen.getByText("海底捞")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByText("一起吃火锅，AA制")).toBeInTheDocument();
@@ -178,7 +182,7 @@ describe("ActivityDetailPage", () => {
     expect(screen.queryByText(/参与者/)).not.toBeInTheDocument();
   });
 
-  it("renders the participants section with each display name when the query returns a non-empty list", () => {
+  it("renders the participants section with each display name, linking to /users/:id, when the query returns a non-empty list", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -197,8 +201,16 @@ describe("ActivityDetailPage", () => {
     });
 
     expect(screen.getByText("参与者（2）")).toBeInTheDocument();
-    expect(screen.getByText("Alice")).toBeInTheDocument();
-    expect(screen.getByText("Bob")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Bob" })).toHaveAttribute("href", "/users/user-2");
+    // 这个夹具里 user-1/Alice 同时是发起人和参与者之一，页面上会渲染出
+    // 两个文字都是"Alice"的链接（发起人那一处 + 参与者 pill 那一处）——
+    // 用 getAllByRole 而不是 getByText，避免命中多个元素报错，两处都应该
+    // 指向同一个 /users/user-1。
+    const aliceLinks = screen.getAllByRole("link", { name: "Alice" });
+    expect(aliceLinks).toHaveLength(2);
+    for (const link of aliceLinks) {
+      expect(link).toHaveAttribute("href", "/users/user-1");
+    }
   });
 
   it("renders the participation button alongside the real content", () => {
