@@ -18,7 +18,7 @@ const LOGOUT_ERROR_MESSAGE = "退出登录失败，请稍后重试。";
 const settingsItemClassName =
   "mb-3 flex h-14 items-center justify-between rounded-2xl bg-white px-4 text-base font-medium text-text shadow-settings-item transition-opacity hover:opacity-90";
 
-const chevronClassName = "text-[18px] leading-none text-[#999]";
+const chevronClassName = "text-[18px] leading-none text-chevron";
 
 /**
  * "我的"标签页目标页面（/profile，路由已在 routes.tsx 用 RequireAuth

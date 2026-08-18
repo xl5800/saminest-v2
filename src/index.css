@@ -25,14 +25,62 @@
  * 次要文字色：规范里提到的"次要文字色"就是下面已有的 --color-text-muted，
  * 不另外建 --color-text-secondary 这个同义 token。
  */
+/*
+ * Meet5 风格改版（2026-08 · docs/saminest_codex_reference_pack/design-reference/
+ * 00-overview.md 任务卡 01）：这里落地那份文档"全局设计 Token"表格里的值。
+ *
+ * 没有新建一整套平行的 --blue/--blue-dark/--blue-light 命名，而是把设计稿
+ * 的蓝色层级"塞"进这个项目已有的语义化 token 名字里，理由：
+ * - --color-primary（原 #2563eb）就是设计稿里的 Primary Blue，改值不改名，
+ *   全站几十处 bg-primary/text-primary/border-primary 不用跟着逐个改。
+ * - --color-accent（原 #1d4ed8）在这个项目里历史上是另一个独立定义、但
+ *   视觉意图跟 primary 几乎一样的"强调蓝"（分类选中态/发布按钮/底部导航
+ *   中间按钮，见这个文件顶部原有注释）——设计稿明确要求"全站只用一套蓝色
+ *   层级，不出现第二种蓝"，所以这次直接把它的值也收敛成跟 primary 完全
+ *   相同的 Primary Blue，而不是保留两个数值相近但不相等的蓝。只改值，
+ *   不合并 token 名字：这两个类名在代码里各自的使用点还很多，改名字要
+ *   逐处替换 className，属于这张任务卡范围之外的重构。
+ * - --color-primary-hover（原 #1e40af，用于按钮 hover 反馈）跟设计稿新增
+ *   的 Blue Dark（#2743B8，用于"找搭子"页悬浮按钮等需要跟主蓝区分的场景）
+ *   本质都是"比 Primary 深一级的蓝"，这次统一改成 Blue Dark 这个数值——
+ *   避免同时存在两个深浅相近但不相等的深蓝。新增 --color-primary-dark
+ *   这个独立的具名 token（同样是 #2743B8）专门给"场景区分"这个用途用
+ *   （比如 Fab 组件的 dark 变体），跟 hover 反馈在语义上是两件事，即使
+ *   数值相同也保留两个名字，方便调用点表达意图。
+ * - 新增 --color-primary-light（Blue Light，#EEF1FD）和 --color-primary-soft
+ *   （Blue Soft，#C9D5FB）——这两级项目里之前没有对应的浅蓝 token，分别
+ *   用于标签/高亮态背景、空状态占位色，02～06 号页面卡会用到。
+ * - --color-text（原 #1a1a1a→#1c1c1e）、--color-text-muted（原 #6b7280→
+ *   #8a8a8e）、--color-border（原 #e5e7eb→#ececef）都是同名字改值，跟
+ *   primary 是同一个道理。新增 --color-text-subtle（Text Tertiary，
+ *   #B0B0B5）——设计稿要求的第三级文字（邮箱、极小标签），项目原来只有
+ *   两级文字色，这一级之前没有对应 token。新增 --color-chevron（Chevron/
+ *   Icon Muted，#C7C7CC）——弱化图标/chevron 专用色，比 text-muted 更淡，
+ *   之前项目里这类地方是各自手写十六进制色值（如 profile-page.tsx 的
+ *   chevronClassName 曾经是 text-[#999]，这次一并换成这个 token，见该
+ *   文件改动）。
+ *
+ * 卡片投影：设计稿"卡片投影：无阴影（保持现状扁平风格）"这一条，这次
+ * 没有改动已有的 --shadow-card（当前项目卡片其实一直带一层很轻的投影，
+ * 不是真正的纯扁平——这个判断跟设计稿"保持现状"的描述不完全一致，但
+ * 属于要不要动全站已有卡片视觉的页面级改动，这张任务卡范围是"建立
+ * token 和 TopBar/BottomTabBar/FAB 组件"，不包含改动其它页面已有卡片的
+ * 阴影，所以保留原值不动，只更新下面的 --shadow-fab 匹配设计稿要求的
+ * 蓝色投影（悬浮按钮/菜单弹层本来就是唯一允许带投影的地方）。
+ */
 @theme {
-  --color-primary: #2563eb;
-  --color-primary-hover: #1e40af;
-  --color-accent: #1d4ed8;
-  --color-bg: #f7f8fa;
-  --color-text: #1a1a1a;
-  --color-text-muted: #6b7280;
-  --color-border: #e5e7eb;
+  --color-primary: #3457e8;
+  --color-primary-hover: #2743b8;
+  --color-primary-dark: #2743b8;
+  --color-primary-light: #eef1fd;
+  --color-primary-soft: #c9d5fb;
+  --color-accent: #3457e8;
+  --color-bg: #f3f5fa;
+  --color-text: #1c1c1e;
+  --color-text-muted: #8a8a8e;
+  --color-text-subtle: #b0b0b5;
+  --color-border: #ececef;
+  --color-chevron: #c7c7cc;
   --color-success: #2e7d32;
   --color-warning: #b7791f;
   --color-danger: #c0392b;
@@ -52,7 +100,12 @@
    */
   --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
   --shadow-search: 0 1px 4px rgba(0, 0, 0, 0.06);
-  --shadow-fab: 0 4px 16px rgba(0, 0, 0, 0.12);
+  /* 设计稿要求的悬浮按钮投影是带品牌蓝色调的，不是中性黑——
+     0 6px 16px rgba(52,87,232,0.35)，52/87/232 就是 Primary Blue #3457E8
+     的 RGB 分量。菜单弹层（TopBar detail 变体的"…"菜单）用的是
+     shadow-lg 这种中性投影，不复用这个 token——那是弹层，不是悬浮按钮，
+     没有理由带品牌色调。 */
+  --shadow-fab: 0 6px 16px rgba(52, 87, 232, 0.35);
   --shadow-settings-item: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 

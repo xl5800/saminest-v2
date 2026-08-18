@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Saminest UI Design System</title>
+<style>
+  :root{
+    --bg:#f3f5fa;
+    --card:#ffffff;
+    --blue:#3457e8;
+    --blue-light:#eef1fd;
+    --text:#1c1c1e;
+    --sub:#8a8a8e;
+    --sub2:#b0b0b5;
+    --line:#ececef;
+    --chev:#c7c7cc;
+    --blue-dark:#2743b8;
+    --blue-soft:#c9d5fb;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    background:#e9eaee;
+    color:var(--text);
+  }
+  .page{
+    max-width:920px;
+    margin:0 auto;
+    padding:40px 28px 100px;
+  }
+  .cover{
+    background:linear-gradient(135deg,#3457e8,#5b78f5 60%,#7c6ce0);
+    color:#fff;
+    border-radius:20px;
+    padding:36px 32px;
+    margin-bottom:32px;
+  }
+  .cover .eyebrow{ font-size:12.5px; letter-spacing:1.5px; opacity:0.85; text-transform:uppercase; margin-bottom:8px;}
+  .cover h1{ font-size:26px; margin:0 0 10px; }
+  .cover p{ font-size:14px; line-height:1.7; opacity:0.95; margin:0; max-width:560px;}
+
+  h2{
+    font-size:19px;
+    margin:0 0 4px;
+    padding-top:8px;
+    display:flex; align-items:center; gap:10px;
+  }
+  h2 .num{
+    display:inline-flex; align-items:center; justify-content:center;
+    width:26px; height:26px; border-radius:8px;
+    background:var(--blue); color:#fff; font-size:13px; font-weight:700;
+  }
+  h3{ font-size:15.5px; margin:22px 0 10px; color:var(--text); }
+  .lede{ font-size:13.5px; color:var(--sub); margin:6px 0 20px; line-height:1.7; }
+
+  section{
+    background:var(--card);
+    border-radius:18px;
+    padding:26px 28px 30px;
+    margin-bottom:22px;
+    box-shadow:0 1px 2px rgba(0,0,0,0.04);
+  }
+
+  /* -- color swatches -- */
+  .swatch-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(140px,1fr));
+    gap:12px;
+    margin-top:14px;
+  }
+  .swatch{
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid var(--line);
+  }
+  .swatch .fill{ height:56px; }
+  .swatch .meta{ padding:8px 10px; font-size:11.5px; }
+  .swatch .meta .name{ font-weight:600; color:var(--text); }
+  .swatch .meta .hex{ color:var(--sub); font-family:ui-monospace,Menlo,monospace; }
+
+  /* -- type scale -- */
+  .type-row{
+    display:flex; align-items:baseline; gap:16px;
+    padding:10px 0; border-bottom:1px solid var(--line);
+  }
+  .type-row:last-child{ border-bottom:none; }
+  .type-row .label{ width:150px; flex-shrink:0; font-size:11.5px; color:var(--sub); }
+  .type-row .sample{ color:var(--text); }
+
+  /* -- spacing scale -- */
+  .space-row{ display:flex; align-items:center; gap:14px; padding:6px 0; }
+  .space-row .bar{ background:var(--blue-light); border:1px solid var(--blue); height:14px; border-radius:3px; }
+  .space-row .label{ font-size:12px; color:var(--sub); width:90px; }
+
+  /* -- radius scale -- */
+  .radius-row{ display:flex; align-items:center; gap:16px; margin-bottom:10px; }
+  .radius-box{ width:52px; height:52px; background:var(--blue-light); border:1.5px solid var(--blue); }
+  .radius-row .label{ font-size:12.5px; color:var(--sub); }
+
+  /* -- nav rule table -- */
+  table{ width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
+  th,td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th{ font-size:11.5px; color:var(--sub); text-transform:uppercase; letter-spacing:0.4px; font-weight:600; }
+  tr:last-child td{ border-bottom:none; }
+  td b{ color:var(--text); }
+  .tag{
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:6px;
+    background:var(--blue-light); color:var(--blue); font-weight:600; margin-right:4px;
+  }
+  .tag.off{ background:#fdeceb; color:#c0392b; }
+
+  /* -- page structure outline -- */
+  .outline-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:16px;
+    margin-top:14px;
+  }
+  .outline-card{
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:14px 16px;
+    background:#fafafb;
+  }
+  .outline-card .title{ font-size:14px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:6px;}
+  .outline-card ol{ margin:0; padding-left:18px; font-size:12.3px; color:#444; line-height:1.9; }
+  .outline-card ol li b{ color:var(--text); }
+
+  /* -- component previews -- */
+  .comp-block{ margin-top:16px; }
+  .comp-desc{ font-size:12.8px; color:var(--sub); margin:6px 0 14px; line-height:1.7; }
+  .preview-shell{
+    background:var(--bg);
+    border-radius:16px;
+    padding:20px;
+  }
+
+  /* list row card preview */
+  .list-card{ background:#fff; border-radius:16px; overflow:hidden; max-width:320px; }
+  .list-row{ display:flex; align-items:center; padding:14px; font-size:14.5px; border-bottom:1px solid var(--line); }
+  .list-row:last-child{ border-bottom:none; }
+  .list-row .icon{ width:22px; text-align:center; margin-right:10px; font-size:15px; }
+  .list-row .label{ flex:1; }
+  .list-row .chev{ color:var(--chev); font-size:15px; }
+
+  /* profile header card */
+  .avatar-card{ background:#fff; border-radius:16px; padding:14px; display:flex; align-items:center; max-width:320px; }
+  .avatar-small{ width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); margin-right:14px; flex-shrink:0; }
+  .avatar-card .name{ font-size:16px; font-weight:600; }
+  .avatar-card .bio{ font-size:12.5px; color:var(--sub); margin:2px 0; }
+  .avatar-card .email{ font-size:11.5px; color:var(--sub2); }
+
+  /* activity card */
+  .activity-card{ background:#fff; border-radius:16px; padding:16px; max-width:320px; }
+  .activity-card .avatars{ display:flex; align-items:center; margin-bottom:12px; }
+  .activity-card .av{ width:48px; height:48px; border-radius:50%; margin-right:-12px; border:2.5px solid #fff; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); box-shadow:0 1px 3px rgba(0,0,0,0.12);}
+  .activity-card .plus{ width:48px; height:48px; border-radius:50%; border:1.5px dashed var(--chev); display:flex; align-items:center; justify-content:center; color:var(--chev); font-size:17px; margin-left:10px;}
+  .activity-card .count{ font-size:11.5px; color:var(--sub); margin-bottom:6px; }
+  .activity-card .ttl{ font-size:15px; font-weight:600; margin-bottom:8px; }
+  .activity-card .meta{ font-size:12px; color:var(--sub); display:flex; align-items:center; gap:5px; margin-bottom:4px; }
+
+  /* member grid */
+  .member-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; max-width:320px; }
+  .member-cell{ aspect-ratio:1; border-radius:10px; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); position:relative; }
+  .member-cell.empty{ background:var(--blue-light); display:flex; align-items:center; justify-content:center; color:var(--blue-soft); font-size:18px;}
+  .member-cell .check{ position:absolute; bottom:4px; right:4px; width:16px; height:16px; border-radius:50%; background:#fff; color:var(--blue); font-size:10px; display:flex; align-items:center; justify-content:center; }
+
+  /* promo banner */
+  .promo-card{ border-radius:16px; overflow:hidden; max-width:320px; height:180px; position:relative; background:linear-gradient(160deg,#8fae7c,#6f8f5c); }
+  .promo-card .tag-box{ position:absolute; left:12px; right:12px; bottom:12px; background:var(--blue-dark); color:#fff; border-radius:10px; padding:12px 14px; }
+  .promo-card .tag-box .h{ font-size:14px; font-weight:700; margin-bottom:4px; }
+  .promo-card .tag-box .d{ font-size:10.5px; opacity:0.95; line-height:1.5; }
+
+  /* FAB */
+  .fab-demo{ display:flex; justify-content:center; padding:10px 0; }
+  .fab{
+    background:var(--blue); color:#fff; font-size:14px; font-weight:700;
+    padding:12px 26px; border-radius:999px; display:inline-flex; align-items:center; gap:8px;
+    box-shadow:0 6px 16px rgba(52,87,232,0.35);
+  }
+
+  /* tab bar */
+  .tabbar{ display:flex; background:#fff; border-radius:16px; padding:10px 4px; max-width:400px; }
+  .tabitem{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; font-size:10.5px; color:var(--sub); }
+  .tabitem.active{ color:var(--blue); font-weight:600; }
+  .tabitem .ic{ font-size:17px; }
+
+  .note{
+    background:#fff7e6; border:1px solid #f5deae; border-radius:12px;
+    padding:12px 16px; font-size:12.5px; color:#7a5b12; line-height:1.7; margin-top:10px;
+  }
+
+  .qlist{ margin:0; padding-left:20px; font-size:13.3px; line-height:2; color:#333; }
+  .qlist li b{ color:var(--text); }
+
+  footer{ text-align:center; font-size:12px; color:#9aa0ab; margin-top:30px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="cover">
+    <div class="eyebrow">Design System · v0.3 confirmed</div>
+    <h1>Saminest UI Design System</h1>
+    <p>参考 Meet5 的信息架构与视觉规范整理，覆盖设计 Token、页面背景处理、导航与顶部栏规则、五个主 Tab 页面结构，以及核心卡片组件规范。已按反馈确认全部开放问题，此文档仍为方案说明，尚未对应用做任何代码改动。</p>
+  </div>
+
+  <!-- 1. Design Tokens -->
+  <section>
+    <h2><span class="num">1</span>设计 Token</h2>
+    <p class="lede">颜色 / 字号 / 间距 / 圆角的基础规范，后续所有页面与组件均从这里取值，避免样式各自为政。</p>
+
+    <h3>颜色 Color</h3>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="fill" style="background:#2743b8"></div><div class="meta"><div class="name">Blue Dark</div><div class="hex">#2743B8</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#3457e8"></div><div class="meta"><div class="name">Primary Blue</div><div class="hex">#3457E8</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#c9d5fb"></div><div class="meta"><div class="name">Blue Soft</div><div class="hex">#C9D5FB</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#eef1fd"></div><div class="meta"><div class="name">Blue Light</div><div class="hex">#EEF1FD</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#f3f5fa"></div><div class="meta"><div class="name">Page BG（品牌微调灰）</div><div class="hex">#F3F5FA</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#ffffff;border-bottom:1px solid #eee"></div><div class="meta"><div class="name">Card White</div><div class="hex">#FFFFFF</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#1c1c1e"></div><div class="meta"><div class="name">Text Primary</div><div class="hex">#1C1C1E</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#8a8a8e"></div><div class="meta"><div class="name">Text Secondary</div><div class="hex">#8A8A8E</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#b0b0b5"></div><div class="meta"><div class="name">Text Tertiary</div><div class="hex">#B0B0B5</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#ececef"></div><div class="meta"><div class="name">Divider</div><div class="hex">#ECECEF</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#c7c7cc"></div><div class="meta"><div class="name">Chevron/Icon Muted</div><div class="hex">#C7C7CC</div></div></div>
+    </div>
+    <div class="note">已确认：不引入额外辅助色（如珊瑚橙）。全部强调型元素（横幅底色、徽章、认证角标）统一用 <b>Blue Dark / Primary Blue / Blue Soft</b> 这套蓝色深浅层级表达，保持品牌色唯一性。</div>
+
+    <h3>字号 Typography</h3>
+    <div class="type-row"><div class="label">H1 页面大标题</div><div class="sample" style="font-size:20px;font-weight:700;">我的 / 找搭子</div></div>
+    <div class="type-row"><div class="label">卡片标题</div><div class="sample" style="font-size:15.5px;font-weight:600;">IELTS 备考搭子，一起刷题</div></div>
+    <div class="type-row"><div class="label">正文/列表项</div><div class="sample" style="font-size:14.5px;">编辑资料</div></div>
+    <div class="type-row"><div class="label">辅助信息</div><div class="sample" style="font-size:12.5px;color:var(--sub);">喜欢hiking · Fairfax 公共图书馆</div></div>
+    <div class="type-row"><div class="label">极小标签/角标</div><div class="sample" style="font-size:11px;color:var(--sub2);">08-19 14:00</div></div>
+
+    <h3>间距 Spacing（4pt 基准）</h3>
+    <div class="space-row"><div class="label">4 / 8</div><div class="bar" style="width:32px"></div></div>
+    <div class="space-row"><div class="label">12（行内间距）</div><div class="bar" style="width:48px"></div></div>
+    <div class="space-row"><div class="label">14（卡片内边距）</div><div class="bar" style="width:56px"></div></div>
+    <div class="space-row"><div class="label">16（卡片间距）</div><div class="bar" style="width:64px"></div></div>
+    <div class="space-row"><div class="label">24（页面边距）</div><div class="bar" style="width:96px"></div></div>
+
+    <h3>圆角 Radius</h3>
+    <div class="radius-row"><div class="radius-box" style="border-radius:8px"></div><div class="label">8px — 小标签/输入框</div></div>
+    <div class="radius-row"><div class="radius-box" style="border-radius:16px"></div><div class="label">16px — 卡片、图片</div></div>
+    <div class="radius-row"><div class="radius-box" style="border-radius:26px"></div><div class="label">999px — 胶囊按钮/悬浮按钮/头像</div></div>
+
+    <h3>页面背景处理 Background Treatment</h3>
+    <div class="comp-desc">当前 Saminest 多数二级页（找搭子详情、找搭子列表等）是纯白底 + 白卡片，卡片和页面几乎没有区分度，看起来“很白很平”。市面上主流 App 基本都不用纯白做画布，而是用一层浅灰/浅色调把白卡片“托”出来。三种常见做法：</div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="fill" style="background:#f5f5f5"></div><div class="meta"><div class="name">中性浅灰（小红书/知乎）</div><div class="hex">#F5F5F5 画布 + 纯白卡片</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#f7f7f7"></div><div class="meta"><div class="name">极淡暖灰（Airbnb）</div><div class="hex">#F7F7F7 画布 + 1px 描边卡片</div></div></div>
+      <div class="swatch"><div class="fill" style="background:#f3f5fa"></div><div class="meta"><div class="name">品牌微调灰（推荐）</div><div class="hex">#F3F5FA 画布，从品牌蓝里提取的极淡冷灰</div></div></div>
+    </div>
+    <div class="note">
+      <b>推荐第三种</b>：用品牌蓝 #3457E8 提取出一个几乎看不出彩度、但比纯灰略偏冷调的背景色 #F3F5FA，既能把白卡片衬托出层次，又和品牌色保持隐性关联（类似 Notion／Linear 用品牌色调背景的做法），比无差别的中性灰更有识别度。已经把本文档「1 设计 Token」里的 Page BG 从 #F2F2F5 调整为 #F3F5FA，后续所有二级页统一套用这个画布色，不再用纯白 #FFFFFF 做页面背景，只让卡片保持白色。
+    </div>
+  </section>
+
+  <!-- 2. Navigation -->
+  <section>
+    <h2><span class="num">2</span>导航与顶部栏规则</h2>
+    <p class="lede">这是本次改版的核心：Meet5 只在 Activities（首页）顶部出现品牌区，其余四个 Tab 顶部只放页面标题和场景化功能图标，二级详情页只有返回和更多菜单。「发布」按钮从每页顶部撤下，仅在首页变成悬浮按钮。</p>
+
+    <table>
+      <tr><th>页面</th><th>左侧</th><th>中间</th><th>右侧</th><th>备注</th></tr>
+      <tr>
+        <td><b>首页</b>（Tab 1）</td>
+        <td>—</td>
+        <td><span class="tag">保留品牌</span>“Saminest”</td>
+        <td>—（撤下发布按钮）</td>
+        <td>唯一出现品牌名的页面；发布改为页面内悬浮 + 号按钮</td>
+      </tr>
+      <tr>
+        <td><b>分类</b>（Tab 2）</td>
+        <td>—</td>
+        <td>“分类” 页面标题</td>
+        <td>筛选/排序图标（可选）</td>
+        <td><span class="tag off">不出现品牌/发布</span>；不保留“?”帮助图标</td>
+      </tr>
+      <tr>
+        <td><b>找搭子</b>（Tab 3）</td>
+        <td>—</td>
+        <td>“找搭子” 页面标题</td>
+        <td>筛选图标</td>
+        <td><span class="tag off">不出现品牌/发布</span>；<span class="tag">本页专属悬浮“发起搭子”按钮</span></td>
+      </tr>
+      <tr>
+        <td><b>消息</b>（Tab 4）</td>
+        <td>—</td>
+        <td>“消息” 页面标题</td>
+        <td>通知铃铛</td>
+        <td><span class="tag off">不出现品牌/发布</span>；不保留“?”帮助图标</td>
+      </tr>
+      <tr>
+        <td><b>我的</b>（Tab 5）</td>
+        <td>—</td>
+        <td>“我的” 页面标题</td>
+        <td>设置齿轮</td>
+        <td><span class="tag off">不出现品牌/发布</span>；不保留“?”帮助图标</td>
+      </tr>
+      <tr>
+        <td><b>二级详情页</b><br><span style="color:var(--sub);font-size:11.5px;">活动详情 / 找搭子详情 / 会员资料</span></td>
+        <td>返回箭头（圆形按钮，半透明底）</td>
+        <td>无标题，或极简短标题</td>
+        <td>“…” 更多菜单（收藏/分享/举报统一收进此菜单）</td>
+        <td><span class="tag off">不出现品牌/发布</span>；页面底部不再平铺次操作行</td>
+      </tr>
+    </table>
+
+    <h3>悬浮发布按钮 Floating Action Button</h3>
+    <div class="comp-desc">共两个入口，均为胶囊形状、主色填充、高度约 48px，投影 <code>0 6px 16px rgba(52,87,232,0.35)</code>，悬浮于内容之上、Tab 栏上方约 12–16px，滚动时不随内容移动：</div>
+    <div class="fab-demo" style="gap:16px;">
+      <div class="fab">＋ 发布</div>
+      <div class="fab" style="background:var(--blue-dark);">＋ 发起搭子</div>
+    </div>
+    <div class="comp-desc">
+      左：<b>首页</b>专属，对应全站通用的“发布”动作。右：<b>找搭子</b>页专属，文案改为“发起搭子”，用更深的 Blue Dark 区分场景（不引入新色相），避免用户为了发搭子还要绕回首页。其余三个 Tab（分类/消息/我的）不出现悬浮按钮。
+    </div>
+  </section>
+
+  <!-- 3. Page structure -->
+  <section>
+    <h2><span class="num">3</span>页面结构</h2>
+    <p class="lede">五个主 Tab + 两类二级页的模块顺序（从上到下）。</p>
+    <div class="outline-grid">
+
+      <div class="outline-card">
+        <div class="title">🏠 首页</div>
+        <ol>
+          <li><b>顶部栏</b>：品牌“Saminest”</li>
+          <li>精选/公告横幅卡（可选，参考 Meet5 推广卡）</li>
+          <li>推荐搭子/成员网格区（头像宫格）</li>
+          <li>活动/搭子信息流（卡片列表）</li>
+          <li><b>悬浮“＋发布”按钮</b></li>
+        </ol>
+      </div>
+
+      <div class="outline-card">
+        <div class="title">🗂 分类</div>
+        <ol>
+          <li><b>顶部栏</b>：标题“分类”</li>
+          <li>分类入口宫格/列表</li>
+          <li>各分类下的内容流（进入子页面）</li>
+        </ol>
+      </div>
+
+      <div class="outline-card">
+        <div class="title">🤝 找搭子</div>
+        <ol>
+          <li><b>顶部栏</b>：标题“找搭子”</li>
+          <li>类型筛选 Chips（吃饭搭子/拼车/健身…）</li>
+          <li>地区筛选下拉</li>
+          <li>搭子活动卡片列表</li>
+          <li><b>悬浮“＋发起搭子”按钮</b></li>
+        </ol>
+      </div>
+
+      <div class="outline-card">
+        <div class="title">💬 消息</div>
+        <ol>
+          <li><b>顶部栏</b>：标题“消息” + 通知铃铛</li>
+          <li>搜索框</li>
+          <li>筛选 Chips（全部/未读/已加入/我发起的）</li>
+          <li>会员/Premium 推广行（可选）</li>
+          <li>聊天列表行</li>
+        </ol>
+      </div>
+
+      <div class="outline-card">
+        <div class="title">👤 我的</div>
+        <ol>
+          <li><b>顶部栏</b>：标题“我的” + 设置齿轮</li>
+          <li>头像信息卡（小头像+昵称+签名+邮箱）</li>
+          <li>功能列表卡：编辑资料/我的发布/我的活动/我的收藏/意见反馈</li>
+          <li>“后台管理”分组 <span class="tag">仅管理员账号可见</span>（角色判断，见 4.1 说明）</li>
+        </ol>
+      </div>
+
+      <div class="outline-card">
+        <div class="title">📄 二级详情页</div>
+        <ol>
+          <li><b>顶部栏</b>：返回 + “…”更多菜单（收藏/分享/举报都在此处）</li>
+          <li>主视觉（图片轮播 / 头像+人数）</li>
+          <li>标题 + 标签</li>
+          <li>关键信息（地点/时间/发起人）</li>
+          <li>正文描述</li>
+          <li>主操作按钮（参与/退出/发消息）</li>
+        </ol>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- 4. Card components -->
+  <section>
+    <h2><span class="num">4</span>卡片组件规范</h2>
+
+    <div class="comp-block">
+      <h3>4.1 列表行卡片 List Row Card</h3>
+      <div class="comp-desc">用于“我的”页功能入口等设置类列表。图标 22px + 10px 间距，文字 14.5px flex:1，右侧 chevron，行内边距 14px，行间 1px 分隔线，卡片整体圆角 16px。</div>
+      <div class="preview-shell">
+        <div class="list-card">
+          <div class="list-row"><span class="icon">✏️</span><span class="label">编辑资料</span><span class="chev">›</span></div>
+          <div class="list-row"><span class="icon">📝</span><span class="label">我的发布</span><span class="chev">›</span></div>
+          <div class="list-row"><span class="icon">⭐</span><span class="label">我的收藏</span><span class="chev">›</span></div>
+          <div class="list-row"><span class="icon">⚙️</span><span class="label">后台管理</span><span class="chev">›</span></div>
+        </div>
+      </div>
+      <div class="comp-desc">“后台管理”行需做<b>角色判断</b>：仅当前登录账号为管理员时才渲染这一行（含分组标题），普通用户完全看不到入口，而不是显示后置灰或做权限拦截提示。</div>
+    </div>
+
+    <div class="comp-block">
+      <h3>4.2 头像信息卡 Profile Header Card</h3>
+      <div class="comp-desc">小头像 56px + 昵称/签名/邮箱纵向排列，卡片内边距 14px，圆角 16px。（延续此前“我的”页改版方案）</div>
+      <div class="preview-shell">
+        <div class="avatar-card">
+          <div class="avatar-small"></div>
+          <div><div class="name">小王</div><div class="bio">喜欢hiking</div><div class="email">xlw0980@gmail.com</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="comp-block">
+      <h3>4.3 活动/搭子卡片 Activity Card</h3>
+      <div class="comp-desc">头像组（叠加圆形头像 + 虚线圆“＋”占位）、人数进度、emoji+标题、地点行、日期行。圆角 16px，卡片本身无阴影，与现状风格保持一致。<b>已确认放大参与者头像</b>：从 34px 提升到 <b>48px</b>，叠放间距收紧到 -12px、白色描边加粗到 2.5px 并带轻投影，让"谁已经加入"在列表流里第一眼就能看到，强化社交吸引力。</div>
+      <div class="preview-shell">
+        <div class="activity-card">
+          <div class="avatars">
+            <div class="av"></div><div class="av"></div>
+            <div class="plus">＋</div>
+          </div>
+          <div class="count">还差 2 人（1/3）</div>
+          <div class="ttl">📚 IELTS 备考搭子，一起刷题</div>
+          <div class="meta">📍 Fairfax 公共图书馆</div>
+          <div class="meta">📅 08-19 14:00</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="comp-block">
+      <h3>4.4 会员网格卡片 Member Grid</h3>
+      <div class="comp-desc">对应 Meet5 首页 “Meet nearby” 头像宫格：4 列正方圆角卡，右下角认证角标，空位显示“＋”邀请占位。</div>
+      <div class="preview-shell">
+        <div class="member-grid">
+          <div class="member-cell"><div class="check">✓</div></div>
+          <div class="member-cell"><div class="check">✓</div></div>
+          <div class="member-cell"><div class="check">✓</div></div>
+          <div class="member-cell empty">＋</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="comp-block">
+      <h3>4.5 推广/横幅卡片 Promo Banner</h3>
+      <div class="comp-desc">背景图铺满 + 底部色块文案，圆角 16–20px。用于首页运营位（对应 Meet5 的 “Create. Host. Connect.”）。</div>
+      <div class="preview-shell">
+        <div class="promo-card">
+          <div class="tag-box">
+            <div class="h">发起一场活动</div>
+            <div class="d">每月发起 2 次搭子活动，解锁社区达人身份</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="comp-block">
+      <h3>4.6 底部 Tab 栏</h3>
+      <div class="comp-desc">5 项，图标约 22px + 文字 10.5px，选中态图标与文字变主色并加粗，未选中态灰色 #8a8a8e，背景白色，安全区适配。</div>
+      <div class="preview-shell">
+        <div class="tabbar">
+          <div class="tabitem active"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. Confirmed decisions -->
+  <section>
+    <h2><span class="num">5</span>已确认的设计决策</h2>
+    <ol class="qlist">
+      <li><b>“找搭子”页需要专属发起入口</b> —— 增加悬浮“＋发起搭子”按钮，样式同首页“发布”按钮，用 Blue Dark 区分场景，见 2.3。</li>
+      <li><b>二级 Tab 页不保留“?”帮助图标</b> —— 分类/找搭子/消息/我的四页顶部左侧留空，只保留页面标题（及消息的铃铛、我的的齿轮），见 2 导航规则表。</li>
+      <li><b>不引入辅助色</b> —— 全站不使用珊瑚橙等新色相，横幅、认证角标等强调元素统一改用 Blue Dark / Primary Blue / Blue Soft 这套蓝色层级，见 1 设计 Token。</li>
+      <li><b>详情页次操作收进“…”菜单</b> —— 收藏/分享/举报不再平铺在页面底部，统一收进右上角“…”更多菜单，见 2 导航规则表与 3 页面结构。</li>
+      <li><b>“后台管理”仅管理员账号可见</b> —— 前端按角色判断渲染，普通用户不显示该分组和入口，见 4.1 组件说明。</li>
+      <li><b>活动卡片头像放大</b> —— 参与者头像从 34px 提升到 48px、描边加粗+投影，突出社交吸引力，见 4.3 组件说明。</li>
+    </ol>
+  </section>
+
+  <footer>Saminest UI Design System · v0.3 confirmed · 仅为方案文档，未涉及任何代码改动</footer>
+</div>
+</body>
+</html>

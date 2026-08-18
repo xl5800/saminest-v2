@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Saminest 成品页面视觉稿 v2</title>
+<style>
+  :root{
+    --bg:#f3f5fa;
+    --card:#ffffff;
+    --blue:#3457e8;
+    --blue-dark:#2743b8;
+    --blue-light:#eef1fd;
+    --blue-soft:#c9d5fb;
+    --text:#1c1c1e;
+    --sub:#8a8a8e;
+    --sub2:#b0b0b5;
+    --line:#ececef;
+    --chev:#c7c7cc;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",Arial,sans-serif;
+    background:#e5e7ee;
+    padding:32px 20px 70px;
+  }
+  h1{ text-align:center; font-size:20px; margin:0 0 4px; color:#1c1c1e; }
+  p.subtitle{ text-align:center; color:#6b7280; font-size:13px; margin:0 0 30px; max-width:640px; margin-left:auto; margin-right:auto; line-height:1.7;}
+
+  .wrap{ display:flex; flex-wrap:wrap; justify-content:center; gap:30px; }
+  .col{ display:flex; flex-direction:column; align-items:center; }
+  .col-label{
+    font-size:13.5px; font-weight:600; margin-bottom:10px; padding:4px 14px;
+    border-radius:999px; background:#eef1fd; color:var(--blue);
+  }
+
+  .phone{
+    width:290px; height:610px;
+    background:var(--bg);
+    border-radius:32px;
+    border:8px solid #111827;
+    overflow:hidden;
+    position:relative;
+    box-shadow:0 12px 28px rgba(0,0,0,0.22);
+  }
+  .notch{
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:110px; height:16px; background:#111827;
+    border-bottom-left-radius:12px; border-bottom-right-radius:12px; z-index:6;
+  }
+  .screen{ height:100%; display:flex; flex-direction:column; }
+  .content{ flex:1; overflow:hidden; padding:24px 12px 0; position:relative; }
+
+  /* ---- generic top bars ---- */
+  .topbar{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:0 2px;}
+  .topbar .side{ width:26px; height:26px; border-radius:50%; background:#fff; display:flex; align-items:center; justify-content:center; font-size:14px; color:#4b5563; flex-shrink:0;}
+  .topbar .side.ghost{ background:transparent; }
+  .topbar .brand{ color:var(--blue); font-size:16.5px; font-weight:700; }
+  .topbar .title{ font-size:16px; font-weight:700; color:var(--text); }
+  .section-h1{ font-size:19px; font-weight:700; margin:2px 0 12px; }
+
+  /* ---- home top bar (state · brand, left-aligned + icon cluster right) ---- */
+  .topbar-home{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:0 2px;}
+  .topbar-home .brandline{ font-size:15.5px; font-weight:700; color:var(--text); }
+  .topbar-home .brandline .state{ color:var(--sub); font-weight:500; font-size:12.5px; }
+  .topbar-home .brandline .dot{ color:var(--sub2); margin:0 3px; font-weight:400; }
+  .topbar-home .brandline .brand{ color:var(--blue); font-weight:700; }
+  .topbar-home .icons{ display:flex; gap:8px; flex-shrink:0; }
+
+  /* ---- promo banner ---- */
+  .promo{
+    border-radius:16px; overflow:hidden; height:120px; position:relative;
+    background:linear-gradient(135deg,#5b78f5,#3457e8 60%,#2743b8); margin-bottom:14px;
+  }
+  .promo .tag{ position:absolute; left:12px; right:12px; bottom:10px; color:#fff; }
+  .promo .tag .h{ font-size:13px; font-weight:700; margin-bottom:2px; }
+  .promo .tag .d{ font-size:10px; opacity:0.9; line-height:1.4; }
+
+  /* ---- member grid ---- */
+  .grid-title{ font-size:13.5px; font-weight:700; margin:2px 0 8px; }
+  .member-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:5px; margin-bottom:14px;}
+  .member-cell{ aspect-ratio:1; border-radius:9px; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); position:relative;}
+  .member-cell.empty{ background:var(--blue-light); display:flex; align-items:center; justify-content:center; color:var(--blue-soft); font-size:16px;}
+  .member-cell .check{ position:absolute; bottom:3px; right:3px; width:13px; height:13px; border-radius:50%; background:#fff; color:var(--blue); font-size:8px; display:flex; align-items:center; justify-content:center;}
+
+  /* ---- activity card ---- */
+  .activity-card{ background:#fff; border-radius:16px; padding:14px; margin-bottom:12px; }
+  .activity-card .avatars{ display:flex; align-items:center; margin-bottom:10px; }
+  .activity-card .av{ width:40px; height:40px; border-radius:50%; margin-right:-10px; border:2.5px solid #fff; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); box-shadow:0 1px 3px rgba(0,0,0,0.12);}
+  .activity-card .plus{ width:40px; height:40px; border-radius:50%; border:1.5px dashed var(--chev); display:flex; align-items:center; justify-content:center; color:var(--chev); font-size:15px; margin-left:8px;}
+  .activity-card .count{ font-size:11px; color:var(--sub); margin-bottom:5px; }
+  .activity-card .ttl{ font-size:14px; font-weight:600; margin-bottom:7px; }
+  .activity-card .meta{ font-size:11.5px; color:var(--sub); display:flex; align-items:center; gap:5px; margin-bottom:3px; }
+  .chip{ display:inline-block; font-size:10px; color:var(--blue); background:var(--blue-light); padding:2px 8px; border-radius:999px; margin-right:6px; }
+
+  /* ---- FAB ---- */
+  .fab{
+    position:absolute; left:50%; bottom:76px; transform:translateX(-50%);
+    background:var(--blue); color:#fff; font-size:13px; font-weight:700;
+    padding:11px 22px; border-radius:999px; display:inline-flex; align-items:center; gap:6px;
+    box-shadow:0 6px 14px rgba(52,87,232,0.35); white-space:nowrap; z-index:5;
+  }
+  .fab.alt{ background:var(--blue-dark); }
+
+  /* ---- category chips ---- */
+  .chip-row{ display:flex; gap:8px; overflow:hidden; margin-bottom:12px; }
+  .chip-row .c{ font-size:11.5px; padding:7px 13px; border-radius:999px; background:#fff; color:#4b5563; white-space:nowrap; }
+  .chip-row .c.active{ background:var(--blue); color:#fff; font-weight:600; }
+
+  /* ---- search bar ---- */
+  .search{ background:#fff; border-radius:999px; padding:10px 14px; font-size:12.5px; color:var(--sub); margin-bottom:12px; }
+
+  /* ---- chat list ---- */
+  .chat-row{ display:flex; align-items:center; background:#fff; padding:12px; border-radius:14px; margin-bottom:8px; }
+  .chat-av{ width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); margin-right:10px; flex-shrink:0;}
+  .chat-row .name{ font-size:13.5px; font-weight:600; }
+  .chat-row .msg{ font-size:11.5px; color:var(--sub); margin-top:2px; }
+  .chat-row .dots{ margin-left:auto; color:var(--chev); font-size:14px; }
+
+  /* ---- profile ---- */
+  .avatar-card{ background:#fff; border-radius:16px; padding:13px; display:flex; align-items:center; margin-bottom:12px;}
+  .avatar-small{ width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); margin-right:12px; flex-shrink:0;}
+  .avatar-card .name{ font-size:15px; font-weight:600; }
+  .avatar-card .bio{ font-size:11.5px; color:var(--sub); margin:2px 0; }
+  .avatar-card .email{ font-size:10.5px; color:var(--sub2); }
+
+  .list-card{ background:#fff; border-radius:16px; overflow:hidden; margin-bottom:12px;}
+  .list-row{ display:flex; align-items:center; padding:12.5px 13px; font-size:13px; border-bottom:1px solid var(--line); }
+  .list-row:last-child{ border-bottom:none; }
+  .list-row .icon{ width:20px; text-align:center; margin-right:9px; font-size:14px; }
+  .list-row .label{ flex:1; }
+  .list-row .chev{ color:var(--chev); font-size:14px; }
+  .grp-label{ font-size:10.5px; color:var(--sub); margin:0 0 6px 2px; display:flex; align-items:center; gap:6px;}
+  .admin-tag{ font-size:9px; color:var(--blue); background:var(--blue-light); padding:1px 6px; border-radius:999px; }
+
+  /* ---- detail page ---- */
+  .detail-hero{ display:flex; align-items:center; margin-bottom:12px; }
+  .detail-hero .av{ width:44px; height:44px; border-radius:50%; margin-right:-10px; border:2.5px solid #fff; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); box-shadow:0 1px 3px rgba(0,0,0,0.12);}
+  .detail-title{ font-size:16.5px; font-weight:700; margin-bottom:8px; }
+  .detail-tags{ margin-bottom:12px; }
+  .detail-tags .c{ font-size:10.5px; color:var(--blue); background:var(--blue-light); padding:3px 10px; border-radius:999px; margin-right:6px;}
+  .detail-box{ background:#fff; border-radius:14px; padding:12px; margin-bottom:10px; font-size:12px; color:#333; }
+  .detail-box .l1{ font-weight:600; font-size:13px; margin-bottom:2px;}
+  .detail-box .l2{ color:var(--sub); font-size:11px; }
+  .detail-desc{ font-size:12px; color:#444; line-height:1.7; margin-bottom:12px; }
+  .initiator{ display:flex; align-items:center; background:#fff; border-radius:14px; padding:11px; margin-bottom:12px; }
+  .initiator .av{ width:34px;height:34px;border-radius:50%; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); margin-right:10px;}
+  .initiator .n{ font-size:12.5px; font-weight:600; }
+  .initiator .r{ font-size:10.5px; color:var(--sub); }
+  .initiator .chev{ color:var(--chev); font-size:14px; margin-left:auto; }
+  .primary-btn{ background:var(--blue-light); color:var(--blue); text-align:center; font-size:13px; font-weight:600; padding:11px; border-radius:12px; }
+  .menu-pop{ position:absolute; top:40px; right:12px; background:#fff; border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,0.15); overflow:hidden; z-index:10; width:120px;}
+  .menu-pop .mi{ padding:10px 14px; font-size:12px; color:var(--text); display:flex; align-items:center; gap:8px; border-bottom:1px solid var(--line);}
+  .menu-pop .mi:last-child{ border-bottom:none; }
+
+  /* ---- tab bar ---- */
+  .tabbar{ display:flex; background:#fff; padding:9px 2px 6px; border-top:1px solid var(--line); }
+  .tabitem{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:9.5px; color:var(--sub); }
+  .tabitem.active{ color:var(--blue); font-weight:700; }
+  .tabitem .ic{ font-size:16px; }
+
+  .caption{ margin-top:10px; font-size:11.5px; color:#6b7280; text-align:center; max-width:280px; line-height:1.6;}
+  footer{ text-align:center; font-size:12px; color:#9aa0ab; margin-top:36px; }
+
+  .initiator .chev{ color:var(--chev); font-size:14px; margin-left:auto; }
+
+  /* ---- compose form fields ---- */
+  .field-label{ font-size:12px; font-weight:600; color:var(--text); margin:14px 0 8px; }
+  .field-label:first-child{ margin-top:0; }
+  .upload-box{ background:#fff; border:1.5px dashed var(--chev); border-radius:14px; height:80px; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--sub); font-size:11px; gap:4px;}
+  .input-box{ background:#fff; border-radius:12px; padding:12px 13px; font-size:12.5px; color:var(--sub); margin-bottom:2px; }
+  .textarea-box{ background:#fff; border-radius:12px; padding:12px 13px; font-size:12px; color:var(--sub); height:56px; }
+  .select-box{ display:flex; align-items:center; justify-content:space-between; background:#fff; border-radius:12px; padding:12px 13px; font-size:12.5px; color:var(--text); margin-bottom:2px;}
+  .select-box .car{ color:var(--chev); font-size:11px; }
+  .row-field{ display:flex; align-items:center; background:#fff; border-radius:12px; padding:12px 13px; font-size:12.5px; margin-bottom:8px; }
+  .row-field .ic{ margin-right:8px; }
+  .row-field .lb{ flex:1; color:var(--text); }
+  .row-field .chev{ color:var(--chev); font-size:14px; }
+  .stepper{ display:flex; align-items:center; gap:10px; font-size:13px; }
+  .stepper .btn{ width:22px; height:22px; border-radius:50%; background:var(--blue-light); color:var(--blue); display:flex; align-items:center; justify-content:center; font-weight:700;}
+  .post-btn{ font-size:13px; font-weight:700; color:var(--blue); }
+
+  /* ---- host profile ---- */
+  .profile-hero{ display:flex; flex-direction:column; align-items:center; text-align:center; padding:6px 0 14px; }
+  .profile-hero .av{ width:76px; height:76px; border-radius:50%; background:linear-gradient(135deg,#f6a5c0,#7c6ce0); margin-bottom:10px; border:3px solid #fff; box-shadow:0 2px 8px rgba(0,0,0,0.12);}
+  .profile-hero .n{ font-size:16px; font-weight:700; }
+  .profile-hero .b{ font-size:11.5px; color:var(--sub); margin:4px 0 8px; }
+  .profile-hero .badges .c{ font-size:9.5px; color:var(--blue); background:var(--blue-light); padding:3px 9px; border-radius:999px; margin:0 3px; }
+  .msg-row-solo{ display:flex; justify-content:center; margin-bottom:14px; }
+  .msg-btn-solo{ background:var(--blue); color:#fff; text-align:center; font-size:13.5px; font-weight:700; padding:12px 44px; border-radius:999px; }
+  .sub-h{ font-size:12.5px; font-weight:700; margin:4px 0 8px; }
+
+  /* ---- marketplace listing grid (home) ---- */
+  .listing-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .listing-card{ background:#fff; border-radius:14px; overflow:hidden; }
+  .listing-card .img{ height:78px; background:linear-gradient(135deg,#dbe3f5,#aebbe8); }
+  .listing-card .body{ padding:9px 10px 11px; }
+  .listing-card .t{ font-size:11.5px; font-weight:600; line-height:1.35; margin-bottom:5px; color:var(--text); }
+  .listing-card .price{ font-size:13px; font-weight:700; color:var(--text); margin-bottom:6px; }
+  .listing-card .tagrow{ display:flex; align-items:center; gap:5px; }
+  .listing-card .tagrow .tag{ font-size:9px; color:var(--blue); background:var(--blue-light); padding:2px 6px; border-radius:6px; }
+  .listing-card .tagrow .loc{ font-size:9.5px; color:var(--sub); }
+
+  /* ---- category tiles (分类 tab) ---- */
+  .cat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .cat-tile{ background:#fff; border-radius:14px; padding:24px 0; text-align:center; font-size:14px; font-weight:600; color:var(--text); }
+
+  /* ---- region picker ---- */
+  .region-search{ background:#f2f3f6; border-radius:12px; padding:11px 14px; font-size:12.5px; color:var(--sub); margin-bottom:14px; }
+  .region-toggle-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .region-toggle-row .lbl{ font-size:12px; color:var(--sub); }
+  .region-toggle-row .tabs{ display:flex; align-items:center; gap:8px; font-size:12px; }
+  .region-toggle-row .tabs .t{ color:var(--sub); }
+  .region-toggle-row .tabs .t.active{ color:var(--blue); font-weight:700; }
+  .region-toggle-row .tabs .sep{ color:var(--line); }
+  .region-list .r{ display:flex; align-items:center; padding:11px 2px; font-size:13px; color:var(--text); border-bottom:1px solid var(--line); }
+  .region-list .r .code{ font-weight:700; margin-right:6px; }
+  .region-list .r .chev{ margin-left:auto; color:var(--chev); font-size:14px; }
+
+  /* ---- bottom sheet modal ---- */
+  .sheet-overlay{ position:absolute; inset:0; background:rgba(17,24,39,0.4); z-index:8; }
+  .sheet{ position:absolute; left:0; right:0; bottom:0; background:#fff; border-radius:20px 20px 0 0; padding:14px 14px 18px; z-index:9; }
+  .sheet .h{ text-align:center; font-size:12px; color:var(--sub); margin-bottom:12px; font-weight:600; }
+  .sheet .opt{ display:flex; align-items:center; gap:10px; padding:12px 12px; border-radius:12px; font-size:13px; font-weight:600; margin-bottom:7px; background:#f6f7fb; color:var(--text); }
+  .sheet .opt.active{ background:var(--blue-light); color:var(--blue); }
+  .sheet .opt .ic{ font-size:16px; }
+</style>
+</head>
+<body>
+
+<h1>Saminest 成品页面视觉稿 v2</h1>
+<p class="subtitle">按最新反馈更新：首页改为真实的租房/求租/二手信息流，顶部左侧同行显示「所在州 · Saminest」，右侧只保留「＋」和搜索两个图标（悬浮发布按钮已取消）；新增「分类」Tab、「选择发布类型」弹层、通用「发布帖子」表单；找搭子的悬浮按钮直接跳转发布表单；发起者主页去掉收藏、发消息按钮居中；新增点击首页州名后的「地区选择」页面。仍为静态视觉稿，未涉及任何代码改动。</p>
+
+<div class="wrap">
+
+  <!-- ① 首页 -->
+  <div class="col">
+    <div class="col-label">① 首页</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar-home">
+            <div class="brandline"><span class="state">Virginia</span><span class="dot">·</span><span class="brand">Saminest</span></div>
+            <div class="icons">
+              <div class="side">＋</div>
+              <div class="side">🔍</div>
+            </div>
+          </div>
+
+          <div class="chip-row">
+            <div class="c active">推荐</div>
+            <div class="c">租房</div>
+            <div class="c">求租</div>
+            <div class="c">二手</div>
+          </div>
+
+          <div class="listing-grid">
+            <div class="listing-card">
+              <div class="img"></div>
+              <div class="body">
+                <div class="t">二手洗地毯机</div>
+                <div class="price">USD 60</div>
+                <div class="tagrow"><span class="tag">二手</span><span class="loc">Arlington</span></div>
+              </div>
+            </div>
+            <div class="listing-card">
+              <div class="img"></div>
+              <div class="body">
+                <div class="t">二手床垫</div>
+                <div class="price">USD 30</div>
+                <div class="tagrow"><span class="tag">二手</span><span class="loc">Washington, DC</span></div>
+              </div>
+            </div>
+            <div class="listing-card">
+              <div class="img"></div>
+              <div class="body">
+                <div class="t">dc2001转租</div>
+                <div class="price" style="color:var(--sub);font-weight:500;font-size:11.5px;">价格未填写</div>
+                <div class="tagrow"><span class="tag">租房</span><span class="loc">Washington, DC</span></div>
+              </div>
+            </div>
+            <div class="listing-card">
+              <div class="img"></div>
+              <div class="body">
+                <div class="t">出1b1b短租</div>
+                <div class="price" style="color:var(--sub);font-weight:500;font-size:11.5px;">价格未填写</div>
+                <div class="tagrow"><span class="tag">租房</span><span class="loc">Arlington</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem active"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">左侧同行显示「所在州 · Saminest」；右侧只保留「＋」快捷发布和搜索两个图标，悬浮发布按钮已取消，搜索框也不再单独占一行；点「＋」弹出 ⑨</div>
+  </div>
+
+  <!-- ② 分类 -->
+  <div class="col">
+    <div class="col-label">② 分类</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side ghost"></div>
+            <div class="title">分类</div>
+            <div class="side ghost"></div>
+          </div>
+
+          <div class="cat-grid">
+            <div class="cat-tile">🏠 租房</div>
+            <div class="cat-tile">🔑 求租</div>
+            <div class="cat-tile">🛍 二手</div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem active"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">按统一规则去掉品牌名和「发布」按钮，顶部只留居中标题「分类」；点进每个分类查看对应筛选后的 ① 信息流</div>
+  </div>
+
+  <!-- ③ 找搭子 -->
+  <div class="col">
+    <div class="col-label">③ 找搭子</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side ghost"></div>
+            <div class="title">找搭子</div>
+            <div class="side">▽</div>
+          </div>
+
+          <div class="chip-row">
+            <div class="c active">全部</div>
+            <div class="c">🍜 吃饭搭子</div>
+            <div class="c">🚗 拼车</div>
+          </div>
+
+          <div class="activity-card">
+            <div class="avatars"><div class="av"></div><div class="av"></div><div class="plus">＋</div></div>
+            <div class="count">还差 2 人（1/3）</div>
+            <div class="ttl">📚 IELTS 备考搭子，一起刷题</div>
+            <div class="meta">📍 Fairfax 公共图书馆</div>
+            <div class="meta">📅 08-19 14:00</div>
+          </div>
+
+          <div class="activity-card">
+            <div class="avatars"><div class="av"></div><div class="plus">＋</div><div class="plus">＋</div></div>
+            <div class="count">还差 3 人（0/3）</div>
+            <div class="ttl">🚗 DC → NYC 周五早上拼车</div>
+            <div class="meta">📍 计划从 DC 出发</div>
+            <div class="meta">📅 08-21 08:00</div>
+          </div>
+
+          <div class="fab alt">＋ 发起搭子</div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem active"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">悬浮「＋发起搭子」不经过⑨的类型选择，点击直接跳转到 ⑦ 发布搭子内容表单</div>
+  </div>
+
+  <!-- ④ 消息 -->
+  <div class="col">
+    <div class="col-label">④ 消息</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side ghost"></div>
+            <div class="title">消息</div>
+            <div class="side">🔔</div>
+          </div>
+
+          <div class="search">🔍 搜索聊天</div>
+          <div class="chip-row">
+            <div class="c active">全部</div>
+            <div class="c">未读</div>
+            <div class="c">已加入</div>
+          </div>
+
+          <div class="chat-row">
+            <div class="chat-av"></div>
+            <div><div class="name">小雨</div><div class="msg">周末的活动还去吗？</div></div>
+            <div class="dots">⋮</div>
+          </div>
+          <div class="chat-row">
+            <div class="chat-av"></div>
+            <div><div class="name">阿泽</div><div class="msg">图书馆见～</div></div>
+            <div class="dots">⋮</div>
+          </div>
+          <div class="chat-row">
+            <div class="chat-av"></div>
+            <div><div class="name">卷卷</div><div class="msg">草稿：你好</div></div>
+            <div class="dots">⋮</div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem active"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">无品牌名、无「?」帮助图标；右上角只保留通知铃铛</div>
+  </div>
+
+  <!-- ⑤ 我的 -->
+  <div class="col">
+    <div class="col-label">⑤ 我的</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side ghost"></div>
+            <div class="title">我的</div>
+            <div class="side">⚙</div>
+          </div>
+
+          <div class="avatar-card">
+            <div class="avatar-small"></div>
+            <div><div class="name">小王</div><div class="bio">喜欢hiking</div><div class="email">xlw0980@gmail.com</div></div>
+          </div>
+
+          <div class="list-card">
+            <div class="list-row"><span class="icon">✏️</span><span class="label">编辑资料</span><span class="chev">›</span></div>
+            <div class="list-row"><span class="icon">📝</span><span class="label">我的发布</span><span class="chev">›</span></div>
+            <div class="list-row"><span class="icon">📅</span><span class="label">我的活动</span><span class="chev">›</span></div>
+            <div class="list-row"><span class="icon">⭐</span><span class="label">我的收藏</span><span class="chev">›</span></div>
+            <div class="list-row"><span class="icon">💬</span><span class="label">意见反馈</span><span class="chev">›</span></div>
+          </div>
+
+          <div class="grp-label">后台管理 <span class="admin-tag">仅管理员可见</span></div>
+          <div class="list-card">
+            <div class="list-row"><span class="icon">🛠</span><span class="label">后台管理</span><span class="chev">›</span></div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem active"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">小头像信息卡 + 统一列表；「后台管理」按角色判断渲染，非管理员完全不可见</div>
+  </div>
+
+  <!-- ⑥ 找搭子详情 -->
+  <div class="col">
+    <div class="col-label">⑥ 找搭子详情</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content" style="position:relative;">
+          <div class="topbar">
+            <div class="side">←</div>
+            <div></div>
+            <div class="side">⋯</div>
+          </div>
+          <div class="menu-pop">
+            <div class="mi">♡ 收藏</div>
+            <div class="mi">↗ 分享</div>
+            <div class="mi">⚑ 举报</div>
+          </div>
+
+          <div class="detail-hero"><div class="av"></div><div class="av"></div></div>
+          <div class="detail-title">📚 IELTS 备考搭子，一起刷题</div>
+          <div class="detail-tags"><span class="c">学习搭子</span><span class="c">IELTS</span></div>
+
+          <div class="detail-box">
+            <div class="l1">Fairfax 公共图书馆</div>
+            <div class="l2">Fairfax · 08-19 14:00</div>
+          </div>
+
+          <div class="detail-desc">准备考雅思，想找人一起约图书馆刷题、互相纠正口语，Fairfax 附近的优先。</div>
+
+          <div class="initiator"><div class="av"></div><div><div class="n">小王</div><div class="r">发起人</div></div><div class="chev">›</div></div>
+
+          <div class="primary-btn">退出活动</div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem active"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">已报名后展示「退出活动」；点击「发起人」行进入 ⑧ 发起者主页，可给对方发消息</div>
+  </div>
+
+  <!-- ⑦ 发布搭子内容 -->
+  <div class="col">
+    <div class="col-label">⑦ 发布搭子内容</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side">✕</div>
+            <div class="title">发布搭子内容</div>
+            <div class="post-btn">发布</div>
+          </div>
+
+          <div class="field-label">选择分类</div>
+          <div class="chip-row">
+            <div class="c">🍜 吃饭搭子</div>
+            <div class="c active">📚 学习搭子</div>
+            <div class="c">🏃 健身</div>
+          </div>
+
+          <div class="field-label">封面图</div>
+          <div class="upload-box">📷 添加封面图（选填）</div>
+
+          <div class="field-label">标题</div>
+          <div class="input-box">起个吸引人的标题</div>
+
+          <div class="field-label">详细描述</div>
+          <div class="textarea-box">介绍一下活动内容、要求…</div>
+
+          <div class="field-label">其他信息</div>
+          <div class="row-field"><span class="ic">📍</span><span class="lb">选择地点</span><span class="chev">›</span></div>
+          <div class="row-field"><span class="ic">📅</span><span class="lb">选择时间</span><span class="chev">›</span></div>
+          <div class="row-field"><span class="ic">👥</span><span class="lb">人数上限</span><span class="stepper"><span class="btn">−</span>3<span class="btn">＋</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">从 ③ 找搭子页的悬浮按钮直接进入，分类已默认聚焦「搭子」相关标签；全屏创建流程，不展示 Tab 栏</div>
+  </div>
+
+  <!-- ⑧ 发起者主页 -->
+  <div class="col">
+    <div class="col-label">⑧ 发起者主页</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side">←</div>
+            <div></div>
+            <div class="side">⋯</div>
+          </div>
+
+          <div class="profile-hero">
+            <div class="av"></div>
+            <div class="n">小王</div>
+            <div class="b">喜欢hiking · Fairfax, VA</div>
+            <div class="badges"><span class="c">靠谱搭子</span><span class="c">已认证</span></div>
+          </div>
+
+          <div class="msg-row-solo">
+            <div class="msg-btn-solo">💬 发消息</div>
+          </div>
+
+          <div class="sub-h">TA 发起的搭子</div>
+          <div class="activity-card" style="padding:12px;">
+            <div class="ttl" style="margin-bottom:5px;">📚 IELTS 备考搭子，一起刷题</div>
+            <div class="meta">📍 Fairfax 公共图书馆</div>
+            <div class="meta">📅 08-19 14:00</div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem active"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">去掉了收藏按钮；「发消息」是唯一主操作，居中显示，不再和其他按钮并排</div>
+  </div>
+
+  <!-- ⑨ 选择发布类型 -->
+  <div class="col">
+    <div class="col-label">⑨ 选择发布类型</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content" style="position:relative;">
+          <div class="topbar-home">
+            <div class="brandline"><span class="state">Virginia</span><span class="dot">·</span><span class="brand">Saminest</span></div>
+            <div class="icons"><div class="side">＋</div><div class="side">🔍</div></div>
+          </div>
+          <div class="chip-row">
+            <div class="c active">推荐</div><div class="c">租房</div><div class="c">求租</div>
+          </div>
+          <div class="listing-grid">
+            <div class="listing-card"><div class="img"></div><div class="body"><div class="t">二手洗地毯机</div><div class="price">USD 60</div></div></div>
+            <div class="listing-card"><div class="img"></div><div class="body"><div class="t">二手床垫</div><div class="price">USD 30</div></div></div>
+          </div>
+
+          <div class="sheet-overlay"></div>
+          <div class="sheet">
+            <div class="h">选择发布类型</div>
+            <div class="opt active"><span class="ic">🤝</span>发起搭子</div>
+            <div class="opt"><span class="ic">🏠</span>发布租房</div>
+            <div class="opt"><span class="ic">🔑</span>发布求租</div>
+            <div class="opt"><span class="ic">🛍</span>发布二手</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">点击首页「＋」弹出的底部弹层；选「发起搭子」跳到 ⑦，选其余三项跳到 ⑩ 发布帖子（分类预选中对应项）</div>
+  </div>
+
+  <!-- ⑩ 发布帖子 -->
+  <div class="col">
+    <div class="col-label">⑩ 发布帖子</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side">✕</div>
+            <div class="title">发布帖子</div>
+            <div class="post-btn">发布</div>
+          </div>
+
+          <div class="field-label">分类</div>
+          <div class="select-box"><span>租房</span><span class="car">⌄</span></div>
+
+          <div class="field-label">地区</div>
+          <div class="select-box"><span style="color:var(--sub);">不限地区</span><span class="car">⌄</span></div>
+
+          <div class="field-label">标题</div>
+          <div class="input-box">起个标题</div>
+
+          <div class="field-label">描述</div>
+          <div class="textarea-box">详细描述一下…</div>
+
+          <div class="field-label">价格（可选）</div>
+          <div class="input-box">USD</div>
+
+          <div class="field-label">联系方式类型</div>
+          <div class="select-box"><span style="color:var(--sub);">请选择联系方式</span><span class="car">⌄</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">对应租房/求租/二手三类的通用发布表单，样式与 ⑦ 保持一致；顶部同样只有「✕」+ 标题 + 文字「发布」按钮，不展示 Tab 栏</div>
+  </div>
+
+  <!-- ⑪ 地区选择 -->
+  <div class="col">
+    <div class="col-label">⑪ 地区选择</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="screen">
+        <div class="content">
+          <div class="topbar">
+            <div class="side">←</div>
+            <div class="title">地区选择</div>
+            <div class="side ghost"></div>
+          </div>
+
+          <div class="region-search">🔍 请输入地址搜索</div>
+
+          <div class="region-toggle-row">
+            <div class="lbl">全部城市</div>
+            <div class="tabs"><span class="t active">按热度</span><span class="sep">|</span><span class="t">按字母</span></div>
+          </div>
+
+          <div class="region-list">
+            <div class="r"><span class="code">NY</span>纽约州<span class="chev">›</span></div>
+            <div class="r"><span class="code">CA</span>加利福尼亚州<span class="chev">›</span></div>
+            <div class="r"><span class="code">TX</span>得克萨斯州</div>
+            <div class="r"><span class="code">HI</span>夏威夷州</div>
+            <div class="r"><span class="code">WA</span>华盛顿州</div>
+            <div class="r"><span class="code">MA</span>马萨诸塞州</div>
+            <div class="r"><span class="code">NJ</span>新泽西州</div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem active"><span class="ic">🏠</span>首页</div>
+          <div class="tabitem"><span class="ic">🗂</span>分类</div>
+          <div class="tabitem"><span class="ic">🤝</span>找搭子</div>
+          <div class="tabitem"><span class="ic">💬</span>消息</div>
+          <div class="tabitem"><span class="ic">👤</span>我的</div>
+        </div>
+      </div>
+    </div>
+    <div class="caption">点击 ① 首页顶部「Virginia」州名进入；顶部改成统一的返回+居中标题（原图是「‹ 地区选择」纯黑白，无品牌/发布）；NY、CA 这类多城市州带下钻箭头，其余单州直接选中返回</div>
+  </div>
+
+</div>
+
+<footer>Saminest 成品页面视觉稿 v2 · 对应 Design System v0.3 修订版 · 静态示意，未涉及任何代码改动</footer>
+
+</body>
+</html>
