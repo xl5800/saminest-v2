@@ -229,23 +229,12 @@ describe("ActivityDetailPage", () => {
     expect(screen.queryByText(/联系方式/)).not.toBeInTheDocument();
   });
 
-  it("does not render a participants list section when the query resolves to an empty list (not visible to this viewer, or nobody joined)", () => {
-    useActivityDetailQuery.mockReturnValue({
-      data: sampleActivityDetail,
-      isPending: false,
-      isError: false
-    });
-    useActivityParticipantsQuery.mockReturnValue({ data: [] });
-
-    renderWithProviders(<ActivityDetailPage />, {
-      initialEntries: ["/activities/act-1"],
-      route: "/activities/:id"
-    });
-
-    expect(screen.queryByText(/参与者（/)).not.toBeInTheDocument();
-  });
-
-  it("renders the full participants list with each display name, linking to /users/:id, when the query returns a non-empty list", () => {
+  // 单栏列表页精简：原来的"参与者（N）"文字名单区块整个去掉了——完整
+  // 名单现在只靠头像堆叠本身呈现，不管 useActivityParticipantsQuery 返回
+  // 空列表还是非空列表，都不应该再出现这段文字。useActivityParticipantsQuery
+  // 这个查询本身没有删（ActivityParticipantAvatars 还需要它的返回值渲染
+  // 头像堆叠），下面单独有一个测试验证参与者数据确实喂给了头像堆叠。
+  it("never renders a separate '参与者（N）' text list section, regardless of whether the participants query returns data", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -263,8 +252,27 @@ describe("ActivityDetailPage", () => {
       route: "/activities/:id"
     });
 
-    expect(screen.getByText("参与者（2）")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Bob" })).toHaveAttribute("href", "/users/user-2");
+    expect(screen.queryByText(/参与者（/)).not.toBeInTheDocument();
+  });
+
+  it("still feeds useActivityParticipantsQuery's data into the avatar stack (rendered as an avatar initial), even though the text list is gone", () => {
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+    useActivityParticipantsQuery.mockReturnValue({
+      data: [{ userId: "user-2", displayName: "Bob", avatarUrl: null }]
+    });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    // Bob 没有头像图，退化成昵称首字母占位"B"——这个字符只可能来自头像
+    // 堆叠（唯一还在消费 useActivityParticipantsQuery 数据的地方）。
+    expect(screen.getByText("B")).toBeInTheDocument();
   });
 
   it("renders the '参加活动' button alongside the real content", () => {
@@ -299,7 +307,9 @@ describe("ActivityDetailPage", () => {
     expect(screen.getByRole("button", { name: "申请加入" })).toBeInTheDocument();
   });
 
-  it("renders a '查看发起人' button next to '参加活动', linking to /users/:organizerId", () => {
+  // 单栏列表页精简：去掉了独立的"查看发起人"按钮——发起人卡片本来就整条
+  // 包在 <Link to="/users/:id"> 里，是唯一的入口；报名按钮改成独占一整行。
+  it("does not render a standalone '查看发起人' button — the organizer card itself is the only entry point, and '参加活动' spans the full row", () => {
     useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
@@ -312,10 +322,8 @@ describe("ActivityDetailPage", () => {
       route: "/activities/:id"
     });
 
-    expect(screen.getByRole("link", { name: "查看发起人" })).toHaveAttribute(
-      "href",
-      "/users/user-1"
-    );
+    expect(screen.queryByRole("link", { name: "查看发起人" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "我要报名" })).toHaveClass("w-full");
   });
 
   it("renders an organizer card (avatar + nickname + '发起人' label) linking to the same /users/:organizerId destination", () => {

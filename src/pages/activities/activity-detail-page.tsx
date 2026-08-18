@@ -4,10 +4,7 @@ import { Link, useParams } from "react-router-dom";
 
 import { ActivityFavoriteButton } from "../../components/activity-favorite-button";
 import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
-import {
-  ActivityParticipationButtonView,
-  SECONDARY_BUTTON_CLASS_NAME
-} from "../../components/activity-participation-button";
+import { ActivityParticipationButtonView } from "../../components/activity-participation-button";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
@@ -27,9 +24,9 @@ import { formatActivityStartAt } from "../../utils/format";
  * getActivityDetail 已经在 repository 层把这些情况收敛成同一个 null。
  *
  * 头像堆叠改版之后的页面顺序：标题 → 频道/标签（+发起人文字链接，跟改版
- * 前同一个位置）→ 头像堆叠（含参与人数文案）→ 完整参与者名单（若非空）
- * → 时间 → 地点 → 描述 → 联系方式（若有）→ 发起人卡片 → "查看发起人"/
- * "参加活动" 按钮对 → 收藏/分享/举报操作行。
+ * 前同一个位置）→ 头像堆叠（含参与人数文案）→ 时间 → 地点 → 描述 → 联系
+ * 方式（若有）→ 发起人卡片 → "参加活动"按钮（独占一整行）→ 收藏/分享/
+ * 举报操作行。
  *
  * 一致性的关键点：这个页面只调用一次 useActivityParticipationAction，把
  * 同一个 `participationAction` 对象分别交给 ActivityParticipationButtonView
@@ -38,9 +35,14 @@ import { formatActivityStartAt } from "../../utils/format";
  * 背后是同一个 mutation 实例、同一份 disabled 判断，不是分别独立调用两次
  * hook 各自维护一套状态，见 activity-participation-button.tsx 顶部注释。
  *
- * 社交资料页第一批留下的"发起人：{名字}"文字链接和参与者 pill 链接继续
- * 保留在原来的位置，跟这次新增的发起人卡片指向同一个 /users/:id，允许
- * 重复，不需要去重（任务卡明确说明）。
+ * 单栏列表页精简：原来的"参与者（N）"文字名单区块和"查看发起人"按钮都去
+ * 掉了——完整名单现在只靠头像堆叠本身呈现（产品明确接受的取舍），发起人
+ * 卡片本来就整条包在 <Link to="/users/:id"> 里，去掉旁边的"查看发起人"
+ * 按钮之后它自然就是"点击进入发起人主页"的唯一入口，不需要额外补什么。
+ * useActivityParticipantsQuery 这个查询本身没有删——ActivityParticipantAvatars
+ * 仍然需要它的返回值渲染头像堆叠，只是不再额外渲染一份文字名单。社交资料页
+ * 第一批留下的"发起人：{名字}"文字链接继续保留在原来的位置，跟发起人卡片
+ * 指向同一个 /users/:id，允许重复，不需要去重（任务卡明确说明）。
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -123,24 +125,6 @@ export function ActivityDetailPage() {
             onTapEmptySlot={participationAction.handleClick}
           />
 
-          {participants && participants.length > 0 ? (
-            <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
-              <p className="mb-2 text-text-muted">参与者（{participants.length}）</p>
-              <ul className="flex flex-wrap gap-2">
-                {participants.map((participant) => (
-                  <li key={participant.userId}>
-                    <Link
-                      to={`/users/${participant.userId}`}
-                      className="block rounded-full border border-border bg-white px-2 py-0.5 text-xs text-text hover:border-primary"
-                    >
-                      {participant.displayName}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-
           <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>
 
           <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
@@ -185,17 +169,7 @@ export function ActivityDetailPage() {
             </span>
           </Link>
 
-          <div className="flex items-center gap-2">
-            <Link
-              to={`/users/${data.organizerId}`}
-              className={SECONDARY_BUTTON_CLASS_NAME}
-            >
-              查看发起人
-            </Link>
-            <div className="flex-1">
-              <ActivityParticipationButtonView action={participationAction} />
-            </div>
-          </div>
+          <ActivityParticipationButtonView action={participationAction} />
 
           <div className="flex items-center gap-4">
             <ActivityFavoriteButton activityId={data.id} />

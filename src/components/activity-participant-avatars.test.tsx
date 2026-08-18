@@ -191,6 +191,90 @@ describe("ActivityParticipantAvatars", () => {
     expect(onTapEmptySlot).toHaveBeenCalledTimes(1);
   });
 
+  it("interactive={false}: renders no <button> elements at all, even when capacity forces empty slots", () => {
+    const { container } = render(
+      <ActivityParticipantAvatars
+        organizerId="org-1"
+        organizerDisplayName="Alice"
+        organizerAvatarUrl={null}
+        participants={makeParticipants(1)}
+        capacity={4}
+        interactive={false}
+      />
+    );
+
+    // capacity 4 - 发起人 1 - 参与者 1 = 2 个空位，全部应该渲染成纯展示的
+    // <span>，不是 <button>——列表卡片整体是一个 <Link>，塞一个 <button>
+    // 进去会产生非法的 "<a> 嵌套 <button>" 结构。
+    expect(container.querySelectorAll("button")).toHaveLength(0);
+    // Plus 图标视觉还在，只是不可交互。
+    expect(container.querySelectorAll("svg.lucide-plus")).toHaveLength(2);
+  });
+
+  it("interactive={false}: does not require canTapEmptySlot/onTapEmptySlot — renders fine without them", () => {
+    expect(() =>
+      render(
+        <ActivityParticipantAvatars
+          organizerId="org-1"
+          organizerDisplayName="Alice"
+          organizerAvatarUrl={null}
+          participants={[]}
+          capacity={2}
+          interactive={false}
+        />
+      )
+    ).not.toThrow();
+  });
+
+  it("interactive left at its default (true): still renders a clickable <button> empty slot, unchanged from before this prop existed", () => {
+    render(
+      <ActivityParticipantAvatars
+        organizerId="org-1"
+        organizerDisplayName="Alice"
+        organizerAvatarUrl={null}
+        participants={[]}
+        capacity={2}
+        canTapEmptySlot={true}
+        onTapEmptySlot={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "报名加入活动" })).toBeInTheDocument();
+  });
+
+  it("maxVisibleSlots: a smaller cap changes the overflow badge's number accordingly", () => {
+    // 发起人 1 + 4 个参与者 = 5 个总位置。maxVisibleSlots 传 3 时，超过
+    // 3+1=4 个位置就要折叠：只画前 3 个真实头像，溢出徽标显示 "+2"
+    // （5 - 3）。同样的数据用默认 MAX_VISIBLE_SLOTS（5）不会溢出，用来
+    // 对比验证这个数字确实是 maxVisibleSlots driven，不是巧合。
+    const { rerender } = render(
+      <ActivityParticipantAvatars
+        organizerId="org-1"
+        organizerDisplayName="Alice"
+        organizerAvatarUrl={null}
+        participants={makeParticipants(4)}
+        capacity={null}
+        canTapEmptySlot={false}
+        onTapEmptySlot={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+
+    rerender(
+      <ActivityParticipantAvatars
+        organizerId="org-1"
+        organizerDisplayName="Alice"
+        organizerAvatarUrl={null}
+        participants={makeParticipants(4)}
+        capacity={null}
+        canTapEmptySlot={false}
+        onTapEmptySlot={vi.fn()}
+        maxVisibleSlots={3}
+      />
+    );
+    expect(screen.getByText("+2")).toBeInTheDocument();
+  });
+
   it("shows the shared formatActivityParticipantSummary caption as small, non-emphasized text", () => {
     const { container } = render(
       <ActivityParticipantAvatars

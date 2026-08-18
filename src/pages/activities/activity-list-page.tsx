@@ -1,27 +1,47 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
 import { useActivitiesQuery } from "../../features/activities/use-activities-query";
+import { useActivityParticipantPreviewsQuery } from "../../features/activities/use-activity-participant-previews-query";
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import {
   ACTIVITY_CHANNEL_OPTIONS,
   getActivityChannelMeta
 } from "../../repositories/activities-repository";
-import {
-  formatActivityParticipantSummary,
-  formatActivityStartAt
-} from "../../utils/format";
+import { formatActivityStartAt } from "../../utils/format";
+
+// 列表卡片空间比详情页紧凑，头像堆叠的可见数量上限调小一点（详情页默认
+// MAX_VISIBLE_SLOTS = 5），格子/溢出徽标的计算逻辑不用改，只是换一个更
+// 小的 maxVisibleSlots。
+const CARD_AVATAR_MAX_VISIBLE_SLOTS = 4;
 
 /**
  * "一起去"活动列表页（/activities，公开，不需要登录，游客也能刷）。
  *
- * 瀑布流卡片布局照抄 post-list.tsx 的做法（原生 CSS 多栏 columns-2 +
- * break-inside-avoid，不引入 JS masonry 库），这是设计文档明确要求的
- * "参照小红书瀑布流卡片"视觉，帖子列表已经踩过一遍这条路，没有理由为
- * 活动列表另起一套布局方式。没有做无限滚动——这一批活动数据量小，先用
- * 最简单的"一次性查全部"，等真的出现分页体量的活动数量再考虑加（跟
- * post-list.tsx 当初从"分页按钮"改成"无限滚动"是同一类演进，不是必须
- * 一步到位的东西）。
+ * 单栏纵向列表（Meet5 风格）：从原来的瀑布流两栏 columns-2 卡片改成
+ * flex-col 单栏，一张接一张往下排，每张卡片占满整行宽度。卡片内容顺序：
+ * 头像堆叠（发起人+参与者，头像排列占据视觉主体） → 标题（emoji+文字）→
+ * 地址 → 时间。原来卡片底部的"频道标签 pill + 人数摘要文字"这一行去掉了：
+ * 频道信息继续靠标题前的 emoji 传达（现状已经如此），人数信息现在由头像
+ * 堆叠组件自带的 caption（同一个 formatActivityParticipantSummary，组件
+ * 内部已经在渲染）承担，不需要卡片再单独展示一份，避免同一条信息出现两次。
+ *
+ * 每张卡片整体仍然是一个 <Link to="/activities/:id">（点哪里都跳详情页，
+ * 这是改版前就有的行为，不变）——头像堆叠传 interactive={false}，空位
+ * 因此渲染成纯展示的 <span> 而不是 <button>，避免"<a> 嵌套可交互
+ * <button>"这种非法 HTML 结构（跟 conversation-list-page.tsx 修过的
+ * "<a> 嵌套 <a>"是同一类问题），列表卡片的空位不支持点击报名——只在活动
+ * 详情页保留这个交互，见 activity-participant-avatars.tsx 的注释。
+ *
+ * 参与者预览用 useActivityParticipantPreviewsQuery 一次性批量查（避免
+ * N+1），activityIds 直接从 useActivitiesQuery 结果 map 出来——筛选条件
+ * 变化导致 activities 变化时，这批 id 自然跟着变，hook 内部按新的
+ * queryKey 重新查询，不需要额外处理。
+ *
+ * 没有做无限滚动——这一批活动数据量小，先用最简单的"一次性查全部"，等真的
+ * 出现分页体量的活动数量再考虑加（跟 post-list.tsx 当初从"分页按钮"改成
+ * "无限滚动"是同一类演进，不是必须一步到位的东西）。
  *
  * 频道筛选用 ACTIVITY_CHANNEL_OPTIONS 渲染成一排 pill（复用
  * category-nav.tsx 的视觉风格：h-11 圆角胶囊 + 选中态 bg-accent），地区
@@ -38,6 +58,9 @@ export function ActivityListPage() {
     locationId: locationId || undefined
   });
   const { data: regions } = useActivityRegionsQuery();
+  const { data: participantPreviews } = useActivityParticipantPreviewsQuery(
+    (activities ?? []).map((activity) => activity.id)
+  );
 
   const inactivePillClassName =
     "flex h-11 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
@@ -94,16 +117,25 @@ export function ActivityListPage() {
       ) : null}
 
       {!isPending && !isError && activities && activities.length > 0 ? (
-        <div className="columns-2 gap-3">
+        <div className="flex flex-col gap-3">
           {activities.map((activity) => {
-            const { emoji, label } = getActivityChannelMeta(activity.channel);
+            const { emoji } = getActivityChannelMeta(activity.channel);
             return (
               <Link
                 key={activity.id}
                 to={`/activities/${activity.id}`}
-                className="mb-3 block break-inside-avoid rounded-2xl border border-border bg-white p-3 shadow-card"
+                className="block rounded-2xl border border-border bg-white p-3 shadow-card"
               >
-                <p className="line-clamp-2 break-words text-base text-text">
+                <ActivityParticipantAvatars
+                  organizerId={activity.organizerId}
+                  organizerDisplayName={activity.organizerDisplayName}
+                  organizerAvatarUrl={activity.organizerAvatarUrl}
+                  participants={participantPreviews?.get(activity.id) ?? []}
+                  capacity={activity.capacity}
+                  interactive={false}
+                  maxVisibleSlots={CARD_AVATAR_MAX_VISIBLE_SLOTS}
+                />
+                <p className="mt-2 line-clamp-2 break-words text-base text-text">
                   {emoji} {activity.title}
                 </p>
                 <p className="mt-1 text-xs text-text-muted">
@@ -112,14 +144,6 @@ export function ActivityListPage() {
                 <p className="mt-1 text-xs text-text-muted">
                   {formatActivityStartAt(activity.startAt)}
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-1">
-                  <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
-                    {label}
-                  </span>
-                  <span className="text-xs text-accent">
-                    {formatActivityParticipantSummary(activity.participantCount, activity.capacity)}
-                  </span>
-                </div>
               </Link>
             );
           })}

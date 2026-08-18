@@ -41,6 +41,7 @@ import {
   joinActivity,
   leaveActivity,
   listActivities,
+  listActivityParticipantPreviews,
   listActivityParticipants,
   listMyJoinedActivities,
   listMyOrganizedActivities,
@@ -62,14 +63,14 @@ function resetAllMocks(): void {
 describe("listActivities", () => {
   beforeEach(resetAllMocks);
 
-  it("filters to open/full status with start_at in the future, ordered by start_at ascending, with a nested location select", async () => {
+  it("filters to open/full status with start_at in the future, ordered by start_at ascending, with a nested location/organizer select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listActivities();
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval"
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.in).toHaveBeenCalledWith("status", ["open", "full"]);
     expect(queryBuilder.gte).toHaveBeenCalledWith("start_at", expect.any(String));
@@ -93,7 +94,7 @@ describe("listActivities", () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith("location_id", "loc-1");
   });
 
-  it("maps rows to ActivityListItem, resolving the joined location name and requiresApproval", async () => {
+  it("maps rows to ActivityListItem, resolving the joined location name, organizer identity and requiresApproval", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -109,7 +110,8 @@ describe("listActivities", () => {
           capacity: 4,
           participant_count: 2,
           status: "open",
-          requires_approval: true
+          requires_approval: true,
+          organizer: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" }
         }
       ],
       error: null
@@ -121,6 +123,8 @@ describe("listActivities", () => {
       {
         id: "act-1",
         organizerId: "user-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: "https://img.example.com/alice.jpg",
         channel: "food",
         tagText: "火锅",
         title: "周末吃火锅",
@@ -152,7 +156,8 @@ describe("listActivities", () => {
           capacity: null,
           participant_count: 1,
           status: "open",
-          requires_approval: false
+          requires_approval: false,
+          organizer: null
         }
       ],
       error: null
@@ -161,6 +166,35 @@ describe("listActivities", () => {
     const result = await listActivities();
 
     expect(result[0].locationName).toBeNull();
+  });
+
+  it("falls back to a placeholder organizer name and null avatar when the joined organizer is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "act-1",
+          organizer_id: "user-1",
+          channel: "game",
+          tag_text: null,
+          title: "线上开黑",
+          location: null,
+          landmark_text: null,
+          is_online: true,
+          start_at: "2026-08-20T18:00:00.000Z",
+          capacity: null,
+          participant_count: 1,
+          status: "open",
+          requires_approval: false,
+          organizer: null
+        }
+      ],
+      error: null
+    });
+
+    const result = await listActivities();
+
+    expect(result[0].organizerDisplayName).toBe("未知用户");
+    expect(result[0].organizerAvatarUrl).toBeNull();
   });
 
   it("returns an empty list without throwing when there are no matching activities", async () => {
@@ -682,6 +716,87 @@ describe("listActivityParticipants", () => {
   });
 });
 
+describe("listActivityParticipantPreviews", () => {
+  beforeEach(resetAllMocks);
+
+  it("returns an empty map without querying at all when given an empty array of activity ids", async () => {
+    const result = await listActivityParticipantPreviews([]);
+
+    expect(result).toEqual(new Map());
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("queries approved, non-cancelled participants across the given activity ids, ordered by joined_at ascending, with a nested profile select", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listActivityParticipantPreviews(["act-1", "act-2"]);
+
+    expect(fromMock).toHaveBeenCalledWith("activity_participants");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "activity_id, user_id, user:profiles(display_name, avatar_url)"
+    );
+    expect(queryBuilder.in).toHaveBeenCalledWith("activity_id", ["act-1", "act-2"]);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: true });
+  });
+
+  it("groups rows by activity_id into a Map<activityId, ActivityParticipant[]>", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          activity_id: "act-1",
+          user_id: "user-1",
+          user: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" }
+        },
+        { activity_id: "act-1", user_id: "user-2", user: { display_name: "Bob", avatar_url: null } },
+        { activity_id: "act-2", user_id: "user-3", user: { display_name: "Carol", avatar_url: null } }
+      ],
+      error: null
+    });
+
+    const result = await listActivityParticipantPreviews(["act-1", "act-2"]);
+
+    expect(result.get("act-1")).toEqual([
+      { userId: "user-1", displayName: "Alice", avatarUrl: "https://img.example.com/alice.jpg" },
+      { userId: "user-2", displayName: "Bob", avatarUrl: null }
+    ]);
+    expect(result.get("act-2")).toEqual([
+      { userId: "user-3", displayName: "Carol", avatarUrl: null }
+    ]);
+    // 没有任何参与者的活动 id 不应该出现在 Map 里（不是空数组占位）。
+    expect(result.has("act-3")).toBe(false);
+  });
+
+  it("falls back to a placeholder display name and a null avatarUrl when the joined profile is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [{ activity_id: "act-1", user_id: "user-1", user: null }],
+      error: null
+    });
+
+    const result = await listActivityParticipantPreviews(["act-1"]);
+
+    expect(result.get("act-1")).toEqual([{ userId: "user-1", displayName: "未知用户", avatarUrl: null }]);
+  });
+
+  it("returns an empty map without throwing when none of the given activities have any approved participants", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listActivityParticipantPreviews(["act-1"])).resolves.toEqual(new Map());
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listActivityParticipantPreviews(["act-1"])).rejects.toMatchObject({
+      code: "ACTIVITY_PARTICIPANT_PREVIEWS_LIST_FAILED"
+    });
+  });
+});
+
 describe("listMyOrganizedActivities", () => {
   beforeEach(resetAllMocks);
 
@@ -692,7 +807,7 @@ describe("listMyOrganizedActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval"
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("organizer_id", "user-1");
     expect(queryBuilder.in).not.toHaveBeenCalled();
@@ -700,7 +815,7 @@ describe("listMyOrganizedActivities", () => {
     expect(queryBuilder.order).toHaveBeenCalledWith("start_at", { ascending: true });
   });
 
-  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId/requiresApproval", async () => {
+  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId/organizerDisplayName/requiresApproval", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -716,7 +831,8 @@ describe("listMyOrganizedActivities", () => {
           capacity: 4,
           participant_count: 2,
           status: "cancelled",
-          requires_approval: true
+          requires_approval: true,
+          organizer: { display_name: "Alice", avatar_url: null }
         }
       ],
       error: null
@@ -728,6 +844,8 @@ describe("listMyOrganizedActivities", () => {
       {
         id: "act-1",
         organizerId: "user-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
         channel: "food",
         tagText: "火锅",
         title: "周末吃火锅",
@@ -771,7 +889,7 @@ describe("listMyJoinedActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval)"
+      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url))"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);
@@ -797,7 +915,8 @@ describe("listMyJoinedActivities", () => {
             capacity: null,
             participant_count: 0,
             status: "cancelled",
-            requires_approval: false
+            requires_approval: false,
+            organizer: { display_name: "Organizer", avatar_url: null }
           }
         }
       ],
@@ -810,6 +929,8 @@ describe("listMyJoinedActivities", () => {
       {
         id: "act-1",
         organizerId: "organizer-1",
+        organizerDisplayName: "Organizer",
+        organizerAvatarUrl: null,
         channel: "food",
         tagText: null,
         title: "已被取消的活动",
@@ -844,7 +965,8 @@ describe("listMyJoinedActivities", () => {
             capacity: null,
             participant_count: 0,
             status: "open",
-            requires_approval: true
+            requires_approval: true,
+            organizer: null
           }
         }
       ],

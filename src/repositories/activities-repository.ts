@@ -49,6 +49,8 @@ export function getActivityChannelMeta(channel: string): { label: string; emoji:
 export interface ActivityListItem {
   id: string;
   organizerId: string;
+  organizerDisplayName: string;
+  organizerAvatarUrl: string | null;
   channel: string;
   tagText: string | null;
   title: string;
@@ -81,6 +83,7 @@ interface ActivityListRow {
   participant_count: number;
   status: string;
   requires_approval: boolean;
+  organizer: { display_name: string; avatar_url: string | null } | null;
 }
 
 /**
@@ -118,13 +121,23 @@ interface ActivityListRow {
 // "待审核申请"这个展开区块，ActivityParticipationButton 也要靠它决定
 // 报名按钮文案是"我要报名"还是"申请加入"——同一个"给字段加到共享 select
 // 列"的模式，参照上次给 organizerId 加字段那次改动，不新建一套查询。
+//
+// organizer:profiles(display_name, avatar_url) 是活动列表单栏改版（Meet5
+// 头像堆叠卡片）新加的——跟 getActivityDetail 已经在用的写法一致。这一列
+// 会同时影响 listActivities/listMyOrganizedActivities/listMyJoinedActivities
+// 三个函数的返回值（都走这个共享 select），这是预期的：只有
+// activity-list-page.tsx 真正用它渲染头像堆叠，my-activities-page.tsx 的
+// 两个 tab 多出这两个字段但不用，不算破坏性变更，不需要为了"只有一处用"
+// 就拆成两套 select。
 const ACTIVITY_LIST_SELECT_COLUMNS =
-  "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval";
+  "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)";
 
 function mapActivityListRow(row: ActivityListRow): ActivityListItem {
   return {
     id: row.id,
     organizerId: row.organizer_id,
+    organizerDisplayName: row.organizer?.display_name ?? "未知用户",
+    organizerAvatarUrl: row.organizer?.avatar_url ?? null,
     channel: row.channel,
     tagText: row.tag_text,
     title: row.title,
@@ -538,6 +551,20 @@ interface ActivityParticipantRow {
 }
 
 /**
+ * listActivityParticipants 和 listActivityParticipantPreviews 共用的行
+ * 映射——两处联表结构完全一样（`user_id` + `user:profiles(display_name,
+ * avatar_url)`），只是后者多一列 `activity_id` 用来分组，映射成
+ * ActivityParticipant 的逻辑没有理由抄两遍。
+ */
+function mapActivityParticipantRow(row: ActivityParticipantRow): ActivityParticipant {
+  return {
+    userId: row.user_id,
+    displayName: row.user?.display_name ?? "未知用户",
+    avatarUrl: row.user?.avatar_url ?? null
+  };
+}
+
+/**
  * 活动详情页"参与者"区块用（设计文档第 4 节 + 本批任务范围 1）。这里不做
  * 任何"我有没有权限看"的判断——RLS 已经按身份把可见范围收窄好了：
  * activity_participants_select_organizer 让发起人查到完整名单，
@@ -584,11 +611,63 @@ export async function listActivityParticipants(
     throw new AppError(error.message, "ACTIVITY_PARTICIPANTS_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => ({
-    userId: row.user_id,
-    displayName: row.user?.display_name ?? "未知用户",
-    avatarUrl: row.user?.avatar_url ?? null
-  }));
+  return (data ?? []).map(mapActivityParticipantRow);
+}
+
+interface ActivityParticipantPreviewRow extends ActivityParticipantRow {
+  activity_id: string;
+}
+
+/**
+ * 活动列表页（Meet5 风格单栏卡片）用：一次性批量查出多张活动各自的参与者
+ * 预览，按 activityId 分组成 Map，供每张卡片的 ActivityParticipantAvatars
+ * 渲染头像堆叠——跟 listPendingActivityParticipants 是同一个"一次
+ * .in("activity_id", activityIds) 批量查询，按 activityId 分组"模式，
+ * 避免列表页对每张卡片各发一次参与者查询（N+1）。查询条件（已确认参与者、
+ * 未取消）和行映射直接复用 listActivityParticipants 的口径
+ * （mapActivityParticipantRow），保证列表卡片头像堆叠和详情页头像堆叠
+ * 看到的是同一批人。
+ *
+ * 不做"每个活动最多返回几条"的数据库层限制——PostgREST 没有"按分组各取
+ * 前 N 条"的简单写法，交给调用方（ActivityParticipantAvatars 的
+ * maxVisibleSlots）在展示层截断。这跟目前活动/参与者的规模（个位数到
+ * 几十）完全匹配，不是性能问题；活动或参与者量级变大之后如果需要数据库层
+ * 分页/限制，是另一个话题，这次不做。
+ *
+ * activityIds 为空数组时直接返回空 Map，不发请求，跟
+ * listPendingActivityParticipants 的空数组早退是同一个原则。
+ */
+export async function listActivityParticipantPreviews(
+  activityIds: string[]
+): Promise<Map<string, ActivityParticipant[]>> {
+  if (activityIds.length === 0) {
+    return new Map();
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .from("activity_participants")
+    .select("activity_id, user_id, user:profiles(display_name, avatar_url)")
+    .in("activity_id", activityIds)
+    .eq("status", "approved")
+    .is("cancelled_at", null)
+    .order("joined_at", { ascending: true })
+    .overrideTypes<ActivityParticipantPreviewRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_PARTICIPANT_PREVIEWS_LIST_FAILED", error);
+  }
+
+  const previewsByActivity = new Map<string, ActivityParticipant[]>();
+  for (const row of data ?? []) {
+    const participant = mapActivityParticipantRow(row);
+    const existing = previewsByActivity.get(row.activity_id);
+    if (existing) {
+      existing.push(participant);
+    } else {
+      previewsByActivity.set(row.activity_id, [participant]);
+    }
+  }
+  return previewsByActivity;
 }
 
 export interface MyJoinedActivityItem extends ActivityListItem {
