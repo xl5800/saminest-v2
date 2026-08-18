@@ -17,10 +17,36 @@ const EMPTY_CONVERSATION_MESSAGE = "还没有消息，发一条打个招呼吧�
 const LOAD_ERROR_MESSAGE = "消息加载失败，请刷新页面重试。";
 const DEFAULT_OTHER_PARTY_LABEL = "对方";
 
-const OTHER_PARTY_ROLE_LABEL = {
-  buyer: "买家",
-  seller: "卖家"
-} as const;
+interface AvatarProps {
+  avatarUrl: string | null;
+  initial: string;
+  sizeClassName: string;
+  testId?: string;
+}
+
+/**
+ * 头像通用展示逻辑：有图用 <img>，没有就用昵称首字母圆形占位——header
+ * 和消息气泡旁边的头像共用这一份逻辑，只是尺寸不一样（sizeClassName 由
+ * 调用方传入），不写两份几乎一样的 img/占位判断。
+ */
+function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
+  return avatarUrl ? (
+    <img
+      src={avatarUrl}
+      alt=""
+      data-testid={testId}
+      className={`${sizeClassName} shrink-0 rounded-full object-cover`}
+    />
+  ) : (
+    <span
+      aria-hidden="true"
+      data-testid={testId}
+      className={`flex ${sizeClassName} shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary`}
+    >
+      {initial}
+    </span>
+  );
+}
 
 /**
  * 一对一会话详情页（/messages/:conversationId）。命名特意避开
@@ -36,9 +62,20 @@ const OTHER_PARTY_ROLE_LABEL = {
  * 保证进到这个页面时是登录状态，这个判断只应对 session 中途失效这种边缘
  * 情况，不是路由鉴权本身。
  *
- * Header 复用现有会话摘要查询展示当前已经具备的买家/卖家身份和帖子标题。
- * 当前会话模型没有返回对方 profile，因此使用身份首字作为头像占位，不为
- * 纯布局需求新增 profile 查询或修改 repository 行为。
+ * Header 和消息气泡都改用真实头像/昵称——conversation（useMyConversationsQuery
+ * 里当前这一条）现在带出了 otherDisplayName/otherAvatarUrl，otherPartyLabel
+ * 直接用 otherDisplayName（找不到时退回 DEFAULT_OTHER_PARTY_LABEL），不再
+ * 是"买家/卖家"身份标签。项目目前没有头像上传功能，avatar_url 恒为
+ * null——这次改完之后头像上传功能上线前，用户看到的大概率还是昵称首字母
+ * 占位，不是真实图片，这是当前产品阶段的已知限制。
+ *
+ * 消息列表里的头像只在"对方发的消息"（isMine === false）左边显示，且
+ * 同一人连续发的几条消息只在第一条旁边显示——复用已有的 previousMessage
+ * 变量判断"是不是连续消息的非第一条"（同一发送者 + 中间没有插入时间
+ * 分隔线），是的话不渲染头像，只用一个等宽的空 div 占位对齐，不是每条都
+ * 重复显示一个头像，效果上接近小红书聊天页那种排布。头像来源是
+ * conversation?.otherAvatarUrl（会话级别取一次，不是每条消息单独查），
+ * 因为一个会话里"对方"只有一个人。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -60,9 +97,7 @@ export function MessageConversationPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const conversation = conversations?.find((item) => item.id === conversationId);
-  const otherPartyLabel = conversation
-    ? OTHER_PARTY_ROLE_LABEL[conversation.otherPartyRole]
-    : DEFAULT_OTHER_PARTY_LABEL;
+  const otherPartyLabel = conversation?.otherDisplayName ?? DEFAULT_OTHER_PARTY_LABEL;
   const conversationContext = conversation?.postTitle
     ? `关于 ${conversation.postTitle}`
     : "私信会话";
@@ -129,12 +164,11 @@ export function MessageConversationPage() {
         </button>
 
         <div className="flex min-w-0 items-center justify-center gap-2 px-2">
-          <span
-            aria-hidden="true"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-          >
-            {otherPartyLabel.charAt(0)}
-          </span>
+          <Avatar
+            avatarUrl={conversation?.otherAvatarUrl ?? null}
+            initial={otherPartyLabel.charAt(0)}
+            sizeClassName="h-9 w-9"
+          />
           <div className="min-w-0 text-left">
             <h1 className="truncate text-base font-semibold text-text">{otherPartyLabel}</h1>
             <p className="truncate text-xs text-text-muted">{conversationContext}</p>
@@ -178,6 +212,14 @@ export function MessageConversationPage() {
                 previousMessage ? previousMessage.createdAt : null
               );
               const isMine = message.senderId === currentUserId;
+              // 同一人连续发的消息只在第一条旁边显示头像：上一条存在、
+              // 发送者跟这一条相同、且中间没有插入时间分隔线，就算作
+              // "连续消息的非第一条"，不重复显示头像。
+              const isConsecutiveFromSameSender =
+                !isMine &&
+                previousMessage !== undefined &&
+                previousMessage.senderId === message.senderId &&
+                !showTimeDivider;
               return (
                 <Fragment key={message.id}>
                   {showTimeDivider ? (
@@ -193,8 +235,20 @@ export function MessageConversationPage() {
                   <li
                     data-message-owner={isMine ? "self" : "other"}
                     aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
-                    className={isMine ? "flex justify-end" : "flex justify-start"}
+                    className={isMine ? "flex justify-end" : "flex items-start justify-start gap-2"}
                   >
+                    {!isMine ? (
+                      isConsecutiveFromSameSender ? (
+                        <div aria-hidden="true" data-testid="message-avatar-spacer" className="h-7 w-7 shrink-0" />
+                      ) : (
+                        <Avatar
+                          avatarUrl={conversation?.otherAvatarUrl ?? null}
+                          initial={otherPartyLabel.charAt(0)}
+                          sizeClassName="h-7 w-7"
+                          testId="message-avatar"
+                        />
+                      )
+                    ) : null}
                     <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
                       <div
                         className={

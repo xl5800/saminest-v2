@@ -59,21 +59,25 @@ describe("ConversationListPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("暂无消息");
   });
 
-  it("renders 卖家/买家 role labels and post titles for a mix of buyer/seller conversations, linking to /messages/:id", () => {
+  it("renders the other party's nickname and post titles, linking to /messages/:id", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
         {
           id: "conv-1",
           postId: "post-1",
           postTitle: "Sunny room",
-          otherPartyRole: "seller",
+          otherUserId: "user-2",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: null,
           lastActivityAt: "2026-07-10T00:00:00.000Z"
         },
         {
           id: "conv-2",
           postId: "post-2",
           postTitle: "Used sofa",
-          otherPartyRole: "buyer",
+          otherUserId: "user-3",
+          otherDisplayName: "Carol",
+          otherAvatarUrl: null,
           lastActivityAt: "2026-07-09T00:00:00.000Z"
         }
       ],
@@ -87,12 +91,72 @@ describe("ConversationListPage", () => {
     expect(links).toHaveLength(2);
 
     expect(links[0]).toHaveAttribute("href", "/messages/conv-1");
-    expect(links[0]).toHaveTextContent("卖家");
+    expect(links[0]).toHaveTextContent("Bob");
     expect(links[0]).toHaveTextContent("关于：Sunny room");
 
     expect(links[1]).toHaveAttribute("href", "/messages/conv-2");
-    expect(links[1]).toHaveTextContent("买家");
+    expect(links[1]).toHaveTextContent("Carol");
     expect(links[1]).toHaveTextContent("关于：Used sofa");
+  });
+
+  it("falls back to '对方' when otherDisplayName is null (e.g. the other party has left the conversation)", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conv-1",
+          postId: null,
+          postTitle: null,
+          otherUserId: null,
+          otherDisplayName: null,
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-10T00:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<ConversationListPage />);
+
+    expect(screen.getByRole("link")).toHaveTextContent("对方");
+  });
+
+  it("renders an <img> avatar when otherAvatarUrl is present, and a nickname-initial placeholder (no <img>) when it is absent", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conv-1",
+          postId: null,
+          postTitle: null,
+          otherUserId: "user-2",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: "https://img.example.com/bob.jpg",
+          lastActivityAt: "2026-07-10T00:00:00.000Z"
+        },
+        {
+          id: "conv-2",
+          postId: null,
+          postTitle: null,
+          otherUserId: "user-3",
+          otherDisplayName: "carol",
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-09T00:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    // 头像 <img alt=""> 是装饰性图片（昵称文字已经在旁边），无障碍树里不会
+    // 带 role="img"，getByRole 查不到，所以这里直接用 querySelectorAll。
+    const { container } = renderWithProviders(<ConversationListPage />);
+
+    const images = container.querySelectorAll("img");
+    expect(images).toHaveLength(1);
+    expect(images[0]).toHaveAttribute("src", "https://img.example.com/bob.jpg");
+
+    // 第二条没有头像图，退化成昵称首字母占位（大写）——不渲染 <img>。
+    expect(screen.getByText("C")).toBeInTheDocument();
   });
 
   it("renders without a broken 关于： fragment when postTitle is null", () => {
@@ -102,7 +166,9 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: null,
           postTitle: null,
-          otherPartyRole: "buyer",
+          otherUserId: "user-2",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: null,
           lastActivityAt: "2026-07-10T00:00:00.000Z"
         }
       ],
@@ -123,7 +189,9 @@ describe("ConversationListPage", () => {
           id: "conv-1",
           postId: null,
           postTitle: null,
-          otherPartyRole: "buyer",
+          otherUserId: "user-2",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: null,
           lastActivityAt: "2026-07-10T00:00:00.000Z"
         }
       ],

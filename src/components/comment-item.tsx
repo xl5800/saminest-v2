@@ -47,6 +47,13 @@ type ActiveAction = "reply" | "delete" | "report" | null;
  * 未登录（currentUserId === null）时不显示"回复/删除/举报"这三个操作，
  * 只能看不能操作——跟 CommentSection 顶部"未登录不显示输入框"是同一个
  * 原则。
+ *
+ * 已删除评论的展示分两种情况：没有任何回复的直接 return null，整条从
+ * 列表里消失；下面还挂着别人回复的不能直接不渲染（会导致那些回复变成
+ * 悬空孤儿内容，看不出在回复谁），改成渲染一个极简占位（不显示昵称/
+ * 时间/操作按钮，字号更小、视觉权重更低）。这个判断只看当前节点自己的
+ * isDeleted + children.length，不递归清理"整条链都是空的已删除节点"这种
+ * 边界情况——概率很低，保持实现简单。
  */
 export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
@@ -163,11 +170,19 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
 
   const indentPx = Math.min(depth, MAX_INDENT_DEPTH) * INDENT_PX_PER_LEVEL;
 
+  // 已删除且没有任何回复——整条从列表里消失（包括外层容器都不渲染），
+  // 就像没发过一样；已删除但下面还挂着别人的回复，不能直接不渲染，否则
+  // 那些回复会变成"看不出在回复谁"的悬空孤儿内容，仍要渲染一个占位（见
+  // 下面 isDeleted 分支），只是视觉权重比之前那版明显降低。
+  if (node.isDeleted && node.children.length === 0) {
+    return null;
+  }
+
   return (
     <>
       <div style={{ paddingLeft: indentPx }} className="mt-3">
         {node.isDeleted ? (
-          <p className="text-sm italic text-text-muted">该评论已删除</p>
+          <p className="text-xs text-text-muted">该评论已删除</p>
         ) : (
           <div>
             <div className="flex items-center justify-between gap-2">

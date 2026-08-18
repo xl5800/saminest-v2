@@ -61,7 +61,9 @@ describe("MessageConversationPage", () => {
           id: "conversation-1",
           postId: "post-1",
           postTitle: "木桌",
-          otherPartyRole: "seller",
+          otherUserId: "seller-1",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: null,
           lastActivityAt: "2026-07-20T12:00:00.000Z"
         }
       ],
@@ -70,13 +72,60 @@ describe("MessageConversationPage", () => {
     });
   });
 
-  it("renders the other party identity and conversation context in the chat header", () => {
+  it("renders the other party's nickname and conversation context in the chat header", () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "卖家" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
     expect(screen.getByText("关于 木桌")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "更多会话选项（暂不可用）" })).toBeDisabled();
+  });
+
+  it("falls back to '对方' in the header when otherDisplayName is null", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conversation-1",
+          postId: "post-1",
+          postTitle: "木桌",
+          otherUserId: null,
+          otherDisplayName: null,
+          otherAvatarUrl: null,
+          lastActivityAt: "2026-07-20T12:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.getByRole("heading", { name: "对方" })).toBeInTheDocument();
+  });
+
+  it("renders an <img> avatar in the header when otherAvatarUrl is present, and a nickname-initial placeholder when it is absent", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: [
+        {
+          id: "conversation-1",
+          postId: "post-1",
+          postTitle: "木桌",
+          otherUserId: "seller-1",
+          otherDisplayName: "Bob",
+          otherAvatarUrl: "https://img.example.com/bob.jpg",
+          lastActivityAt: "2026-07-20T12:00:00.000Z"
+        }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    // 头像 <img alt=""> 是装饰性图片，无障碍树里没有 role="img"，直接用
+    // querySelector 定位。
+    const { container } = renderPage();
+
+    const headerAvatar = container.querySelector("header img");
+    expect(headerAvatar).toHaveAttribute("src", "https://img.example.com/bob.jpg");
   });
 
   it("separates my messages from the other party without visible form-style labels", () => {
@@ -134,6 +183,27 @@ describe("MessageConversationPage", () => {
     expect(listItems[0].querySelector("time")).toBeInTheDocument();
     expect(listItems[0]).not.toHaveAttribute("data-message-owner");
     expect(listItems.slice(1).every((item) => item.hasAttribute("data-message-owner"))).toBe(true);
+  });
+
+  it("shows the avatar only on the first message of a consecutive run from the same sender, uses a spacer on later ones, and never renders an avatar for the current user's own messages", () => {
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "我的第一条", createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "对方第一条", createdAt: "2026-07-20T12:01:00.000Z" },
+        { id: "message-3", senderId: "seller-1", body: "对方第二条", createdAt: "2026-07-20T12:02:00.000Z" },
+        { id: "message-4", senderId: "user-1", body: "我的第二条", createdAt: "2026-07-20T12:03:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    // 只有对方那一组连续消息里的第一条（message-2）显示头像，第二条
+    // （message-3）不重复显示、只用一个等宽 spacer 占位；我发的两条
+    // （message-1/message-4）完全不渲染头像也不渲染 spacer。
+    expect(screen.getAllByTestId("message-avatar")).toHaveLength(1);
+    expect(screen.getAllByTestId("message-avatar-spacer")).toHaveLength(1);
   });
 
   it("inserts a new time divider after a gap of more than 5 minutes", () => {

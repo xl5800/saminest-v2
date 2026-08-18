@@ -614,15 +614,17 @@ describe("app routes", () => {
         id: "conversation-1",
         postId: "post-1",
         postTitle: "木桌",
-        otherPartyRole: "seller",
+        otherUserId: "seller-1",
+        otherDisplayName: "Bob",
+        otherAvatarUrl: null,
         lastActivityAt: "2026-07-20T12:00:00.000Z"
       }
     ]);
 
     const { router } = renderAt("/messages");
-    fireEvent.click(await screen.findByRole("link", { name: /卖家/ }));
+    fireEvent.click(await screen.findByRole("link", { name: /Bob/ }));
 
-    expect(await screen.findByRole("heading", { name: "卖家" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
 
     await act(async () => {

@@ -231,55 +231,119 @@ describe("listMyConversations", () => {
       queryBuilder[key].mockClear();
     }
     overrideTypesMock.mockReset();
+    // 默认给个已解决的空结果——只关心 conversations 那次查询本身的用例
+    // 不用每个都额外串两个空 mock；conversationIds 为空时 fetchOtherParties
+    // 根本不会发出后两次查询，用不上这个默认值也没关系。
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
   });
 
-  it("queries conversations with a nested posts(title) select, ordered by created_at desc", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
-
+  it("queries conversations with a nested posts(title) select, ordered by created_at desc, and skips the member/profile queries when there are no conversations", async () => {
     await listMyConversations("user-1");
 
+    expect(fromMock).toHaveBeenCalledTimes(1);
     expect(fromMock).toHaveBeenCalledWith("conversations");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, created_by, last_message_at, created_at, posts(title)"
+      "id, post_id, last_message_at, created_at, posts(title)"
     );
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
-  it("maps a row with a post title", async () => {
-    overrideTypesMock.mockResolvedValue({
-      data: [
-        {
-          id: "conv-1",
-          post_id: "post-1",
-          created_by: "user-1",
-          last_message_at: "2026-07-10T00:00:00.000Z",
-          created_at: "2026-07-01T00:00:00.000Z",
-          posts: { title: "Sunny room" }
-        }
-      ],
-      error: null
-    });
+  it("batch-queries conversation_members (excluding left_at) then profiles, and maps a row with a post title + the other party's identity", async () => {
+    overrideTypesMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "conv-1",
+            post_id: "post-1",
+            last_message_at: "2026-07-10T00:00:00.000Z",
+            created_at: "2026-07-01T00:00:00.000Z",
+            posts: { title: "Sunny room" }
+          }
+        ],
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: [
+          { conversation_id: "conv-1", user_id: "user-1" },
+          { conversation_id: "conv-1", user_id: "user-2" }
+        ],
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: "user-2", display_name: "Bob", avatar_url: "https://img.example.com/bob.jpg" }],
+        error: null
+      });
 
     const result = await listMyConversations("user-1");
+
+    expect(fromMock).toHaveBeenNthCalledWith(2, "conversation_members");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(2, "conversation_id, user_id");
+    expect(queryBuilder.in).toHaveBeenCalledWith("conversation_id", ["conv-1"]);
+    expect(queryBuilder.is).toHaveBeenCalledWith("left_at", null);
+
+    expect(fromMock).toHaveBeenNthCalledWith(3, "profiles");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(3, "id, display_name, avatar_url");
+    expect(queryBuilder.in).toHaveBeenCalledWith("id", ["user-2"]);
 
     expect(result).toEqual([
       {
         id: "conv-1",
         postId: "post-1",
         postTitle: "Sunny room",
-        otherPartyRole: "seller",
+        otherUserId: "user-2",
+        otherDisplayName: "Bob",
+        otherAvatarUrl: "https://img.example.com/bob.jpg",
         lastActivityAt: "2026-07-10T00:00:00.000Z"
       }
     ]);
   });
 
+  it("returns null for otherUserId/otherDisplayName/otherAvatarUrl, without throwing, when the other party has already left the conversation", async () => {
+    overrideTypesMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "conv-1",
+            post_id: null,
+            last_message_at: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            posts: null
+          }
+        ],
+        error: null
+      })
+      // 只剩当前用户自己是活跃成员（对方已经 left_at 不为空退出），
+      // conversation_members 这次查询（.is("left_at", null) 已经把对方
+      // 那一行过滤掉）就只会返回这一条。
+      .mockResolvedValueOnce({
+        data: [{ conversation_id: "conv-1", user_id: "user-1" }],
+        error: null
+      });
+
+    const result = await listMyConversations("user-1");
+
+    // 找不到非自己的成员，otherUserIds 为空，不应该再发第三次 profiles
+    // 查询。
+    expect(fromMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual([
+      {
+        id: "conv-1",
+        postId: null,
+        postTitle: null,
+        otherUserId: null,
+        otherDisplayName: null,
+        otherAvatarUrl: null,
+        lastActivityAt: "2026-07-01T00:00:00.000Z"
+      }
+    ]);
+  });
+
   it("maps a row with post_id null (no post attached) to postTitle: null", async () => {
-    overrideTypesMock.mockResolvedValue({
+    overrideTypesMock.mockResolvedValueOnce({
       data: [
         {
           id: "conv-1",
           post_id: null,
-          created_by: "user-1",
           last_message_at: null,
           created_at: "2026-07-01T00:00:00.000Z",
           posts: null
@@ -295,12 +359,11 @@ describe("listMyConversations", () => {
   });
 
   it("treats a set post_id with an RLS-blocked (null) nested posts join as no title, without throwing", async () => {
-    overrideTypesMock.mockResolvedValue({
+    overrideTypesMock.mockResolvedValueOnce({
       data: [
         {
           id: "conv-1",
           post_id: "post-hidden",
-          created_by: "user-1",
           last_message_at: null,
           created_at: "2026-07-01T00:00:00.000Z",
           posts: null
@@ -315,53 +378,12 @@ describe("listMyConversations", () => {
     expect(result[0].postTitle).toBeNull();
   });
 
-  it("marks the other party as seller when the current user is the conversation creator (buyer)", async () => {
-    overrideTypesMock.mockResolvedValue({
-      data: [
-        {
-          id: "conv-1",
-          post_id: "post-1",
-          created_by: "user-1",
-          last_message_at: null,
-          created_at: "2026-07-01T00:00:00.000Z",
-          posts: { title: "Sunny room" }
-        }
-      ],
-      error: null
-    });
-
-    const result = await listMyConversations("user-1");
-
-    expect(result[0].otherPartyRole).toBe("seller");
-  });
-
-  it("marks the other party as buyer when the current user is not the conversation creator (seller)", async () => {
-    overrideTypesMock.mockResolvedValue({
-      data: [
-        {
-          id: "conv-1",
-          post_id: "post-1",
-          created_by: "buyer-user",
-          last_message_at: null,
-          created_at: "2026-07-01T00:00:00.000Z",
-          posts: { title: "Sunny room" }
-        }
-      ],
-      error: null
-    });
-
-    const result = await listMyConversations("seller-user");
-
-    expect(result[0].otherPartyRole).toBe("buyer");
-  });
-
   it("falls back to created_at for lastActivityAt when last_message_at is null", async () => {
-    overrideTypesMock.mockResolvedValue({
+    overrideTypesMock.mockResolvedValueOnce({
       data: [
         {
           id: "conv-1",
           post_id: null,
-          created_by: "user-1",
           last_message_at: null,
           created_at: "2026-07-05T00:00:00.000Z",
           posts: null
@@ -376,12 +398,11 @@ describe("listMyConversations", () => {
   });
 
   it("sorts by lastActivityAt (last_message_at ?? created_at) descending, regardless of DB fetch order", async () => {
-    overrideTypesMock.mockResolvedValue({
+    overrideTypesMock.mockResolvedValueOnce({
       data: [
         {
           id: "conv-oldest-activity",
           post_id: null,
-          created_by: "user-1",
           last_message_at: "2026-07-02T00:00:00.000Z",
           created_at: "2026-07-09T00:00:00.000Z",
           posts: null
@@ -389,7 +410,6 @@ describe("listMyConversations", () => {
         {
           id: "conv-newest-activity-null-last-message",
           post_id: null,
-          created_by: "user-1",
           last_message_at: null,
           created_at: "2026-07-15T00:00:00.000Z",
           posts: null
@@ -397,7 +417,6 @@ describe("listMyConversations", () => {
         {
           id: "conv-middle-activity",
           post_id: null,
-          created_by: "user-1",
           last_message_at: "2026-07-08T00:00:00.000Z",
           created_at: "2026-07-01T00:00:00.000Z",
           posts: null
@@ -415,8 +434,8 @@ describe("listMyConversations", () => {
     ]);
   });
 
-  it("throws an AppError when the Supabase query fails", async () => {
-    overrideTypesMock.mockResolvedValue({
+  it("throws an AppError when the conversations query fails", async () => {
+    overrideTypesMock.mockResolvedValueOnce({
       data: null,
       error: { message: "network down", code: "500" }
     });
@@ -426,9 +445,59 @@ describe("listMyConversations", () => {
     });
   });
 
-  it("returns an empty list without throwing when the user has no conversations", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  it("throws an AppError when the conversation_members query fails", async () => {
+    overrideTypesMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "conv-1",
+            post_id: null,
+            last_message_at: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            posts: null
+          }
+        ],
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "network down", code: "500" }
+      });
 
+    await expect(listMyConversations("user-1")).rejects.toMatchObject({
+      code: "CONVERSATIONS_LIST_FAILED"
+    });
+  });
+
+  it("throws an AppError when the profiles query fails", async () => {
+    overrideTypesMock
+      .mockResolvedValueOnce({
+        data: [
+          {
+            id: "conv-1",
+            post_id: null,
+            last_message_at: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            posts: null
+          }
+        ],
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: [{ conversation_id: "conv-1", user_id: "user-2" }],
+        error: null
+      })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "network down", code: "500" }
+      });
+
+    await expect(listMyConversations("user-1")).rejects.toMatchObject({
+      code: "CONVERSATIONS_LIST_FAILED"
+    });
+  });
+
+  it("returns an empty list without throwing when the user has no conversations", async () => {
     await expect(listMyConversations("user-1")).resolves.toEqual([]);
   });
 });

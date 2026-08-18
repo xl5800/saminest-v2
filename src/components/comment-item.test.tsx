@@ -210,7 +210,7 @@ describe("CommentItem", () => {
     );
   });
 
-  it("shows a placeholder for a deleted comment but still renders its replies", () => {
+  it("shows a minimal placeholder (no author/time/action buttons) for a deleted comment that still has replies, and still renders those replies", () => {
     const node = makeNode({
       isDeleted: true,
       content: "should not be shown",
@@ -220,11 +220,34 @@ describe("CommentItem", () => {
 
     render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
 
-    expect(screen.getByText("该评论已删除")).toBeInTheDocument();
+    const placeholder = screen.getByText("该评论已删除");
+    expect(placeholder).toBeInTheDocument();
     expect(screen.queryByText("should not be shown")).not.toBeInTheDocument();
     expect(screen.queryByText("should not be shown either")).not.toBeInTheDocument();
+    // 极简占位不再显示昵称/时间那一行，也不显示回复/删除/举报这三个操作
+    // 按钮——不能直接对整个 render 结果查"回复"按钮不存在，因为下面那条
+    // 可见的 Carol 回复本身没被删除，合法地有自己的"回复"按钮；这里只
+    // 断言占位这一行自己的容器（它的直接父节点，只包了这一个 <p>）内部
+    // 没有任何 button。
+    expect(placeholder.parentElement?.querySelector("button")).toBeNull();
     expect(screen.getByText("a visible reply")).toBeInTheDocument();
     expect(screen.getByText("Carol")).toBeInTheDocument();
+  });
+
+  it("does not render a deleted comment that has no replies at all", () => {
+    const node = makeNode({
+      isDeleted: true,
+      content: "should not be shown",
+      authorDisplayName: "should not be shown either",
+      children: []
+    });
+
+    const { container } = render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+
+    expect(screen.queryByText("should not be shown")).not.toBeInTheDocument();
+    expect(screen.queryByText("should not be shown either")).not.toBeInTheDocument();
+    expect(screen.queryByText("该评论已删除")).not.toBeInTheDocument();
+    expect(container.textContent).toBe("");
   });
 
   it("keeps the three inline actions mutually exclusive — opening one closes the other", () => {

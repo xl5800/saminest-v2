@@ -22,8 +22,11 @@ export interface ConversationListItem {
   id: string;
   postId: string | null;
   postTitle: string | null;
-  /** 相对于当前登录用户，对方的身份——买家还是卖家。 */
-  otherPartyRole: "buyer" | "seller";
+  /** 对方的 user_id；正常情况下（direct 会话恰好两个活跃成员）能唯一
+   *  确定，找不到（比如对方已经退出会话）时是 null。 */
+  otherUserId: string | null;
+  otherDisplayName: string | null;
+  otherAvatarUrl: string | null;
   /** last_message_at 为空时退回 created_at，用作列表排序的依据。 */
   lastActivityAt: string;
 }
@@ -31,7 +34,6 @@ export interface ConversationListItem {
 interface ConversationListRow {
   id: string;
   post_id: string | null;
-  created_by: string;
   last_message_at: string | null;
   created_at: string;
   // 未加别名，字段名跟着嵌套查询里的表名 posts 走（跟
@@ -44,6 +46,98 @@ interface ConversationListRow {
   posts: { title: string } | null;
 }
 
+interface ConversationMemberRow {
+  conversation_id: string;
+  user_id: string;
+}
+
+interface OtherPartyProfileRow {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+}
+
+interface OtherParty {
+  userId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+}
+
+/**
+ * 批量查出这批会话各自的"对方是谁"，按 conversation_id 拼成一个 Map，
+ * 跟 reports-repository.ts 的 fetchTargetTitles() 是同一个"批量查 +
+ * Map 拼装"模式（避免每个会话单独查一次，N+1）。但这里查询失败时选择
+ * 往外抛 AppError，不像 fetchTargetTitles 那样 try/catch 静默吞掉——
+ * 标题在举报队列里只是辅助展示信息，查不到不影响核心功能；而"对方是谁"
+ * 是这个消息列表的核心内容，查询失败应该让整个列表进入错误态，不应该
+ * 悄悄显示一屏"未知用户"。
+ *
+ * 分两步：
+ * 1. 查这批会话的 conversation_members（排除 left_at 不为空、已经退出
+ *    的），按 conversation_id 分组，找出 user_id !== currentUserId 的
+ *    那一条——V1 的 direct 会话正常情况下只有两个活跃成员，这样能唯一
+ *    确定对方。找不到（比如对方已经退出）就不在结果 Map 里出现，调用方
+ *    据此把 otherUserId 等字段展示成 null，不抛错，这不是一种失败。
+ * 2. 收集第 1 步算出的所有 otherUserId，去重后一次性查 profiles，按 id
+ *    建索引，再跟第 1 步的结果拼起来。
+ */
+async function fetchOtherParties(
+  conversationIds: string[],
+  currentUserId: string
+): Promise<Map<string, OtherParty>> {
+  const otherUserIdByConversation = new Map<string, string>();
+  if (conversationIds.length === 0) {
+    return new Map();
+  }
+
+  const client = getSupabaseClient();
+
+  const { data: memberRows, error: memberError } = await client
+    .from("conversation_members")
+    .select("conversation_id, user_id")
+    .in("conversation_id", conversationIds)
+    .is("left_at", null)
+    .overrideTypes<ConversationMemberRow[]>();
+
+  if (memberError) {
+    throw new AppError(memberError.message, "CONVERSATIONS_LIST_FAILED", memberError);
+  }
+
+  for (const row of memberRows ?? []) {
+    if (row.user_id !== currentUserId) {
+      otherUserIdByConversation.set(row.conversation_id, row.user_id);
+    }
+  }
+
+  const otherUserIds = [...new Set(otherUserIdByConversation.values())];
+  if (otherUserIds.length === 0) {
+    return new Map();
+  }
+
+  const { data: profileRows, error: profileError } = await client
+    .from("profiles")
+    .select("id, display_name, avatar_url")
+    .in("id", otherUserIds)
+    .overrideTypes<OtherPartyProfileRow[]>();
+
+  if (profileError) {
+    throw new AppError(profileError.message, "CONVERSATIONS_LIST_FAILED", profileError);
+  }
+
+  const profileById = new Map((profileRows ?? []).map((row) => [row.id, row]));
+
+  const result = new Map<string, OtherParty>();
+  for (const [conversationId, otherUserId] of otherUserIdByConversation) {
+    const profile = profileById.get(otherUserId);
+    result.set(conversationId, {
+      userId: otherUserId,
+      displayName: profile?.display_name ?? null,
+      avatarUrl: profile?.avatar_url ?? null
+    });
+  }
+  return result;
+}
+
 /**
  * 当前登录用户参与的所有会话，供 /messages 会话列表页使用。
  *
@@ -52,11 +146,13 @@ interface ConversationListRow {
  * 迁移）——policy 已经保证 select * from conversations 只会返回当前用户是
  * 成员的会话，这里不需要再显式 join/过滤 conversation_members。
  *
- * otherPartyRole 的判断不需要查 conversation_members：V1 的 direct 会话
- * 只有买卖双方两个成员，买家固定是 conversations.created_by（唯一的创建
- * 入口 create_direct_conversation() 里买家身份就是发起者），所以只要拿
- * created_by 跟 currentUserId 比较，就能推出"对方"是买家还是卖家，不需要
- * 额外一次查询、也不需要拉全部成员列表。
+ * 对方是谁（otherUserId/otherDisplayName/otherAvatarUrl）交给
+ * fetchOtherParties() 批量查，不逐条现查——这一版之前用 created_by 跟
+ * currentUserId 比较推出"对方是买家还是卖家"，现在要展示真实身份就必须
+ * 知道对方的 user_id，created_by 已经不够用了（它只是会话的发起者，不是
+ * "对方"本身），所以这里从 1 次查询变成最多 3 次（会话数为 0 时后面两次
+ * 直接跳过，不发空数组查询）。当前访问量不大，可以接受；如果以后聊天量
+ * 变大需要合并成一次数据库视图/RPC 查询，是另一个话题，这次不做。
  *
  * 排序：产品要求"按 last_message_at 倒序排列，为空则用 created_at"。
  * PostgREST 的 .order() 只能按一个真实列排序，没法表达"某列为空时退回
@@ -72,7 +168,7 @@ export async function listMyConversations(
 ): Promise<ConversationListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("conversations")
-    .select("id, post_id, created_by, last_message_at, created_at, posts(title)")
+    .select("id, post_id, last_message_at, created_at, posts(title)")
     .order("created_at", { ascending: false })
     .overrideTypes<ConversationListRow[]>();
 
@@ -80,13 +176,24 @@ export async function listMyConversations(
     throw new AppError(error.message, "CONVERSATIONS_LIST_FAILED", error);
   }
 
-  const items: ConversationListItem[] = (data ?? []).map((row) => ({
-    id: row.id,
-    postId: row.post_id,
-    postTitle: row.posts?.title ?? null,
-    otherPartyRole: row.created_by === currentUserId ? "seller" : "buyer",
-    lastActivityAt: row.last_message_at ?? row.created_at
-  }));
+  const rows = data ?? [];
+  const otherPartyByConversation = await fetchOtherParties(
+    rows.map((row) => row.id),
+    currentUserId
+  );
+
+  const items: ConversationListItem[] = rows.map((row) => {
+    const otherParty = otherPartyByConversation.get(row.id) ?? null;
+    return {
+      id: row.id,
+      postId: row.post_id,
+      postTitle: row.posts?.title ?? null,
+      otherUserId: otherParty?.userId ?? null,
+      otherDisplayName: otherParty?.displayName ?? null,
+      otherAvatarUrl: otherParty?.avatarUrl ?? null,
+      lastActivityAt: row.last_message_at ?? row.created_at
+    };
+  });
 
   items.sort(
     (a, b) => new Date(b.lastActivityAt).getTime() - new Date(a.lastActivityAt).getTime()
