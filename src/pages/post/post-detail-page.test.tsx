@@ -183,13 +183,72 @@ describe("PostDetailPage", () => {
     expect(screen.getByText("租房")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByText("2000-07-01")).toBeInTheDocument();
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("发布者：Alice")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 
     const images = screen.getAllByRole("img");
     expect(images).toHaveLength(2);
     expect(images[0]).toHaveAttribute("src", "https://img.example.com/1.jpg");
     expect(images[1]).toHaveAttribute("src", "https://img.example.com/2.jpg");
+  });
+
+  // 改版之后价格在标题上方（放大突出），不再是"标题在最上面"——用
+  // compareDocumentPosition 断言价格文本节点在标题 <h1> 之前，而不是只
+  // 断言两者都存在（存在性已经被上面那条测试覆盖了）。
+  it("renders the price above the title (P0 layout reorder: image → price → title → description → secondary info)", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    const price = screen.getByText("USD 1,200");
+    const title = screen.getByRole("heading", { name: "Sunny room near metro" });
+
+    // Node.DOCUMENT_POSITION_FOLLOWING (4): title 在 price 之后。
+    expect(price.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders a horizontally scrollable image carousel (not a two-column grid) with a '1 / 2' counter that updates on scroll", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+
+    const carousel = screen.getByTestId("post-image-carousel");
+    Object.defineProperty(carousel, "clientWidth", { value: 400, configurable: true });
+    Object.defineProperty(carousel, "scrollLeft", { value: 400, configurable: true });
+    fireEvent.scroll(carousel);
+
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  });
+
+  it("does not render a counter when the post has exactly one image", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: { ...samplePostDetail, images: [samplePostDetail.images[0]] },
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(screen.queryByText("1 / 1")).not.toBeInTheDocument();
   });
 
   it("opens a full-screen lightbox when an image is clicked, and closes it via the close button", () => {

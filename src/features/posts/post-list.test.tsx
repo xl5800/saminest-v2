@@ -6,24 +6,12 @@ import {
   triggerLastIntersectionObserver
 } from "../../test/setup";
 
-const { listApprovedPosts, useFavoritePostIdsQuery, useToggleFavoriteMutation } =
-  vi.hoisted(() => ({
-    listApprovedPosts: vi.fn(),
-    useFavoritePostIdsQuery: vi.fn(),
-    useToggleFavoriteMutation: vi.fn()
-  }));
+const { listApprovedPosts } = vi.hoisted(() => ({
+  listApprovedPosts: vi.fn()
+}));
 
 vi.mock("../../repositories/posts-repository", () => ({
   listApprovedPosts
-}));
-// PostList renders FavoriteButton per item, which pulls in useQuery/useMutation
-// hooks of its own — mock those the same way favorite-button.test.tsx does so
-// this file stays focused on list/infinite-scroll behavior.
-vi.mock("../favorites/use-favorite-post-ids-query", () => ({
-  useFavoritePostIdsQuery
-}));
-vi.mock("../favorites/use-toggle-favorite-mutation", () => ({
-  useToggleFavoriteMutation
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -51,10 +39,6 @@ describe("PostList", () => {
 
   beforeEach(() => {
     listApprovedPosts.mockReset();
-    useFavoritePostIdsQuery.mockReset();
-    useToggleFavoriteMutation.mockReset();
-    useFavoritePostIdsQuery.mockReturnValue({ data: [] });
-    useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
     resetIntersectionObserverMock();
   });
 
@@ -84,7 +68,7 @@ describe("PostList", () => {
     );
   });
 
-  it("renders each post's title, price, location, published date and a link to /post/:id", async () => {
+  it("renders each post's title, price, location, category tag, and a link to /post/:id", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
@@ -94,27 +78,23 @@ describe("PostList", () => {
     expect(link).toHaveTextContent("Sunny room near metro");
     expect(link).toHaveTextContent("USD 1,200");
     expect(link).toHaveTextContent("Rockville");
-    expect(link).toHaveTextContent("2000-07-01");
+    expect(link).toHaveTextContent("租房");
   });
 
-  it("renders the category tag, author nickname, and favorite count", async () => {
+  // 精简卡片改版（Facebook Marketplace 风格）之后，作者昵称、发布时间、
+  // 收藏数/评论数、FavoriteButton 都从列表卡片上去掉了——这些信息只在
+  // 详情页展示，不是这个组件漏渲染。
+  it("does not render author nickname, published date, favorite/comment counts, or a favorite button", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
 
     const link = await screen.findByRole("link");
-    expect(link).toHaveTextContent("租房");
-    expect(link).toHaveTextContent("Alice");
-    expect(screen.getByText("♥ 5")).toBeInTheDocument();
-  });
-
-  it("renders the comment count next to the favorite count", async () => {
-    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
-
-    renderWithProviders(<PostList />);
-
-    await screen.findByRole("link");
-    expect(screen.getByText("💬 2")).toBeInTheDocument();
+    expect(link).not.toHaveTextContent("Alice");
+    expect(link).not.toHaveTextContent("2000-07-01");
+    expect(screen.queryByText("♥ 5")).not.toBeInTheDocument();
+    expect(screen.queryByText("💬 2")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
   it("renders an <img> with the cover image url when coverImageUrl is present", async () => {

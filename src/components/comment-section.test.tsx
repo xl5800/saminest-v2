@@ -90,20 +90,23 @@ describe("CommentSection", () => {
   it("does not show the composer textarea when there is no session, and shows a 登录 link instead", () => {
     renderSection();
 
-    expect(screen.queryByLabelText("发表评论")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("写下你的评论…")).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
   });
 
+  // 输入框改版成圆角胶囊单行输入条之后不再有单独的"发表评论"文字标签，
+  // 靠 placeholder 定位输入框；发送按钮也从文字按钮变成图标按钮，
+  // 可访问名称改用 aria-label="发表评论"（未提交时）/"发送中…"（提交中）。
   it("shows the composer textarea and submits a top-level comment (parentId: null) when logged in", async () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     createCommentMutateAsync.mockResolvedValue({ id: "new-comment", createdAt: "now" });
 
     renderSection();
 
-    fireEvent.change(screen.getByLabelText("发表评论"), {
+    fireEvent.change(screen.getByPlaceholderText("写下你的评论…"), {
       target: { value: "这是一条新评论" }
     });
-    fireEvent.click(screen.getByRole("button", { name: "发表" }));
+    fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
 
     await waitFor(() => {
       expect(createCommentMutateAsync).toHaveBeenCalledWith({
@@ -115,12 +118,59 @@ describe("CommentSection", () => {
     });
   });
 
+  // jsdom 不做真实布局，scrollHeight 在这里恒为 0，用 defineProperty
+  // 手动模拟出"输入变长导致 scrollHeight 变大"这件事，验证的是
+  // handleContentChange 自己的算法（style.height 是否跟着 scrollHeight
+  // 走），而不是浏览器真实的撑高像素——真实撑高效果只能在浏览器里肉眼
+  // 确认。max-h-32/overflow-y-auto 这两个 class 断言的是"CSS 封顶 +
+  // 内部滚动"这条规则确实挂在元素上，同样不是断言真实渲染出的像素高度。
+  it("grows the textarea's inline height to match scrollHeight as content changes, and keeps the max-h-32/overflow-y-auto cap classes for once content exceeds it", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderSection();
+
+    const textarea = screen.getByPlaceholderText("写下你的评论…") as HTMLTextAreaElement;
+    expect(textarea).toHaveClass("max-h-32", "overflow-y-auto");
+
+    Object.defineProperty(textarea, "scrollHeight", { value: 40, configurable: true });
+    fireEvent.change(textarea, { target: { value: "一行短评论" } });
+    expect(textarea.style.height).toBe("40px");
+
+    Object.defineProperty(textarea, "scrollHeight", { value: 260, configurable: true });
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          "这是一段很长很长很长很长很长很长很长很长很长很长很长很长很长很长很长的评论，用来测试输入框是否会随着内容变长而撑高。"
+      }
+    });
+    expect(textarea.style.height).toBe("260px");
+  });
+
+  it("resets the textarea's inline height back to auto after a successful submit", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    createCommentMutateAsync.mockResolvedValue({ id: "new-comment", createdAt: "now" });
+
+    renderSection();
+
+    const textarea = screen.getByPlaceholderText("写下你的评论…") as HTMLTextAreaElement;
+    Object.defineProperty(textarea, "scrollHeight", { value: 200, configurable: true });
+    fireEvent.change(textarea, { target: { value: "一条会被撑高再提交的评论" } });
+    expect(textarea.style.height).toBe("200px");
+
+    fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
+
+    await waitFor(() => {
+      expect(createCommentMutateAsync).toHaveBeenCalled();
+    });
+    expect(textarea.style.height).toBe("auto");
+  });
+
   it("shows a validation error and does not call the mutation when the comment is empty", async () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
 
     renderSection();
 
-    fireEvent.click(screen.getByRole("button", { name: "发表" }));
+    fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("请输入评论内容。");
     expect(createCommentMutateAsync).not.toHaveBeenCalled();

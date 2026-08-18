@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type UIEvent, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
@@ -25,6 +25,20 @@ interface PostDetailLocationState {
  * 区分开来会向未授权的访问者泄露"这个 ID 存在，只是还没通过审核"这种
  * 信息，getPostDetail 在 repository 层已经把这两种情况都收敛成同一个
  * null 返回值，页面这一层不应该、也没有能力再把它们分开。
+ *
+ * 图片区是横向大图轮播，不是原来的两列小图网格：用原生 CSS scroll-snap
+ * （横向 overflow-x-auto 容器 + snap-x snap-mandatory、每张图 snap-center
+ * + flex-none w-full）实现，不引入额外的手势/轮播库。当前滑到第几张靠
+ * onScroll 读容器的 scrollLeft / 容器宽度换算，驱动底部"1 / N"计数
+ * 指示器（只有 1 张图时不显示，跟 ImageLightbox 自己"只有一张图不显示
+ * 计数/切换按钮"的判断是同一个逻辑）。点击当前这张大图打开的还是
+ * ImageLightbox 全屏查看器，触发方式从"点小图格"变成"点当前大图"，
+ * ImageLightbox 组件本身没有改动。
+ *
+ * 页面信息排布顺序：图片轮播 → 价格（放大突出）→ 标题 → 描述 → 次要信息
+ * （分类/地区/发布时间/作者，字号调小、加大行间距——这几项对买家来说
+ * 是"看一眼图和价格就能判断感不感兴趣"之外的次要信息，不需要跟标题挤在
+ * 最上面）。联系方式/收藏/举报按钮和评论区顺序不变，仍然在这块之后。
  */
 export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,14 +48,19 @@ export function PostDetailPage() {
 
   const { data, isPending, isError } = usePostDetailQuery(id ?? "");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // 大图轮播当前滚动到第几张，驱动底部"1 / 5"这种计数指示器。用原生
+  // scroll-snap（横向 overflow-x-auto + snap-x snap-mandatory 容器、每张图
+  // snap-center）实现滑动，不引入额外的手势/轮播库；这里只是监听容器的
+  // onScroll，用 scrollLeft / 容器宽度 换算出当前索引，不需要跟踪拖拽状态。
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   // 传给 ImageLightbox 的图片数组要先过滤掉 publicUrl 是 null 的项（类型是
-  // string | null），点击某一张缩略图时传的 initialIndex 必须是"过滤后
+  // string | null），点击某一张大图时传的 initialIndex 必须是"过滤后
   // 数组里的索引"，不能直接用 data.images 里的原始下标——如果中间有图片
-  // publicUrl 是 null 被过滤掉了，两个下标会对不上，点第 3 张缩略图会打开
+  // publicUrl 是 null 被过滤掉了，两个下标会对不上，点第 3 张图会打开
   // 另一张图。这里单次遍历同时算出 lightboxImages（喂给 ImageLightbox 的
-  // 纯 URL 数组）和每张缩略图对应的 lightboxIndex（publicUrl 是 null 时
-  // 为 null，缩略图按钮据此禁用，不触发打开查看器）。
+  // 纯 URL 数组）和每张图对应的 lightboxIndex（publicUrl 是 null 时为
+  // null，图片按钮据此禁用，不触发打开查看器）。
   const lightboxImages: string[] = [];
   const imagesWithLightboxIndex = (data?.images ?? []).map((image) => {
     if (image.publicUrl === null) {
@@ -51,6 +70,13 @@ export function PostDetailPage() {
     lightboxImages.push(image.publicUrl);
     return { ...image, lightboxIndex: indexInLightbox };
   });
+
+  function handleCarouselScroll(event: UIEvent<HTMLDivElement>): void {
+    const container = event.currentTarget;
+    if (container.clientWidth === 0) return;
+    const index = Math.round(container.scrollLeft / container.clientWidth);
+    setCurrentImageIndex(index);
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
@@ -75,53 +101,63 @@ export function PostDetailPage() {
 
       {!isPending && !isError && data ? (
         <div className="space-y-4">
-          <div>
-            <h1 className="mb-2 text-xl font-bold text-text">{data.title}</h1>
-            <p className="text-lg font-semibold text-text">
-              {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
-            </p>
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
-                {data.categoryName}
-              </span>
-              <span className="text-xs text-text-muted">
-                {data.locationName ?? "地区未填写"}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center justify-between text-xs text-text-muted">
-              <span>{data.authorDisplayName}</span>
-              <span>{formatListingDate(data.createdAt)}</span>
-            </div>
-          </div>
-
           {data.images.length > 0 ? (
-            <div className="grid grid-cols-2 gap-2">
-              {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
-                <button
-                  key={imageId}
-                  type="button"
-                  aria-label="查看大图"
-                  disabled={indexInLightbox === null}
-                  onClick={() => {
-                    if (indexInLightbox !== null) {
-                      setLightboxIndex(indexInLightbox);
-                    }
-                  }}
-                  className="block disabled:cursor-default"
-                >
-                  <img
-                    src={publicUrl ?? undefined}
-                    alt={data.title}
-                    className="aspect-[4/3] w-full rounded-lg object-cover"
-                  />
-                </button>
-              ))}
+            <div>
+              <div
+                data-testid="post-image-carousel"
+                onScroll={handleCarouselScroll}
+                className="flex snap-x snap-mandatory overflow-x-auto rounded-lg"
+              >
+                {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
+                  <button
+                    key={imageId}
+                    type="button"
+                    aria-label="查看大图"
+                    disabled={indexInLightbox === null}
+                    onClick={() => {
+                      if (indexInLightbox !== null) {
+                        setLightboxIndex(indexInLightbox);
+                      }
+                    }}
+                    className="block w-full flex-none snap-center disabled:cursor-default"
+                  >
+                    <img
+                      src={publicUrl ?? undefined}
+                      alt={data.title}
+                      className="aspect-[4/3] w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+              {data.images.length > 1 ? (
+                <p className="mt-2 text-center text-xs text-text-muted">
+                  {currentImageIndex + 1} / {data.images.length}
+                </p>
+              ) : null}
             </div>
           ) : null}
+
+          <div>
+            <p className="text-2xl font-bold text-text">
+              {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
+            </p>
+            <h1 className="mt-1 text-lg font-semibold text-text">{data.title}</h1>
+          </div>
 
           <p className="whitespace-pre-wrap break-words text-sm text-text">
             {data.description}
           </p>
+
+          <div className="space-y-3 border-t border-border pt-4 text-xs text-text-muted">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
+                {data.categoryName}
+              </span>
+              <span>{data.locationName ?? "地区未填写"}</span>
+            </div>
+            <p>{formatListingDate(data.createdAt)}</p>
+            <p>发布者：{data.authorDisplayName}</p>
+          </div>
 
           {data.contactMethod && data.contactValue ? (
             <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">

@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
-import { FavoriteButton } from "../../components/favorite-button";
-import { formatListingDate, formatPrice } from "../../utils/format";
+import { formatPrice } from "../../utils/format";
 import { usePostsInfiniteQuery } from "./use-posts-query";
 
 export interface PostListProps {
@@ -21,9 +20,10 @@ export interface PostListProps {
  * 就能达到效果。每张卡片加 break-inside-avoid，防止内容被从中间断开
  * 到下一栏。
  *
- * FavoriteButton 保持跟改版之前一样，不嵌套在 <Link> 里面（<Link> 渲染成
- * <a>，button 嵌套在 a 里本身是不合法的 HTML，且会干扰它自己的
- * stopPropagation 逻辑），而是作为 <Link> 的同级兄弟节点放在卡片内。
+ * 卡片改版成 Facebook Marketplace 那种"扫一眼知道是什么、多少钱、在哪"的
+ * 精简样式：只保留封面图、标题、价格、分类/地区。原来卡片上的作者名字、
+ * 发布时间、收藏数/评论数、FavoriteButton 都去掉了——列表页不需要承载这些
+ * 社交互动信息，详情页仍然完整展示（详情页是单独的次要信息区块）。
  *
  * 分页按钮已经删掉了（今晚早些时候的改动），这里用"哨兵元素 +
  * IntersectionObserver"实现无限滚动：列表底部放一个不可见的哨兵 div，
@@ -107,19 +107,8 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
                     {post.locationName ?? "地区未填写"}
                   </span>
                 </div>
-                <div className="flex items-center justify-between text-xs text-text-muted">
-                  <span>{post.authorDisplayName}</span>
-                  <span>{formatListingDate(post.createdAt)}</span>
-                </div>
               </div>
             </Link>
-            <div className="flex items-center justify-between px-3 pb-3">
-              <span className="flex items-center gap-2 text-xs text-text-muted">
-                <span>♥ {post.favoriteCount}</span>
-                <span>💬 {post.commentCount}</span>
-              </span>
-              <FavoriteButton postId={post.id} />
-            </div>
           </div>
         ))}
       </div>
