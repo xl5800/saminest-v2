@@ -32,6 +32,45 @@ export async function listActiveLocations(): Promise<LocationListItem[]> {
   }));
 }
 
+export interface LocationWithStateItem {
+  id: string;
+  name: string;
+  /** 城市所属的州，即 locations.state_code（'DC' / 'VA' / 'MD'）——跟
+   *  listActiveActivityRegions() 返回的 3 条 type = 'state' 行的 name
+   *  字段是同一套取值，06 号卡地区选择页用这个字段把城市分组挂到对应的
+   *  州名下面，不需要额外的州-城市关联表。理论上这一列是 nullable（表定义
+   *  允许 null），但种子数据里 14 条 type = 'city' 行全部填了这一列，这里
+   *  仍按 nullable 建模，不假设数据库层面一定非空。 */
+  stateCode: string | null;
+}
+
+/**
+ * 06 号卡「地区选择」页专用：跟 listActiveLocations 查同一张表、同样的
+ * is_active/type='city' 过滤和排序，只是多选一列 state_code——地区选择页
+ * 需要按州把城市分组（州内只有一个城市的直接可选中，多个城市的带下钻
+ * 箭头，见 region-select-page.tsx），listActiveLocations 现有调用方
+ * （发布表单的城市下拉框）不需要这一列，不改它的返回结构，新增这个函数
+ * 而不是给 LocationListItem 加字段，避免所有现有调用方都要跟着改。
+ */
+export async function listActiveCitiesWithState(): Promise<LocationWithStateItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("locations")
+    .select("id, name, state_code")
+    .eq("is_active", true)
+    .eq("type", "city")
+    .order("sort_order", { ascending: true });
+
+  if (error) {
+    throw new AppError(error.message, "LOCATIONS_WITH_STATE_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    stateCode: row.state_code
+  }));
+}
+
 /**
  * 找搭子（活动）的地区筛选 + 发起活动地区选择用。跟 listActiveLocations
  * 查同一张 locations 表，但只取 type = 'state' 的 3 条（DC/VA/MD）——

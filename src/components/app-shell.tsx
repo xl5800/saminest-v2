@@ -61,13 +61,23 @@ const NO_CHROME_PATTERNS = [
  * 03 号卡（category-tab）新加一条：分类 Tab 页（/categories）——同样是
  * "顶部栏换了、底部 Tab 栏还在"的常规浏览场景（对照
  * saminest_final_screens.html ②屏），不是沉浸式。
+ *
+ * 06 号卡（profile-region-misc）新加三条：我的（/profile）、消息
+ * （/messages）、地区选择（/region-select）——分别对照
+ * saminest_final_screens.html ⑤④⑪三屏，都是"顶部栏换了、底部 Tab 栏
+ * 还在"的常规场景，不是沉浸式（地区选择虽然是从首页州名点进来的二级
+ * 导航页，但设计稿⑪屏本身也带着底部 Tab 栏，不属于 NO_CHROME_PATTERNS
+ * 那种完全沉浸式）。
  */
 const TOPBAR_MIGRATED_PATTERNS = [
   "/",
   "/activities",
   "/activities/:id",
   "/users/:userId",
-  "/categories"
+  "/categories",
+  "/profile",
+  "/messages",
+  "/region-select"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {

@@ -15,7 +15,11 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { listActiveActivityRegions, listActiveLocations } from "./locations-repository";
+import {
+  listActiveActivityRegions,
+  listActiveCitiesWithState,
+  listActiveLocations
+} from "./locations-repository";
 
 describe("listActiveLocations", () => {
   beforeEach(() => {
@@ -61,6 +65,61 @@ describe("listActiveLocations", () => {
 
     await expect(listActiveLocations()).rejects.toMatchObject({
       code: "LOCATIONS_LIST_FAILED"
+    });
+  });
+});
+
+describe("listActiveCitiesWithState", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.eq.mockClear();
+    orderMock.mockReset();
+  });
+
+  it("only requests active, type = 'city' locations ordered by sort_order, selecting state_code", async () => {
+    orderMock.mockResolvedValue({ data: [], error: null });
+
+    await listActiveCitiesWithState();
+
+    expect(fromMock).toHaveBeenCalledWith("locations");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, name, state_code");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("is_active", true);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("type", "city");
+    expect(orderMock).toHaveBeenCalledWith("sort_order", { ascending: true });
+  });
+
+  it("maps rows to LocationWithStateItem, including state_code", async () => {
+    orderMock.mockResolvedValue({
+      data: [
+        { id: "loc-1", name: "Washington, DC", state_code: "DC" },
+        { id: "loc-2", name: "Arlington", state_code: "VA" }
+      ],
+      error: null
+    });
+
+    const result = await listActiveCitiesWithState();
+
+    expect(result).toEqual([
+      { id: "loc-1", name: "Washington, DC", stateCode: "DC" },
+      { id: "loc-2", name: "Arlington", stateCode: "VA" }
+    ]);
+  });
+
+  it("returns an empty array without throwing when there are no locations", async () => {
+    orderMock.mockResolvedValue({ data: [], error: null });
+
+    expect(await listActiveCitiesWithState()).toEqual([]);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    orderMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listActiveCitiesWithState()).rejects.toMatchObject({
+      code: "LOCATIONS_WITH_STATE_LIST_FAILED"
     });
   });
 });

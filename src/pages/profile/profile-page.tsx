@@ -1,13 +1,25 @@
+import { Calendar, FileText, MessageSquare, Pencil, Settings, Star, type LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ProfileSummary } from "../../components/profile-summary";
+import { TopBar } from "../../components/top-bar";
 import { useIsAdminQuery } from "../../features/admin/use-is-admin-query";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { authService } from "../../services/auth/auth-service";
 import { useAuthStore } from "../../store/auth-store";
 
 const LOGOUT_ERROR_MESSAGE = "退出登录失败，请稍后重试。";
+
+/**
+ * 顶部栏"设置"齿轮的目标路径——06 号卡（00-overview.md 顶部栏规则表）
+ * 只要求"我的"页顶部右侧有一个设置齿轮，没有要求这次一并建出"设置"页面
+ * 本身（那是另一张没出现过的任务卡的范围）。这里先接入一个占位路径，跟
+ * home-page.tsx 的 REGION_SELECT_PATH 是同一个处理方式：routes.tsx 里
+ * 没有匹配的路由，点击会落到全局通配符 NotFoundPage，不是死链接/报错，
+ * 以后真的建出设置页时这里不需要再改。
+ */
+const SETTINGS_PATH = "/settings";
 
 /**
  * Settings List 每一项共用的样式：显式高度 56px（h-14，落在规范给的
@@ -20,27 +32,64 @@ const settingsItemClassName =
 
 const chevronClassName = "text-[18px] leading-none text-chevron";
 
+interface SettingsRowProps {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+}
+
+/**
+ * 06 号卡新增：给功能列表每一行补上前置图标（codex_task_profile_redesign.md
+ * "建议给全部 5 行都补上前置图标...用项目现有的线性图标集，不要用 emoji
+ * 占位"），用 lucide-react（项目已经在 bottom-nav.tsx 里引入过，这里复用
+ * 同一个图标库，不新增依赖）。抽成这个小组件而不是 5 行各自重复一遍
+ * "图标+文字"的 JSX 结构，避免改一次行内布局要同步改 5 处。
+ *
+ * "后台管理"那一行故意不用这个组件——codex_task_profile_redesign.md
+ * 明确写了"「后台管理」分组标题及其列表卡片位置、样式保持不变"，不在这次
+ * 补图标范围内，见下面渲染处的注释。
+ */
+function SettingsRow({ to, icon: Icon, label }: SettingsRowProps) {
+  return (
+    <Link to={to} className={settingsItemClassName}>
+      <span className="flex items-center gap-3">
+        <Icon aria-hidden="true" size={20} className="shrink-0 text-text-muted" />
+        <span>{label}</span>
+      </span>
+      <span aria-hidden="true" className={chevronClassName}>
+        ›
+      </span>
+    </Link>
+  );
+}
+
 /**
  * "我的"标签页目标页面（/profile，路由已在 routes.tsx 用 RequireAuth
  * 包裹，这里不做登录检查/跳转，符合 CLAUDE.md 的统一规则）。
  *
  * 是否管理员复用现有的 useIsAdminQuery（RequireAdmin 也在用同一个
- * hook），不重新实现一遍角色判断逻辑。
+ * hook），不重新实现一遍角色判断逻辑——06 号卡"后台管理只有管理员能看到"
+ * 这条验收标准在这次改动之前就已经是这个写法（isAdmin === true 才渲染
+ * 整块，不是置灰），这次没有改这段判断逻辑本身，只是把它保留在新的页面
+ * 结构里。
  *
- * 头部视觉统一：原来是 56px 头像 + 昵称 + 内联"编辑"文字链接 + 邮箱的小
- * 横条卡片，跟公开主页（user-profile-page.tsx）96px 大头像居中 + 昵称 +
- * 城市 + 简介的展示完全是两套视觉语言——用户自己看不到"我在别人眼里主页
- * 长什么样"，也看不到自己填的城市/简介有没有生效（这里之前压根没展示
- * 这两个字段）。现在改成用共享组件 ProfileSummary 渲染头像/昵称/城市/
- * 简介，两个页面头部手感一致；数据来自现有的 useMyProfileQuery()，
- * MyProfile 早就带了 bio/locationName，不需要新查询。
- *
- * 邮箱是这个页面独有的展示项（公开主页从来不展示邮箱——这是隐私信息，
- * ProfileSummary 不应该知道"邮箱"这个概念），跟"编辑资料"按钮一起作为
- * children 传给 ProfileSummary，渲染在头像/昵称/城市/简介下面同一个
- * 操作区里，不塞进共享组件的 props。原来内联的"编辑"文字链接去掉，统一
- * 换成这个按钮，视觉重量参考 user-profile-page.tsx 的"发消息"按钮，两个
- * 页面手感一致。
+ * 06 号卡（profile-region-misc）改版：
+ * - 顶部栏换成 TopBar 的 tab 变体（标题"我的"，右侧设置齿轮），不再是
+ *   全局 AppHeader 那一套"← Saminest 发布"；组件自己的 <h1> 已经是这个
+ *   页面的标题，原来手写的 <h1>我的</h1> 删掉，避免同一个页面出现两个
+ *   <h1>（见 top-bar.tsx 顶部注释）。这个路由已经加进
+ *   app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS。
+ * - 头像区改用 ProfileSummary 的 compact 变体（56px 头像、左对齐横排
+ *   卡片），恢复 codex_task_profile_redesign.md 的验收标准——这是对
+ *   36732ee（个人主页视觉统一）把"我的"页头像区改成跟公开主页共用的
+ *   96px 居中样式的一次有意调整，不是不知道这个改动的存在；调整方式是
+ *   给共享组件加 size 变体，不是把两个页面拆开各写各的，见
+ *   profile-summary.tsx 顶部注释。
+ * - "编辑资料"从卡片下方的独立蓝色按钮，改成功能列表的第一行，样式跟
+ *   "我的发布/我的活动/我的收藏/意见反馈"完全一致（同一个
+ *   settingsItemClassName）。邮箱从紧跟按钮下面的一行文字，改成
+ *   compact 卡片内的第三行（ProfileSummary 的 tertiaryText），组件本身
+ *   仍然不认识"邮箱"这个概念，只是换了个位置摆放同一段文字。
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -67,87 +116,78 @@ export function ProfilePage() {
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-md px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-4 text-xl font-bold text-text">我的</h1>
+    <main className="min-h-screen pb-20 md:pb-6">
+      <TopBar
+        variant="tab"
+        title="我的"
+        right={{
+          icon: <Settings size={18} aria-hidden="true" />,
+          label: "设置",
+          onClick: () => navigate(SETTINGS_PATH)
+        }}
+      />
 
-      {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
-      {isError ? (
-        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          用户信息加载失败，请稍后重试。
-        </p>
-      ) : null}
+      {/* TopBar 本身不套 max-w（跟 categories-page.tsx/activity-list-page.tsx/
+          user-profile-page.tsx 同一个约定，全宽横跨视口），页面内容单独套
+          max-w-md——公开主页 user-profile-page.tsx 也是 max-w-md，两个页面
+          宽度保持一致。 */}
+      <div className="mx-auto max-w-md px-4 py-6">
+        {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+        {isError ? (
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            用户信息加载失败，请稍后重试。
+          </p>
+        ) : null}
 
-      {!isPending && !isError ? (
-        <div className="mb-6">
-          <ProfileSummary
-            displayName={profile?.displayName ?? null}
-            avatarUrl={profile?.avatarUrl ?? null}
-            locationName={profile?.locationName}
-            bio={profile?.bio}
-          >
-            <Link
-              to="/profile/edit"
-              className="mt-4 rounded bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
-            >
-              编辑资料
+        {!isPending && !isError ? (
+          <div className="mb-6">
+            <ProfileSummary
+              size="compact"
+              displayName={profile?.displayName ?? null}
+              avatarUrl={profile?.avatarUrl ?? null}
+              bio={profile?.bio}
+              tertiaryText={email}
+            />
+          </div>
+        ) : null}
+
+        <nav aria-label="我的功能" className="mb-6">
+          <SettingsRow to="/profile/edit" icon={Pencil} label="编辑资料" />
+          <SettingsRow to="/my-posts" icon={FileText} label="我的发布" />
+          <SettingsRow to="/my-activities" icon={Calendar} label="我的活动" />
+          <SettingsRow to="/favorites" icon={Star} label="我的收藏" />
+          <SettingsRow to="/feedback" icon={MessageSquare} label="意见反馈" />
+        </nav>
+
+        {isAdmin === true ? (
+          <section aria-label="管理员功能" className="mb-6">
+            <h2 className="mb-2 text-sm font-medium text-text-muted">后台管理</h2>
+            {/* codex_task_profile_redesign.md："后台管理"分组标题及其列表
+                卡片位置、样式保持不变——这一行故意不用 SettingsRow（不补
+                前置图标），沿用改动前就有的纯文字行。 */}
+            <Link to="/admin/posts" className={settingsItemClassName}>
+              <span>后台管理</span>
+              <span aria-hidden="true" className={chevronClassName}>
+                ›
+              </span>
             </Link>
-            <p className="mt-2 break-words text-sm text-text-muted">{email}</p>
-          </ProfileSummary>
-        </div>
-      ) : null}
+          </section>
+        ) : null}
 
-      <nav aria-label="我的功能" className="mb-6">
-        <Link to="/my-posts" className={settingsItemClassName}>
-          <span>我的发布</span>
-          <span aria-hidden="true" className={chevronClassName}>
-            ›
-          </span>
-        </Link>
-        <Link to="/my-activities" className={settingsItemClassName}>
-          <span>我的活动</span>
-          <span aria-hidden="true" className={chevronClassName}>
-            ›
-          </span>
-        </Link>
-        <Link to="/favorites" className={settingsItemClassName}>
-          <span>我的收藏</span>
-          <span aria-hidden="true" className={chevronClassName}>
-            ›
-          </span>
-        </Link>
-        <Link to="/feedback" className={settingsItemClassName}>
-          <span>意见反馈</span>
-          <span aria-hidden="true" className={chevronClassName}>
-            ›
-          </span>
-        </Link>
-      </nav>
-
-      {isAdmin === true ? (
-        <section aria-label="管理员功能" className="mb-6">
-          <h2 className="mb-2 text-sm font-medium text-text-muted">后台管理</h2>
-          <Link to="/admin/posts" className={settingsItemClassName}>
-            <span>后台管理</span>
-            <span aria-hidden="true" className={chevronClassName}>
-              ›
-            </span>
-          </Link>
-        </section>
-      ) : null}
-
-      {logoutError ? (
-        <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          {logoutError}
-        </p>
-      ) : null}
-      <button
-        type="button"
-        onClick={handleLogout}
-        disabled={isLoggingOut}
-        className="w-full rounded-xl border border-border px-4 py-2 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        退出登录
-      </button>
+        {logoutError ? (
+          <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {logoutError}
+          </p>
+        ) : null}
+        <button
+          type="button"
+          onClick={handleLogout}
+          disabled={isLoggingOut}
+          className="w-full rounded-xl border border-border px-4 py-2 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          退出登录
+        </button>
+      </div>
     </main>
   );
 }

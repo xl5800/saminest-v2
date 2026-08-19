@@ -35,6 +35,9 @@ function renderShell(path = "/") {
             <Route path="login" element={<p>login page</p>} />
             <Route path="other" element={<p>other page</p>} />
             <Route path="categories" element={<p>categories page</p>} />
+            <Route path="profile" element={<p>profile page</p>} />
+            <Route path="messages" element={<p>messages page</p>} />
+            <Route path="region-select" element={<p>region-select page</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -109,5 +112,21 @@ describe("AppShell", () => {
       expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
+
+    // 06 号卡（profile-region-misc）：我的/消息/地区选择三个页面也迁移到了
+    // 自己的 TopBar，同样只关 AppHeader、留着 BottomNav。
+    it.each([
+      ["/profile", "profile page"],
+      ["/messages", "messages page"],
+      ["/region-select", "region-select page"]
+    ])(
+      "renders BottomNav but NOT AppHeader on the migrated \"%s\" page",
+      (path) => {
+        renderShell(path);
+
+        expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+        expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+      }
+    );
   });
 });

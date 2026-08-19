@@ -61,7 +61,7 @@ describe("ProfilePage", () => {
     );
   });
 
-  it("shows the city and bio when the profile has them, matching the public profile page's ProfileSummary display", async () => {
+  it("shows the bio (个性签名) when the profile has one, but not the city — the compact card only has nickname/signature/email per codex_task_profile_redesign.md", async () => {
     getMyProfile.mockResolvedValue({
       displayName: "Alice",
       bio: "Hi there, I like hiking.",
@@ -72,8 +72,8 @@ describe("ProfilePage", () => {
     renderWithProviders(<ProfilePage />);
 
     await screen.findByText("Alice");
-    expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByText("Hi there, I like hiking.")).toBeInTheDocument();
+    expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
   });
 
   it("does not show a city/bio section when the profile has neither", async () => {
@@ -138,6 +138,28 @@ describe("ProfilePage", () => {
     });
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/");
+    });
+  });
+
+  describe("top bar (TopBar tab variant)", () => {
+    it("renders '我的' as the page heading and a 设置 button, with no brand name/发布 button/? help icon", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      expect(screen.getByRole("heading", { name: "我的" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
+      expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "?" })).not.toBeInTheDocument();
+    });
+
+    it("navigates to the settings placeholder route when the 设置 gear is clicked", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      fireEvent.click(screen.getByRole("button", { name: "设置" }));
+
+      expect(navigateMock).toHaveBeenCalledWith("/settings");
     });
   });
 

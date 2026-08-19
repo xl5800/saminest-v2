@@ -14,7 +14,10 @@ vi.mock("../../repositories/posts-repository", () => ({
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
+import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { HomePage } from "./home-page";
+
+const initialRegionState = useSelectedRegionStore.getState();
 
 /** 每个测试都要先点开搜索图标才能看到输入框——搜索默认收起，不再是常驻
  *  一整行，见 home-page.tsx 顶部注释。 */
@@ -30,6 +33,8 @@ describe("HomePage", () => {
   beforeEach(() => {
     listActiveCategories.mockReset();
     listApprovedPosts.mockReset();
+    useSelectedRegionStore.setState(initialRegionState, true);
+    localStorage.clear();
   });
 
   it("does not render a '一起去'/找搭子 entry on the home page — that's the bottom nav's job now", async () => {
@@ -74,7 +79,7 @@ describe("HomePage", () => {
   });
 
   describe("top bar (TopBar home variant)", () => {
-    it("renders the 'Saminest' brand name and no stray state-name text (no region source yet)", () => {
+    it("renders only the 'Saminest' brand name with no stray state-name text when no region has been selected yet", () => {
       listActiveCategories.mockResolvedValue([]);
       listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
@@ -82,6 +87,23 @@ describe("HomePage", () => {
 
       expect(screen.getByText("Saminest")).toBeInTheDocument();
       expect(screen.queryByText("·")).not.toBeInTheDocument();
+    });
+
+    // 06 号卡：地区选择页写入的 useSelectedRegionStore 现在是首页州名的真实
+    // 数据源，不再是写死的 null——见 home-page.tsx 顶部注释。
+    it("renders the persisted selected region's stateCode next to the brand name once one has been chosen", () => {
+      listActiveCategories.mockResolvedValue([]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+      useSelectedRegionStore.getState().setSelectedRegion({
+        cityId: "loc-arlington",
+        cityName: "Arlington",
+        stateCode: "VA"
+      });
+
+      renderWithProviders(<HomePage />);
+
+      expect(screen.getByText("VA")).toBeInTheDocument();
+      expect(screen.getByText("Saminest")).toBeInTheDocument();
     });
 
     it("renders only icon buttons ('发布'/'搜索') at the top — no visible text '发布' button and no bottom floating publish button", () => {

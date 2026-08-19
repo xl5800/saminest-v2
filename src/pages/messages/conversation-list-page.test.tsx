@@ -1,13 +1,18 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useMyConversationsQuery } = vi.hoisted(() => ({
-  useMyConversationsQuery: vi.fn()
+const { useMyConversationsQuery, navigateMock } = vi.hoisted(() => ({
+  useMyConversationsQuery: vi.fn(),
+  navigateMock: vi.fn()
 }));
 
 vi.mock("../../features/conversations/use-my-conversations-query", () => ({
   useMyConversationsQuery
 }));
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 import { renderWithProviders } from "../../test/render-with-providers";
 import { ConversationListPage } from "./conversation-list-page";
@@ -19,6 +24,30 @@ describe("ConversationListPage", () => {
 
   beforeEach(() => {
     useMyConversationsQuery.mockReset();
+    navigateMock.mockReset();
+  });
+
+  describe("top bar (TopBar tab variant)", () => {
+    it("renders '消息' as the page heading and a 通知 button, with no brand name/发布 button/? help icon", () => {
+      useMyConversationsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+
+      renderWithProviders(<ConversationListPage />);
+
+      expect(screen.getByRole("heading", { name: "消息" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "通知" })).toBeInTheDocument();
+      expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "?" })).not.toBeInTheDocument();
+    });
+
+    it("navigates to the notifications placeholder route when the 通知 bell is clicked", () => {
+      useMyConversationsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+
+      renderWithProviders(<ConversationListPage />);
+      fireEvent.click(screen.getByRole("button", { name: "通知" }));
+
+      expect(navigateMock).toHaveBeenCalledWith("/notifications");
+    });
   });
 
   it("shows a loading state before the query resolves", () => {
