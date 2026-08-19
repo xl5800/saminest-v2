@@ -1,36 +1,19 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  usePublicProfileQuery,
-  useCreateProfileConversationMutation,
-  useOrganizerActivitiesQuery,
-  useActivityParticipantPreviewsQuery,
-  mutateMock,
-  navigateMock
-} = vi.hoisted(() => ({
-  usePublicProfileQuery: vi.fn(),
-  useCreateProfileConversationMutation: vi.fn(),
-  useOrganizerActivitiesQuery: vi.fn(),
-  useActivityParticipantPreviewsQuery: vi.fn(),
-  mutateMock: vi.fn(),
-  navigateMock: vi.fn()
-}));
+const { usePublicProfileQuery, useCreateProfileConversationMutation, mutateMock, navigateMock } =
+  vi.hoisted(() => ({
+    usePublicProfileQuery: vi.fn(),
+    useCreateProfileConversationMutation: vi.fn(),
+    mutateMock: vi.fn(),
+    navigateMock: vi.fn()
+  }));
 
 vi.mock("../../features/profile/use-public-profile-query", () => ({
   usePublicProfileQuery
 }));
 vi.mock("../../features/conversations/use-create-profile-conversation-mutation", () => ({
   useCreateProfileConversationMutation
-}));
-// UserProfilePage 现在多了一段"TA 发起的搭子"，查询 mock 到 hook 这一层
-// （跟 usePublicProfileQuery 是同一个模式），默认返回空数据，不影响原有
-// 断言——只有专门测这个新区块的用例才会覆写成非空数据。
-vi.mock("../../features/activities/use-organizer-activities-query", () => ({
-  useOrganizerActivitiesQuery
-}));
-vi.mock("../../features/activities/use-activity-participant-previews-query", () => ({
-  useActivityParticipantPreviewsQuery
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -68,8 +51,6 @@ describe("UserProfilePage", () => {
     useAuthStore.setState(initialAuthState, true);
     usePublicProfileQuery.mockReset();
     useCreateProfileConversationMutation.mockReset();
-    useOrganizerActivitiesQuery.mockReset();
-    useActivityParticipantPreviewsQuery.mockReset();
     mutateMock.mockReset();
     navigateMock.mockReset();
 
@@ -77,8 +58,6 @@ describe("UserProfilePage", () => {
       mutate: mutateMock,
       isPending: false
     });
-    useOrganizerActivitiesQuery.mockReturnValue({ data: [] });
-    useActivityParticipantPreviewsQuery.mockReturnValue({ data: new Map() });
   });
 
   it("shows a loading message while the query is pending", () => {
@@ -311,53 +290,19 @@ describe("UserProfilePage", () => {
     expect(screen.getAllByRole("button")).toHaveLength(2); // 返回 + 发消息
   });
 
-  it("does not render a 'TA 发起的搭子' section when the organizer has no public activities", () => {
+  // 07 号卡（活动卡片头像区放大 + 发起者联系参与者）验收标准："发起者
+  // 主页不再展示 TA发起的搭子 列表"——04 号卡最初引入的这个区块已经整个
+  // 删掉，联系发起人/参与者统一走活动详情页的"点头像/整行进主页"机制，
+  // 不需要在这个页面单独列一份活动。
+  it("never renders a 'TA 发起的搭子' section (07 号卡删掉了这个区块)", () => {
     usePublicProfileQuery.mockReturnValue({
       data: samplePublicProfile,
       isPending: false,
       isError: false
     });
-    useOrganizerActivitiesQuery.mockReturnValue({ data: [] });
 
     renderPage();
 
     expect(screen.queryByText("TA 发起的搭子")).not.toBeInTheDocument();
-  });
-
-  it("renders a 'TA 发起的搭子' section reusing the ActivityCard avatar-stack component when the organizer has public activities", () => {
-    usePublicProfileQuery.mockReturnValue({
-      data: samplePublicProfile,
-      isPending: false,
-      isError: false
-    });
-    useOrganizerActivitiesQuery.mockReturnValue({
-      data: [
-        {
-          id: "act-1",
-          organizerId: "user-2",
-          organizerDisplayName: "Bob",
-          organizerAvatarUrl: null,
-          channel: "food",
-          tagText: null,
-          title: "周末吃火锅",
-          locationName: "Rockville",
-          landmarkText: "海底捞",
-          isOnline: false,
-          startAt: "2099-08-20T18:00:00.000Z",
-          capacity: 4,
-          participantCount: 1,
-          status: "open",
-          requiresApproval: false
-        }
-      ]
-    });
-
-    renderPage();
-
-    expect(screen.getByText("TA 发起的搭子")).toBeInTheDocument();
-    const link = screen.getByRole("link", { name: /周末吃火锅/ });
-    expect(link).toHaveAttribute("href", "/activities/act-1");
-    // 头像堆叠复用同一个组件：发起人头像格带皇冠角标。
-    expect(link.querySelector("svg.lucide-crown")).toBeInTheDocument();
   });
 });

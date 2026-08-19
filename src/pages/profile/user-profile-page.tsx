@@ -1,11 +1,8 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
-import { ActivityCard } from "../../components/activity-card";
 import { ProfileSummary } from "../../components/profile-summary";
 import { TopBar } from "../../components/top-bar";
-import { useActivityParticipantPreviewsQuery } from "../../features/activities/use-activity-participant-previews-query";
-import { useOrganizerActivitiesQuery } from "../../features/activities/use-organizer-activities-query";
 import { useCreateProfileConversationMutation } from "../../features/conversations/use-create-profile-conversation-mutation";
 import { usePublicProfileQuery } from "../../features/profile/use-public-profile-query";
 import { useAuthStore } from "../../store/auth-store";
@@ -18,7 +15,12 @@ const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
  * 公开个人主页 / 04 号卡里的"发起者主页"（/users/:userId，路由没有用
  * RequireAuth 包裹，游客也能看——跟 post-detail-page.tsx/
  * activity-detail-page.tsx 是同一个可见性模式，只是页面内部"发消息"按钮
- * 未登录时点击会跳去 /login，不是整个页面需要登录）。
+ * 未登录时点击会跳去 /login，不是整个页面需要登录）。这个页面结构对任何
+ * 用户都一样，不区分"是不是某个活动的发起人"——发起人跟普通用户看到的是
+ * 同一个组件、同一套结构，07 号卡（活动卡片头像区放大 + 发起者联系参与者）
+ * 正是靠这一点，把"发起者点参与者头像"和"参与者点发起人整行"两个方向的
+ * 联系需求，统一收进"点头像/整行 → 进这个页面 → 点发消息"这一套机制，不用
+ * 分别建两套 UI。
  *
  * 头像/昵称/城市/简介 + 发消息，不做"编辑资料"（那是"我的"页
  * profile-page.tsx 的事）。简介为空时整个简介区块不渲染，不显示"暂无简介"
@@ -47,19 +49,22 @@ const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
  * "只保留一个发消息按钮、居中显示、不跟收藏/关注等按钮并排"不需要额外
  * 布局改动就已经成立。
  *
- * 04 号卡（find-buddy-flow）改版：
- * - 顶部换成 TopBar 的 detail 变体（返回箭头），不再是页面自己手写的
- *   "←"按钮——不传 moreMenu：这个仓库目前没有"举报用户"这个功能（只有
- *   举报活动/举报帖子），先不在菜单里放一个点了会 404 的空壳入口，等
- *   举报用户功能真的做出来再补，TopBar 的 moreMenu 本来就是可选的，不传
- *   就完全不渲染"…"按钮，见 top-bar.tsx 顶部注释。
- * - 新增"TA 发起的搭子"区块：查 useOrganizerActivitiesQuery(userId)（只
- *   返回这个用户公开可见、招募中的活动，不是"我的活动"页那个只能查自己的
- *   listMyOrganizedActivities，见该 repository 函数顶部注释），卡片复用
- *   ActivityCard（跟活动列表页同一个组件），保证头像堆叠是同一套放大后的
- *   48px 样式，不是这个页面自己另起一份。没有活动时不渲染这个区块的空态
- *   文案之外的任何东西——查询结果是空数组就直接不显示整个区块标题，不用
- *   "TA 还没有发起过搭子"这类占位文案硬撑一个空区块。
+ * 04 号卡（find-buddy-flow）改版：顶部换成 TopBar 的 detail 变体（返回
+ * 箭头），不再是页面自己手写的"←"按钮——不传 moreMenu：这个仓库目前没有
+ * "举报用户"这个功能（只有举报活动/举报帖子），先不在菜单里放一个点了会
+ * 404 的空壳入口，等举报用户功能真的做出来再补，TopBar 的 moreMenu 本来
+ * 就是可选的，不传就完全不渲染"…"按钮，见 top-bar.tsx 顶部注释。
+ *
+ * 07 号卡（活动卡片头像区放大 + 发起者联系参与者）：删掉了 04 号卡最初
+ * 引入的"TA 发起的搭子"活动列表区块（连同它用到的
+ * useOrganizerActivitiesQuery/useActivityParticipantPreviewsQuery/
+ * ActivityCard——这几个 import 因此也一并去掉了）。产品决定不需要在发起
+ * 者主页单独展示一份"TA 发起的活动"列表，联系发起人/参与者已经有更直接
+ * 的入口（活动详情页的发起人整行 + 参与者头像，见
+ * activity-participant-avatars.tsx），这个页面重新变回"只有资料 + 发消息"
+ * 的最简单形态，没有必要为了一个没有额外产品价值的列表继续维护
+ * listOrganizerActivities 这条专门为了避开 RLS 假阴性而写的查询（已经在
+ * activities-repository.ts 里一并删掉，见该文件对应位置的说明）。
  */
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -70,11 +75,6 @@ export function UserProfilePage() {
   const { data, isPending, isError } = usePublicProfileQuery(userId ?? "");
   const createConversation = useCreateProfileConversationMutation();
   const [error, setError] = useState<string | null>(null);
-
-  const { data: organizedActivities } = useOrganizerActivitiesQuery(userId ?? "");
-  const { data: participantPreviews } = useActivityParticipantPreviewsQuery(
-    (organizedActivities ?? []).map((activity) => activity.id)
-  );
 
   function handleMessage(): void {
     if (!userId) return;
@@ -127,46 +127,29 @@ export function UserProfilePage() {
         ) : null}
 
         {!isPending && !isError && data ? (
-          <>
-            <ProfileSummary
-              displayName={data.displayName}
-              avatarUrl={data.avatarUrl}
-              locationName={data.locationName}
-              bio={data.bio}
-            >
-              {error ? (
-                <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {error}
-                </p>
-              ) : null}
-
-              {!isOwnProfile ? (
-                <button
-                  type="button"
-                  onClick={handleMessage}
-                  disabled={createConversation.isPending}
-                  className="mt-4 rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {createConversation.isPending ? "创建会话中…" : "发消息"}
-                </button>
-              ) : null}
-            </ProfileSummary>
-
-            {organizedActivities && organizedActivities.length > 0 ? (
-              <section className="mt-8">
-                <h2 className="mb-3 text-base font-bold text-text">TA 发起的搭子</h2>
-                <div className="flex flex-col gap-3">
-                  {organizedActivities.map((activity) => (
-                    <ActivityCard
-                      key={activity.id}
-                      activity={activity}
-                      participants={participantPreviews?.get(activity.id) ?? []}
-                    />
-                  ))}
-                </div>
-              </section>
+          <ProfileSummary
+            displayName={data.displayName}
+            avatarUrl={data.avatarUrl}
+            locationName={data.locationName}
+            bio={data.bio}
+          >
+            {error ? (
+              <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {error}
+              </p>
             ) : null}
-          </>
+
+            {!isOwnProfile ? (
+              <button
+                type="button"
+                onClick={handleMessage}
+                disabled={createConversation.isPending}
+                className="mt-4 rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {createConversation.isPending ? "创建会话中…" : "发消息"}
+              </button>
+            ) : null}
+          </ProfileSummary>
         ) : null}
       </div>
     </main>
