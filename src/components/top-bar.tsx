@@ -125,8 +125,12 @@ function MoreMenuButton({ label, content }: MoreMenuButtonProps) {
 interface TopBarHomeProps {
   variant: "home";
   /** 所在州名。还没定位到/用户没选过时传 null——这时中间只显示
-   *  "Saminest"，不显示"· Saminest"这种带着孤零零分隔点的半截文案。 */
+   *  "Saminest"，不显示"· Saminest"这种带着孤零零分隔点的半截文案，
+   *  也不会渲染下面这个可点击的州名按钮（没有州名可点）。 */
   stateName: string | null;
+  /** 点击州名跳转"地区选择"页——只有 stateName 非空时才会渲染出可点击
+   *  元素，这个回调也就只在那种情况下会被触发。 */
+  onStateClick: () => void;
   /** 左边"＋"图标点击——首页点它弹出"选择发布类型"弹层（⑨），具体弹层
    *  由调用方决定，这个组件只负责暴露点击事件。 */
   onCreateClick: () => void;
@@ -188,7 +192,13 @@ export function TopBar(props: TopBarProps) {
         <p className="flex items-baseline text-base font-bold">
           {props.stateName ? (
             <>
-              <span className="text-xs font-medium text-text-muted">{props.stateName}</span>
+              <button
+                type="button"
+                onClick={props.onStateClick}
+                className="text-xs font-medium text-text-muted hover:underline"
+              >
+                {props.stateName}
+              </button>
               <span aria-hidden="true" className="mx-1 text-text-subtle">
                 ·
               </span>

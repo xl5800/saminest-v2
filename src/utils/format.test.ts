@@ -5,6 +5,7 @@ import {
   formatMessageTimeDivider,
   formatPrice,
   formatPublishedAt,
+  isPriceUnset,
   shouldShowMessageTimeDivider
 } from "./format";
 
@@ -19,6 +20,20 @@ describe("formatPrice", () => {
 
   it("falls back to a placeholder when both amount and label are missing", () => {
     expect(formatPrice(null, null, "USD")).toBe("价格未填写");
+  });
+});
+
+describe("isPriceUnset", () => {
+  it("is true exactly when formatPrice would return the '价格未填写' placeholder", () => {
+    expect(isPriceUnset(null, null)).toBe(true);
+  });
+
+  it("is false when there is a price label, even without an amount", () => {
+    expect(isPriceUnset(null, "面议")).toBe(false);
+  });
+
+  it("is false when there is a numeric amount, even without a label", () => {
+    expect(isPriceUnset(1200, null)).toBe(false);
   });
 });
 

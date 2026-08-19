@@ -23,32 +23,64 @@ describe("TopBar", () => {
   describe("home variant", () => {
     it("always renders the 'Saminest' brand name", () => {
       renderWithProviders(
-        <TopBar variant="home" stateName={null} onCreateClick={vi.fn()} onSearchClick={vi.fn()} />
-      );
-
-      expect(screen.getByText("Saminest")).toBeInTheDocument();
-    });
-
-    it("renders the state name + separator dot when stateName is provided", () => {
-      renderWithProviders(
         <TopBar
           variant="home"
-          stateName="Virginia"
+          stateName={null}
+          onStateClick={vi.fn()}
           onCreateClick={vi.fn()}
           onSearchClick={vi.fn()}
         />
       );
 
-      expect(screen.getByText("Virginia")).toBeInTheDocument();
+      expect(screen.getByText("Saminest")).toBeInTheDocument();
+    });
+
+    it("renders the state name (as a clickable button) + separator dot when stateName is provided", () => {
+      renderWithProviders(
+        <TopBar
+          variant="home"
+          stateName="Virginia"
+          onStateClick={vi.fn()}
+          onCreateClick={vi.fn()}
+          onSearchClick={vi.fn()}
+        />
+      );
+
+      expect(screen.getByRole("button", { name: "Virginia" })).toBeInTheDocument();
       expect(screen.getByText("·")).toBeInTheDocument();
     });
 
-    it("does not render a stray separator dot when stateName is null", () => {
+    it("does not render a stray separator dot or a state button when stateName is null", () => {
       renderWithProviders(
-        <TopBar variant="home" stateName={null} onCreateClick={vi.fn()} onSearchClick={vi.fn()} />
+        <TopBar
+          variant="home"
+          stateName={null}
+          onStateClick={vi.fn()}
+          onCreateClick={vi.fn()}
+          onSearchClick={vi.fn()}
+        />
       );
 
       expect(screen.queryByText("·")).not.toBeInTheDocument();
+      // 只剩"发布"和"搜索"两个图标按钮，没有第三个州名按钮。
+      expect(screen.getAllByRole("button")).toHaveLength(2);
+    });
+
+    it("calls onStateClick when the state name button is clicked", () => {
+      const onStateClick = vi.fn();
+      renderWithProviders(
+        <TopBar
+          variant="home"
+          stateName="Virginia"
+          onStateClick={onStateClick}
+          onCreateClick={vi.fn()}
+          onSearchClick={vi.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Virginia" }));
+
+      expect(onStateClick).toHaveBeenCalledTimes(1);
     });
 
     it("calls onCreateClick and onSearchClick from their respective icon buttons", () => {
@@ -58,6 +90,7 @@ describe("TopBar", () => {
         <TopBar
           variant="home"
           stateName={null}
+          onStateClick={vi.fn()}
           onCreateClick={onCreateClick}
           onSearchClick={onSearchClick}
         />

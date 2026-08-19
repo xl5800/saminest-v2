@@ -8,6 +8,17 @@ export function formatPrice(
   return `${currencyCode} ${priceAmount.toLocaleString("zh-CN")}`;
 }
 
+/**
+ * 首页/分类页信息流卡片（post-list.tsx）用："价格未填写"这个占位文案要用
+ * 灰色弱化展示，跟真实价格的黑色加粗区分开——判断条件必须跟 formatPrice
+ * 走到"价格未填写"分支的条件逐字一致（没有 priceLabel 且 priceAmount 为
+ * null），单独抽成这个函数导出，调用方不需要自己在页面里重新拼一遍同样
+ * 的判断，也不会因为两处条件各写一遍而以后改出不一致。
+ */
+export function isPriceUnset(priceAmount: number | null, priceLabel: string | null): boolean {
+  return !priceLabel && priceAmount === null;
+}
+
 export function formatPublishedAt(publishedAt: string | null): string {
   if (!publishedAt) return "发布时间未知";
   return new Date(publishedAt).toLocaleDateString("zh-CN");

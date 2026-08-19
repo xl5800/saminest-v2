@@ -23,8 +23,14 @@ export function CategoryNav({ activeSlug }: CategoryNavProps) {
     return null;
   }
 
+  // 未选中态改成白底（bg-card）而不是页面画布色（bg-bg）——Meet5 风格
+  // 改版之后 --color-bg 是一个带蓝色调的浅灰画布，不再接近纯白，chips 需要
+  // 用真正的白色才能在画布上"浮"出来，见 02-home-page.md"筛选 Chips：
+  // ……未选中态白底灰字"。边框保留（设计稿的静态截图里没有画出来，但
+  // --color-border 现在的值已经很浅——#ececef，白底 chip 完全不描边在
+  // #f3f5fa 画布上对比度太低，这是比照设计稿做的一个小取舍，不是照抄）。
   const inactiveClassName =
-    "flex h-11 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
+    "flex h-11 items-center justify-center rounded-full border border-border bg-card px-4 text-sm whitespace-nowrap text-text-muted";
   const activeClassName =
     "flex h-11 items-center justify-center rounded-full px-4 text-sm whitespace-nowrap bg-accent text-white font-semibold";
 

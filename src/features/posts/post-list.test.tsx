@@ -97,6 +97,49 @@ describe("PostList", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  it("renders a two-column CSS grid (not the old waterfall columns-2 layout)", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    const { container } = renderWithProviders(<PostList />);
+    await screen.findByRole("link");
+
+    expect(container.querySelector(".grid.grid-cols-2")).toBeInTheDocument();
+    expect(container.querySelector(".columns-2")).not.toBeInTheDocument();
+  });
+
+  it("renders the cover image at a 16:9 aspect ratio, and the card itself with no border/shadow", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    const img = await screen.findByRole("img");
+    expect(img).toHaveClass("aspect-video");
+
+    const link = screen.getByRole("link");
+    expect(link).not.toHaveClass("border-border", "shadow-card");
+  });
+
+  it("renders the category tag with the light-blue chip styling", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    expect(await screen.findByText("租房")).toHaveClass("bg-primary-light", "text-primary");
+  });
+
+  it("styles the '价格未填写' placeholder in muted gray, distinct from a real price", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...samplePost, priceAmount: null, priceLabel: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList />);
+
+    const priceText = await screen.findByText("价格未填写");
+    expect(priceText).toHaveClass("text-text-muted");
+    expect(priceText).not.toHaveClass("text-text");
+  });
+
   it("renders an <img> with the cover image url when coverImageUrl is present", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
