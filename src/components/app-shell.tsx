@@ -26,7 +26,14 @@ const NO_CHROME_PATTERNS = [
   "/register",
   "/forgot-password",
   "/reset-password",
-  "/messages/:conversationId"
+  "/messages/:conversationId",
+  // 04 号卡（find-buddy-flow）：发布搭子内容表单，创建流程页面，AppHeader
+  // 和 BottomNav 都不要。
+  "/activities/new",
+  // 05 号卡（publish-flow）：发布帖子表单（新建 /publish、编辑 /publish/:id
+  // 共用同一个 PublishPage），创建流程页面，AppHeader 和 BottomNav 都不要。
+  "/publish",
+  "/publish/:id"
 ];
 
 /**
@@ -44,8 +51,24 @@ const NO_CHROME_PATTERNS = [
  *
  * 02 号卡只迁移了首页（"/"）。03～06 号卡迁移各自负责的页面时，把对应
  * 路径模式加进这个数组就够，不需要再碰这个文件里的判断逻辑本身。
+ *
+ * 04 号卡（find-buddy-flow）新加了三条：找搭子列表（/activities）、找
+ * 搭子详情（/activities/:id）、发起者主页（/users/:userId）——这三个都是
+ * "顶部栏换了、底部 Tab 栏还在"的常规浏览场景（对照 saminest_final_screens.html
+ * ③⑥⑧三屏），不是沉浸式；真正沉浸式的发布搭子内容表单在上面
+ * NO_CHROME_PATTERNS 里。
+ *
+ * 03 号卡（category-tab）新加一条：分类 Tab 页（/categories）——同样是
+ * "顶部栏换了、底部 Tab 栏还在"的常规浏览场景（对照
+ * saminest_final_screens.html ②屏），不是沉浸式。
  */
-const TOPBAR_MIGRATED_PATTERNS = ["/"];
+const TOPBAR_MIGRATED_PATTERNS = [
+  "/",
+  "/activities",
+  "/activities/:id",
+  "/users/:userId",
+  "/categories"
+];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {
   return patterns.some((pattern) => matchPath({ path: pattern, end: true }, pathname) !== null);

@@ -34,6 +34,7 @@ function renderShell(path = "/") {
             <Route index element={<p>page content</p>} />
             <Route path="login" element={<p>login page</p>} />
             <Route path="other" element={<p>other page</p>} />
+            <Route path="categories" element={<p>categories page</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -96,6 +97,14 @@ describe("AppShell", () => {
     // 不能像改版前那样共用一个开关。首页（"/"）是 02 号卡唯一迁移的路径。
     it("renders BottomNav but NOT AppHeader on a page that has migrated to its own TopBar (home, \"/\")", () => {
       renderShell("/");
+
+      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+    });
+
+    // 03 号卡（category-tab）：分类 Tab 页也迁移到了自己的 TopBar。
+    it("renders BottomNav but NOT AppHeader on the migrated categories tab page (\"/categories\")", () => {
+      renderShell("/categories");
 
       expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();

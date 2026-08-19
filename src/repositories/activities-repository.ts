@@ -181,6 +181,40 @@ export async function listActivities(
 }
 
 /**
+ * 发起者主页（/users/:userId，公开，游客也能看）"TA 发起的搭子"区块用：
+ * 任意用户（不一定是当前登录用户）作为发起人、当前公开可见的活动。
+ *
+ * 故意不复用下面的 listMyOrganizedActivities——那个函数没有加
+ * status/start_at 过滤，是靠 activities_select_own 这条 RLS（`organizer_id
+ * = auth.uid()`）替它把"只能看到自己发起的"这件事锁死的，如果拿来查
+ * *别人* 的 organizerId，RLS 会把这些本该存在的行全部过滤掉，静默返回一个
+ * 空列表——不会报错，页面会看起来像"这个人从没发起过活动"，是一个很容易
+ * 被忽略的假阴性。这里改用 activities_select_public 允许的公开可见性
+ * （非取消、非软删除），再显式加 status/start_at 过滤，跟 listActivities
+ * 是同一套"默认只展示招募中的未来活动"规则，只是多一个 organizer_id 精确
+ * 匹配——这样查别人的主页和查自己的主页走的是同一条公开可见性规则，不会
+ * 因为查询函数选错而漏掉本该看到的数据。
+ */
+export async function listOrganizerActivities(organizerId: string): Promise<ActivityListItem[]> {
+  const nowIso = new Date().toISOString();
+
+  const { data, error } = await getSupabaseClient()
+    .from("activities")
+    .select(ACTIVITY_LIST_SELECT_COLUMNS)
+    .eq("organizer_id", organizerId)
+    .in("status", ["open", "full"])
+    .gte("start_at", nowIso)
+    .order("start_at", { ascending: true })
+    .overrideTypes<ActivityListRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ORGANIZER_ACTIVITIES_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map(mapActivityListRow);
+}
+
+/**
  * "我的活动"页面（/my-activities）"我发起的" tab 用：当前用户作为发起人的
  * 全部活动，不限状态（包括已取消/已结束的历史活动，管理页需要能看到
  * 完整记录，不只是还在招募中的）。activities_select_own 这条 RLS 早就

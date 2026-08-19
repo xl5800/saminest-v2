@@ -1,8 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
+import { TopBar } from "../../components/top-bar";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { useLocationsQuery } from "../../features/locations/use-locations-query";
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
@@ -178,6 +180,20 @@ async function uploadAndInsertPostImages(input: {
  *   'pending'；编辑时 updatePost() 只有原状态是 'approved' 才会顺带转回
  *   'pending'，这个组件只负责把 usePostDetailQuery() 查到的原始 status
  *   转交给 updatePost() 的 currentStatus 参数，不在这里做任何状态判断。
+ *
+ * 顶部栏改用 TopBar 的 create 变体（05-publish-flow.md）：视觉上的"发布"
+ * 提交按钮搬到了顶部栏右侧，不再是表单底部的 <button type="submit">——
+ * TopBar 的 create 变体按钮本身是 type="button"（见 top-bar.tsx），点击直接
+ * 调用调用方传入的 onSubmit，不经过原生表单提交事件。所以这里把提交逻辑
+ * 拆成不依赖 FormEvent 的 submitForm()，<form> 的 onSubmit（保留，输入框里
+ * 按 Enter 键时浏览器仍会触发）和 TopBar 的 onSubmit 都调用它，两个入口
+ * 触发的是同一份校验/提交逻辑，不是两套。
+ *
+ * 页面背景改成 bg-bg（全局 token），字段不再包在一张居中的白色卡片里——
+ * 每个字段自己是一个 bg-card 的"选择行/输入框"，跟 saminest_final_screens.html
+ * 屏 ⑩ 的视觉一致；这个页面现在是创建流程页，AppShell 不再渲染 AppHeader/
+ * BottomNav（见 app-shell.tsx 的 NO_CHROME_PATTERNS），所以也不需要再像
+ * 改版前那样在小屏/大屏之间用 pb-20/md:pb-10 让出底部 Tab 栏空间。
  */
 export function PublishPage() {
   const navigate = useNavigate();
@@ -287,8 +303,7 @@ export function PublishPage() {
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function submitForm(): Promise<void> {
     if (submitting) return;
 
     setError(null);
@@ -413,200 +428,221 @@ export function PublishPage() {
     }
   }
 
-  if (loadingExistingPost) {
-    return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-2xl rounded-lg border border-border bg-white p-6 shadow-sm">
-          <p className="text-sm text-text-muted">加载中…</p>
-        </div>
-      </main>
-    );
+  async function handleFormSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    await submitForm();
   }
 
-  if (loadError) {
-    return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-2xl rounded-lg border border-border bg-white p-6 shadow-sm">
-          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            {EDIT_LOAD_FAILED_MESSAGE}
-          </p>
-        </div>
-      </main>
-    );
-  }
+  const submitLabel = uploadingImages
+    ? "上传图片中…"
+    : submitting
+      ? isEditMode
+        ? "保存中…"
+        : "发布中…"
+      : isEditMode
+        ? "保存修改"
+        : "发布";
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-2xl rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">
-          {isEditMode ? "编辑帖子" : "发布帖子"}
-        </h1>
-        <form onSubmit={handleSubmit} noValidate>
-          {error ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <label className="mb-4 block text-sm font-medium text-text">
-            分类
-            <select
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-              disabled={categoriesPending}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">请选择分类</option>
-              {(categories ?? []).map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.nameZh}
-                </option>
-              ))}
-            </select>
-          </label>
-          {categoriesError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              分类加载失败，请刷新页面重试。
-            </p>
-          ) : null}
-          <label className="mb-1 block text-sm font-medium text-text">
-            地区
-            <select
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-              disabled={locationsPending}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">不限地区</option>
-              {(locations ?? []).map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-              <option value={OTHER_LOCATION_VALUE}>其他（手动输入）</option>
-            </select>
-          </label>
-          {locationId === OTHER_LOCATION_VALUE ? (
-            <input
-              type="text"
-              value={locationText}
-              onChange={(event) => setLocationText(event.target.value)}
-              maxLength={LOCATION_TEXT_MAX_LENGTH}
-              placeholder="请输入地区名称"
-              aria-label="地区名称"
-              className="mb-4 mt-2 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          ) : (
-            <div className="mb-4" />
-          )}
-          {locationsError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              地区加载失败，请刷新页面重试。
-            </p>
-          ) : null}
-          <label className="mb-4 block text-sm font-medium text-text">
-            标题
-            <input
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              minLength={TITLE_MIN_LENGTH}
-              maxLength={TITLE_MAX_LENGTH}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            描述
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              minLength={DESCRIPTION_MIN_LENGTH}
-              maxLength={DESCRIPTION_MAX_LENGTH}
-              required
-              className="mt-1 min-h-[120px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            价格（可选）
-            <input
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(event) => setPrice(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            联系方式类型
-            <select
-              value={contactMethod}
-              onChange={(event) => setContactMethod(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">请选择联系方式</option>
-              {CONTACT_METHOD_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            联系方式内容
-            <input
-              type="text"
-              value={contactValue}
-              onChange={(event) => setContactValue(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          {isEditMode && existingImages.length > 0 ? (
-            <div className="mb-4">
-              <p className="mb-2 text-sm font-medium text-text">已上传的图片</p>
-              <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {existingImages.map((image) => (
-                  <li key={image.id} className="relative rounded border border-border p-1">
-                    {image.publicUrl ? (
-                      <img
-                        src={image.publicUrl}
-                        alt=""
-                        width={80}
-                        height={80}
-                        className="h-20 w-20 rounded object-cover"
-                      />
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveExistingImage(image.id)}
-                      disabled={removingImageId === image.id}
-                      className="mt-1 w-full rounded border border-danger px-1 py-0.5 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {removingImageId === image.id ? "删除中…" : "删除"}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-          <PostImagePicker value={images} onChange={setImages} />
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-6 w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {uploadingImages
-              ? "上传图片中…"
-              : submitting
-                ? isEditMode
-                  ? "保存中…"
-                  : "发布中…"
-                : isEditMode
-                  ? "保存修改"
-                  : "发布"}
-          </button>
-        </form>
+    <main className="min-h-dvh bg-bg pb-10">
+      <TopBar
+        variant="create"
+        title={isEditMode ? "编辑帖子" : "发布帖子"}
+        onSubmit={() => void submitForm()}
+        submitLabel={submitLabel}
+        submitDisabled={submitting || loadingExistingPost || loadError}
+      />
+      <div className="px-4 pb-6">
+        {loadingExistingPost ? (
+          <p className="py-10 text-center text-sm text-text-muted">加载中…</p>
+        ) : loadError ? (
+          <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+            {EDIT_LOAD_FAILED_MESSAGE}
+          </p>
+        ) : (
+          <form onSubmit={handleFormSubmit} noValidate>
+            {error ? (
+              <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                {error}
+              </p>
+            ) : null}
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">分类</span>
+              <span className="relative block">
+                <select
+                  value={categoryId}
+                  onChange={(event) => setCategoryId(event.target.value)}
+                  disabled={categoriesPending}
+                  required
+                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">请选择分类</option>
+                  {(categories ?? []).map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.nameZh}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  size={16}
+                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
+                />
+              </span>
+            </label>
+            {categoriesError ? (
+              <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                分类加载失败，请刷新页面重试。
+              </p>
+            ) : null}
+
+            <label className="mb-1 block">
+              <span className="mb-2 block text-xs font-semibold text-text">地区</span>
+              <span className="relative block">
+                <select
+                  value={locationId}
+                  onChange={(event) => setLocationId(event.target.value)}
+                  disabled={locationsPending}
+                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">不限地区</option>
+                  {(locations ?? []).map((location) => (
+                    <option key={location.id} value={location.id}>
+                      {location.name}
+                    </option>
+                  ))}
+                  <option value={OTHER_LOCATION_VALUE}>其他（手动输入）</option>
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  size={16}
+                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
+                />
+              </span>
+            </label>
+            {locationId === OTHER_LOCATION_VALUE ? (
+              <input
+                type="text"
+                value={locationText}
+                onChange={(event) => setLocationText(event.target.value)}
+                maxLength={LOCATION_TEXT_MAX_LENGTH}
+                placeholder="请输入地区名称"
+                aria-label="地区名称"
+                className="mb-4 mt-2 w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            ) : (
+              <div className="mb-4" />
+            )}
+            {locationsError ? (
+              <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                地区加载失败，请刷新页面重试。
+              </p>
+            ) : null}
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">标题</span>
+              <input
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                minLength={TITLE_MIN_LENGTH}
+                maxLength={TITLE_MAX_LENGTH}
+                placeholder="起个标题"
+                required
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">描述</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                minLength={DESCRIPTION_MIN_LENGTH}
+                maxLength={DESCRIPTION_MAX_LENGTH}
+                placeholder="详细描述一下…"
+                required
+                className="min-h-[120px] w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">联系方式类型</span>
+              <span className="relative block">
+                <select
+                  value={contactMethod}
+                  onChange={(event) => setContactMethod(event.target.value)}
+                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">请选择联系方式</option>
+                  {CONTACT_METHOD_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  aria-hidden="true"
+                  size={16}
+                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
+                />
+              </span>
+            </label>
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">联系方式内容</span>
+              <input
+                type="text"
+                value={contactValue}
+                onChange={(event) => setContactValue(event.target.value)}
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+
+            {isEditMode && existingImages.length > 0 ? (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-semibold text-text">已上传的图片</p>
+                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {existingImages.map((image) => (
+                    <li key={image.id} className="relative rounded-xl bg-card p-1">
+                      {image.publicUrl ? (
+                        <img
+                          src={image.publicUrl}
+                          alt=""
+                          width={80}
+                          height={80}
+                          className="h-20 w-20 rounded-lg object-cover"
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExistingImage(image.id)}
+                        disabled={removingImageId === image.id}
+                        className="mt-1 w-full rounded-lg border border-danger px-1 py-0.5 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {removingImageId === image.id ? "删除中…" : "删除"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <PostImagePicker value={images} onChange={setImages} />
+          </form>
+        )}
       </div>
     </main>
   );

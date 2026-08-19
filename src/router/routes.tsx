@@ -10,7 +10,6 @@ import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
-import { CategoryPage } from "../pages/category/category-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
 import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
@@ -69,10 +68,9 @@ export const router = createBrowserRouter([
         )
       },
       {
-        path: "category/:slug",
-        element: <CategoryPage />
-      },
-      {
+        // 03 号卡（category-tab）：独立的 /category/:slug 分类下钻页已经
+        // 退役——分类筛选态统一收进首页的 ?category=<slug> 查询参数，见
+        // categories-page.tsx / home-page.tsx / category-nav.tsx 的改动。
         path: "categories",
         element: <CategoriesPage />
       },

@@ -1,19 +1,36 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { usePublicProfileQuery, useCreateProfileConversationMutation, mutateMock, navigateMock } =
-  vi.hoisted(() => ({
-    usePublicProfileQuery: vi.fn(),
-    useCreateProfileConversationMutation: vi.fn(),
-    mutateMock: vi.fn(),
-    navigateMock: vi.fn()
-  }));
+const {
+  usePublicProfileQuery,
+  useCreateProfileConversationMutation,
+  useOrganizerActivitiesQuery,
+  useActivityParticipantPreviewsQuery,
+  mutateMock,
+  navigateMock
+} = vi.hoisted(() => ({
+  usePublicProfileQuery: vi.fn(),
+  useCreateProfileConversationMutation: vi.fn(),
+  useOrganizerActivitiesQuery: vi.fn(),
+  useActivityParticipantPreviewsQuery: vi.fn(),
+  mutateMock: vi.fn(),
+  navigateMock: vi.fn()
+}));
 
 vi.mock("../../features/profile/use-public-profile-query", () => ({
   usePublicProfileQuery
 }));
 vi.mock("../../features/conversations/use-create-profile-conversation-mutation", () => ({
   useCreateProfileConversationMutation
+}));
+// UserProfilePage 现在多了一段"TA 发起的搭子"，查询 mock 到 hook 这一层
+// （跟 usePublicProfileQuery 是同一个模式），默认返回空数据，不影响原有
+// 断言——只有专门测这个新区块的用例才会覆写成非空数据。
+vi.mock("../../features/activities/use-organizer-activities-query", () => ({
+  useOrganizerActivitiesQuery
+}));
+vi.mock("../../features/activities/use-activity-participant-previews-query", () => ({
+  useActivityParticipantPreviewsQuery
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -51,6 +68,8 @@ describe("UserProfilePage", () => {
     useAuthStore.setState(initialAuthState, true);
     usePublicProfileQuery.mockReset();
     useCreateProfileConversationMutation.mockReset();
+    useOrganizerActivitiesQuery.mockReset();
+    useActivityParticipantPreviewsQuery.mockReset();
     mutateMock.mockReset();
     navigateMock.mockReset();
 
@@ -58,6 +77,8 @@ describe("UserProfilePage", () => {
       mutate: mutateMock,
       isPending: false
     });
+    useOrganizerActivitiesQuery.mockReturnValue({ data: [] });
+    useActivityParticipantPreviewsQuery.mockReturnValue({ data: new Map() });
   });
 
   it("shows a loading message while the query is pending", () => {
@@ -253,5 +274,90 @@ describe("UserProfilePage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "会话创建失败，请稍后重试。"
     );
+  });
+
+  // 04 号卡改版：顶部换成 TopBar detail 变体，页面自己不再手写返回按钮。
+  it("renders the TopBar detail variant's back button", () => {
+    usePublicProfileQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+    renderPage();
+
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+  });
+
+  it("does not render a '…' more-menu button (no 举报用户 feature yet)", () => {
+    usePublicProfileQuery.mockReturnValue({
+      data: samplePublicProfile,
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.queryByRole("button", { name: "更多操作" })).not.toBeInTheDocument();
+  });
+
+  // 04 号卡验收标准："发起者主页只有「发消息」一个主操作按钮且居中，没有
+  // 收藏/星标按钮"。
+  it("renders only the '发消息' button as the primary action — no favorite/follow button next to it", () => {
+    usePublicProfileQuery.mockReturnValue({
+      data: samplePublicProfile,
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.getAllByRole("button")).toHaveLength(2); // 返回 + 发消息
+  });
+
+  it("does not render a 'TA 发起的搭子' section when the organizer has no public activities", () => {
+    usePublicProfileQuery.mockReturnValue({
+      data: samplePublicProfile,
+      isPending: false,
+      isError: false
+    });
+    useOrganizerActivitiesQuery.mockReturnValue({ data: [] });
+
+    renderPage();
+
+    expect(screen.queryByText("TA 发起的搭子")).not.toBeInTheDocument();
+  });
+
+  it("renders a 'TA 发起的搭子' section reusing the ActivityCard avatar-stack component when the organizer has public activities", () => {
+    usePublicProfileQuery.mockReturnValue({
+      data: samplePublicProfile,
+      isPending: false,
+      isError: false
+    });
+    useOrganizerActivitiesQuery.mockReturnValue({
+      data: [
+        {
+          id: "act-1",
+          organizerId: "user-2",
+          organizerDisplayName: "Bob",
+          organizerAvatarUrl: null,
+          channel: "food",
+          tagText: null,
+          title: "周末吃火锅",
+          locationName: "Rockville",
+          landmarkText: "海底捞",
+          isOnline: false,
+          startAt: "2099-08-20T18:00:00.000Z",
+          capacity: 4,
+          participantCount: 1,
+          status: "open",
+          requiresApproval: false
+        }
+      ]
+    });
+
+    renderPage();
+
+    expect(screen.getByText("TA 发起的搭子")).toBeInTheDocument();
+    const link = screen.getByRole("link", { name: /周末吃火锅/ });
+    expect(link).toHaveAttribute("href", "/activities/act-1");
+    // 头像堆叠复用同一个组件：发起人头像格带皇冠角标。
+    expect(link.querySelector("svg.lucide-crown")).toBeInTheDocument();
   });
 });

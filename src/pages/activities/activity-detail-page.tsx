@@ -1,10 +1,11 @@
 import { Share } from "@capacitor/share";
-import { MoreHorizontal, Share2 } from "lucide-react";
+import { ChevronRight, Flag, Share2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { ActivityFavoriteButton } from "../../components/activity-favorite-button";
 import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
 import { ActivityParticipationButtonView } from "../../components/activity-participation-button";
+import { TopBar } from "../../components/top-bar";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
@@ -25,8 +26,18 @@ import { formatActivityStartAt } from "../../utils/format";
  *
  * 头像堆叠改版之后的页面顺序：标题 → 频道/标签（+发起人文字链接，跟改版
  * 前同一个位置）→ 头像堆叠（含参与人数文案）→ 时间 → 地点 → 描述 → 联系
- * 方式（若有）→ 发起人卡片 → "参加活动"按钮（独占一整行）→ 收藏/分享/
- * 举报操作行。
+ * 方式（若有）→ 发起人卡片 → "参加活动"按钮（独占一整行）。
+ *
+ * 04 号卡（find-buddy-flow）改版：顶部换成 TopBar 的 detail 变体（返回
+ * 箭头 + "…"更多菜单），原来页面底部平铺的"收藏/分享/举报"操作行收进了
+ * 这个更多菜单——ActivityFavoriteButton/handleShare/举报链接三个实现完全
+ * 没变，只是从"页面正文里的一行"挪成了"菜单里的三项"，见下面 moreMenu
+ * 的 content。TopBar 不认识"收藏/分享/举报"这些具体业务概念，调用方传
+ * 什么就摆什么，见 top-bar.tsx 顶部注释。
+ *
+ * 发起人卡片这次加了一个右侧 chevron（纯装饰，不改变可点击范围——整张
+ * 卡片本来就是一个 <Link>）：明确提示"这一整行可点，会跳发起者主页"，
+ * 跟详情页/发起者主页之间的导航关系在视觉上对应起来。
  *
  * 一致性的关键点：这个页面只调用一次 useActivityParticipationAction，把
  * 同一个 `participationAction` 对象分别交给 ActivityParticipationButtonView
@@ -79,118 +90,135 @@ export function ActivityDetailPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      {isPending ? <p role="status">加载中…</p> : null}
+    <main data-testid="activity-detail-page">
+      <TopBar
+        variant="detail"
+        moreMenu={
+          data
+            ? {
+                label: "更多操作",
+                content: (
+                  <>
+                    <ActivityFavoriteButton activityId={data.id} />
+                    <button
+                      type="button"
+                      onClick={() => void handleShare(data)}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text hover:bg-bg"
+                    >
+                      <Share2 size={16} aria-hidden="true" />
+                      分享
+                    </button>
+                    <Link
+                      to={`/activities/${data.id}/report`}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
+                    >
+                      <Flag size={16} aria-hidden="true" />
+                      举报
+                    </Link>
+                  </>
+                )
+              }
+            : undefined
+        }
+      />
 
-      {isError ? <p role="alert">活动加载失败，请稍后重试。</p> : null}
+      <div className="mx-auto max-w-2xl px-4 pb-20 md:pb-6">
+        {isPending ? <p role="status">加载中…</p> : null}
 
-      {!isPending && !isError && data === null ? (
-        <>
-          <h1>活动未找到</h1>
-          <p role="alert">活动不存在或已被取消。</p>
-        </>
-      ) : null}
+        {isError ? <p role="alert">活动加载失败，请稍后重试。</p> : null}
 
-      {!isPending && !isError && data ? (
-        <div className="space-y-4">
-          <div>
-            <h1 className="mb-2 text-xl font-bold text-text">
-              {getActivityChannelMeta(data.channel).emoji} {data.title}
-            </h1>
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
-                {getActivityChannelMeta(data.channel).label}
-              </span>
-              {data.tagText ? (
+        {!isPending && !isError && data === null ? (
+          <>
+            <h1>活动未找到</h1>
+            <p role="alert">活动不存在或已被取消。</p>
+          </>
+        ) : null}
+
+        {!isPending && !isError && data ? (
+          <div className="space-y-4">
+            <div>
+              <h1 className="mb-2 text-xl font-bold text-text">
+                {getActivityChannelMeta(data.channel).emoji} {data.title}
+              </h1>
+              <div className="flex flex-wrap items-center gap-1">
                 <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
-                  {data.tagText}
+                  {getActivityChannelMeta(data.channel).label}
                 </span>
+                {data.tagText ? (
+                  <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
+                    {data.tagText}
+                  </span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-xs text-text-muted">
+                发起人：
+                <Link to={`/users/${data.organizerId}`} className="text-primary hover:underline">
+                  {data.organizerDisplayName}
+                </Link>
+              </p>
+            </div>
+
+            <ActivityParticipantAvatars
+              organizerId={data.organizerId}
+              organizerDisplayName={data.organizerDisplayName}
+              organizerAvatarUrl={data.organizerAvatarUrl}
+              participants={participants ?? []}
+              capacity={data.capacity}
+              canTapEmptySlot={canTapEmptySlot}
+              onTapEmptySlot={participationAction.handleClick}
+            />
+
+            <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>
+
+            <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
+              <p>{data.isOnline ? "线上活动" : (data.landmarkText ?? data.locationName ?? "地点待定")}</p>
+              {!data.isOnline && data.locationName ? (
+                <p className="mt-1 text-xs text-text-muted">{data.locationName}</p>
               ) : null}
             </div>
-            <p className="mt-1 text-xs text-text-muted">
-              发起人：
-              <Link to={`/users/${data.organizerId}`} className="text-primary hover:underline">
-                {data.organizerDisplayName}
-              </Link>
-            </p>
-          </div>
 
-          <ActivityParticipantAvatars
-            organizerId={data.organizerId}
-            organizerDisplayName={data.organizerDisplayName}
-            organizerAvatarUrl={data.organizerAvatarUrl}
-            participants={participants ?? []}
-            capacity={data.capacity}
-            canTapEmptySlot={canTapEmptySlot}
-            onTapEmptySlot={participationAction.handleClick}
-          />
+            <p className="whitespace-pre-wrap break-words text-sm text-text">{data.description}</p>
 
-          <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>
-
-          <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
-            <p>{data.isOnline ? "线上活动" : (data.landmarkText ?? data.locationName ?? "地点待定")}</p>
-            {!data.isOnline && data.locationName ? (
-              <p className="mt-1 text-xs text-text-muted">{data.locationName}</p>
+            {data.contactMethod && data.contactValue ? (
+              <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
+                <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
+                <p className="break-words font-medium">{data.contactValue}</p>
+              </div>
             ) : null}
-          </div>
 
-          <p className="whitespace-pre-wrap break-words text-sm text-text">{data.description}</p>
-
-          {data.contactMethod && data.contactValue ? (
-            <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
-              <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
-              <p className="break-words font-medium">{data.contactValue}</p>
-            </div>
-          ) : null}
-
-          <Link
-            to={`/users/${data.organizerId}`}
-            className="flex items-center gap-3 rounded-lg border border-border bg-white p-3 hover:border-primary"
-          >
-            {data.organizerAvatarUrl ? (
-              <img
-                src={data.organizerAvatarUrl}
-                alt=""
-                className="h-10 w-10 shrink-0 rounded-full object-cover"
-              />
-            ) : (
-              <span
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-              >
-                {data.organizerDisplayName.trim().charAt(0).toUpperCase() || "?"}
-              </span>
-            )}
-            <span>
-              <span className="block text-sm font-medium text-text">
-                {data.organizerDisplayName}
-              </span>
-              <span className="block text-xs text-text-muted">发起人</span>
-            </span>
-          </Link>
-
-          <ActivityParticipationButtonView action={participationAction} />
-
-          <div className="flex items-center gap-4">
-            <ActivityFavoriteButton activityId={data.id} />
-            <button
-              type="button"
-              onClick={() => void handleShare(data)}
-              className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-primary"
-            >
-              <Share2 size={16} />
-              分享
-            </button>
             <Link
-              to={`/activities/${data.id}/report`}
-              className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-danger hover:underline"
+              to={`/users/${data.organizerId}`}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white p-3 hover:border-primary"
             >
-              <MoreHorizontal size={16} />
-              举报
+              <span className="flex min-w-0 items-center gap-3">
+                {data.organizerAvatarUrl ? (
+                  <img
+                    src={data.organizerAvatarUrl}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-full object-cover"
+                  />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+                  >
+                    {data.organizerDisplayName.trim().charAt(0).toUpperCase() || "?"}
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-text">
+                    {data.organizerDisplayName}
+                  </span>
+                  <span className="block text-xs text-text-muted">发起人</span>
+                </span>
+              </span>
+              <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-chev" />
             </Link>
+
+            <ActivityParticipationButtonView action={participationAction} />
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </main>
   );
 }

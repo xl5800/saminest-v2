@@ -21,7 +21,7 @@ describe("CategoryNav", () => {
     listActiveCategories.mockReset();
   });
 
-  it("renders a '推荐' link plus one link per active category, from the database not hardcoded", async () => {
+  it("renders a '推荐' link plus one link per active category, from the database not hardcoded — each category links to the home feed filtered by ?category=<slug>", async () => {
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" },
       { id: "cat-2", slug: "wanted", nameZh: "求租" },
@@ -33,16 +33,16 @@ describe("CategoryNav", () => {
     await waitFor(() => {
       expect(screen.getByRole("link", { name: "租房" })).toHaveAttribute(
         "href",
-        "/category/rent"
+        "/?category=rent"
       );
     });
     expect(screen.getByRole("link", { name: "求租" })).toHaveAttribute(
       "href",
-      "/category/wanted"
+      "/?category=wanted"
     );
     expect(screen.getByRole("link", { name: "二手" })).toHaveAttribute(
       "href",
-      "/category/used"
+      "/?category=used"
     );
     expect(screen.getByRole("link", { name: "推荐" })).toHaveAttribute("href", "/");
   });

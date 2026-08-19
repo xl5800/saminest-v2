@@ -76,6 +76,20 @@
   --color-primary-soft: #c9d5fb;
   --color-accent: #3457e8;
   --color-bg: #f3f5fa;
+  /*
+   * --color-card（Card 背景，#FFFFFF，见 00-overview.md 全局设计 Token
+   * 表格）：01 号卡的 token 落地漏掉了这一条，导致 top-bar.tsx 的
+   * ICON_BUTTON_CLASS_NAME、category-nav.tsx、post-list.tsx 等一批早就在
+   * 用的 bg-card/ring-card class 因为没有对应的 --color-card 变量，一直
+   * 静默解析成透明（Tailwind 对不认识的颜色 token 直接不生成对应
+   * CSS，不会报错）——TopBar 所有变体的圆形图标按钮实际上背景是透明的，
+   * 不是设计稿要求的白色。这里补上这一条，是 04 号卡（find-buddy-flow）
+   * 实现头像堆叠"2.5px 白色描边"时发现的：ring-card 描边渲染成了
+   * currentColor（黑色文字色）而不是白色，才顺带发现 bg-card 全站都受
+   * 影响。跟 primary/text 等其它 token 一样只补值、不改名，全站 bg-card/
+   * ring-card/text-card 用法不用跟着改。
+   */
+  --color-card: #ffffff;
   --color-text: #1c1c1e;
   --color-text-muted: #8a8a8e;
   --color-text-subtle: #b0b0b5;

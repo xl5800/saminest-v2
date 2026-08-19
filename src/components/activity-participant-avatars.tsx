@@ -13,9 +13,17 @@ import { formatActivityParticipantSummary } from "../utils/format";
 // 活动详情页维持这个默认，活动列表页（卡片空间更紧凑）会传一个更小的值。
 export const MAX_VISIBLE_SLOTS = 5;
 
-const AVATAR_SIZE_CLASS_NAME = "h-11 w-11";
+// 48px（04 号卡"活动卡片头像放大"要求，从原来的 44px 提一档）。这个尺寸
+// 同时喂给头像/空位/溢出徽标三种格子，保持堆叠时对齐。
+const AVATAR_SIZE_CLASS_NAME = "h-12 w-12";
+// 2.5px 白色描边（ring-[2.5px] ring-card）+ 轻投影——头像会用 -space-x-3
+// 叠放，描边是让相邻头像在视觉上分得开的关键，不是装饰。ring-card 而不是
+// ring-white：跟 --card token 保持同一个语义来源（卡片背景色），万一以后
+// 卡片背景不是纯白，描边跟着换，不需要单独记一个硬编码颜色。
+const AVATAR_RING_CLASS_NAME =
+  "ring-[2.5px] ring-card shadow-[0_1px_3px_rgba(0,0,0,0.12)]";
 const EMPTY_SLOT_CLASS_NAME =
-  "flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-border text-text-muted";
+  "flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-border bg-card text-text-muted";
 
 export interface ActivityParticipantAvatarsProps {
   organizerId: string;
@@ -70,12 +78,12 @@ function SlotAvatar({ avatarUrl, initial, isOrganizer }: SlotAvatarProps) {
         <img
           src={avatarUrl}
           alt=""
-          className={`${AVATAR_SIZE_CLASS_NAME} rounded-full object-cover`}
+          className={`${AVATAR_SIZE_CLASS_NAME} ${AVATAR_RING_CLASS_NAME} rounded-full object-cover`}
         />
       ) : (
         <span
           aria-hidden="true"
-          className={`flex ${AVATAR_SIZE_CLASS_NAME} items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary`}
+          className={`flex ${AVATAR_SIZE_CLASS_NAME} ${AVATAR_RING_CLASS_NAME} items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary`}
         >
           {initial}
         </span>
@@ -139,7 +147,7 @@ export function ActivityParticipantAvatars({
 
   return (
     <div>
-      <ul className="flex flex-wrap items-center gap-2">
+      <ul className="flex items-center -space-x-3">
         {visibleSlots.map((slot, index) => {
           if (slot.type === "organizer") {
             return (
@@ -192,7 +200,7 @@ export function ActivityParticipantAvatars({
           <li>
             <span
               aria-hidden="true"
-              className={`flex ${AVATAR_SIZE_CLASS_NAME} items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted`}
+              className={`flex ${AVATAR_SIZE_CLASS_NAME} ${AVATAR_RING_CLASS_NAME} items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted`}
             >
               +{overflowCount}
             </span>

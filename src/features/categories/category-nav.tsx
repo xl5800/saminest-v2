@@ -46,7 +46,13 @@ export function CategoryNav({ activeSlug }: CategoryNavProps) {
       {categories.map((category) => (
         <Link
           key={category.id}
-          to={`/category/${category.slug}`}
+          // 03 号卡（分类 Tab）之后，分类筛选态统一收进首页自己的
+          // ?category=<slug> 查询参数，不再跳去独立的 /category/:slug
+          // 页面——那个页面已经跟着这次改动一起退役了（见
+          // categories-page.tsx / routes.tsx 的改动说明），这个组件是
+          // 唯一负责"点分类去哪"的地方，改这一处就同时影响首页和（原来）
+          // 分类下钻页两个调用点，不需要分别改。
+          to={`/?category=${category.slug}`}
           aria-current={activeSlug === category.slug ? "page" : undefined}
           className={activeSlug === category.slug ? activeClassName : inactiveClassName}
         >

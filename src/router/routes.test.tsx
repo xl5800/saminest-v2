@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -138,7 +138,6 @@ import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
-import { CategoryPage } from "../pages/category/category-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
 import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
@@ -196,7 +195,6 @@ function renderAt(path: string | string[]) {
               </RequireAuth>
             )
           },
-          { path: "category/:slug", element: <CategoryPage /> },
           { path: "categories", element: <CategoriesPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
           {
@@ -424,12 +422,22 @@ describe("app routes", () => {
     expect(screen.getByTestId("home-page")).toBeInTheDocument();
   });
 
-  it("renders the category page at /category/:slug", async () => {
-    renderAt("/category/rent");
+  // 03 号卡（category-tab）：独立的 /category/:slug 分类下钻页已经退役，
+  // 分类筛选态统一收进首页的 ?category=<slug> 查询参数，见下面
+  // "renders the home page filtered by ?category=" 这个测试。
+  it("navigates to the home feed filtered by ?category=<slug> when a category tile is clicked at /categories", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
-    expect(
-      await screen.findByRole("heading", { name: "租房" })
-    ).toBeInTheDocument();
+    renderAt("/categories");
+
+    fireEvent.click(await screen.findByRole("link", { name: "租房" }));
+
+    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listApprovedPosts).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: "cat-1" })
+      );
+    });
   });
 
   it("renders the categories page at /categories", async () => {
@@ -438,6 +446,19 @@ describe("app routes", () => {
     expect(
       await screen.findByRole("heading", { name: "分类" })
     ).toBeInTheDocument();
+  });
+
+  it("renders the home page pre-filtered when landing directly on /?category=<slug>", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+    renderAt("/?category=rent");
+
+    expect(screen.getByTestId("home-page")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listApprovedPosts).toHaveBeenCalledWith(
+        expect.objectContaining({ categoryId: "cat-1" })
+      );
+    });
   });
 
   it("renders the post detail page at /post/:id (not-found state when the post doesn't resolve)", async () => {
@@ -452,7 +473,9 @@ describe("app routes", () => {
   it("renders the activity list page at /activities without requiring a session", async () => {
     renderAt("/activities");
 
-    expect(await screen.findByRole("heading", { name: "🤝 一起去" })).toBeInTheDocument();
+    // 04 号卡改版：顶部 TopBar tab 变体的标题从旧版"🤝 一起去"换成了
+    // "找搭子"。
+    expect(await screen.findByRole("heading", { name: "找搭子" })).toBeInTheDocument();
   });
 
   it("renders the activity detail page at /activities/:id (not-found state when the activity doesn't resolve)", async () => {
@@ -477,7 +500,9 @@ describe("app routes", () => {
 
     renderAt("/activities/new");
 
-    expect(screen.getByRole("heading", { name: "发起一起去" })).toBeInTheDocument();
+    // 04 号卡改版：顶部 TopBar create 变体的标题从旧版"发起一起去"换成了
+    // "发布搭子内容"。
+    expect(screen.getByRole("heading", { name: "发布搭子内容" })).toBeInTheDocument();
     expect(
       await screen.findByRole("option", { name: "VA" })
     ).toBeInTheDocument();

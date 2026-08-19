@@ -1,6 +1,8 @@
-import { type FormEvent, useState } from "react";
+import { Minus, Plus } from "lucide-react";
+import { type FormEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import {
   ACTIVITY_CHANNEL_OPTIONS,
@@ -14,20 +16,37 @@ import { validateActivityInput } from "./activity-validation";
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
 
 /**
- * 发布活动表单（/activities/new，路由已在 routes.tsx 用 RequireAuth
- * 包裹，页面内部不做登录检查/跳转，符合 CLAUDE.md 的统一规则）。
+ * 发布活动表单 / 04 号卡里的"发布搭子内容"表单（/activities/new，路由已
+ * 在 routes.tsx 用 RequireAuth 包裹、在 app-shell.tsx 的 NO_CHROME_PATTERNS
+ * 里，页面内部不做登录检查/跳转，也不需要自己处理"不展示底部 Tab 栏"——
+ * 那是 AppShell 路由级开关的事，见 app-shell.tsx 顶部注释）。
  *
- * 整体结构、字段级校验（先本地校验、失败直接 setError 挡住，不指望数据库
- * 报错兜底）、错误提示的展示方式，都照抄 publish-page.tsx——门槛要跟发帖子
- * 一样低是设计文档第 0 节明确要求的原则，不应该为活动另起一套更复杂的
- * 表单交互。
+ * 校验逻辑、错误提示的展示方式完全没变（还是 validateActivityInput 先
+ * 本地校验、失败直接 setError 挡住），04 号卡改的只是外层壳子和几个字段
+ * 的输入控件形态：
+ * - 顶部从页面自己手写的 <h1>+ 底部整行提交按钮，换成 TopBar 的 create
+ *   变体（✕ 关闭 + 居中标题「发布搭子内容」+ 右侧文字「发布」按钮）——
+ *   提交按钮挪到顶部之后，用一个 <form ref={formRef}> + 隐藏的
+ *   formRef.current?.requestSubmit() 桥接：TopBar 的按钮在 <form> 外面
+ *   （页面顶部 chrome），点击时不会自动触发原生表单提交，需要显式调用
+ *   requestSubmit() 走同一条 <form onSubmit={handleSubmit}> 路径，不是
+ *   另起一份提交逻辑。
+ * - "频道"从 <select> 换成一排 Chips（跟活动列表页的频道筛选、
+ *   category-nav.tsx 是同一套胶囊视觉），仍然是同一个 channel 状态、同一套
+ *   校验，只是输入控件换了形状。
+ * - "人数上限"从裸 <input type="number"> 换成 +/- 步进器，同样只是换了
+ *   输入控件，capacity 还是那个字符串状态、走同一套校验（必须是大于 0 的
+ *   整数，留空表示不限）。
  *
- * 这一批（第一批）只做"新建"，不做"编辑活动"——设计文档第 7 节前端范围
- * 只列了"发布活动表单"，没有编辑，且 activities_update_own 这条 RLS
- * 策略目前对发起人几乎没有字段限制（跟 posts_update_own_or_admin 那种
- * 锁死系统字段的写法不一样，细节见 activities-repository.ts 顶部注释），
- * 编辑功能涉及的校验/交互设计留到设计文档规划的第二批一起做，不在这次
- * 顺带加。
+ * 封面图上传（04 号卡设计稿里的选填字段）这一轮没有做：activities 表
+ * 目前没有对应的列，也没有配套的 Storage bucket（帖子的多图上传是完全
+ * 独立的一套 post_images 系统，活动这边没有对应实现）——加一个只在前端
+ * 能选图、提交时又不落地的上传控件，会让用户以为选的图片生效了，实际上
+ * 悄悄丢掉，是比"这一轮不做"更差的体验。等后续任务卡定下 activities 封面
+ * 图的表结构/Storage 方案，再补这个字段。
+ *
+ * 这一批（第一批）只做"新建"，不做"编辑活动"——原因见下面 organizer_id
+ * 的说明段落，这次改版没有改变这个范围。
  *
  * organizer_id 不是表单字段，只从 auth-store 里当前登录用户的 session
  * 读取，用户没有任何方式在表单上编辑或伪造它——跟 publish-page.tsx 的
@@ -36,17 +55,11 @@ const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
  * "需要我同意才能加入"（P2 报名审核制）默认关闭，是唯一一个发布后不能再
  * 改的开关（这批任务没有编辑活动的入口）——发起人发布前需要想清楚要不要
  * 开审核，不是可以随时切换的设置。
- *
- * 没有走 useMutation：直接 await createActivity(...)，不包一层
- * useCreateActivityMutation——照抄 publish-page.tsx 里 createPost() 的
- * 调用方式，这个仓库对"新建之后直接跳转到详情页，当前页面不需要展示
- * 局部 pending/缓存刷新"的场景，一直是直接调用 repository 函数，只有
- * "操作完还要留在当前列表页、需要 invalidate 缓存"的场景（比如收藏、
- * 报名/退出）才用 useMutation 包一层。
  */
 export function CreateActivityPage() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const { data: regions, isPending: regionsPending, isError: regionsError } =
     useActivityRegionsQuery();
@@ -67,6 +80,12 @@ export function CreateActivityPage() {
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  function adjustCapacity(delta: 1 | -1): void {
+    const current = capacity.trim() ? Number(capacity) : 0;
+    const next = current + delta;
+    setCapacity(next > 0 ? String(next) : "");
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -130,11 +149,22 @@ export function CreateActivityPage() {
     }
   }
 
+  const inactiveChipClassName =
+    "flex h-11 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
+  const activeChipClassName =
+    "flex h-11 items-center justify-center rounded-full px-4 text-sm whitespace-nowrap bg-accent text-white font-semibold";
+
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-2xl rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">发起一起去</h1>
-        <form onSubmit={handleSubmit} noValidate>
+    <main data-testid="create-activity-page">
+      <TopBar
+        variant="create"
+        title="发布搭子内容"
+        onSubmit={() => formRef.current?.requestSubmit()}
+        submitDisabled={submitting}
+      />
+
+      <div className="mx-auto max-w-2xl px-4 py-4 pb-10">
+        <form ref={formRef} onSubmit={handleSubmit} noValidate>
           {error ? (
             <p
               className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
@@ -144,22 +174,22 @@ export function CreateActivityPage() {
             </p>
           ) : null}
 
-          <label className="mb-4 block text-sm font-medium text-text">
-            频道
-            <select
-              value={channel}
-              onChange={(event) => setChannel(event.target.value)}
-              required
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">请选择频道</option>
+          <fieldset className="mb-4">
+            <legend className="mb-1 block text-sm font-medium text-text">分类</legend>
+            <div className="flex flex-wrap gap-2">
               {ACTIVITY_CHANNEL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={channel === option.value}
+                  onClick={() => setChannel(option.value)}
+                  className={channel === option.value ? activeChipClassName : inactiveChipClassName}
+                >
                   {option.emoji} {option.label}
-                </option>
+                </button>
               ))}
-            </select>
-          </label>
+            </div>
+          </fieldset>
 
           <label className="mb-4 block text-sm font-medium text-text">
             细分标签（可选，比如"火锅"、"LOL"）
@@ -195,49 +225,53 @@ export function CreateActivityPage() {
             />
           </label>
 
-          <label className="mb-4 flex items-center gap-2 text-sm font-medium text-text">
-            <input
-              type="checkbox"
-              checked={isOnline}
-              onChange={(event) => setIsOnline(event.target.checked)}
-              className="h-4 w-4 rounded border-border text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            线上活动（不需要选州）
-          </label>
+          <fieldset className="mb-4 rounded-lg border border-border p-3">
+            <legend className="px-1 text-sm font-medium text-text">地点</legend>
 
-          <label className="mb-1 block text-sm font-medium text-text">
-            州{isOnline ? "（可选）" : ""}
-            <select
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-              disabled={regionsPending}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">{isOnline ? "不选择州" : "请选择州"}</option>
-              {(regions ?? []).map((region) => (
-                <option key={region.id} value={region.id}>
-                  {region.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          {regionsError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              州加载失败，请刷新页面重试。
-            </p>
-          ) : (
-            <div className="mb-4" />
-          )}
+            <label className="mb-3 flex items-center gap-2 text-sm font-medium text-text">
+              <input
+                type="checkbox"
+                checked={isOnline}
+                onChange={(event) => setIsOnline(event.target.checked)}
+                className="h-4 w-4 rounded border-border text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              线上活动（不需要选州）
+            </label>
 
-          <label className="mb-4 block text-sm font-medium text-text">
-            具体地标（可选，比如店名/地址，会公开展示在活动卡片上）
-            <input
-              type="text"
-              value={landmarkText}
-              onChange={(event) => setLandmarkText(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
+            <label className="mb-1 block text-sm font-medium text-text">
+              州{isOnline ? "（可选）" : ""}
+              <select
+                value={locationId}
+                onChange={(event) => setLocationId(event.target.value)}
+                disabled={regionsPending}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">{isOnline ? "不选择州" : "请选择州"}</option>
+                {(regions ?? []).map((region) => (
+                  <option key={region.id} value={region.id}>
+                    {region.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {regionsError ? (
+              <p className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                州加载失败，请刷新页面重试。
+              </p>
+            ) : (
+              <div className="mb-3" />
+            )}
+
+            <label className="block text-sm font-medium text-text">
+              具体地标（可选，比如店名/地址，会公开展示在活动卡片上）
+              <input
+                type="text"
+                value={landmarkText}
+                onChange={(event) => setLandmarkText(event.target.value)}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+          </fieldset>
 
           <label className="mb-4 block text-sm font-medium text-text">
             开始时间
@@ -250,44 +284,61 @@ export function CreateActivityPage() {
             />
           </label>
 
-          <label className="mb-4 block text-sm font-medium text-text">
-            人数上限（可选，不填表示不限）
-            <input
-              type="number"
-              min={1}
-              step={1}
-              value={capacity}
-              onChange={(event) => setCapacity(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
+          <div className="mb-4">
+            <span className="mb-1 block text-sm font-medium text-text">人数上限（不填表示不限）</span>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                aria-label="减少人数上限"
+                onClick={() => adjustCapacity(-1)}
+                disabled={!capacity.trim()}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-text disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Minus size={16} aria-hidden="true" />
+              </button>
+              <span className="min-w-[3rem] text-center text-base font-semibold text-text">
+                {capacity.trim() || "不限"}
+              </span>
+              <button
+                type="button"
+                aria-label="增加人数上限"
+                onClick={() => adjustCapacity(1)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border text-text"
+              >
+                <Plus size={16} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
 
-          <label className="mb-4 block text-sm font-medium text-text">
-            联系方式类型
-            <select
-              value={contactMethod}
-              onChange={(event) => setContactMethod(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">请选择联系方式</option>
-              {CONTACT_METHOD_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            联系方式内容
-            <input
-              type="text"
-              value={contactValue}
-              onChange={(event) => setContactValue(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
+          <fieldset className="mb-4 rounded-lg border border-border p-3">
+            <legend className="px-1 text-sm font-medium text-text">联系方式（可选）</legend>
+            <label className="mb-3 block text-sm font-medium text-text">
+              类型
+              <select
+                value={contactMethod}
+                onChange={(event) => setContactMethod(event.target.value)}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">请选择联系方式</option>
+                {CONTACT_METHOD_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-text">
+              内容
+              <input
+                type="text"
+                value={contactValue}
+                onChange={(event) => setContactValue(event.target.value)}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+          </fieldset>
 
-          <label className="mb-4 flex items-center gap-2 text-sm font-medium text-text">
+          <label className="mb-2 flex items-center gap-2 text-sm font-medium text-text">
             <input
               type="checkbox"
               checked={requiresApproval}
@@ -296,14 +347,6 @@ export function CreateActivityPage() {
             />
             需要我同意才能加入（默认关闭）
           </label>
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-2 w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {submitting ? "发布中…" : "发布活动"}
-          </button>
         </form>
       </div>
     </main>

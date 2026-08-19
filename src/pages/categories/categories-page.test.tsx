@@ -47,7 +47,7 @@ describe("CategoriesPage", () => {
     expect(await screen.findByText("暂无分类。")).toBeInTheDocument();
   });
 
-  it("renders one link per category, from the database not hardcoded", async () => {
+  it("renders one link per category, from the database not hardcoded, each linking to the home feed filtered by ?category=<slug>", async () => {
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" },
       { id: "cat-2", slug: "wanted", nameZh: "求租" },
@@ -58,15 +58,27 @@ describe("CategoriesPage", () => {
 
     expect(await screen.findByRole("link", { name: "租房" })).toHaveAttribute(
       "href",
-      "/category/rent"
+      "/?category=rent"
     );
     expect(screen.getByRole("link", { name: "求租" })).toHaveAttribute(
       "href",
-      "/category/wanted"
+      "/?category=wanted"
     );
     expect(screen.getByRole("link", { name: "二手" })).toHaveAttribute(
       "href",
-      "/category/used"
+      "/?category=used"
     );
+  });
+
+  it("renders the TopBar tab variant: centered '分类' heading, no brand name, no '发布' button", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" }
+    ]);
+
+    renderWithProviders(<CategoriesPage />);
+
+    expect(await screen.findByRole("heading", { name: "分类" })).toBeInTheDocument();
+    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
   });
 });

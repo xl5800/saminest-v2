@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { TopBar } from "../../components/top-bar";
 import { CategoryNav } from "../../features/categories/category-nav";
+import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { PostList } from "../../features/posts/post-list";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 
@@ -44,13 +45,30 @@ const REGION_SELECT_PATH = "/region-select";
  * 任务卡"可先用现有搜索逻辑"的要求，不重新实现一套。关闭搜索时顺带清空
  * 已输入的内容，回到浏览模式（分类 Chips + 完整信息流），不留一个隐藏起来
  * 但仍在生效的过滤条件。
+ *
+ * 分类筛选（03-category-tab.md）：读取 `?category=<slug>` 这个 URL 查询
+ * 参数决定当前筛选态——分类 Tab 页（categories-page.tsx）的三个 tile 和
+ * 这个页面自己的 CategoryNav 分类 Chips 现在都统一导航到
+ * `/?category=<slug>`（见 category-nav.tsx 的改动），不再各自指向一个
+ * 独立的 `/category/:slug` 详情页；那个页面已经退役（复用同一个 PostList
+ * 组件渲染筛选后的列表，不需要单独再做一套列表 UI，见任务卡原话）。
+ * 用 URL 而不是本地 state 存这个筛选态，是为了让分类 Tab 页的 tile 链接、
+ * 浏览器前进/后退、直接分享/收藏某个分类筛选态的链接都自然工作，不需要
+ * 额外的状态同步逻辑。
  */
 export function HomePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [publishSheetOpen, setPublishSheetOpen] = useState(false);
   const debouncedSearchQuery = useDebouncedValue(inputValue, SEARCH_DEBOUNCE_MS);
+
+  const { data: categories } = useCategoriesQuery();
+  const activeCategorySlug = searchParams.get("category") ?? undefined;
+  const activeCategoryId = categories?.find(
+    (category) => category.slug === activeCategorySlug
+  )?.id;
 
   function handleToggleSearch(): void {
     setIsSearchOpen((current) => {
@@ -85,8 +103,12 @@ export function HomePage() {
         </div>
       ) : null}
 
-      <CategoryNav />
-      <PostList key="all" searchQuery={debouncedSearchQuery} />
+      <CategoryNav activeSlug={activeCategorySlug} />
+      <PostList
+        key={activeCategoryId ?? "all"}
+        categoryId={activeCategoryId}
+        searchQuery={debouncedSearchQuery}
+      />
 
       {publishSheetOpen ? (
         <PublishActionSheet onClose={() => setPublishSheetOpen(false)} />

@@ -102,6 +102,17 @@ describe("ActivityDetailPage", () => {
     useToggleActivityFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
   });
 
+  it("renders the TopBar detail variant's back button (page no longer relies on the global AppHeader for it)", () => {
+    useActivityDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+  });
+
   it("shows a loading message while the query is pending", () => {
     useActivityDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
@@ -159,9 +170,10 @@ describe("ActivityDetailPage", () => {
     expect(screen.getByText("abc123")).toBeInTheDocument();
 
     // 页面顺序断言：标题 → 频道/标签(+发起人) → 头像堆叠 → 时间 → 地点 →
-    // 描述 → 联系方式 → 发起人卡片 → 按钮对 → 操作行，用各个文案在
-    // document.body.textContent 里出现的先后顺序来断言，不依赖具体 DOM
-    // 结构。
+    // 描述 → 联系方式 → 发起人卡片，用各个文案在 document.body.textContent
+    // 里出现的先后顺序来断言，不依赖具体 DOM 结构。收藏/分享/举报这次挪进
+    // 了顶部"…"更多菜单（默认收起，不在正文流里），不再是这条顺序链的
+    // 一部分，见下面单独的 more-menu 测试。
     const text = container.textContent ?? "";
     const titleIndex = text.indexOf("周末吃火锅");
     // 用频道标签"吃饭搭子"而不是活动标签"火锅"作为这一步的锚点文字——
@@ -173,7 +185,6 @@ describe("ActivityDetailPage", () => {
     const locationIndex = text.indexOf("海底捞");
     const descriptionIndex = text.indexOf("一起吃火锅，AA制");
     const contactIndex = text.indexOf("联系方式");
-    const reportIndex = text.indexOf("举报");
 
     expect(titleIndex).toBeLessThan(tagIndex);
     expect(tagIndex).toBeLessThan(organizerLinkIndex);
@@ -181,7 +192,6 @@ describe("ActivityDetailPage", () => {
     expect(startAtIndex).toBeLessThan(locationIndex);
     expect(locationIndex).toBeLessThan(descriptionIndex);
     expect(descriptionIndex).toBeLessThan(contactIndex);
-    expect(contactIndex).toBeLessThan(reportIndex);
   });
 
   it("renders the ActivityParticipantAvatars stack with the organizer's crown badge", () => {
@@ -346,7 +356,10 @@ describe("ActivityDetailPage", () => {
     expect(organizerCardLink).toHaveAttribute("href", "/users/user-1");
   });
 
-  it("renders the collect/share/report action row (♡ 收藏, ↗ 分享, ⋯ 举报)", () => {
+  // 04 号卡验收标准："发起人"行可点击并带 chevron，点击进入发起者主页
+  // （4.3）——整行本来就是 <Link>，chevron 只是让"可点、会跳转"这件事在
+  // 视觉上更明确。
+  it("renders a chevron icon inside the clickable organizer row", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -357,6 +370,30 @@ describe("ActivityDetailPage", () => {
       initialEntries: ["/activities/act-1"],
       route: "/activities/:id"
     });
+
+    const organizerCardLink = screen.getByRole("link", { name: "Alice 发起人" });
+    expect(organizerCardLink.querySelector("svg.lucide-chevron-right")).toBeInTheDocument();
+  });
+
+  // 04 号卡改版：收藏/分享/举报不再平铺在页面底部，收进了顶部"…"更多
+  // 菜单——默认收起，点开菜单触发按钮之后才应该出现在文档里。
+  it("does not render the collect/share/report actions until the '…' more-menu is opened, and shows all three once it is", () => {
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    expect(screen.queryByRole("button", { name: "收藏" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "分享" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "举报" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
     expect(screen.getByRole("button", { name: /收藏/ })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /分享/ })).toBeInTheDocument();
@@ -366,7 +403,27 @@ describe("ActivityDetailPage", () => {
     );
   });
 
-  it("calls Share.share with the activity title, a time/location summary, and the hardcoded production domain when 分享 is clicked", async () => {
+  // 页面底部不应该再平铺这三个按钮/链接——验收标准明确要求"页面底部没有
+  // 平铺这三个按钮"，不只是"菜单里有"。
+  it("does not render a flat collect/share/report row at the bottom of the page anymore", () => {
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+
+    const { container } = renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    // 菜单没打开时，整个文档里都不应该出现这三个可点元素——上面那条测试
+    // 已经断言过"菜单打开后才出现"，这里换个角度确认它们不是从别的地方
+    // （比如遗留的底部行）冒出来的。
+    expect(container.querySelector("[aria-label='收藏']")).not.toBeInTheDocument();
+  });
+
+  it("calls Share.share with the activity title, a time/location summary, and the hardcoded production domain when 分享 is clicked from the more-menu", async () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -378,6 +435,7 @@ describe("ActivityDetailPage", () => {
       route: "/activities/:id"
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
     fireEvent.click(screen.getByRole("button", { name: /分享/ }));
 
     await waitFor(() => {
@@ -391,7 +449,7 @@ describe("ActivityDetailPage", () => {
     });
   });
 
-  it("renders the ActivityFavoriteButton (♡ 收藏)", () => {
+  it("renders the ActivityFavoriteButton (♡ 收藏) inside the more-menu", () => {
     useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
@@ -404,6 +462,8 @@ describe("ActivityDetailPage", () => {
       initialEntries: ["/activities/act-1"],
       route: "/activities/:id"
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
     const heartIcon = container.querySelector("svg.lucide-heart");
     expect(heartIcon).toBeInTheDocument();

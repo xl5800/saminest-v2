@@ -1,13 +1,13 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActivities, listActiveActivityRegions, listActivityParticipantPreviews } = vi.hoisted(
-  () => ({
+const { listActivities, listActiveActivityRegions, listActivityParticipantPreviews, navigateMock } =
+  vi.hoisted(() => ({
     listActivities: vi.fn(),
     listActiveActivityRegions: vi.fn(),
-    listActivityParticipantPreviews: vi.fn()
-  })
-);
+    listActivityParticipantPreviews: vi.fn(),
+    navigateMock: vi.fn()
+  }));
 
 vi.mock("../../repositories/activities-repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../repositories/activities-repository")>();
@@ -16,6 +16,10 @@ vi.mock("../../repositories/activities-repository", async (importOriginal) => {
 vi.mock("../../repositories/locations-repository", () => ({
   listActiveActivityRegions
 }));
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 import { renderWithProviders } from "../../test/render-with-providers";
 import { ActivityListPage } from "./activity-list-page";
@@ -46,8 +50,18 @@ describe("ActivityListPage", () => {
     listActivities.mockReset();
     listActiveActivityRegions.mockReset();
     listActivityParticipantPreviews.mockReset();
+    navigateMock.mockReset();
     listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA" }]);
     listActivityParticipantPreviews.mockResolvedValue(new Map());
+  });
+
+  it("renders the TopBar tab heading '找搭子' (not the old '🤝 一起去' title)", () => {
+    listActivities.mockReturnValue(new Promise(() => {}));
+
+    renderWithProviders(<ActivityListPage />);
+
+    expect(screen.getByRole("heading", { name: "找搭子" })).toBeInTheDocument();
+    expect(screen.queryByText("🤝 一起去")).not.toBeInTheDocument();
   });
 
   it("shows a loading message before the query resolves", () => {
@@ -105,25 +119,18 @@ describe("ActivityListPage", () => {
     renderWithProviders(<ActivityListPage />);
 
     const link = await screen.findByRole("link", { name: /周末吃火锅/ });
-    // "吃饭搭子"（频道 pill 的文案）不应该出现在卡片里——频道信息现在只
-    // 靠标题前的 emoji 传达。人数摘要（"还差 N 人（.../4）"）由头像堆叠
-    // 组件自带的 caption 承担，同一条信息不应该在卡片里重复出现第二次。
     expect(link).not.toHaveTextContent("吃饭搭子");
     const summaryOccurrences = (link.textContent ?? "").match(/还差 \d+ 人/g) ?? [];
     expect(summaryOccurrences).toHaveLength(1);
   });
 
   it("renders the ActivityParticipantAvatars stack with the organizer's crown badge, in non-interactive mode (no <button> for empty slots)", async () => {
-    // capacity 4、发起人 1 人、没有查到参与者预览 → 应该有 3 个空位，
-    // 如果这些空位被渲染成 <button>，就会出现"<a> 嵌套 <button>"这种
-    // 非法结构。
     listActivities.mockResolvedValue([sampleActivity]);
 
     const { container } = renderWithProviders(<ActivityListPage />);
 
     const link = await screen.findByRole("link", { name: /周末吃火锅/ });
     expect(container.querySelector("svg.lucide-crown")).toBeInTheDocument();
-    // 卡片整体是一个 <Link>（<a>），它内部不应该出现任何 <button>。
     expect(link.querySelectorAll("button")).toHaveLength(0);
   });
 
@@ -145,8 +152,6 @@ describe("ActivityListPage", () => {
 
     renderWithProviders(<ActivityListPage />);
 
-    // act-1 的卡片应该多出 Bob 的头像首字母占位（"B"），act-2 没有对应的
-    // 预览条目，只画发起人（Alice 的"A"）。
     await screen.findByText("B");
     const aInitials = screen.getAllByText("A");
     expect(aInitials).toHaveLength(2);
@@ -185,18 +190,38 @@ describe("ActivityListPage", () => {
     });
   });
 
-  it("re-queries with the selected region when the region dropdown changes", async () => {
+  // 州筛选收进了 TopBar 右侧的筛选图标里（04 号卡改版），不再是常驻展示的
+  // 下拉——先点筛选图标展开，再操作下拉。
+  it("does not show the region dropdown until the filter icon is clicked, then re-queries with the selected region", async () => {
     listActivities.mockResolvedValue([]);
 
     renderWithProviders(<ActivityListPage />);
     await waitFor(() => expect(listActivities).toHaveBeenCalled());
-    listActivities.mockClear();
 
+    expect(screen.queryByLabelText("州")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "筛选" }));
     const select = await screen.findByLabelText("州");
+
+    listActivities.mockClear();
     fireEvent.change(select, { target: { value: "loc-1" } });
 
     await waitFor(() => {
       expect(listActivities).toHaveBeenCalledWith({ channel: undefined, locationId: "loc-1" });
     });
+  });
+
+  // 04 号卡验收标准：悬浮按钮点击后直接进入发布搭子内容表单，中间没有
+  // 类型选择弹层。
+  it("navigates straight to /activities/new when the dark FAB '发起搭子' is clicked (no type-selection sheet in between)", async () => {
+    listActivities.mockResolvedValue([]);
+
+    renderWithProviders(<ActivityListPage />);
+    await waitFor(() => expect(listActivities).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByRole("button", { name: /发起搭子/ }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/activities/new");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

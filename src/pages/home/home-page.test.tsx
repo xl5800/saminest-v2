@@ -53,7 +53,7 @@ describe("HomePage", () => {
     expect(screen.getByTestId("home-page")).toBeInTheDocument();
     expect(await screen.findByRole("link", { name: "租房" })).toHaveAttribute(
       "href",
-      "/category/rent"
+      "/?category=rent"
     );
     expect(await screen.findByText("暂无帖子。")).toBeInTheDocument();
   });
@@ -208,6 +208,70 @@ describe("HomePage", () => {
       // 再打开一次，应该是空的，不是残留的上次输入。
       openSearch();
       expect(screen.getByPlaceholderText("搜租房、求租、二手物品…")).toHaveValue("");
+    });
+  });
+
+  // 03 号卡（category-tab）：分类 Tab 页的 tile / CategoryNav 的分类 Chips
+  // 现在都统一导航到 /?category=<slug>，首页自己读这个查询参数筛选，不再
+  // 有独立的 /category/:slug 详情页，见 category-nav.tsx / categories-page.tsx
+  // 的改动。
+  describe("category filter (?category=<slug>)", () => {
+    it("filters the post list by the resolved categoryId when landing on /?category=<slug>", async () => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" }
+      ]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />, { initialEntries: ["/?category=rent"] });
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ categoryId: "cat-1" })
+        );
+      });
+    });
+
+    it("marks the matching CategoryNav chip as active via aria-current when a ?category= param is present", async () => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" }
+      ]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />, { initialEntries: ["/?category=rent"] });
+
+      expect(await screen.findByRole("link", { name: "租房" })).toHaveAttribute(
+        "aria-current",
+        "page"
+      );
+      expect(screen.getByRole("link", { name: "推荐" })).not.toHaveAttribute("aria-current");
+    });
+
+    it("queries with no category filter when there is no ?category= param (unchanged default browsing state)", async () => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" }
+      ]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />);
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ categoryId: undefined })
+        );
+      });
+    });
+
+    it("does not filter (categoryId undefined) when the ?category= slug doesn't match any known category yet (categories still loading)", async () => {
+      listActiveCategories.mockReturnValue(new Promise(() => {}));
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />, { initialEntries: ["/?category=rent"] });
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ categoryId: undefined })
+        );
+      });
     });
   });
 });

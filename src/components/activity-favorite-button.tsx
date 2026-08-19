@@ -61,16 +61,17 @@ export function ActivityFavoriteButton({ activityId }: ActivityFavoriteButtonPro
   }
 
   return (
-    <span>
+    <span className="block">
       <button
         type="button"
         aria-pressed={isFavorited}
         disabled={toggleFavorite.isPending}
         onClick={handleClick}
-        className="inline-flex items-center gap-1 text-sm text-text-muted hover:text-danger"
+        className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text hover:bg-bg hover:text-danger"
       >
         <Heart
           size={16}
+          aria-hidden="true"
           className={isFavorited ? "fill-current text-danger" : undefined}
         />
         收藏
