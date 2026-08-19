@@ -745,7 +745,19 @@ export async function listMyJoinedActivities(userId: string): Promise<MyJoinedAc
     .is("cancelled_at", null)
     .neq("status", "rejected")
     .order("joined_at", { ascending: false })
-    .overrideTypes<MyJoinedActivityRow[]>();
+    // 09 号卡：这里的 select 字符串是模板字符串拼出来的（内嵌
+    // ACTIVITY_LIST_SELECT_COLUMNS 这个运行时变量，不是纯字面量），
+    // postgrest-js 的类型级 select 语法解析器解析不了这种拼接结果，会把
+    // 这次查询的原始推断类型退化成一个 SelectQueryError（本质是一个带着
+    // 错误信息的字符串字面量类型）。overrideTypes<T>() 默认 merge: true，
+    // 会把我们指定的 MyJoinedActivityRow[] 跟这个已经损坏的原始推断类型
+    // 合并，产出一个同时"看起来像 { activity, status } 对象"又"带着一堆
+    // String.prototype 方法"的畸形交叉类型——这正是下面 .filter() 类型
+    // 谓词报错的根因，不是类型谓词本身写错了。显式传 { merge: false }
+    // （postgrest-js 官方文档标出的"完全替换而不是合并"用法）绕开这次
+    // 合并，直接用 MyJoinedActivityRow[] 替换掉那个损坏的推断类型，不需要
+    // 额外的 as/any 断言。
+    .overrideTypes<MyJoinedActivityRow[], { merge: false }>();
 
   if (error) {
     throw new AppError(error.message, "MY_JOINED_ACTIVITIES_LIST_FAILED", error);
