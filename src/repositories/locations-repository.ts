@@ -99,3 +99,74 @@ export async function listActiveActivityRegions(): Promise<LocationListItem[]> {
     name: row.name
   }));
 }
+
+interface RegionContentCountRow {
+  location: { state_code: string | null } | null;
+}
+
+/**
+ * 08 号卡「地区选择」页"按热度"排序用：按州代码统计当前活跃内容数量
+ * （活动 + 帖子合计），供 region-select-page.tsx 给全美 51 项排序。
+ *
+ * 没有建数据库视图/RPC 做服务端 GROUP BY——这个项目目前的内容量级（个位数
+ * 到几十条，见 activities-repository.ts/posts-repository.ts 其它地方对
+ * "这个体量不需要昂贵聚合"的同类判断）用两次轻量查询、在 JS 里累加就完全
+ * 够用，不值得为了一个排序功能新增一张视图/一次迁移。两次查询只选
+ * `locations!inner(state_code)` 这一列（不是完整的帖子/活动字段），
+ * `!inner` 强制内连接——location_id 为 null（没填地区）的帖子/活动在这里
+ * 天然被排除，不计入任何一个州的热度，这跟 listApprovedPosts/listActivities
+ * 里"筛选某个州时，没有地区信息的内容不应该被算进那个州"是同一个判断，
+ * 只是这里统计的是热度分母而不是筛选结果本身。
+ *
+ * 状态过滤口径分别照抄 listApprovedPosts（status = 'approved' 且未软删除）
+ * 和 listActivities（status in ('open','full') 且 start_at 未过去）——"热度"
+ * 应该反映"用户现在能看到的内容有多少"，跟这两个函数默认展示给访客的口径
+ * 必须一致，不能用另一套统计口径导致热度排序和实际列表内容对不上。
+ *
+ * 返回一个 Map<州代码, 数量>——没有出现在这个 Map 里的州代码（大多数还没有
+ * 任何内容的州）视为 0，调用方（sortByMode 的"按热度"分支）自己处理这个
+ * 兜底，不在这里把全部 51 个州都预先垫上 0（那些州代码来自
+ * src/data/us-states.ts 这份静态数据，不是这个函数的职责）。
+ */
+export async function listRegionContentCounts(): Promise<Map<string, number>> {
+  const nowIso = new Date().toISOString();
+
+  const [postsResult, activitiesResult] = await Promise.all([
+    getSupabaseClient()
+      .from("posts")
+      .select("location:locations!inner(state_code)")
+      .eq("status", "approved")
+      .is("deleted_at", null)
+      .overrideTypes<RegionContentCountRow[]>(),
+    getSupabaseClient()
+      .from("activities")
+      .select("location:locations!inner(state_code)")
+      .in("status", ["open", "full"])
+      .gte("start_at", nowIso)
+      .overrideTypes<RegionContentCountRow[]>()
+  ]);
+
+  if (postsResult.error) {
+    throw new AppError(postsResult.error.message, "REGION_CONTENT_COUNTS_POSTS_FAILED", postsResult.error);
+  }
+  if (activitiesResult.error) {
+    throw new AppError(
+      activitiesResult.error.message,
+      "REGION_CONTENT_COUNTS_ACTIVITIES_FAILED",
+      activitiesResult.error
+    );
+  }
+
+  const counts = new Map<string, number>();
+  function tally(rows: RegionContentCountRow[]): void {
+    for (const row of rows) {
+      const stateCode = row.location?.state_code;
+      if (!stateCode) continue;
+      counts.set(stateCode, (counts.get(stateCode) ?? 0) + 1);
+    }
+  }
+  tally(postsResult.data ?? []);
+  tally(activitiesResult.data ?? []);
+
+  return counts;
+}

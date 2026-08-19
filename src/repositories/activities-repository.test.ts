@@ -86,12 +86,29 @@ describe("listActivities", () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith("channel", "food");
   });
 
-  it("also filters by locationId when provided", async () => {
+  // 08 号卡：locationId 换成了 stateCode——筛选一个州时，location 这一列
+  // 的联表从左连接换成 `locations!inner(...)`（PostgREST 要求这么写才能
+  // 对内嵌表的列做过滤），select 字符串也要跟着变，见
+  // activities-repository.ts 的 buildActivityListSelectColumns。
+  it("also filters by stateCode when provided, switching the location join to an inner join", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
-    await listActivities({ locationId: "loc-1" });
+    await listActivities({ stateCode: "VA" });
 
-    expect(queryBuilder.eq).toHaveBeenCalledWith("location_id", "loc-1");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, organizer_id, channel, tag_text, title, location:locations!inner(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("location.state_code", "VA");
+  });
+
+  it("does not switch to an inner join when stateCode is not provided (unfiltered browsing keeps location-less activities)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listActivities();
+
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+    );
   });
 
   it("maps rows to ActivityListItem, resolving the joined location name, organizer identity and requiresApproval", async () => {

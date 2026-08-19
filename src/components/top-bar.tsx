@@ -124,15 +124,22 @@ function MoreMenuButton({ label, content }: MoreMenuButtonProps) {
 
 interface TopBarHomeProps {
   variant: "home";
-  /** 所在州名。还没定位到/用户没选过时传 null——这时中间只显示
-   *  "Saminest"，不显示"· Saminest"这种带着孤零零分隔点的半截文案，
-   *  也不会渲染下面这个可点击的州名按钮（没有州名可点）。 */
-  stateName: string | null;
-  /** 点击州名跳转"地区选择"页——只有 stateName 非空时才会渲染出可点击
-   *  元素，这个回调也就只在那种情况下会被触发。 */
-  onStateClick: () => void;
-  /** 左边"＋"图标点击——首页点它弹出"选择发布类型"弹层（⑨），具体弹层
-   *  由调用方决定，这个组件只负责暴露点击事件。 */
+  /** 胶囊按钮第二行展示的地区文案（08 号卡改版，取代原来单行的
+   *  "{州名} · Saminest"）——没有选中地区时传 null，这一行显示占位文案
+   *  「选择地区」，不是留空/不渲染这一行：08 号卡明确要求"未选择地区时
+   *  这一行显示占位文案"，胶囊本身的两行结构、可点击范围都不因为有没有
+   *  选中地区而变化，只有第二行的文字内容不同。具体传什么字符串由调用方
+   *  决定（首页目前是"有城市数据就显示 {城市名}, {州代码}，否则显示
+   *  {州全名}"，见 home-page.tsx），这个组件不关心地区数据从哪来。 */
+  regionLabel: string | null;
+  /** 点击整个胶囊按钮跳转"地区选择"页——08 号卡改版前只有州名那一小段文字
+   *  可点，现在整个胶囊（含"Saminest"那一行）都是同一个点击目标，理由是
+   *  两行文字本来就是一个不可拆分的视觉整体（同一个按钮），没必要让用户
+   *  必须精确点中第二行才能触发跳转。 */
+  onRegionClick: () => void;
+  /** 右侧"＋"图标点击——首页点它弹出"选择发布类型"弹层（⑨），具体弹层
+   *  由调用方决定，这个组件只负责暴露点击事件。（这条注释原来误写成"左边"，
+   *  顺手改成跟实际渲染位置一致的"右侧"，跟这次改动本身无关。） */
   onCreateClick: () => void;
   onSearchClick: () => void;
 }
@@ -189,23 +196,21 @@ export function TopBar(props: TopBarProps) {
   if (props.variant === "home") {
     return (
       <header className="flex h-14 items-center justify-between px-4">
-        <p className="flex items-baseline text-base font-bold">
-          {props.stateName ? (
-            <>
-              <button
-                type="button"
-                onClick={props.onStateClick}
-                className="text-xs font-medium text-text-muted hover:underline"
-              >
-                {props.stateName}
-              </button>
-              <span aria-hidden="true" className="mx-1 text-text-subtle">
-                ·
-              </span>
-            </>
-          ) : null}
-          <span className="text-primary">Saminest</span>
-        </p>
+        {/* 08 号卡改版：从"州名 · Saminest 单行文字"换成 Meet5 风格的独立
+            圆角胶囊按钮，内部纵向堆叠两行——第一行品牌名（加粗蓝字），第二行
+            当前选中的地区（小字、次要文字色，未选择时是占位文案）。整个胶囊
+            都是一个可点击的 <button>，不是只有地区那一小行可点——见上面
+            onRegionClick 的注释。 */}
+        <button
+          type="button"
+          onClick={props.onRegionClick}
+          className="flex shrink-0 flex-col items-start rounded-full border border-border bg-card px-3 py-1.5 text-left"
+        >
+          <span className="text-base font-bold leading-tight text-primary">Saminest</span>
+          <span className="text-xs font-medium leading-tight text-text-muted">
+            {props.regionLabel ?? "选择地区"}
+          </span>
+        </button>
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"

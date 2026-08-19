@@ -1,3 +1,4 @@
+import { MapPin } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
@@ -7,6 +8,17 @@ import { usePostsInfiniteQuery } from "./use-posts-query";
 export interface PostListProps {
   categoryId?: string;
   searchQuery?: string;
+  /** 08 号卡新增：透传给 usePostsInfiniteQuery 的州筛选。同时也是判断要不要
+   *  展示"这个地区还没有内容"空状态的依据——见下面 isRegionEmptyState 的
+   *  说明。 */
+  stateCode?: string;
+  /** 08 号卡新增：地区空状态里"去发布"按钮的点击回调。PostList 本身不知道
+   *  "选择发布类型"弹层长什么样、由谁控制开关（那是 HomePage 已经有的
+   *  publishSheetOpen/PublishActionSheet），只负责暴露这个点击事件，调用方
+   *  决定点了之后具体发生什么——不传时不渲染这个按钮（理论上 stateCode 有
+   *  值就应该配一个 onPublishClick，但不强制，保持这个组件在没有发布入口
+   *  的场景下也能单独使用）。 */
+  onPublishClick?: () => void;
 }
 
 /**
@@ -48,9 +60,9 @@ export interface PostListProps {
  * 没有下一页时彻底不挂这个元素，而不是渲染出来但不响应，避免它一直
  * 空占着 DOM/被观察却永远不会有意义地触发。
  */
-export function PostList({ categoryId, searchQuery }: PostListProps) {
+export function PostList({ categoryId, searchQuery, stateCode, onPublishClick }: PostListProps) {
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    usePostsInfiniteQuery({ categoryId, searchQuery });
+    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -83,7 +95,32 @@ export function PostList({ categoryId, searchQuery }: PostListProps) {
 
   const posts = data.pages.flatMap((page) => page.posts);
 
+  // 08 号卡 8.4：空状态优先级——正在搜索时，零结果永远是"没有找到相关
+  // 帖子"（用户意图是找一个具体的东西，"去发布"跟这个意图不搭），跟有没有
+  // 选中地区无关；没有搜索、选中了某个州、这个州（在当前分类 tab 下）没有
+  // 内容，才展示"这个地区还没有内容"+去发布的引导——这个空状态明确要求
+  // "选中了某个州"这个前提，未选择州时零结果一律退回原来的"暂无帖子"。
   if (posts.length === 0) {
+    if (!searchQuery && stateCode) {
+      return (
+        <div
+          role="status"
+          className="flex flex-col items-center gap-3 px-6 py-12 text-center"
+        >
+          <MapPin aria-hidden="true" size={32} className="text-text-subtle" />
+          <p className="text-sm text-text-muted">这个地区还没有内容，欢迎发布第一条</p>
+          {onPublishClick ? (
+            <button
+              type="button"
+              onClick={onPublishClick}
+              className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+            >
+              去发布
+            </button>
+          ) : null}
+        </div>
+      );
+    }
     return <p role="status">{searchQuery ? "没有找到相关帖子。" : "暂无帖子。"}</p>;
   }
 

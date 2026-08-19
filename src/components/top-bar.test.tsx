@@ -20,13 +20,16 @@ describe("TopBar", () => {
     navigateMock.mockReset();
   });
 
+  // 08 号卡：从"州名 · Saminest 单行文字（只有州名那一小段可点）"改成
+  // Meet5 风格的独立圆角胶囊按钮（纵向堆叠"Saminest" + 地区两行，整个胶囊
+  // 都可点击）。
   describe("home variant", () => {
     it("always renders the 'Saminest' brand name", () => {
       renderWithProviders(
         <TopBar
           variant="home"
-          stateName={null}
-          onStateClick={vi.fn()}
+          regionLabel={null}
+          onRegionClick={vi.fn()}
           onCreateClick={vi.fn()}
           onSearchClick={vi.fn()}
         />
@@ -35,52 +38,65 @@ describe("TopBar", () => {
       expect(screen.getByText("Saminest")).toBeInTheDocument();
     });
 
-    it("renders the state name (as a clickable button) + separator dot when stateName is provided", () => {
+    it("renders the caller-supplied regionLabel as the pill's second line", () => {
       renderWithProviders(
         <TopBar
           variant="home"
-          stateName="Virginia"
-          onStateClick={vi.fn()}
+          regionLabel="Arlington, VA"
+          onRegionClick={vi.fn()}
           onCreateClick={vi.fn()}
           onSearchClick={vi.fn()}
         />
       );
 
-      expect(screen.getByRole("button", { name: "Virginia" })).toBeInTheDocument();
-      expect(screen.getByText("·")).toBeInTheDocument();
+      expect(screen.getByText("Arlington, VA")).toBeInTheDocument();
     });
 
-    it("does not render a stray separator dot or a state button when stateName is null", () => {
+    it("shows the '选择地区' placeholder on the second line when regionLabel is null", () => {
       renderWithProviders(
         <TopBar
           variant="home"
-          stateName={null}
-          onStateClick={vi.fn()}
+          regionLabel={null}
+          onRegionClick={vi.fn()}
           onCreateClick={vi.fn()}
           onSearchClick={vi.fn()}
         />
       );
 
-      expect(screen.queryByText("·")).not.toBeInTheDocument();
-      // 只剩"发布"和"搜索"两个图标按钮，没有第三个州名按钮。
-      expect(screen.getAllByRole("button")).toHaveLength(2);
+      expect(screen.getByText("选择地区")).toBeInTheDocument();
     });
 
-    it("calls onStateClick when the state name button is clicked", () => {
-      const onStateClick = vi.fn();
+    it("renders the whole pill (both lines) as a single clickable button, alongside the create/search icon buttons — 3 buttons total", () => {
       renderWithProviders(
         <TopBar
           variant="home"
-          stateName="Virginia"
-          onStateClick={onStateClick}
+          regionLabel={null}
+          onRegionClick={vi.fn()}
           onCreateClick={vi.fn()}
           onSearchClick={vi.fn()}
         />
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Virginia" }));
+      // 胶囊本身是一个 <button>，可访问名称同时包含品牌名和地区文案两行。
+      expect(screen.getByRole("button", { name: "Saminest 选择地区" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button")).toHaveLength(3);
+    });
 
-      expect(onStateClick).toHaveBeenCalledTimes(1);
+    it("calls onRegionClick when the pill button is clicked, regardless of which line is clicked", () => {
+      const onRegionClick = vi.fn();
+      renderWithProviders(
+        <TopBar
+          variant="home"
+          regionLabel="Virginia"
+          onRegionClick={onRegionClick}
+          onCreateClick={vi.fn()}
+          onSearchClick={vi.fn()}
+        />
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Saminest Virginia" }));
+
+      expect(onRegionClick).toHaveBeenCalledTimes(1);
     });
 
     it("calls onCreateClick and onSearchClick from their respective icon buttons", () => {
@@ -89,8 +105,8 @@ describe("TopBar", () => {
       renderWithProviders(
         <TopBar
           variant="home"
-          stateName={null}
-          onStateClick={vi.fn()}
+          regionLabel={null}
+          onRegionClick={vi.fn()}
           onCreateClick={onCreateClick}
           onSearchClick={onSearchClick}
         />

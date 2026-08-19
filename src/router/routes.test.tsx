@@ -9,6 +9,7 @@ const {
   listActiveLocations,
   listActiveActivityRegions,
   listActiveCitiesWithState,
+  listRegionContentCounts,
   listApprovedPosts,
   listPendingPosts,
   listAllPosts,
@@ -41,6 +42,7 @@ const {
   listActiveLocations: vi.fn(),
   listActiveActivityRegions: vi.fn(),
   listActiveCitiesWithState: vi.fn(),
+  listRegionContentCounts: vi.fn(),
   listApprovedPosts: vi.fn(),
   listPendingPosts: vi.fn(),
   listAllPosts: vi.fn(),
@@ -76,7 +78,8 @@ vi.mock("../repositories/categories-repository", () => ({
 vi.mock("../repositories/locations-repository", () => ({
   listActiveLocations,
   listActiveActivityRegions,
-  listActiveCitiesWithState
+  listActiveCitiesWithState,
+  listRegionContentCounts
 }));
 vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
@@ -365,6 +368,7 @@ describe("app routes", () => {
     listActiveLocations.mockReset();
     listActiveActivityRegions.mockReset();
     listActiveCitiesWithState.mockReset();
+    listRegionContentCounts.mockReset();
     listApprovedPosts.mockReset();
     listPendingPosts.mockReset();
     listAllPosts.mockReset();
@@ -399,6 +403,7 @@ describe("app routes", () => {
     listActiveCitiesWithState.mockResolvedValue([
       { id: "loc-1", name: "Rockville", stateCode: "VA" }
     ]);
+    listRegionContentCounts.mockResolvedValue(new Map());
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
     getPostDetail.mockResolvedValue(null);
     listPendingPosts.mockResolvedValue([]);

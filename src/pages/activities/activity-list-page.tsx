@@ -1,4 +1,4 @@
-import { Filter } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -7,8 +7,8 @@ import { Fab } from "../../components/fab";
 import { TopBar } from "../../components/top-bar";
 import { useActivitiesQuery } from "../../features/activities/use-activities-query";
 import { useActivityParticipantPreviewsQuery } from "../../features/activities/use-activity-participant-previews-query";
-import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import { ACTIVITY_CHANNEL_OPTIONS } from "../../repositories/activities-repository";
+import { useSelectedRegionStore } from "../../store/selected-region-store";
 
 /**
  * "找搭子"活动列表页（/activities，公开，不需要登录，游客也能刷）。
@@ -16,31 +16,36 @@ import { ACTIVITY_CHANNEL_OPTIONS } from "../../repositories/activities-reposito
  * Meet5 风格改版（04-find-buddy-flow.md）：顶部换成 TopBar 的 tab 变体，
  * 居中标题「找搭子」，不再有旧版 emoji 大标题「🤝 一起去」——组件本身
  * 已经是这个页面的 <h1>，删掉自己原来手写的 <h1>，避免同一个页面出现两个
- * <h1>（见 top-bar.tsx 顶部注释）。TopBar 右侧的筛选图标点击展开/收起
- * 州筛选行（之前常驻展示，现在收进这个开关里——跟 home-page.tsx 搜索框
- * "点🔍切换显隐"是同一个模式），频道筛选 Chips 继续常驻展示，不跟着收起
- * （04 号卡明确要求"类型筛选 Chips 保留"）。
+ * <h1>（见 top-bar.tsx 顶部注释）。频道筛选 Chips 常驻展示（04 号卡明确
+ * 要求"类型筛选 Chips 保留"）。
  *
  * 悬浮按钮换成 01 号卡的 Fab 组件，variant="dark"，点击直接
  * navigate("/activities/new")——不经过"选择发布类型"弹层（那个弹层只在
  * 首页"＋"触发，见 05 号卡），这是这次改版对"找搭子"页发起流程的
  * 明确要求。
  *
- * 活动卡片本身抽成了共享组件 ActivityCard（见该文件顶部注释），发起者
- * 主页的"TA 发起的搭子"区块也在用同一个组件，保证两处头像堆叠是同一套
- * 放大后的 48px 样式，不会各自维护一份容易跑偏的 JSX。
+ * 活动卡片本身抽成了共享组件 ActivityCard（见该文件顶部注释）。
+ *
+ * 08 号卡（地区选择扩展全美 + 按州筛选）：删掉了这个页面原来自己维护的
+ * "筛选"图标 + 州下拉框（本地 locationId/isFilterOpen state，只能在
+ * DC/VA/MD 三个真实 locations 行之间选）——验收标准明确要求"找搭子列表页
+ * 内容按选中州正确过滤，跟首页用的是同一个选中状态"，全美 51 项里大多数
+ * 州压根没有对应的 locationId 可选，这个本地下拉框的机制天然覆盖不了，
+ * 与其维护两套互相独立、容易让用户困惑"到底是哪个筛选在生效"的地区筛选
+ * （页面本地下拉 + 全局 useSelectedRegionStore），不如直接改成跟首页一样
+ * 读同一个全局 store——地区筛选统一只有一个入口（首页顶部胶囊 → 地区选择
+ * 页），这个页面不再需要自己的 TopBar 右侧图标，退回 tab 变体不传 right
+ * 的默认外观（无右侧按钮）。
  */
 export function ActivityListPage() {
   const navigate = useNavigate();
   const [channel, setChannel] = useState<string>("");
-  const [locationId, setLocationId] = useState<string>("");
-  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
   const { data: activities, isPending, isError } = useActivitiesQuery({
     channel: channel || undefined,
-    locationId: locationId || undefined
+    stateCode: selectedRegion?.stateCode
   });
-  const { data: regions } = useActivityRegionsQuery();
   const { data: participantPreviews } = useActivityParticipantPreviewsQuery(
     (activities ?? []).map((activity) => activity.id)
   );
@@ -50,17 +55,20 @@ export function ActivityListPage() {
   const activePillClassName =
     "flex h-11 items-center justify-center rounded-full px-4 text-sm whitespace-nowrap bg-accent text-white font-semibold";
 
+  // 08 号卡 8.4：选中了某个州（且没有额外叠加频道筛选）但这个州压根没有
+  // 任何活动时，展示专门的"发起第一个"引导，而不是通用的"换个筛选条件试试"
+  // 文案——后者暗示"筛选条件可能不对"，但这里更准确的原因是"这个地区还没
+  // 有内容"。限定 channel === ""（没有额外选中某个具体频道）是因为"这个
+  // 地区还没有搭子活动"这句话必须在"没有任何频道过滤"的前提下才是准确的：
+  // 如果用户同时选了某个频道，零结果更可能是"这个地区有活动、只是不是这个
+  // 频道"，那种情况用回下面的通用文案更贴切，不应该误导用户以为整个地区
+  // 都没有内容。
+  const isRegionEmptyState =
+    !isPending && !isError && activities && activities.length === 0 && channel === "" && selectedRegion;
+
   return (
     <main data-testid="activity-list-page" className="pb-24">
-      <TopBar
-        variant="tab"
-        title="找搭子"
-        right={{
-          icon: <Filter size={18} aria-hidden="true" />,
-          label: "筛选",
-          onClick: () => setIsFilterOpen((current) => !current)
-        }}
-      />
+      <TopBar variant="tab" title="找搭子" />
 
       <div className="mx-auto max-w-2xl px-4 pt-2">
         <nav aria-label="频道筛选" className="mb-2 flex gap-2 overflow-x-auto py-1">
@@ -85,28 +93,26 @@ export function ActivityListPage() {
           ))}
         </nav>
 
-        {isFilterOpen ? (
-          <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-            州
-            <select
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-              className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">全部地区</option>
-              {(regions ?? []).map((region) => (
-                <option key={region.id} value={region.id}>
-                  {region.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-
         {isPending ? <p role="status">加载中…</p> : null}
         {isError ? <p role="alert">活动加载失败，请稍后重试。</p> : null}
 
-        {!isPending && !isError && activities && activities.length === 0 ? (
+        {isRegionEmptyState ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+            <MapPin aria-hidden="true" size={32} className="text-text-subtle" />
+            <p role="status" className="text-sm text-text-muted">
+              这个地区还没有搭子活动，发起第一个吧
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate("/activities/new")}
+              className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+            >
+              发起搭子
+            </button>
+          </div>
+        ) : null}
+
+        {!isPending && !isError && activities && activities.length === 0 && !isRegionEmptyState ? (
           <p role="status">暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。</p>
         ) : null}
 

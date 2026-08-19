@@ -1,24 +1,32 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Globe } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
-import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
+import { US_STATES, type UsState } from "../../data/us-states";
 import { useCitiesWithStateQuery } from "../../features/locations/use-cities-with-state-query";
+import { useRegionContentCountsQuery } from "../../features/locations/use-region-content-counts-query";
 import type { LocationWithStateItem } from "../../repositories/locations-repository";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 
 type SortMode = "popularity" | "alphabetical";
 
-interface StateGroup {
-  /** 州代码，同时也是展示文案——复用 useActivityRegionsQuery() 现有的 3 条
-   *  type = 'state' 行的 name（'DC' / 'VA' / 'MD'，见 locations-repository.ts
-   *  顶部注释），不新造一套"纽约州/加利福尼亚州"这种长名——设计稿参考的是
-   *  全美 50 州场景，这个项目目前只服务 DMV 三个州，"找搭子"页的州筛选
-   *  下拉框已经在用同一份数据、同样只显示缩写，这里沿用同一个展示约定，
-   *  不新增一套长名映射（那属于任务卡范围之外的产品决策）。 */
+interface StateRow {
   code: string;
+  name: string;
+  /** 这个州在 locations 表里已有的真实城市（可能是空数组——全美 51 项里
+   *  绝大多数州目前是这种情况）。长度决定这一行是"下钻"还是"直接选中"，
+   *  见 handleStateRowClick。 */
   cities: LocationWithStateItem[];
+}
+
+/** 搜索结果 / 下钻城市列表里，每一行不区分是"州"还是"城市"，都渲染成
+ *  同一种扁平、可直接点击的行——搜索结果本来就是"跟州列表/下钻列表平级的
+ *  第三种展示态（扁平列表，不分州）"，见下面 buildSearchResults 的注释。 */
+interface SelectableEntry {
+  key: string;
+  name: string;
+  onSelect: () => void;
 }
 
 const SORT_OPTIONS: { value: SortMode; label: string }[] = [
@@ -32,21 +40,55 @@ function sortByMode<T extends { name: string }>(items: T[], mode: SortMode): T[]
 }
 
 /**
- * 06 号卡「地区选择」页（/region-select，从首页顶部州名点击进入，见
+ * 51 项州列表专用的排序——跟上面通用的 sortByMode 不是同一个函数，因为
+ * "按热度"对州列表有真实定义（按 useRegionContentCountsQuery 给出的活跃
+ * 内容数量降序），但对城市/搜索结果列表没有（那两处的"按热度"维持 08 号卡
+ * 之前就有的行为：不重排，就是数据原本的顺序，见 sortByMode 的实现——
+ * 这不是疏漏，08 号卡任务卡原文的"按热度"定义明确是"按该州..."，是一个
+ * 州级别的概念，没有要求重新定义城市/搜索结果的热度排序）。
+ *
+ * 数量并列（含最常见的"都是 0"）时退到字母序——降序比较 0 时自然会走到
+ * 这一分支，不需要专门判断"是不是都是 0"这种情况，见任务卡"不需要精确的
+ * 并列排序策略，这条兜底规则够用"。
+ */
+function sortStateRows(rows: StateRow[], mode: SortMode, contentCounts: Map<string, number>): StateRow[] {
+  if (mode === "alphabetical") {
+    return [...rows].sort((a, b) => a.name.localeCompare(b.name));
+  }
+  return [...rows].sort((a, b) => {
+    const countDiff = (contentCounts.get(b.code) ?? 0) - (contentCounts.get(a.code) ?? 0);
+    if (countDiff !== 0) return countDiff;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function findStateName(code: string): string {
+  return US_STATES.find((state) => state.code === code)?.name ?? code;
+}
+
+/**
+ * 08 号卡「地区选择」页（/region-select，从首页顶部胶囊按钮点击进入，见
  * home-page.tsx 的 REGION_SELECT_PATH）。
  *
- * 数据模型跟设计稿（saminest_final_screens.html 屏 ⑪，NY/CA/TX/HI/WA/
- * MA/NJ 这种全美多州场景）不是 1:1 照搬——这个项目目前只服务 DMV 三个州
- * （locations 表种子数据只有 DC/VA/MD，见 20260816223226_add_activity_
- * region_locations.sql），没有全美 50 州的数据源，也不在这张卡的范围内
- * 新建一个。这里复用已有的两个只读查询拼出"州 -> 城市列表"的分组结构：
- * useActivityRegionsQuery()（3 条 type = 'state' 行，决定州的顺序/展示名）
- * + useCitiesWithStateQuery()（14 条 type = 'city' 行，每行带 state_code）。
- * DC 底下只有 1 个城市（Washington, DC 本身），天然落在"单一地区的州"分支
- * （直接点击选中、不带 chevron）；VA/MD 各有多个城市，落在"多城市州"分支
- * （带 chevron 下钻），跟任务卡"NY、CA 这类多城市州带下钻箭头，其余单一
- * 地区的州直接点击即选中"的验收标准是同一个判断规则，只是用真实的
- * DMV 数据代入，不是 46 个字面意义上的其它州。
+ * 全美 51 项州列表（50 州 + DC）来自静态数据 src/data/us-states.ts，不再是
+ * 06 号卡时期"只查 locations 表里已有的 3 条 type = 'state' 行"——那 3 条
+ * 行（DC/VA/MD）现在只用来判断"这个州有没有真实城市数据"（跟
+ * useCitiesWithStateQuery() 返回的城市按 stateCode 分组交叉比对），不再
+ * 决定"列表里展示哪些州"，见 stateRows 的构造。
+ *
+ * 有真实城市数据的州（目前是 DC/VA/MD 里城市数 > 1 的 VA/MD）保留右侧
+ * chevron，点进去下钻到具体城市；只有 1 个城市的州（目前是 DC）直接选中
+ * 那一个城市；0 个城市的州（其余 47 项）直接选中整个州本身——这条"有几个
+ * 城市决定点击行为"的规则完全沿用 06 号卡已经定的判断（cities.length > 1
+ * 才下钻），不是新规则，08 号卡只是把它应用到 51 项而不是 3 项，"以后哪个
+ * 州有了真实城市数据，自动会出现下钻箭头"这条也是因为这个规则本身就是
+ * 数据驱动的，不是写死某几个州代码。
+ *
+ * "全美"是列表最上方一个独立的固定项，不属于下面 51 项、不参与排序/搜索，
+ * 只在最外层的州列表视图展示（下钻/搜索结果视图不展示）——选中它清除
+ * useSelectedRegionStore 里的选中地区（第一次给这个 store 补上"取消选择"
+ * 的能力，见 selected-region-store.ts 的 clearSelectedRegion），首页/找
+ * 搭子恢复展示全部内容。
  *
  * 下钻用页面内 state（drilldownCode），不是新开一个路由——设计稿里"地区
  * 选择"就是一张屏，下钻是同一屏内的列表切换，不需要 /region-select/:code
@@ -54,83 +96,132 @@ function sortByMode<T extends { name: string }>(items: T[], mode: SortMode): T[]
  * 整个页面（默认的 navigate(-1) 行为会直接跳出这个页面，回到首页，不是
  * 用户在下钻态点"返回"时想要的结果）。
  *
- * 搜索框按 06 号卡"保留原有结构"的要求接入：在城市全集里按名字子串匹配，
- * 匹配结果是一个跟"州列表/下钻列表"平级的第三种展示态（扁平城市列表，
- * 不分州），有搜索词时优先展示这个态，忽略当前是不是处于下钻——没有专门
- * 的地址地理编码/模糊搜索服务可用，用最简单的子串匹配已经能覆盖"找一个
- * 我知道具体名字的城市"这个使用场景。
+ * 搜索框按 06 号卡"保留原有结构"的要求接入，08 号卡把它"扩展到能搜索全部
+ * 51 项"——原来只在城市名字里子串匹配，现在同时匹配 51 州的名字/两字母
+ * 缩写（州名/城市名分别匹配，不是把所有名字拼一起模糊搜），命中的州和
+ * 命中的城市合并成同一个扁平列表，跟"州列表/下钻列表"平级，是第三种展示
+ * 态，有搜索词时优先展示这个态，忽略当前是不是处于下钻。没有专门的地址
+ * 地理编码/模糊搜索服务可用，用最简单的子串匹配已经能覆盖"找一个我知道
+ * 具体名字的地区"这个使用场景。
  *
  * "全部城市"是设计稿里的静态分组标题（不是按钮/切换），"按热度｜按字母"
  * 才是真正的排序切换——见 saminest_final_screens.html 屏 ⑪ 的 DOM 结构
  * （.lbl 纯文字 + .tabs 里两个 span.t 才带 active 态）。这个切换统一作用于
  * 当前正在展示的那一份列表（州列表 / 下钻城市列表 / 搜索结果），不是只对
- * 某一种列表生效——用同一个 sortByMode() helper 处理三处，保证排序规则
- * 一致。
+ * 某一种列表生效——州列表用 sortStateRows（真实按内容数量排序），其余两
+ * 种列表继续用 sortByMode（见该函数上方注释）。
  *
- * 选中后写入 useSelectedRegionStore（06 号卡新建的纯前端持久化数据源，见
- * 该文件顶部注释）并 navigate(-1) 返回上一页——跟 TopBar 默认返回按钮是
- * 同一个"回到进入这个页面之前那一页"的语义，不假设一定是首页（虽然目前
- * 唯一入口确实是首页）。
+ * 选中后写入 useSelectedRegionStore 并 navigate(-1) 返回上一页——跟 TopBar
+ * 默认返回按钮是同一个"回到进入这个页面之前那一页"的语义，不假设一定是
+ * 首页（虽然目前唯一入口确实是首页）。
  */
 export function RegionSelectPage() {
   const navigate = useNavigate();
   const setSelectedRegion = useSelectedRegionStore((s) => s.setSelectedRegion);
+  const clearSelectedRegion = useSelectedRegionStore((s) => s.clearSelectedRegion);
 
-  const {
-    data: states,
-    isPending: isStatesPending,
-    isError: isStatesError
-  } = useActivityRegionsQuery();
   const {
     data: cities,
     isPending: isCitiesPending,
     isError: isCitiesError
   } = useCitiesWithStateQuery();
+  const {
+    data: contentCounts,
+    isPending: isContentCountsPending,
+    isError: isContentCountsError
+  } = useRegionContentCountsQuery();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [sortMode, setSortMode] = useState<SortMode>("popularity");
   const [drilldownCode, setDrilldownCode] = useState<string | null>(null);
 
-  const groups: StateGroup[] = useMemo(() => {
-    if (!states || !cities) return [];
-    return states.map((state) => ({
-      code: state.name,
-      cities: cities.filter((city) => city.stateCode === state.name)
+  const stateRows: StateRow[] = useMemo(() => {
+    if (!cities) return [];
+    return US_STATES.map((state) => ({
+      code: state.code,
+      name: state.name,
+      cities: cities.filter((city) => city.stateCode === state.code)
     }));
-  }, [states, cities]);
+  }, [cities]);
 
-  const sortedGroups = useMemo(
-    () => (sortMode === "popularity" ? groups : [...groups].sort((a, b) => a.code.localeCompare(b.code))),
-    [groups, sortMode]
+  const sortedStateRows = useMemo(
+    () => sortStateRows(stateRows, sortMode, contentCounts ?? new Map()),
+    [stateRows, sortMode, contentCounts]
   );
 
   const drilldownGroup = drilldownCode
-    ? (sortedGroups.find((group) => group.code === drilldownCode) ?? null)
+    ? (stateRows.find((row) => row.code === drilldownCode) ?? null)
     : null;
 
   const trimmedQuery = searchQuery.trim().toLowerCase();
-  const searchResults = useMemo(() => {
-    if (!trimmedQuery || !cities) return null;
-    const matched = cities.filter((city) => city.name.toLowerCase().includes(trimmedQuery));
-    return sortByMode(matched, sortMode);
+  // 08 号卡：搜索扩展到全部 51 项——州名/两字母缩写、城市名分别匹配，命中
+  // 的合并成一个扁平列表。州名/缩写用 US_STATES 这份静态数据匹配（不依赖
+  // 已加载的 cities/stateRows），城市继续用 useCitiesWithStateQuery 的结果。
+  const searchResults: SelectableEntry[] | null = useMemo(() => {
+    if (!trimmedQuery) return null;
+
+    const matchedStates: SelectableEntry[] = US_STATES.filter(
+      (state) =>
+        state.name.toLowerCase().includes(trimmedQuery) ||
+        state.code.toLowerCase().includes(trimmedQuery)
+    ).map((state) => ({
+      key: `state-${state.code}`,
+      name: state.name,
+      onSelect: () => selectState(state)
+    }));
+
+    const matchedCities: SelectableEntry[] = (cities ?? [])
+      .filter((city) => city.name.toLowerCase().includes(trimmedQuery))
+      .map((city) => ({
+        key: city.id,
+        name: city.name,
+        onSelect: () => selectCity(city, city.stateCode ?? "")
+      }));
+
+    return sortByMode([...matchedStates, ...matchedCities], sortMode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cities, trimmedQuery, sortMode]);
 
   function selectCity(city: LocationWithStateItem, stateCode: string): void {
-    setSelectedRegion({ cityId: city.id, cityName: city.name, stateCode });
+    setSelectedRegion({
+      stateCode,
+      stateName: findStateName(stateCode),
+      cityId: city.id,
+      cityName: city.name
+    });
     navigate(-1);
   }
 
-  function handleStateRowClick(group: StateGroup): void {
-    if (group.cities.length <= 1) {
-      const onlyCity = group.cities[0];
-      if (onlyCity) selectCity(onlyCity, group.code);
-      return;
-    }
-    setDrilldownCode(group.code);
+  function selectState(state: UsState): void {
+    setSelectedRegion({
+      stateCode: state.code,
+      stateName: state.name,
+      cityId: null,
+      cityName: null
+    });
+    navigate(-1);
   }
 
-  const isPending = isStatesPending || isCitiesPending;
-  const isError = isStatesError || isCitiesError;
+  function handleSelectNationwide(): void {
+    clearSelectedRegion();
+    navigate(-1);
+  }
+
+  function handleStateRowClick(row: StateRow): void {
+    if (row.cities.length > 1) {
+      setDrilldownCode(row.code);
+      return;
+    }
+    const onlyCity = row.cities[0];
+    if (onlyCity) {
+      selectCity(onlyCity, row.code);
+      return;
+    }
+    selectState(row);
+  }
+
+  const isPending = isCitiesPending || isContentCountsPending;
+  const isError = isCitiesError || isContentCountsError;
 
   return (
     <main data-testid="region-select-page">
@@ -192,20 +283,35 @@ export function RegionSelectPage() {
 
         {!isPending && !isError ? (
           <ul className="mt-3 divide-y divide-border rounded-2xl bg-card">
+            {/* 「全美」只在最外层的州列表视图展示——不属于 51 项、不参与
+                排序/搜索，见组件顶部注释。 */}
+            {!searchResults && !drilldownGroup ? (
+              <li>
+                <button
+                  type="button"
+                  onClick={handleSelectNationwide}
+                  className="flex h-12 w-full items-center gap-2 px-4 text-left text-base font-medium text-text"
+                >
+                  <Globe aria-hidden="true" size={18} className="text-primary" />
+                  全美
+                </button>
+              </li>
+            ) : null}
+
             {searchResults ? (
               searchResults.length === 0 ? (
                 <li className="px-4 py-6 text-center text-sm text-text-muted">
                   没有找到匹配的地区。
                 </li>
               ) : (
-                searchResults.map((city) => (
-                  <li key={city.id}>
+                searchResults.map((entry) => (
+                  <li key={entry.key}>
                     <button
                       type="button"
-                      onClick={() => selectCity(city, city.stateCode ?? "")}
+                      onClick={entry.onSelect}
                       className="flex h-12 w-full items-center px-4 text-left text-base text-text"
                     >
-                      {city.name}
+                      {entry.name}
                     </button>
                   </li>
                 ))
@@ -223,15 +329,15 @@ export function RegionSelectPage() {
                 </li>
               ))
             ) : (
-              sortedGroups.map((group) => (
-                <li key={group.code}>
+              sortedStateRows.map((row) => (
+                <li key={row.code}>
                   <button
                     type="button"
-                    onClick={() => handleStateRowClick(group)}
+                    onClick={() => handleStateRowClick(row)}
                     className="flex h-12 w-full items-center justify-between px-4 text-left text-base text-text"
                   >
-                    <span>{group.code}</span>
-                    {group.cities.length > 1 ? (
+                    <span>{row.name}</span>
+                    {row.cities.length > 1 ? (
                       <ChevronRight aria-hidden="true" size={18} className="text-chevron" />
                     ) : null}
                   </button>

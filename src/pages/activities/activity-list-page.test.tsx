@@ -1,28 +1,26 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActivities, listActiveActivityRegions, listActivityParticipantPreviews, navigateMock } =
-  vi.hoisted(() => ({
-    listActivities: vi.fn(),
-    listActiveActivityRegions: vi.fn(),
-    listActivityParticipantPreviews: vi.fn(),
-    navigateMock: vi.fn()
-  }));
+const { listActivities, listActivityParticipantPreviews, navigateMock } = vi.hoisted(() => ({
+  listActivities: vi.fn(),
+  listActivityParticipantPreviews: vi.fn(),
+  navigateMock: vi.fn()
+}));
 
 vi.mock("../../repositories/activities-repository", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../repositories/activities-repository")>();
   return { ...actual, listActivities, listActivityParticipantPreviews };
 });
-vi.mock("../../repositories/locations-repository", () => ({
-  listActiveActivityRegions
-}));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
 });
 
 import { renderWithProviders } from "../../test/render-with-providers";
+import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { ActivityListPage } from "./activity-list-page";
+
+const initialRegionState = useSelectedRegionStore.getState();
 
 const sampleActivity = {
   id: "act-1",
@@ -48,11 +46,11 @@ describe("ActivityListPage", () => {
 
   beforeEach(() => {
     listActivities.mockReset();
-    listActiveActivityRegions.mockReset();
     listActivityParticipantPreviews.mockReset();
     navigateMock.mockReset();
-    listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA" }]);
     listActivityParticipantPreviews.mockResolvedValue(new Map());
+    useSelectedRegionStore.setState(initialRegionState, true);
+    localStorage.clear();
   });
 
   it("renders the TopBar tab heading '找搭子' (not the old '🤝 一起去' title)", () => {
@@ -172,7 +170,7 @@ describe("ActivityListPage", () => {
     renderWithProviders(<ActivityListPage />);
 
     await waitFor(() => {
-      expect(listActivities).toHaveBeenCalledWith({ channel: undefined, locationId: undefined });
+      expect(listActivities).toHaveBeenCalledWith({ channel: undefined, stateCode: undefined });
     });
   });
 
@@ -186,28 +184,97 @@ describe("ActivityListPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /吃饭搭子/ }));
 
     await waitFor(() => {
-      expect(listActivities).toHaveBeenCalledWith({ channel: "food", locationId: undefined });
+      expect(listActivities).toHaveBeenCalledWith({ channel: "food", stateCode: undefined });
     });
   });
 
-  // 州筛选收进了 TopBar 右侧的筛选图标里（04 号卡改版），不再是常驻展示的
-  // 下拉——先点筛选图标展开，再操作下拉。
-  it("does not show the region dropdown until the filter icon is clicked, then re-queries with the selected region", async () => {
-    listActivities.mockResolvedValue([]);
+  // 08 号卡：这个页面原来自己维护的"筛选"图标 + 州下拉框已经删掉，改成
+  // 直接读全局 useSelectedRegionStore——跟首页是同一个选中状态，见
+  // activity-list-page.tsx 顶部注释。
+  describe("region filter (useSelectedRegionStore, 08 号卡)", () => {
+    it("no longer renders a page-local '筛选' button or 州 dropdown", async () => {
+      listActivities.mockResolvedValue([]);
 
-    renderWithProviders(<ActivityListPage />);
-    await waitFor(() => expect(listActivities).toHaveBeenCalled());
+      renderWithProviders(<ActivityListPage />);
+      await waitFor(() => expect(listActivities).toHaveBeenCalled());
 
-    expect(screen.queryByLabelText("州")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "筛选" })).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("州")).not.toBeInTheDocument();
+    });
 
-    fireEvent.click(screen.getByRole("button", { name: "筛选" }));
-    const select = await screen.findByLabelText("州");
+    it("queries activities with the globally selected region's stateCode", async () => {
+      listActivities.mockResolvedValue([]);
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "VA",
+        stateName: "Virginia",
+        cityId: null,
+        cityName: null
+      });
 
-    listActivities.mockClear();
-    fireEvent.change(select, { target: { value: "loc-1" } });
+      renderWithProviders(<ActivityListPage />);
 
-    await waitFor(() => {
-      expect(listActivities).toHaveBeenCalledWith({ channel: undefined, locationId: "loc-1" });
+      await waitFor(() => {
+        expect(listActivities).toHaveBeenCalledWith({ channel: undefined, stateCode: "VA" });
+      });
+    });
+
+    // 08 号卡 8.4：选中了某个州、没有额外选中频道、结果为空时，展示
+    // "发起第一个"的引导，而不是通用的"换个筛选条件试试"文案。
+    it("shows the region empty state ('这个地区还没有搭子活动，发起第一个吧') when the selected region has no activities and no channel filter is active", async () => {
+      listActivities.mockResolvedValue([]);
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "CA",
+        stateName: "California",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<ActivityListPage />);
+
+      expect(
+        await screen.findByText("这个地区还没有搭子活动，发起第一个吧")
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。")
+      ).not.toBeInTheDocument();
+
+      // 页面上这时有两个"发起搭子"按钮——空状态里的这个 + 常驻的悬浮 Fab，
+      // 空状态的按钮先出现在 DOM 里（见 activity-list-page.tsx 里 Fab 是
+      // 挂在这段内容后面的），取第一个。
+      const [emptyStatePublishButton] = screen.getAllByRole("button", { name: "发起搭子" });
+      fireEvent.click(emptyStatePublishButton);
+      expect(navigateMock).toHaveBeenCalledWith("/activities/new");
+    });
+
+    it("falls back to the generic empty-state message when a channel filter is also active, even with a region selected", async () => {
+      listActivities.mockResolvedValue([]);
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "CA",
+        stateName: "California",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<ActivityListPage />);
+      await waitFor(() => expect(listActivities).toHaveBeenCalled());
+      fireEvent.click(screen.getByRole("button", { name: /吃饭搭子/ }));
+
+      expect(
+        await screen.findByText("暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。")
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText("这个地区还没有搭子活动，发起第一个吧")
+      ).not.toBeInTheDocument();
+    });
+
+    it("falls back to the generic empty-state message when no region is selected", async () => {
+      listActivities.mockResolvedValue([]);
+
+      renderWithProviders(<ActivityListPage />);
+
+      expect(
+        await screen.findByText("暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。")
+      ).toBeInTheDocument();
     });
   });
 

@@ -66,7 +66,15 @@ export interface ActivityListItem {
 
 export interface ListActivitiesInput {
   channel?: string;
-  locationId?: string;
+  /** 08 号卡：从"选一个具体的 locationId（只能是 locations 表里已有的
+   *  DC/VA/MD 三个 state 行之一）"换成"按州代码筛选"——跟首页信息流筛选是
+   *  同一套机制（useSelectedRegionStore 选中的 stateCode），全美 51 项里
+   *  大多数州在 locations 表里根本没有对应的行，不可能有一个 locationId
+   *  可选，只有 stateCode 这个纯字符串筛选条件能覆盖全部 51 项。原来的
+   *  locationId 参数已删除——唯一消费者是 activity-list-page.tsx 自己的
+   *  「筛选」下拉框，那个下拉框本身也在这次改动里被移除了（见该页面顶部
+   *  注释），不是留一个不再使用的兼容参数。 */
+  stateCode?: string;
 }
 
 interface ActivityListRow {
@@ -99,9 +107,10 @@ interface ActivityListRow {
  * 场景，用户更关心"什么时候开始"而不是"什么时候发布"，一个明天就开始的
  * 活动比三周后才开始的活动更值得排在前面，不管两者哪个是先创建的。
  *
- * channel/locationId 两个筛选都是可选的精确匹配（不是像 posts 搜索那样
- * 的模糊匹配），city 筛选就是"同城市"这个产品要求本身（见设计文档第 5
- * 节问题 2：不做真实地理距离，复用 locations 表的城市粒度）。
+ * channel/stateCode 两个筛选都是可选的精确匹配（不是像 posts 搜索那样
+ * 的模糊匹配）。stateCode 筛选（08 号卡新增，取代原来的 locationId）就是
+ * "同州"这个产品要求本身（见设计文档第 5 节问题 2：不做真实地理距离，
+ * 复用 locations 表的州/城市粒度）。
  */
 // activities 列表查询共用的 select 列表：activity-list-page.tsx（公开浏览）、
 // my-activities-page.tsx 的"我发起的"/"我报名的"两个 tab 都要展示同一组
@@ -129,8 +138,20 @@ interface ActivityListRow {
 // activity-list-page.tsx 真正用它渲染头像堆叠，my-activities-page.tsx 的
 // 两个 tab 多出这两个字段但不用，不算破坏性变更，不需要为了"只有一处用"
 // 就拆成两套 select。
-const ACTIVITY_LIST_SELECT_COLUMNS =
-  "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)";
+// 08 号卡：listActivities 按 stateCode 筛选时，location 这一列需要从默认
+// 的左连接换成 `locations!inner(...)`——PostgREST 要求这么写才能对内嵌表
+// 的列（state_code）做过滤，见下面 listActivities 里的用法，跟
+// posts-repository.ts listApprovedPosts 是同一个处理方式。
+// listMyOrganizedActivities/listMyJoinedActivities 这两个函数不需要这个
+// 筛选，继续用下面固定的左连接版本（ACTIVITY_LIST_SELECT_COLUMNS），不受
+// 影响。
+function buildActivityListSelectColumns(locationJoin: "left" | "inner"): string {
+  const locationSelect =
+    locationJoin === "inner" ? "location:locations!inner(name, state_code)" : "location:locations(name)";
+  return `id, organizer_id, channel, tag_text, title, ${locationSelect}, landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)`;
+}
+
+const ACTIVITY_LIST_SELECT_COLUMNS = buildActivityListSelectColumns("left");
 
 function mapActivityListRow(row: ActivityListRow): ActivityListItem {
   return {
@@ -156,10 +177,13 @@ export async function listActivities(
   input: ListActivitiesInput = {}
 ): Promise<ActivityListItem[]> {
   const nowIso = new Date().toISOString();
+  const selectColumns = input.stateCode
+    ? buildActivityListSelectColumns("inner")
+    : ACTIVITY_LIST_SELECT_COLUMNS;
 
   let query = getSupabaseClient()
     .from("activities")
-    .select(ACTIVITY_LIST_SELECT_COLUMNS)
+    .select(selectColumns)
     .in("status", ["open", "full"])
     .gte("start_at", nowIso)
     .order("start_at", { ascending: true });
@@ -167,8 +191,8 @@ export async function listActivities(
   if (input.channel) {
     query = query.eq("channel", input.channel);
   }
-  if (input.locationId) {
-    query = query.eq("location_id", input.locationId);
+  if (input.stateCode) {
+    query = query.eq("location.state_code", input.stateCode);
   }
 
   const { data, error } = await query.overrideTypes<ActivityListRow[]>();

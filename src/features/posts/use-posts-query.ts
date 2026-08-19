@@ -7,6 +7,8 @@ export const DEFAULT_POSTS_PAGE_SIZE = 20;
 export interface UsePostsInfiniteQueryInput {
   categoryId?: string;
   searchQuery?: string;
+  /** 08 号卡新增，透传给 listApprovedPosts——见该函数 input 类型上的注释。 */
+  stateCode?: string;
   pageSize?: number;
 }
 
@@ -27,15 +29,20 @@ export interface UsePostsInfiniteQueryInput {
  */
 export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
   const pageSize = input.pageSize ?? DEFAULT_POSTS_PAGE_SIZE;
-  const { categoryId, searchQuery } = input;
+  const { categoryId, searchQuery, stateCode } = input;
 
   return useInfiniteQuery({
     queryKey: [
       "posts",
-      { categoryId: categoryId ?? null, searchQuery: searchQuery ?? null, pageSize }
+      {
+        categoryId: categoryId ?? null,
+        searchQuery: searchQuery ?? null,
+        stateCode: stateCode ?? null,
+        pageSize
+      }
     ],
     queryFn: ({ pageParam }) =>
-      listApprovedPosts({ categoryId, searchQuery, page: pageParam, pageSize }),
+      listApprovedPosts({ categoryId, searchQuery, stateCode, page: pageParam, pageSize }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, _allPages, lastPageParam) =>
       lastPage.hasNextPage ? lastPageParam + 1 : undefined

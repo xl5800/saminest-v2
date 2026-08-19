@@ -89,21 +89,40 @@ describe("HomePage", () => {
       expect(screen.queryByText("·")).not.toBeInTheDocument();
     });
 
-    // 06 号卡：地区选择页写入的 useSelectedRegionStore 现在是首页州名的真实
-    // 数据源，不再是写死的 null——见 home-page.tsx 顶部注释。
-    it("renders the persisted selected region's stateCode next to the brand name once one has been chosen", () => {
+    // 06 号卡：地区选择页写入的 useSelectedRegionStore 现在是首页地区文案的
+    // 真实数据源，不再是写死的 null——见 home-page.tsx 顶部注释。08 号卡：
+    // 展示格式从"裸露的 stateCode"改成 formatRegionLabel 的两种情形。
+    it("renders '{cityName}, {stateCode}' when a DMV city has been selected (has real city data)", () => {
       listActiveCategories.mockResolvedValue([]);
       listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
       useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "VA",
+        stateName: "Virginia",
         cityId: "loc-arlington",
-        cityName: "Arlington",
-        stateCode: "VA"
+        cityName: "Arlington"
       });
 
       renderWithProviders(<HomePage />);
 
-      expect(screen.getByText("VA")).toBeInTheDocument();
+      expect(screen.getByText("Arlington, VA")).toBeInTheDocument();
       expect(screen.getByText("Saminest")).toBeInTheDocument();
+    });
+
+    // 08 号卡：全美 50 州里大多数州没有城市数据，直接选中整个州时没有
+    // cityName，胶囊第二行应该退回展示州全名，不是裸露的两字母缩写。
+    it("renders the full state name when a state with no city data has been selected directly", () => {
+      listActiveCategories.mockResolvedValue([]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "CA",
+        stateName: "California",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<HomePage />);
+
+      expect(screen.getByText("California")).toBeInTheDocument();
     });
 
     it("renders only icon buttons ('发布'/'搜索') at the top — no visible text '发布' button and no bottom floating publish button", () => {
@@ -294,6 +313,78 @@ describe("HomePage", () => {
           expect.objectContaining({ categoryId: undefined })
         );
       });
+    });
+  });
+
+  // 08 号卡：首页信息流按 useSelectedRegionStore 选中的州筛选。
+  describe("region filter (useSelectedRegionStore)", () => {
+    it("queries posts with no stateCode filter when no region has been selected", async () => {
+      listActiveCategories.mockResolvedValue([]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />);
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ stateCode: undefined })
+        );
+      });
+    });
+
+    it("queries posts with the selected region's stateCode once one has been chosen", async () => {
+      listActiveCategories.mockResolvedValue([]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "CA",
+        stateName: "California",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<HomePage />);
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ stateCode: "CA" })
+        );
+      });
+    });
+
+    // 08 号卡 8.4：选中一个没有内容的州之后，信息流区域展示"这个地区还没有
+    // 内容"的空状态，点"去发布"复用首页已有的 PublishActionSheet（跟顶部
+    // "＋"图标同一个开关），不是另起一个入口。
+    it("shows the region empty state with a '去发布' button that opens the same PublishActionSheet as the '+' icon, when the selected region has no content", async () => {
+      listActiveCategories.mockResolvedValue([]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "CA",
+        stateName: "California",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<HomePage />);
+
+      expect(
+        await screen.findByText("这个地区还没有内容，欢迎发布第一条")
+      ).toBeInTheDocument();
+      expect(screen.queryByText("暂无帖子。")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "去发布" }));
+
+      expect(await screen.findByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
+    });
+
+    it("falls back to the generic '暂无帖子。' empty state when no region is selected", async () => {
+      listActiveCategories.mockResolvedValue([]);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />);
+
+      expect(await screen.findByText("暂无帖子。")).toBeInTheDocument();
+      expect(
+        screen.queryByText("这个地区还没有内容，欢迎发布第一条")
+      ).not.toBeInTheDocument();
     });
   });
 });

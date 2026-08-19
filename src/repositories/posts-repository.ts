@@ -30,6 +30,10 @@ export interface PostFeedItem extends PostListItem {
 export interface ListApprovedPostsInput {
   categoryId?: string;
   searchQuery?: string;
+  /** 08 号卡新增：按州筛选（useSelectedRegionStore 选中的 stateCode，如
+   *  "VA"）。不传/传空值时不过滤，展示全部地区——跟 categoryId/searchQuery
+   *  是同一个"可选、不传就不加这个条件"的约定。 */
+  stateCode?: string;
   page: number;
   pageSize: number;
 }
@@ -162,14 +166,23 @@ function sanitizeSearchTerm(raw: string): string {
 export async function listApprovedPosts(
   input: ListApprovedPostsInput
 ): Promise<ListApprovedPostsResult> {
-  const { categoryId, searchQuery, page, pageSize } = input;
+  const { categoryId, searchQuery, stateCode, page, pageSize } = input;
   const from = page * pageSize;
   const to = from + pageSize;
+
+  // 08 号卡：按州筛选时，location 这一列的联表从默认的左连接（帖子没填
+  // 地区时 location 是 null，帖子本身仍然会出现在结果里）换成
+  // `locations!inner(...)`——PostgREST 要求这么写才能对内嵌表的列
+  // （state_code）做过滤（`.eq("location.state_code", ...)`），副作用是
+  // 没有 location_id 的帖子会被这次内连接排除，这正是期望行为："某个州的
+  // 内容"天然不应该包含没填地区的帖子。不筛选州时维持原来的左连接，行为
+  // 完全不变。
+  const locationSelect = stateCode ? "location:locations!inner(name)" : "location:locations(name)";
 
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      `id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, ${locationSelect}, location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)`
     )
     .eq("status", "approved")
     .is("deleted_at", null)
@@ -179,6 +192,10 @@ export async function listApprovedPosts(
 
   if (categoryId) {
     query = query.eq("category_id", categoryId);
+  }
+
+  if (stateCode) {
+    query = query.eq("location.state_code", stateCode);
   }
 
   if (searchQuery) {

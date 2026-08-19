@@ -24,7 +24,22 @@ const SEARCH_DEBOUNCE_MS = 400;
 const REGION_SELECT_PATH = "/region-select";
 
 /**
- * 首页（Meet5 风格改版，02-home-page.md）。
+ * 08 号卡：TopBar home 变体胶囊按钮第二行的展示文案。有具体城市数据时
+ * （目前只有 DC/VA/MD 三州，用户下钻选了具体某个城市）用"{城市名}, {州
+ * 代码}"——精确复刻 Meet5 参考截图"Woodbridge, VA"这个格式；其余大多数州
+ * 没有城市可选、直接选中整个州时没有 cityName 可用，退回展示州全名（比
+ * 单独显示两字母缩写"CA"更友好，尤其是首页这种第一眼就要认出"这是哪里"
+ * 的场景）。这个格式化逻辑只有首页这一个消费者，就地写成一个小函数，不
+ * 提到 selected-region-store.ts 里——那个 store 只负责存数据，不应该背上
+ * "怎么格式化展示"这种表现层逻辑。
+ */
+function formatRegionLabel(region: { stateCode: string; stateName: string; cityName: string | null }): string {
+  return region.cityName ? `${region.cityName}, ${region.stateCode}` : region.stateName;
+}
+
+/**
+ * 首页（Meet5 风格改版，02-home-page.md，08 号卡修订了顶部地区入口的
+ * 具体样式）。
  *
  * 顶部栏换成 TopBar 的 home 变体（01 号卡产出），不再是旧版"← Saminest
  * 发布"那一整行——发布入口从文字按钮变成顶部"＋"图标（点击复用已有的
@@ -49,6 +64,18 @@ const REGION_SELECT_PATH = "/region-select";
  * 用 URL 而不是本地 state 存这个筛选态，是为了让分类 Tab 页的 tile 链接、
  * 浏览器前进/后退、直接分享/收藏某个分类筛选态的链接都自然工作，不需要
  * 额外的状态同步逻辑。
+ *
+ * 08 号卡（地区选择扩展全美 + 按州筛选）：
+ * - 顶部胶囊按钮从"只显示州代码的单行文字"改成两行堆叠，第二行文案见
+ *   formatRegionLabel；onStateClick 改名 onRegionClick，语义从"点州名"
+ *   变成"点整个胶囊"，见 top-bar.tsx 对应 prop 的注释。
+ * - selectedRegion.stateCode 现在真正喂给 PostList 做服务端过滤（透传到
+ *   listApprovedPosts 的 stateCode 参数），不再只是首页胶囊按钮的展示
+ *   文本——四个分类 tab 复用的都是同一个 PostList，筛选逻辑天然对四个
+ *   tab 一致生效，不需要各自实现一遍。
+ * - PostList 的"这个地区还没有内容"空状态需要一个"去发布"入口，直接复用
+ *   这个页面已有的 publishSheetOpen/PublishActionSheet（顶部"＋"图标同一套
+ *   开关），不是另起一个入口。
  */
 export function HomePage() {
   const navigate = useNavigate();
@@ -79,8 +106,8 @@ export function HomePage() {
     <main data-testid="home-page">
       <TopBar
         variant="home"
-        stateName={selectedRegion?.stateCode ?? null}
-        onStateClick={() => navigate(REGION_SELECT_PATH)}
+        regionLabel={selectedRegion ? formatRegionLabel(selectedRegion) : null}
+        onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={handleToggleSearch}
       />
@@ -103,6 +130,8 @@ export function HomePage() {
         key={activeCategoryId ?? "all"}
         categoryId={activeCategoryId}
         searchQuery={debouncedSearchQuery}
+        stateCode={selectedRegion?.stateCode}
+        onPublishClick={() => setPublishSheetOpen(true)}
       />
 
       {publishSheetOpen ? (
