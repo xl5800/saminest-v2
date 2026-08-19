@@ -1,12 +1,23 @@
 import { Bell } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
 import { formatPublishedAt } from "../../utils/format";
 
 const EMPTY_LIST_MESSAGE = "暂无消息";
 const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
 const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
+
+/**
+ * 顶部栏通知铃铛的目标路径——06 号卡只要求"消息"Tab 顶部右侧有一个通知
+ * 铃铛图标，这个仓库目前没有独立的"系统通知列表"页面（系统通知目前是
+ * 混在会话列表里的一条特殊会话，见下面 originType === 'system' 那部分
+ * 注释），跟 profile-page.tsx 的 SETTINGS_PATH 是同一个"先接入占位路径"
+ * 处理方式：routes.tsx 里没有匹配的路由，点击会落到全局通配符
+ * NotFoundPage，不是死链接/报错。
+ */
+const NOTIFICATIONS_PATH = "/notifications";
 
 /**
  * 会话列表页（/messages），登录态鉴权统一由路由层的 RequireAuth 包裹实现
@@ -50,115 +61,138 @@ const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
  * originType === 'system' 识别，头像换成 Bell 图标（不是 img/首字母
  * 占位），昵称固定显示"Saminest 通知"，同样不包 /users/:id 链接（没有
  * 用户可以跳）。
+ *
+ * 06 号卡（profile-region-misc）改版：顶部栏换成 TopBar 的 tab 变体
+ * （标题"消息"，右侧通知铃铛），不再是全局 AppHeader；组件自己的 <h1>
+ * 已经是这个页面的标题，原来手写的 <h1>消息</h1> 删掉，避免同一个页面
+ * 出现两个 <h1>（见 top-bar.tsx 顶部注释）。这个路由已经加进
+ * app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS。其余内容（搜索框、筛选
+ * Chips、聊天列表）——这个页面改版前本来就没有搜索框/筛选 Chips，任务卡
+ * "保持不变"这条对这个页面没有实际影响，聊天列表本身（下面这部分）没有
+ * 任何改动。
  */
 export function ConversationListPage() {
+  const navigate = useNavigate();
   const { data: conversations, isPending, isError } = useMyConversationsQuery();
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-4 text-xl font-bold text-text">消息</h1>
-      {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
-      {isError ? (
-        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          {LOAD_ERROR_MESSAGE}
-        </p>
-      ) : null}
-      {!isPending && !isError && conversations && conversations.length === 0 ? (
-        <p role="status" className="text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
-      ) : null}
-      {!isPending && !isError && conversations && conversations.length > 0 ? (
-        <ul className="flex flex-col gap-2">
-          {conversations.map((conversation) => {
-            const isSystemConversation = conversation.originType === "system";
-            const avatarInitial =
-              conversation.otherDisplayName?.trim().charAt(0).toUpperCase() || "?";
-            const nickname = isSystemConversation
-              ? SYSTEM_NOTIFICATION_LABEL
-              : conversation.otherDisplayName ?? "对方";
-            const avatarElement = isSystemConversation ? (
-              <div
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
-              >
-                <Bell size={18} />
-              </div>
-            ) : conversation.otherAvatarUrl ? (
-              <img
-                src={conversation.otherAvatarUrl}
-                alt=""
-                className="h-10 w-10 shrink-0 rounded-full object-cover"
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
-              >
-                {avatarInitial}
-              </div>
-            );
-            const showProfileLink = !isSystemConversation && conversation.otherUserId;
-            const nicknameClassName = conversation.isUnread
-              ? "block truncate text-sm font-bold text-text"
-              : "block truncate text-sm font-medium text-text";
-            const previewClassName = conversation.isUnread
-              ? "mt-0.5 truncate whitespace-nowrap text-xs font-semibold text-text"
-              : "mt-0.5 truncate whitespace-nowrap text-xs text-text-muted";
+    <main className="pb-20 md:pb-6">
+      <TopBar
+        variant="tab"
+        title="消息"
+        right={{
+          icon: <Bell size={18} aria-hidden="true" />,
+          label: "通知",
+          onClick: () => navigate(NOTIFICATIONS_PATH)
+        }}
+      />
+      {/* TopBar 本身不套 max-w（全宽横跨视口，跟 categories-page.tsx/
+          activity-list-page.tsx 同一个约定），页面内容单独套 max-w-2xl，
+          跟改版前这个页面的宽度保持一致。 */}
+      <div className="mx-auto max-w-2xl px-4 py-6">
+        {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+        {isError ? (
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {LOAD_ERROR_MESSAGE}
+          </p>
+        ) : null}
+        {!isPending && !isError && conversations && conversations.length === 0 ? (
+          <p role="status" className="text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
+        ) : null}
+        {!isPending && !isError && conversations && conversations.length > 0 ? (
+          <ul className="flex flex-col gap-2">
+            {conversations.map((conversation) => {
+              const isSystemConversation = conversation.originType === "system";
+              const avatarInitial =
+                conversation.otherDisplayName?.trim().charAt(0).toUpperCase() || "?";
+              const nickname = isSystemConversation
+                ? SYSTEM_NOTIFICATION_LABEL
+                : conversation.otherDisplayName ?? "对方";
+              const avatarElement = isSystemConversation ? (
+                <div
+                  aria-hidden="true"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+                >
+                  <Bell size={18} />
+                </div>
+              ) : conversation.otherAvatarUrl ? (
+                <img
+                  src={conversation.otherAvatarUrl}
+                  alt=""
+                  className="h-10 w-10 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  aria-hidden="true"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
+                >
+                  {avatarInitial}
+                </div>
+              );
+              const showProfileLink = !isSystemConversation && conversation.otherUserId;
+              const nicknameClassName = conversation.isUnread
+                ? "block truncate text-sm font-bold text-text"
+                : "block truncate text-sm font-medium text-text";
+              const previewClassName = conversation.isUnread
+                ? "mt-0.5 truncate whitespace-nowrap text-xs font-semibold text-text"
+                : "mt-0.5 truncate whitespace-nowrap text-xs text-text-muted";
 
-            return (
-              <li
-                key={conversation.id}
-                className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 hover:border-primary"
-              >
-                {showProfileLink ? (
-                  <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
-                    {avatarElement}
-                  </Link>
-                ) : (
-                  avatarElement
-                )}
-                <div className="min-w-0 flex-1">
+              return (
+                <li
+                  key={conversation.id}
+                  className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 hover:border-primary"
+                >
                   {showProfileLink ? (
-                    <Link
-                      to={`/users/${conversation.otherUserId}`}
-                      className={`${nicknameClassName} hover:underline`}
-                    >
-                      {nickname}
+                    <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
+                      {avatarElement}
                     </Link>
                   ) : (
-                    <span className={nicknameClassName}>{nickname}</span>
+                    avatarElement
                   )}
-                  <Link
-                    to={`/messages/${conversation.id}`}
-                    data-testid="conversation-link"
-                    className="block"
-                  >
-                    {conversation.postTitle ? (
-                      <span className="mt-0.5 block truncate text-xs text-text-muted">
-                        关于：{conversation.postTitle}
+                  <div className="min-w-0 flex-1">
+                    {showProfileLink ? (
+                      <Link
+                        to={`/users/${conversation.otherUserId}`}
+                        className={`${nicknameClassName} hover:underline`}
+                      >
+                        {nickname}
+                      </Link>
+                    ) : (
+                      <span className={nicknameClassName}>{nickname}</span>
+                    )}
+                    <Link
+                      to={`/messages/${conversation.id}`}
+                      data-testid="conversation-link"
+                      className="block"
+                    >
+                      {conversation.postTitle ? (
+                        <span className="mt-0.5 block truncate text-xs text-text-muted">
+                          关于：{conversation.postTitle}
+                        </span>
+                      ) : null}
+                      {conversation.lastMessagePreview ? (
+                        <span data-testid="conversation-preview" className={previewClassName}>
+                          {conversation.lastMessagePreview}
+                        </span>
+                      ) : null}
+                      <span className="mt-0.5 block text-xs text-text-muted">
+                        {formatPublishedAt(conversation.lastActivityAt)}
                       </span>
-                    ) : null}
-                    {conversation.lastMessagePreview ? (
-                      <span data-testid="conversation-preview" className={previewClassName}>
-                        {conversation.lastMessagePreview}
-                      </span>
-                    ) : null}
-                    <span className="mt-0.5 block text-xs text-text-muted">
-                      {formatPublishedAt(conversation.lastActivityAt)}
-                    </span>
-                  </Link>
-                </div>
-                {conversation.isUnread ? (
-                  <span
-                    aria-hidden="true"
-                    data-testid="unread-dot"
-                    className="h-2 w-2 shrink-0 rounded-full bg-danger"
-                  />
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+                    </Link>
+                  </div>
+                  {conversation.isUnread ? (
+                    <span
+                      aria-hidden="true"
+                      data-testid="unread-dot"
+                      className="h-2 w-2 shrink-0 rounded-full bg-danger"
+                    />
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
     </main>
   );
 }

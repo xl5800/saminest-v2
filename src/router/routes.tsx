@@ -26,6 +26,7 @@ import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { UserProfilePage } from "../pages/profile/user-profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
+import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
@@ -73,6 +74,14 @@ export const router = createBrowserRouter([
         // categories-page.tsx / home-page.tsx / category-nav.tsx 的改动。
         path: "categories",
         element: <CategoriesPage />
+      },
+      {
+        // 06 号卡：地区选择页，从首页顶部州名点击进入（见 home-page.tsx 的
+        // REGION_SELECT_PATH），公开可见、不需要登录——跟 categories 同样
+        // 是纯浏览型的二级导航页，选中的地区写进纯前端的
+        // useSelectedRegionStore，不涉及需要鉴权的数据写入。
+        path: "region-select",
+        element: <RegionSelectPage />
       },
       {
         path: "post/:id",

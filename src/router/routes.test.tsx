@@ -8,6 +8,7 @@ const {
   listAllCategoriesForAdmin,
   listActiveLocations,
   listActiveActivityRegions,
+  listActiveCitiesWithState,
   listApprovedPosts,
   listPendingPosts,
   listAllPosts,
@@ -39,6 +40,7 @@ const {
   listAllCategoriesForAdmin: vi.fn(),
   listActiveLocations: vi.fn(),
   listActiveActivityRegions: vi.fn(),
+  listActiveCitiesWithState: vi.fn(),
   listApprovedPosts: vi.fn(),
   listPendingPosts: vi.fn(),
   listAllPosts: vi.fn(),
@@ -73,7 +75,8 @@ vi.mock("../repositories/categories-repository", () => ({
 }));
 vi.mock("../repositories/locations-repository", () => ({
   listActiveLocations,
-  listActiveActivityRegions
+  listActiveActivityRegions,
+  listActiveCitiesWithState
 }));
 vi.mock("../repositories/posts-repository", () => ({
   listApprovedPosts,
@@ -154,6 +157,7 @@ import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { UserProfilePage } from "../pages/profile/user-profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
+import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
@@ -196,6 +200,7 @@ function renderAt(path: string | string[]) {
             )
           },
           { path: "categories", element: <CategoriesPage /> },
+          { path: "region-select", element: <RegionSelectPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
           {
             path: "publish",
@@ -359,6 +364,7 @@ describe("app routes", () => {
     listAllCategoriesForAdmin.mockReset();
     listActiveLocations.mockReset();
     listActiveActivityRegions.mockReset();
+    listActiveCitiesWithState.mockReset();
     listApprovedPosts.mockReset();
     listPendingPosts.mockReset();
     listAllPosts.mockReset();
@@ -390,6 +396,9 @@ describe("app routes", () => {
     listAllCategoriesForAdmin.mockResolvedValue([]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
     listActiveActivityRegions.mockResolvedValue([{ id: "region-1", name: "VA" }]);
+    listActiveCitiesWithState.mockResolvedValue([
+      { id: "loc-1", name: "Rockville", stateCode: "VA" }
+    ]);
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
     getPostDetail.mockResolvedValue(null);
     listPendingPosts.mockResolvedValue([]);
@@ -459,6 +468,15 @@ describe("app routes", () => {
         expect.objectContaining({ categoryId: "cat-1" })
       );
     });
+  });
+
+  it("renders the region-select page at /region-select without requiring a session", async () => {
+    renderAt("/region-select");
+
+    expect(
+      await screen.findByRole("heading", { name: "地区选择" })
+    ).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
   });
 
   it("renders the post detail page at /post/:id (not-found state when the post doesn't resolve)", async () => {

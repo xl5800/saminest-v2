@@ -6,26 +6,20 @@ import { TopBar } from "../../components/top-bar";
 import { CategoryNav } from "../../features/categories/category-nav";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { PostList } from "../../features/posts/post-list";
+import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
 /**
- * 06 号卡（地区选择）还没落地——项目里目前没有任何"用户当前选中的州"这个
- * 概念的数据源/持久化机制（跟活动筛选用的 useActivityRegionsQuery 是完全
- * 独立的两件事，那个是"找搭子"列表筛选用的，不是首页顶部这个"我当前在
- * 哪个州"的用户级选择）。这里先用 null 占位——TopBar 的 home 变体
- * stateName 为 null 时只显示"Saminest"，不会有孤零零的"· "分隔符，也不会
- * 渲染可点击的州名按钮，见 top-bar.tsx。06 号卡把真正的"选中地区"数据源
- * 建出来之后，这里换成读那个数据源即可，不需要改 TopBar 本身。
- */
-const PLACEHOLDER_STATE_NAME: string | null = null;
-
-/**
- * 06 号卡还没建"地区选择"页面对应的路由——这里先接入一个占位路径（跟
- * 任务卡"点🔍先接入路由即可"是同一个处理方式）：目前 routes.tsx 里没有
- * 匹配这个路径的路由，点击会落到全局的通配符 NotFoundPage，不是死链接/
- * 报错，06 号卡建好页面后这个路径会命中真正的路由，这里不需要再改。
+ * 06 号卡（地区选择）已经落地"用户当前选中的州"这个数据源
+ * （useSelectedRegionStore，纯前端 localStorage 持久化，见该文件顶部
+ * 注释），这里换成读那个 store，不再是写死的 null——跟
+ * useActivityRegionsQuery（"找搭子"列表筛选用的独立数据源）没有任何关系。
+ * store 里还没选过地区（游客/新用户第一次进来）时 selectedRegion 是
+ * null，TopBar 的 home 变体在 stateName 为 null 时只显示"Saminest"，
+ * 不会有孤零零的"· "分隔符，见 top-bar.tsx，这条行为跟 06 号卡之前的占位
+ * 实现完全一致，只是数据源从写死的 null 换成了"可能是 null 的真实状态"。
  */
 const REGION_SELECT_PATH = "/region-select";
 
@@ -63,6 +57,7 @@ export function HomePage() {
   const [inputValue, setInputValue] = useState("");
   const [publishSheetOpen, setPublishSheetOpen] = useState(false);
   const debouncedSearchQuery = useDebouncedValue(inputValue, SEARCH_DEBOUNCE_MS);
+  const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
   const { data: categories } = useCategoriesQuery();
   const activeCategorySlug = searchParams.get("category") ?? undefined;
@@ -84,7 +79,7 @@ export function HomePage() {
     <main data-testid="home-page">
       <TopBar
         variant="home"
-        stateName={PLACEHOLDER_STATE_NAME}
+        stateName={selectedRegion?.stateCode ?? null}
         onStateClick={() => navigate(REGION_SELECT_PATH)}
         onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={handleToggleSearch}
