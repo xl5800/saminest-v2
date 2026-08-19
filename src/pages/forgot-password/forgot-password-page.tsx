@@ -8,6 +8,7 @@ import {
   authSubmitButtonClassName
 } from "../../components/auth-layout";
 import { authService } from "../../services/auth/auth-service";
+import { PRODUCTION_ORIGIN } from "../../utils/constants";
 
 const CONFIRMATION_MESSAGE = "如果该邮箱已注册，我们已发送重置密码邮件。";
 
@@ -34,7 +35,7 @@ export function ForgotPasswordPage() {
     try {
       await authService.resetPassword(
         trimmedEmail,
-        `${window.location.origin}/reset-password`
+        `${PRODUCTION_ORIGIN}/reset-password`
       );
     } catch {
       // 不区分邮箱是否存在、请求是否成功，统一展示同一条提示，

@@ -8,6 +8,7 @@ vi.mock("../../services/auth/auth-service", () => ({
   authService: { resetPassword }
 }));
 
+import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { ForgotPasswordPage } from "./forgot-password-page";
 
 function renderPage() {
@@ -82,10 +83,16 @@ describe("ForgotPasswordPage", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "发送重置邮件" }));
 
+    // 重置链接必须用写死的生产域名 PRODUCTION_ORIGIN 拼，不能用
+    // window.location.origin——Capacitor 打包的原生 App 里没配
+    // server.url，location.origin 会是本地资源地址（Android 是
+    // https://localhost），不是用户设备能访问到的地址，见
+    // src/utils/constants.ts 顶部注释和 post-detail-page.tsx/
+    // activity-detail-page.tsx 分享链接的同一个修复方式。
     await waitFor(() => {
       expect(resetPassword).toHaveBeenCalledWith(
         "user@example.com",
-        `${window.location.origin}/reset-password`
+        `${PRODUCTION_ORIGIN}/reset-password`
       );
     });
     expect(screen.getByRole("status")).toHaveTextContent(
