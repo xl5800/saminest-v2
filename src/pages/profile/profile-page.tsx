@@ -13,11 +13,10 @@ const LOGOUT_ERROR_MESSAGE = "退出登录失败，请稍后重试。";
 
 /**
  * 顶部栏"设置"齿轮的目标路径——06 号卡（00-overview.md 顶部栏规则表）
- * 只要求"我的"页顶部右侧有一个设置齿轮，没有要求这次一并建出"设置"页面
- * 本身（那是另一张没出现过的任务卡的范围）。这里先接入一个占位路径，跟
- * home-page.tsx 的 REGION_SELECT_PATH 是同一个处理方式：routes.tsx 里
- * 没有匹配的路由，点击会落到全局通配符 NotFoundPage，不是死链接/报错，
- * 以后真的建出设置页时这里不需要再改。
+ * 当初只要求"我的"页顶部右侧有一个设置齿轮，这里先接入的是一个占位路径。
+ * 账号注销功能（settings-page.tsx / delete-account-page.tsx）落地后，
+ * routes.tsx 里已经补上 /settings 和 /settings/delete-account 这两条
+ * 路由，这个常量本身不用改，"占位"的部分已经不再成立。
  */
 const SETTINGS_PATH = "/settings";
 

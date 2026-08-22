@@ -32,6 +32,8 @@ import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { DeleteAccountPage } from "../pages/settings/delete-account-page";
+import { SettingsPage } from "../pages/settings/settings-page";
 import { TermsPage } from "../pages/terms/terms-page";
 import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
@@ -161,6 +163,24 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <EditProfilePage />
+          </RequireAuth>
+        )
+      },
+      {
+        // "我的"页设置齿轮此前留的占位路径（见 profile-page.tsx 里
+        // SETTINGS_PATH 顶部的注释），这次接入真正的设置页。
+        path: "settings",
+        element: (
+          <RequireAuth>
+            <SettingsPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "settings/delete-account",
+        element: (
+          <RequireAuth>
+            <DeleteAccountPage />
           </RequireAuth>
         )
       },

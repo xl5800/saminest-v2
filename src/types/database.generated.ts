@@ -14,6 +14,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_deletion_requests: {
+        Row: {
+          cancelled_at: string | null
+          id: string
+          purged_at: string | null
+          requested_at: string
+          scheduled_purge_at: string
+          user_id: string
+        }
+        Insert: {
+          cancelled_at?: string | null
+          id?: string
+          purged_at?: string | null
+          requested_at?: string
+          scheduled_purge_at: string
+          user_id: string
+        }
+        Update: {
+          cancelled_at?: string | null
+          id?: string
+          purged_at?: string | null
+          requested_at?: string
+          scheduled_purge_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_deletion_requests_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activities: {
         Row: {
           capacity: number | null
@@ -936,6 +971,7 @@ export type Database = {
         Returns: undefined
       }
       approve_post: { Args: { target_post_id: string }; Returns: undefined }
+      cancel_account_deletion: { Args: never; Returns: undefined }
       create_activity_conversation: {
         Args: { target_activity_id: string }
         Returns: string
@@ -1073,6 +1109,7 @@ export type Database = {
         }
         Returns: string
       }
+      purge_expired_account_deletions: { Args: never; Returns: undefined }
       reject_activity_participant: {
         Args: { target_participant_id: string }
         Returns: undefined
@@ -1081,6 +1118,7 @@ export type Database = {
         Args: { rejection_note: string; target_post_id: string }
         Returns: undefined
       }
+      request_account_deletion: { Args: never; Returns: string }
       resolve_report: {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined

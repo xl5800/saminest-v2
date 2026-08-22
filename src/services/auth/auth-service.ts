@@ -69,6 +69,24 @@ export const authService = {
     }
   },
 
+  /**
+   * "注销账号"流程用：在真正调用 request_account_deletion() 之前，先
+   * 用当前登录邮箱 + 用户输入的密码走一次 signInWithPassword 确认密码
+   * 正确——这是 Supabase 项目里没有专门的"确认密码"API 时的通用做法，
+   * 跟 signIn() 是同一个底层调用，只是这里不关心返回的 session（当前
+   * session 已经是登录态，成功与否只用来判断密码是否正确），失败时
+   * 统一包一层 AUTH_REAUTH_FAILED，不透出 Supabase 原始错误码，避免
+   * 调用方误判成别的密码相关错误分支。
+   */
+  async verifyCurrentPassword(email: string, password: string): Promise<void> {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      throw new AppError("密码不正确，请重新输入。", "AUTH_REAUTH_FAILED", error);
+    }
+  },
+
   async resetPassword(email: string, redirectTo: string): Promise<void> {
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.resetPasswordForEmail(email, {

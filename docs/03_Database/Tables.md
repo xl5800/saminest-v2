@@ -1088,6 +1088,16 @@ deleted_at = now()
 
 用户内容是否保留、匿名化或删除，应根据隐私规则处理。
 
+> 注意（第 37 节账号自助注销功能落地时发现并记录）：`deleted_at = now()`
+> 这条通用建议在 `profiles` 表上不能照搬——`profiles.deleted_at` 从建表
+> 起就兼任 `profiles_select_public_or_self` 这条 RLS 策略的可见性开关，
+> 设置它会让这一行对除本人外的所有人（含匿名访客）永久隐藏，如果本人
+> 已经无法再登录（比如账号注销），就等于任何人都再也查不到这一行，导致
+> "保留内容、只匿名化作者"这个目标失败。`profiles` 表的清除方案应该
+> 只设置 `account_status = deleted`，不设置 `deleted_at`，详见第 37.1 节。
+> 这条限制只针对 `profiles` 这一张表——其它表的 `deleted_at` 沿用本节的
+> 通用做法，不受影响。
+
 ### 帖子删除
 
 帖子优先软删除。
@@ -1641,3 +1651,126 @@ comments(user_id)
 复用现有 `reports` 表，`target_type` 的取值范围已放宽为
 `('post', 'comment')`（2026-08-04），其余字段/索引/RLS 策略不变，见
 第 12 节。
+
+---
+
+# 37. account_deletion_requests
+
+> 本节是 2026-08-22"注销账号"功能新增的表，按第 35 节文档维护规则补充。
+> 顺序上排在文档末尾，是为了不重新编号已有章节、不引入无关改动，不代表
+> 这张表在数据模型里的从属关系比其它表更靠后。
+
+## 37.1 作用
+
+用户自助发起注销账号，15 天可撤销缓冲期内账号正常使用；缓冲期到期后由
+`pg_cron` 每日定时任务调用 `purge_expired_account_deletions()` 真正执行
+清除。是否处于缓冲期，由这张表是否存在一行"未撤销、未清除"的记录判断，
+不额外在 `profiles` 上加状态字段。
+
+清除时 `profiles` 只设置 `account_status = deleted`（同时清空
+`display_name`/`avatar_url`/`bio`/`location_id` 做匿名化），**不物理删除
+该行，也故意不设置 `profiles.deleted_at`**——这是第 19 节"用户删除"通用
+指引（`account_status = deleted` + `deleted_at = now()`）在这张表上的一处
+必要偏离，原因是 `profiles.deleted_at` 从建表迁移
+（`20260715220000_create_profiles_table.sql`）起就是
+`profiles_select_public_or_self` 这条 RLS 策略的可见性开关
+（`using (deleted_at is null or id = auth.uid())`），跟"软删除时间戳"这个
+在其它表里的常规含义不是同一回事：一旦对某个 `profiles` 行设置了
+`deleted_at`，这一行会对除本人以外的所有人（含匿名访客）从 `SELECT`
+结果里消失。而账号注销清除后，本人已经不可能再登录（`auth.users` 的
+登录凭据已经清空），`id = auth.uid()` 这个分支永远不会再成立，等于把这一
+行永久对所有人隐藏——这会直接破坏 37.1 开头"帖子/消息保留、只匿名化作者
+身份"这个设计目标：`posts.author:profiles(display_name)` 这类联表查询会
+拿到 `null`，前端展示的不会是"已注销用户"，而是退回"未知用户"这类兜底
+文案，等同于内容仍然保留但作者信息看起来完全缺失。这个结论已经用本地
+Supabase 环境（`supabase db reset` + 真实 `anon` 角色请求）复现验证过，
+不是理论推测——见 `supabase/migrations/20260822000000_account_self_
+deletion.sql` 顶部注释里"账号注销功能——验证与上线准备"这次改动记录的
+过程。
+
+`auth.users` 对应行则按原方案清空登录凭据字段
+（`email`/`phone`/`encrypted_password`/`raw_user_meta_data`）并置
+`deleted_at`——这里的 `deleted_at` 是 Supabase Auth/GoTrue 自己识别"这个
+用户已被禁用"的字段，不驱动本项目任何 RLS 策略，跟 `profiles.deleted_at`
+是完全不同的两个字段，不受上面这条限制影响，同样不物理删除该行——
+`profiles.id` 外键指向 `auth.users.id`，物理删除任一行都会触发外键错误，
+或者需要级联删掉这个用户的历史帖子/消息，不符合"用户内容是否保留、
+匿名化或删除，应根据隐私规则处理"的要求。
+
+## 37.2 字段
+
+| 字段 | 类型 | 是否为空 | 默认值 | 说明 |
+|---|---|---:|---|---|
+| `id` | `uuid` | 否 | `gen_random_uuid()` | 主键 |
+| `user_id` | `uuid` | 否 | 无 | 指向 `profiles.id`，**不是**主键——见下面约束/索引一节的说明 |
+| `requested_at` | `timestamptz` | 否 | `now()` | 发起注销的时间 |
+| `scheduled_purge_at` | `timestamptz` | 否 | 无 | 计划执行清除的时间（发起时 `now() + 15 天`） |
+| `cancelled_at` | `timestamptz` | 是 | `null` | 撤销注销的时间，`null` 表示未撤销 |
+| `purged_at` | `timestamptz` | 是 | `null` | 实际执行清除的时间，`null` 表示尚未清除 |
+
+`user_id` 最初设计成直接当主键，本地真实验证时发现这样一个用户一生只能
+发起一次注销请求：撤销之后 `cancelled_at` 有值的这一行仍然永久占着
+`user_id` 这个主键值，以后这个用户想再次发起注销，`INSERT` 会直接撞主键
+唯一约束报 `23505`，而不是 `request_account_deletion()` 里那句"an account
+deletion request is already pending"的友好错误——撤销一次就永久失去了
+再次注销的能力，不符合"撤销"应有的语义。已改成独立的 `id` 主键，见
+37.3 的部分唯一索引。
+
+## 37.3 约束
+
+```text
+check (scheduled_purge_at > requested_at)
+```
+
+```text
+-- 任意时刻每个用户最多一条"待处理"（未撤销、未清除）的请求；一个用户
+-- 一生可以有多条历史记录（每次发起+撤销算一条）。这是这张表真正的业务
+-- 唯一性约束，跟 reports 表的 reports_reporter_active_target_unique_idx
+-- （"同一举报人对同一目标最多一条未结束的举报，允许多条历史记录"）是
+-- 同一个模式。
+unique index on account_deletion_requests (user_id)
+  where cancelled_at is null and purged_at is null
+```
+
+## 37.4 索引
+
+```text
+account_deletion_requests(scheduled_purge_at)
+  where cancelled_at is null and purged_at is null
+```
+
+只覆盖"定时任务扫描到期未处理请求"这一种查询，比对全表加索引更小。
+
+## 37.5 权限原则
+
+- 用户只能读取自己的注销请求状态（`user_id = auth.uid()`），没有对
+  `authenticated`/`anon` 开放任何 `insert`/`update`/`delete` 策略——写入
+  一律走下面三个 `security definer` 函数，跟 `moderation_actions` 表"只有
+  函数能写"是同一个模式。
+- `request_account_deletion()`：本人发起注销，`grant` 给 `authenticated`。
+  已存在一条未撤销未清除的请求时报错。
+- `cancel_account_deletion()`：本人撤销注销，`grant` 给 `authenticated`。
+  没有待处理请求时报错。
+- `purge_expired_account_deletions()`：真正执行清除，只给 `pg_cron`
+  调度调用，不 `grant` 给 `authenticated`/`anon`，防止被前端绕过缓冲期
+  直接调用。
+
+## 37.6 缓冲期内的账号限制
+
+缓冲期内账号完全正常使用（可以发帖/私信/收藏），不复用
+`is_account_restricted()`/`is_account_suspended()` 那套限制——这是这次
+产品决策明确要的行为，不是遗漏。
+
+## 37.7 auth.users 处理方式
+
+项目目前是纯 SPA + Postgres migration，没有 Edge Function 或其它服务端
+代码，因此没有走 Supabase 官方的 `auth.admin.deleteUser(id, true)`（需要
+`service_role` key，只能在服务端调用）。改为在 `purge_expired_account_
+deletions()` 内直接用 SQL 复刻同等效果：清空 `auth.users` 的登录凭据
+字段并置 `deleted_at`，同时删除对应的 `auth.sessions`/`auth.refresh_
+tokens` 行，让账号确实无法再登录，但不删除 `auth.users` 这一行本身。
+详见 `supabase/migrations/20260822000000_account_self_deletion.sql` 顶部
+注释。
+
+如果以后项目引入了服务端代码（Edge Function 或其它），可以考虑把这一步
+换成官方 `auth.admin.deleteUser()`，更贴近 Supabase 支持的标准做法。
