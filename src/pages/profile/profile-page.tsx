@@ -86,7 +86,8 @@ function SettingsRow({ to, icon: Icon, label }: SettingsRowProps) {
  *   给共享组件加 size 变体，不是把两个页面拆开各写各的，见
  *   profile-summary.tsx 顶部注释。
  * - "编辑资料"从卡片下方的独立蓝色按钮，改成功能列表的第一行，样式跟
- *   "我的发布/我的活动/我的收藏/意见反馈"完全一致（同一个
+ *   "我的发布/我的活动/我的收藏/联系客服"（原"意见反馈"，本次任务改名，
+ *   路由还是 /feedback）完全一致（同一个
  *   settingsItemClassName）。邮箱从紧跟按钮下面的一行文字，改成
  *   compact 卡片内的第三行（ProfileSummary 的 tertiaryText），组件本身
  *   仍然不认识"邮箱"这个概念，只是换了个位置摆放同一段文字。
@@ -156,7 +157,7 @@ export function ProfilePage() {
           <SettingsRow to="/my-posts" icon={FileText} label="我的发布" />
           <SettingsRow to="/my-activities" icon={Calendar} label="我的活动" />
           <SettingsRow to="/favorites" icon={Star} label="我的收藏" />
-          <SettingsRow to="/feedback" icon={MessageSquare} label="意见反馈" />
+          <SettingsRow to="/feedback" icon={MessageSquare} label="联系客服" />
         </nav>
 
         {isAdmin === true ? (

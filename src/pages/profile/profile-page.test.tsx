@@ -95,11 +95,11 @@ describe("ProfilePage", () => {
     );
   });
 
-  it("shows the '意见反馈' link to /feedback", async () => {
+  it("shows the '联系客服' link to /feedback", async () => {
     renderWithProviders(<ProfilePage />);
 
     await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "意见反馈" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "联系客服" })).toHaveAttribute(
       "href",
       "/feedback"
     );

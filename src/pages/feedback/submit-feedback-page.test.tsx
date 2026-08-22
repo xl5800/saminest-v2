@@ -79,7 +79,7 @@ describe("SubmitFeedbackPage", () => {
   it("renders the type options", () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { name: "意见反馈" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "联系客服" })).toBeInTheDocument();
     expect(screen.getByLabelText("问题反馈")).toBeInTheDocument();
     expect(screen.getByLabelText("功能建议")).toBeInTheDocument();
     expect(screen.getByLabelText("投诉")).toBeInTheDocument();

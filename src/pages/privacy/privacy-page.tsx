@@ -10,8 +10,10 @@ const listClassName = "mb-4 list-disc space-y-1 pl-5 text-base text-text";
  * 道理——法律文件访客必须能读。正文是逐字照抄的法务原文，结构拆分方式
  * （h2/h3/p/ul）自行决定，不影响文字内容本身。
  *
- * "联系我们"一节的意见反馈入口同 /terms 页面一样，换成站内真实的
- * /feedback 路由，其余文字一字未改。
+ * "联系我们"一节的反馈入口同 /terms 页面一样，换成站内真实的 /feedback
+ * 路由，其余文字一字未改。链接文案本次任务从"意见反馈（Feedback）"改成
+ * "联系客服（Feedback）"——跟这个入口在"我的"页/反馈页本身改的名字保持
+ * 一致，不是照抄法务原文的措辞（法务原文本来就不是这个项目写的）。
  */
 export function PrivacyPage() {
   return (
@@ -152,7 +154,7 @@ export function PrivacyPage() {
       <p className={paragraphClassName}>
         如果您对本隐私政策有任何疑问、建议或请求，可通过网站内的
         <Link to="/feedback" className="text-primary underline">
-          意见反馈（Feedback）
+          联系客服（Feedback）
         </Link>
         页面联系我们。
       </p>

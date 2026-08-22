@@ -1093,6 +1093,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_feedback_status: {
+        Args: { new_status: string; target_feedback_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       post_status:

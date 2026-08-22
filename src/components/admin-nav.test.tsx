@@ -9,11 +9,11 @@ describe("AdminNav", () => {
     cleanup();
   });
 
-  it("renders all 5 admin destination links", () => {
+  it("renders all 6 admin destination links", () => {
     renderWithProviders(<AdminNav />, { initialEntries: ["/admin/posts"] });
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     expect(screen.getByRole("link", { name: "待审核" })).toHaveAttribute(
       "href",
       "/admin/posts"
@@ -26,6 +26,10 @@ describe("AdminNav", () => {
       "href",
       "/admin/reports"
     );
+    expect(screen.getByRole("link", { name: "联系客服" })).toHaveAttribute(
+      "href",
+      "/admin/feedback"
+    );
     expect(screen.getByRole("link", { name: "用户管理" })).toHaveAttribute(
       "href",
       "/admin/users"
@@ -33,6 +37,15 @@ describe("AdminNav", () => {
     expect(screen.getByRole("link", { name: "分类管理" })).toHaveAttribute(
       "href",
       "/admin/categories"
+    );
+  });
+
+  it("marks '联系客服' as active with aria-current on /admin/feedback", () => {
+    renderWithProviders(<AdminNav />, { initialEntries: ["/admin/feedback"] });
+
+    expect(screen.getByRole("link", { name: "联系客服" })).toHaveAttribute(
+      "aria-current",
+      "page"
     );
   });
 

@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
+import { listFeedbackImagesByFeedbackIds } from "./feedback-images-repository";
 
 // Postgres/PostgREST 的 insufficient_privilege 错误码，任何 RLS with check
 // 失败都会报这个码——具体为什么这里能把它安全地归因于账号受限，见下面
@@ -86,4 +87,106 @@ export async function createFeedback(
   }
 
   return { id: data.id };
+}
+
+export interface AdminFeedbackListItem {
+  id: string;
+  type: string;
+  title: string;
+  content: string;
+  status: string;
+  createdAt: string;
+  submitterName: string;
+  images: { id: string; publicUrl: string }[];
+}
+
+interface AdminFeedbackRow {
+  id: string;
+  type: string;
+  title: string;
+  content: string;
+  status: string;
+  created_at: string;
+  submitter: { display_name: string } | null;
+}
+
+/**
+ * 管理员"联系客服"处理队列（/admin/feedback）用，照抄
+ * reports-repository.ts 的 listReportsForModeration：status 可选过滤（默认
+ * "pending"，跟 feedback_status_check 约束的四个取值一致），按 created_at
+ * 升序（最早提交的排最前面，同一个"队列处理"的排序直觉）。
+ *
+ * feedback 表对 profiles 只有 user_id 这一个外键（不像 reports 表对
+ * profiles 有 reporter_id/reviewer_id 两个、必须显式指定走哪一个），理论上
+ * `profiles(display_name)` 不加消歧后缀也能过 PostgREST 的关系推断，但这里
+ * 仍然显式写 `profiles!feedback_user_id_fkey(display_name)`——跟
+ * listReportsForModeration 保持同一个写法习惯，不需要每次新增一个联表查询
+ * 都重新判断"这次是不是真的不需要消歧"，写法统一也让以后如果 profiles 真的
+ * 多出第二个外键时不需要回头改这一处。约束名 feedback_user_id_fkey 已经在
+ * Supabase 里核对过（Postgres 默认外键命名规则 {表}_{列}_fkey，没有另外
+ * 显式命名），不是照抄 reports 表猜的。
+ *
+ * 截图不跟主查询一起嵌套 select（那样每条反馈都要单独带出一份 feedback_images
+ * 内嵌数组，字段这次也不需要 storage_path/sort_order 等主查询用不到的
+ * 列），改成拿到这一页反馈的 id 列表后，用 listFeedbackImagesByFeedbackIds
+ * 批量查一次、按 feedbackId 分组——跟 activity-list-page.tsx 批量查参与者
+ * 预览是同一个模式，不对每条反馈单独发一次截图请求。
+ */
+export async function listFeedbackForAdmin(
+  status: string = "pending"
+): Promise<AdminFeedbackListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("feedback")
+    .select(
+      "id, type, title, content, status, created_at, submitter:profiles!feedback_user_id_fkey(display_name)"
+    )
+    .eq("status", status)
+    .order("created_at", { ascending: true })
+    .overrideTypes<AdminFeedbackRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_FEEDBACK_LIST_FAILED", error);
+  }
+
+  const rows = data ?? [];
+  const imagesByFeedback = await listFeedbackImagesByFeedbackIds(rows.map((row) => row.id));
+
+  return rows.map((row) => ({
+    id: row.id,
+    type: row.type,
+    title: row.title,
+    content: row.content,
+    status: row.status,
+    createdAt: row.created_at,
+    submitterName: row.submitter?.display_name ?? "未知用户",
+    images: imagesByFeedback.get(row.id) ?? []
+  }));
+}
+
+// set_feedback_status() 内部失败原因只有两种（调用者不是管理员、new_status
+// 不在 feedback_status_check 允许的四个取值里），管理员在这个页面上点击
+// 现成的状态筛选按钮不可能撞上任何一种（按钮传的状态值都是写死在
+// STATUS_FILTER_OPTIONS 里的合法常量，调用这个函数的前提本身就是已经通过了
+// RequireAdmin 路由鉴权）——不需要像 joinActivity 那样为每种失败原因单独
+// 拆一条可操作的错误提示，一条通用错误码兜底即可。
+const SET_FEEDBACK_STATUS_ERROR_MESSAGE = "操作失败，请稍后重试。";
+
+/**
+ * 管理员修改一条反馈的处理状态。feedback 表没有 UPDATE 策略（见
+ * supabase/migrations/20260724000000_create_feedback_tables.sql 顶部的
+ * 权限原则说明），必须走 set_feedback_status() 这个 security definer
+ * 函数——内部检查 is_admin()、校验 new_status 合法性，并写一条
+ * moderation_actions 审计记录，跟 resolveReport/dismissReport 调用
+ * resolve_report()/dismiss_report() 是同一个"敏感的管理员状态变更必须走
+ * 数据库函数"原则。
+ */
+export async function setFeedbackStatus(feedbackId: string, newStatus: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("set_feedback_status", {
+    target_feedback_id: feedbackId,
+    new_status: newStatus
+  });
+
+  if (error) {
+    throw new AppError(SET_FEEDBACK_STATUS_ERROR_MESSAGE, "ADMIN_SET_FEEDBACK_STATUS_FAILED", error);
+  }
 }

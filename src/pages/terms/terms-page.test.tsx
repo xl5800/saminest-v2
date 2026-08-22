@@ -27,7 +27,7 @@ describe("TermsPage", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("link", { name: "意见反馈（Feedback）" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "联系客服（Feedback）" })).toHaveAttribute(
       "href",
       "/feedback"
     );

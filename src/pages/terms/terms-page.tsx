@@ -12,9 +12,11 @@ const orderedListClassName = "mb-4 list-decimal space-y-1 pl-5 text-base text-te
  * "优化措辞"；HTML 结构（h2/h3/p/ul/ol 怎么拆）是这次渲染时自行决定的，
  * 不影响文字内容本身。
  *
- * 唯一的例外是"联系我们"一节提到的意见反馈入口：原始法务素材里那处写的是
+ * 唯一的例外是"联系我们"一节提到的反馈入口：原始法务素材里那处写的是
  * 一个外部预览域名的 hash 链接，不是站内真实路径，这里换成真实存在的
- * /feedback 路由，用 <Link> 而不是裸 <a>，其余文字一字未改。
+ * /feedback 路由，用 <Link> 而不是裸 <a>，其余文字一字未改。链接文案本次
+ * 任务从"意见反馈（Feedback）"改成"联系客服（Feedback）"，跟 privacy-page.tsx
+ * 是同一处改动、同一个理由。
  */
 export function TermsPage() {
   return (
@@ -211,7 +213,7 @@ export function TermsPage() {
       <p className={paragraphClassName}>
         如果您对本协议有任何疑问，可通过网站内的
         <Link to="/feedback" className="text-primary underline">
-          意见反馈（Feedback）
+          联系客服（Feedback）
         </Link>
         页面与我们联系。
       </p>

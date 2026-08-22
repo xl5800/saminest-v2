@@ -22,6 +22,7 @@ const {
   hasUnreadSystemNotification,
   listMyConversations,
   listReportsForModeration,
+  listFeedbackForAdmin,
   getCurrentUserRole,
   listProfilesForAdmin,
   getMyProfile,
@@ -55,6 +56,7 @@ const {
   hasUnreadSystemNotification: vi.fn(),
   listMyConversations: vi.fn(),
   listReportsForModeration: vi.fn(),
+  listFeedbackForAdmin: vi.fn(),
   getCurrentUserRole: vi.fn(),
   listProfilesForAdmin: vi.fn(),
   getMyProfile: vi.fn(),
@@ -108,6 +110,15 @@ vi.mock("../repositories/reports-repository", async () => {
     listReportsForModeration
   };
 });
+vi.mock("../repositories/feedback-repository", async () => {
+  const actual = await vi.importActual<typeof import("../repositories/feedback-repository")>(
+    "../repositories/feedback-repository"
+  );
+  return {
+    ...actual,
+    listFeedbackForAdmin
+  };
+});
 vi.mock("../repositories/profiles-repository", () => ({
   getCurrentUserRole,
   listProfilesForAdmin,
@@ -140,6 +151,7 @@ import { ActivityListPage } from "../pages/activities/activity-list-page";
 import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
+import { AdminFeedbackPage } from "../pages/admin/feedback-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
@@ -317,6 +329,16 @@ function renderAt(path: string | string[]) {
             )
           },
           {
+            path: "admin/feedback",
+            element: (
+              <RequireAuth>
+                <RequireAdmin>
+                  <AdminFeedbackPage />
+                </RequireAdmin>
+              </RequireAuth>
+            )
+          },
+          {
             path: "admin/users",
             element: (
               <RequireAuth>
@@ -380,6 +402,7 @@ describe("app routes", () => {
     hasUnreadSystemNotification.mockReset();
     listMyConversations.mockReset();
     listReportsForModeration.mockReset();
+    listFeedbackForAdmin.mockReset();
     getCurrentUserRole.mockReset();
     listProfilesForAdmin.mockReset();
     getMyProfile.mockReset();
@@ -413,6 +436,7 @@ describe("app routes", () => {
     hasUnreadSystemNotification.mockResolvedValue(false);
     listMyConversations.mockResolvedValue([]);
     listReportsForModeration.mockResolvedValue([]);
+    listFeedbackForAdmin.mockResolvedValue([]);
     listProfilesForAdmin.mockResolvedValue([]);
     getMyProfile.mockResolvedValue({
       displayName: "Alice",
@@ -800,7 +824,7 @@ describe("app routes", () => {
 
     renderAt("/feedback");
 
-    expect(await screen.findByRole("heading", { name: "意见反馈" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "联系客服" })).toBeInTheDocument();
   });
 
   it("redirects /my-posts to /login when there is no session (reuses RequireAuth)", () => {
@@ -927,6 +951,36 @@ describe("app routes", () => {
 
     expect(
       await screen.findByRole("heading", { name: "举报处理" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/feedback to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/admin/feedback");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("redirects /admin/feedback to / when logged in as a non-admin (reuses RequireAdmin)", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("user");
+
+    renderAt("/admin/feedback");
+
+    expect(
+      await screen.findByTestId("home-page")
+    ).toBeInTheDocument();
+  });
+
+  it("renders the feedback admin page at /admin/feedback when logged in as an admin", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    getCurrentUserRole.mockResolvedValue("super_admin");
+
+    renderAt("/admin/feedback");
+
+    expect(
+      await screen.findByRole("heading", { name: "联系客服" })
     ).toBeInTheDocument();
   });
 

@@ -120,8 +120,11 @@ async function uploadAndInsertFeedbackImages(input: {
 }
 
 /**
- * 意见反馈提交页（/feedback，路由已在 routes.tsx 用 RequireAuth 包裹，
- * 页面内部不做登录检查/跳转，符合 CLAUDE.md 的统一规则）。
+ * "联系客服"提交页（/feedback，路由已在 routes.tsx 用 RequireAuth 包裹，
+ * 页面内部不做登录检查/跳转，符合 CLAUDE.md 的统一规则）。页面标题从
+ * "意见反馈"改名"联系客服"（这次任务改的），路由路径/表单结构/后端表名
+ * 都还是 feedback 这个既有概念，不是重新做一个功能，只是给这同一个入口
+ * 换了个用户看到的名字。
  *
  * 表单结构照抄 report-post-page.tsx：类型单选、标题/内容必填、成功后用
  * submitted 布尔值切换成功态、账号受限单独判断文案。截图上传照抄
@@ -217,7 +220,7 @@ export function SubmitFeedbackPage() {
     return (
       <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
         <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">意见反馈</h1>
+          <h1 className="mb-6 text-xl font-bold text-text">联系客服</h1>
           <p role="status" className="rounded border border-success bg-success/10 px-3 py-2 text-sm text-success">
             {successMessage}
           </p>
@@ -231,7 +234,7 @@ export function SubmitFeedbackPage() {
   return (
     <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
       <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">意见反馈</h1>
+        <h1 className="mb-6 text-xl font-bold text-text">联系客服</h1>
         <form onSubmit={handleSubmit} noValidate>
           {validationError ? (
             <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">

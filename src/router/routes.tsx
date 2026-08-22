@@ -6,6 +6,7 @@ import { ActivityListPage } from "../pages/activities/activity-list-page";
 import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
+import { AdminFeedbackPage } from "../pages/admin/feedback-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
@@ -209,6 +210,16 @@ export const router = createBrowserRouter([
           <RequireAuth>
             <RequireAdmin>
               <AdminReportsPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
+      {
+        path: "admin/feedback",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminFeedbackPage />
             </RequireAdmin>
           </RequireAuth>
         )
