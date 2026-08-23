@@ -1,8 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Bell } from "lucide-react";
-import { Fragment, type FormEvent, useEffect, useState } from "react";
+import { Fragment, type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { useBlockUserMutation } from "../../features/blocks/use-block-user-mutation";
+import { useIsBlockedPairQuery } from "../../features/blocks/use-is-blocked-pair-query";
+import { useIsBlockingQuery } from "../../features/blocks/use-is-blocking-query";
+import { useUnblockUserMutation } from "../../features/blocks/use-unblock-user-mutation";
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
 import { useMessagesQuery } from "../../features/messages/use-messages-query";
 import { useSendMessageMutation } from "../../features/messages/use-send-message-mutation";
@@ -22,6 +26,8 @@ const LOAD_ERROR_MESSAGE = "消息加载失败，请刷新页面重试。";
 const DEFAULT_OTHER_PARTY_LABEL = "对方";
 const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
 const SYSTEM_NOTIFICATION_SUBTITLE = "官方通知";
+const BLOCK_ACTION_ERROR_MESSAGE = "操作失败，请稍后重试。";
+const BLOCKED_COMPOSER_MESSAGE = "你们之间存在屏蔽关系，无法互发消息。";
 
 interface AvatarProps {
   avatarUrl: string | null;
@@ -154,6 +160,33 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  * 靠它自己原来的 refetchOnWindowFocus 机制，范围说明里已经写明这是独立
  * 的另一个改动，这次不做。失败只 console.error，不影响页面正常使用——
  * 标记已读是次要副作用，不应该因为它失败就让整个页面报错。
+ *
+ * UGC 安全功能补齐任务卡 1（屏蔽用户）：header 右上角原来那个禁用的
+ * "更多会话选项（暂不可用）"占位按钮，这次实现成真正可点的"…"菜单——
+ * 交互模式照抄 top-bar.tsx 的 MoreMenuButton（本地 open state + 点击外部/
+ * Escape 关闭、菜单内容点击后冒泡到外层容器统一收起），但没有直接复用
+ * 那个组件：这个页面的 header 是自己手写的三栏 grid 布局，不是通过
+ * <TopBar variant="detail" /> 渲染的（跟 user-profile-page.tsx 不一样），
+ * 把整个 header 换成 TopBar 是一次更大范围的重构，不在这次任务卡的范围内，
+ * 所以这里就地实现一份同构但独立的菜单，不算重复造轮子。
+ *
+ * 菜单只有一个"屏蔽此人/取消屏蔽"项，文案由 useIsBlockingQuery 决定；
+ * 系统通知会话（没有"对方"这个人）或者 conversation?.otherUserId 为
+ * null（对方已退出会话）时，菜单整体不可用，退回原来那个禁用占位按钮，
+ * 不显示一个点了也没有效果的空菜单。
+ *
+ * 屏蔽状态之外，另外用 useIsBlockedPairQuery 查询"我和对方之间有没有
+ * 任一方向的屏蔽关系"，为真时把消息输入框（<form
+ * data-testid="conversation-composer">）整个换成一条说明文案，不再让
+ * 用户输入后才在提交时收到一条不够准确的失败提示——见
+ * messages-repository.ts 里 sendMessage() 对应的注释：数据库层
+ * messages_insert_own_as_active_member 策略的 42501 拒绝原因现在有两种
+ * （账号受限 / 屏蔽关系），后端异常本身分不出是哪一种，前端能提前查出来的
+ * 就不依赖那条兜底文案。这条文案刻意不区分"是我屏蔽了对方"还是"对方屏蔽了
+ * 我"——前一种信息用户自己已经能在对方主页的屏蔽按钮上看到，没必要在这里
+ * 重复；不区分方向也避免了意外暴露"对方屏蔽了我"这种可能更敏感的单向
+ * 信息。系统通知会话继续保持原来"不渲染输入框"的分支不变，加了一层
+ * "先判断是不是系统会话，再判断是不是屏蔽关系"。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -186,6 +219,38 @@ export function MessageConversationPage() {
       ? `关于 ${conversation.postTitle}`
       : "私信会话";
 
+  const otherUserId = conversation?.otherUserId ?? undefined;
+  const canManageBlock = !isSystemConversation && !!otherUserId;
+  const { data: isBlocking } = useIsBlockingQuery(currentUserId, otherUserId);
+  const { data: isBlockedPair } = useIsBlockedPairQuery(currentUserId, otherUserId);
+  const blockMutation = useBlockUserMutation();
+  const unblockMutation = useUnblockUserMutation();
+  const isBlockActionPending = blockMutation.isPending || unblockMutation.isPending;
+  const [blockActionError, setBlockActionError] = useState<string | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function handlePointerDown(event: MouseEvent): void {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
+
   useEffect(() => {
     if (!conversationId || !currentUserId) return;
 
@@ -204,6 +269,25 @@ export function MessageConversationPage() {
       return;
     }
     navigate(-1);
+  }
+
+  async function handleToggleBlock(): Promise<void> {
+    // 防御性判断，不是路由鉴权本身——这个路由已经被 RequireAuth 包裹，
+    // currentUserId 正常情况下必定存在，这里只应对 session 中途失效这种
+    // 边缘情况，跟 handleSubmit 里 senderId 的判断是同一个原则。
+    if (!currentUserId || !otherUserId) return;
+    if (isBlockActionPending) return;
+
+    setBlockActionError(null);
+    try {
+      if (isBlocking) {
+        await unblockMutation.mutateAsync({ blockerId: currentUserId, blockedId: otherUserId });
+      } else {
+        await blockMutation.mutateAsync({ blockerId: currentUserId, blockedId: otherUserId });
+      }
+    } catch {
+      setBlockActionError(BLOCK_ACTION_ERROR_MESSAGE);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
@@ -233,10 +317,13 @@ export function MessageConversationPage() {
       await sendMessageMutation.mutateAsync({ senderId, body: trimmedBody });
       setBody("");
     } catch (error) {
-      // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：账号
-      // 受限是一个明确、可操作的失败原因（重试没有用），跟其它未知失败
-      // 原因共用一条"请稍后重试"文案会误导用户。
-      if (error instanceof AppError && error.code === "ACCOUNT_RESTRICTED") {
+      // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：
+      // MESSAGE_SEND_FORBIDDEN 是一个明确、可操作的失败原因（重试没有
+      // 用），跟其它未知失败原因共用一条"请稍后重试"文案会误导用户。见
+      // messages-repository.ts 里 sendMessage() 的注释：这个 code 现在
+      // 涵盖账号受限和屏蔽关系两种可能，不再是单一原因，所以文案本身
+      // 也不预设具体是哪一种。
+      if (error instanceof AppError && error.code === "MESSAGE_SEND_FORBIDDEN") {
         setSubmitError(error.message);
       } else {
         setSubmitError(DEFAULT_ERROR_MESSAGE);
@@ -295,14 +382,46 @@ export function MessageConversationPage() {
           </div>
         </div>
 
-        <button
-          type="button"
-          aria-label="更多会话选项（暂不可用）"
-          disabled
-          className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          ⋯
-        </button>
+        {canManageBlock ? (
+          <div ref={menuRef} className="relative justify-self-end">
+            <button
+              type="button"
+              aria-label="更多会话选项"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((current) => !current)}
+              className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-text hover:bg-bg focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              ⋯
+            </button>
+            {menuOpen ? (
+              <div
+                role="menu"
+                onClick={() => setMenuOpen(false)}
+                className="absolute right-0 top-11 z-20 min-w-[132px] overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lg"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleToggleBlock()}
+                  disabled={isBlockActionPending}
+                  className="block w-full px-4 py-2.5 text-left text-sm text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isBlockActionPending ? "处理中…" : isBlocking ? "取消屏蔽" : "屏蔽此人"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <button
+            type="button"
+            aria-label="更多会话选项（暂不可用）"
+            disabled
+            className="flex h-11 w-11 items-center justify-center rounded-full text-xl text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            ⋯
+          </button>
+        )}
       </header>
 
       <section
@@ -310,6 +429,11 @@ export function MessageConversationPage() {
         data-testid="conversation-messages"
         className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 pb-6"
       >
+        {blockActionError ? (
+          <p role="alert" className="mb-3 rounded-xl border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {blockActionError}
+          </p>
+        ) : null}
         {messagesPending ? (
           <p role="status" className="text-sm text-text-muted">加载中…</p>
         ) : null}
@@ -405,7 +529,17 @@ export function MessageConversationPage() {
         ) : null}
       </section>
 
-      {!isSystemConversation ? (
+      {!isSystemConversation && isBlockedPair ? (
+        <div
+          data-testid="conversation-blocked-banner"
+          className="sticky bottom-0 z-10 shrink-0 border-t border-border bg-white px-4 py-3 text-center text-sm text-text-muted"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          {BLOCKED_COMPOSER_MESSAGE}
+        </div>
+      ) : null}
+
+      {!isSystemConversation && !isBlockedPair ? (
         <form
           onSubmit={handleSubmit}
           noValidate

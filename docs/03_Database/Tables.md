@@ -821,6 +821,11 @@ group
 
 具体去重方式应根据最终消息产品规则确定。
 
+> 2026-08-21 补充：`create_direct_conversation`/`create_profile_
+> conversation`/`create_activity_conversation` 这三个创建会话的入口，
+> 现在都会先检查双方是否存在屏蔽关系（`is_blocked_pair`），存在则拒绝
+> 创建，见第 38 节 `user_blocks` 表。
+
 ---
 
 # 14. conversation_members
@@ -920,6 +925,9 @@ messages(sender_id, created_at desc)
 - 发送者必须是该会话有效成员。
 - 用户不能读取其他会话的消息。
 - 删除和撤回规则应由产品要求明确后再实现。
+- 2026-08-21 补充：发送者和会话里任何仍在场的其它成员之间存在屏蔽关系
+  （`is_blocked_in_conversation`）时也会被拒绝，即使双方是已有会话里的
+  既有成员。见第 38 节 `user_blocks` 表 38.6。
 
 ---
 
@@ -1774,3 +1782,120 @@ tokens` 行，让账号确实无法再登录，但不删除 `auth.users` 这一�
 
 如果以后项目引入了服务端代码（Edge Function 或其它），可以考虑把这一步
 换成官方 `auth.admin.deleteUser()`，更贴近 Supabase 支持的标准做法。
+
+---
+
+# 38. user_blocks
+
+> 本节是 2026-08-21 "UGC 安全功能补齐（任务卡 1：屏蔽用户）"新增的表，
+> 按第 35 节文档维护规则补充。顺序上排在文档末尾，是为了不重新编号已有
+> 章节、不引入无关改动，不代表这张表在数据模型里的从属关系比其它表更
+> 靠后——跟第 36/37 节是同一个理由。
+
+## 38.1 作用
+
+用户单方面屏蔽另一个用户，屏蔽后双方无法互相发起新会话、也无法在已有
+会话里继续互发消息（对方仍能看到已经存在的历史消息，只是不能再发新的）。
+背景见 `docs/04_Development/Apple-UGC-Compliance-Review.md`——Apple App
+Store 审核要求 UGC 类应用提供"用户可以自行屏蔽其他用户"的能力，不能只有
+管理员侧的账号限制/封禁。
+
+这张表只记录"谁屏蔽了谁"这个单向关系本身，不是"双向拉黑"的对称关系——
+`blocker_id` 屏蔽 `blocked_id` 之后，`blocked_id` 并不会自动屏蔽
+`blocker_id`。但对话/消息层面的实际限制效果是双向对称的（A 屏蔽了 B
+之后，A 发消息给 B 会被拒绝，B 发消息给 A 也会被拒绝）——这是产品决策，
+不是技术上的疏漏：真实存在骚扰关系时，被骚扰方屏蔽对方后，双方都不应该
+再能通过这条会话互相打扰，不能因为"骚扰方没有主动屏蔽"就仍然收到对方的
+消息。这个"任一方向存在屏蔽记录即视为双方互相屏蔽"的判断逻辑封装在
+`is_blocked_pair(uuid, uuid)` 这个 `security definer` 函数里，见 38.5。
+
+这张表没有历史记录的概念（不像 `account_deletion_requests` 那样"当前
+只能有一条有效记录，但允许保留历史"），取消屏蔽就是物理删除对应行，
+重新屏蔽就是重新插入一行——跟 `favorites` 表的"用户维护自己的一份关系
+列表"是同一个模式（见第 8/9 节），不需要软删除，也不需要
+`account_deletion_requests` 那种"独立 id 主键 + 部分唯一索引"设计（那是
+为了保留历史记录才需要的，这张表不需要）。
+
+## 38.2 字段
+
+| 字段 | 类型 | 是否为空 | 默认值 | 说明 |
+|---|---|---:|---|---|
+| `id` | `uuid` | 否 | `gen_random_uuid()` | 主键 |
+| `blocker_id` | `uuid` | 否 | 无 | 指向 `profiles.id`，发起屏蔽的用户 |
+| `blocked_id` | `uuid` | 否 | 无 | 指向 `profiles.id`，被屏蔽的用户 |
+| `created_at` | `timestamptz` | 否 | `now()` | 屏蔽发生时间 |
+
+## 38.3 约束
+
+```text
+check (blocker_id <> blocked_id)  -- user_blocks_no_self_block，不能屏蔽自己
+```
+
+```text
+-- 同一用户不会对同一目标重复插入多条屏蔽记录——跟 favorites 表的
+-- favorites_user_id_post_id_key 是同一个模式，插入时撞上这条约束
+-- （23505）在仓库层当成"已经屏蔽成功"处理，不向上抛错，见
+-- src/repositories/user-blocks-repository.ts 的 blockUser()。
+unique index user_blocks_blocker_blocked_unique_idx
+  on user_blocks (blocker_id, blocked_id)
+```
+
+## 38.4 索引
+
+```text
+user_blocks(blocked_id)
+```
+
+`blocker_id` 已经被上面的联合唯一索引覆盖（联合索引的最左列可以直接服务
+`where blocker_id = ...` 查询），但 `is_blocked_pair()` 需要反过来按
+`blocked_id` 查找"谁屏蔽了我"，单独加这一个索引，否则这个方向的查询要走
+全表扫描。
+
+## 38.5 权限原则
+
+- 用户只能读取自己发起的屏蔽记录（`blocker_id = auth.uid()`）——RLS 直接
+  读表拿不到"对方有没有屏蔽我"这个反方向信息，这是刻意的：不应该让
+  被屏蔽的一方能够查询到"谁屏蔽了我"这份名单。
+- `insert`/`delete` 都要求 `blocker_id = auth.uid()`，用户只能维护自己
+  发起的屏蔽关系，不能替别人屏蔽/取消屏蔽。没有 `update` 策略——屏蔽
+  关系只有"存在"和"不存在"两种状态，不需要修改已有行。
+- `is_blocked_pair(user_a uuid, user_b uuid) returns boolean`：
+  `security definer stable` 函数，判断 `user_a`/`user_b` 之间任一方向是否
+  存在屏蔽记录。因为 `user_blocks` 的 RLS 只允许读自己发起的那一半记录，
+  直接查表拿不到"对方是否屏蔽了我"这个方向，所以需要一个绕过 RLS 的
+  `security definer` 函数来做这次双向判断——这跟 `is_conversation_member`
+  等一系列"绕开 RLS 自引用递归"的函数是同一类手法，但这里的动机不是递归
+  （`user_blocks` 本身不会触发 RLS 递归），而是"业务上需要读到对方那一半
+  数据"。默认保留 Postgres 的 `PUBLIC` 执行权限（不显式 `revoke`/`grant`），
+  前端和其它 SQL 函数都能直接调用，跟 `is_conversation_member` 系列函数
+  是同一个惯例。
+- `is_blocked_in_conversation(target_conversation_id uuid, target_user_id
+  uuid) returns boolean`：同样是 `security definer stable` 函数，判断
+  `target_conversation_id` 里除 `target_user_id` 之外的其它在场成员，是否
+  有人跟 `target_user_id` 存在 `is_blocked_pair`。供 `messages` 表的
+  `messages_insert_own_as_active_member` 策略调用，见 38.6。
+
+## 38.6 对会话创建 / 消息发送的实际约束
+
+这张表本身不直接限制别的表，实际限制效果由下面这些既有函数/策略在
+`with check` 里额外调用 `is_blocked_pair`/`is_blocked_in_conversation`
+实现（对应迁移文件
+`supabase/migrations/20260822020000_enforce_user_blocks_in_messaging.sql`，
+第 13/15 节里这几个函数/策略原本的说明保持不变，这里只补充这次新增的
+第四个限制条件）：
+
+- `create_direct_conversation`/`create_profile_conversation`/
+  `create_activity_conversation`（第 13 节 conversations 表"防重复
+  规则"提到的三个创建入口）：三个函数都在最前面新增一次
+  `is_blocked_pair` 检查，双方存在任一方向的屏蔽关系时直接
+  `raise exception`，不创建新会话。`create_profile_conversation` 把这次
+  检查放在"复用已有会话"的查找逻辑之前——即使之前双方已经有一个会话，
+  一旦存在屏蔽关系，也不会把用户导向那个旧会话继续发消息。
+- `messages_insert_own_as_active_member`（第 15 节 messages 表"权限
+  原则"提到的插入策略）：`with check` 新增第四个条件
+  `not is_blocked_in_conversation(messages.conversation_id, auth.uid())`，
+  已经存在的会话里，只要发送者和会话里任何一个仍在场的其它成员之间存在
+  屏蔽关系，插入会被拒绝。前端 `src/repositories/messages-repository.ts`
+  的 `sendMessage()` 因此不能再像以前那样把这条策略触发的 `42501` 一律
+  归因成"账号受限"——账号受限和屏蔽关系现在都是这个错误码背后的真实
+  可能原因，具体处理方式见该文件对应的注释。
