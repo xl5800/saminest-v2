@@ -254,6 +254,34 @@ describe("listReportsForModeration", () => {
     expect(result[0].targetTitle).toBe("周六一起打球");
   });
 
+  // UGC 安全功能补齐任务卡 2（举报用户）：target_type = "user" 时查
+  // profiles 表的 display_name，跟 post/activity 分别查 posts/activities
+  // 是同一个批量查询模式，只是换了张表、换了字段名（title → display_name）。
+  it("looks up and attaches the target user's display name", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-3",
+          reason_code: "harassment",
+          description: null,
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "user",
+          target_id: "user-9",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+    inMock.mockResolvedValue({ data: [{ id: "user-9", display_name: "Alice" }], error: null });
+
+    const result = await listReportsForModeration();
+
+    expect(fromMock).toHaveBeenCalledWith("profiles");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, display_name");
+    expect(inMock).toHaveBeenCalledWith("id", ["user-9"]);
+    expect(result[0].targetTitle).toBe("Alice");
+  });
+
   it("falls back to a null title, without throwing, when the title lookup query errors", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
@@ -276,7 +304,7 @@ describe("listReportsForModeration", () => {
     expect(result[0].targetTitle).toBeNull();
   });
 
-  it("skips the title lookup entirely for target types other than post/activity", async () => {
+  it("skips the title lookup entirely for target types other than post/activity/user", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {

@@ -31,6 +31,7 @@ import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
+import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { DeleteAccountPage } from "../pages/settings/delete-account-page";
 import { SettingsPage } from "../pages/settings/settings-page";
@@ -187,6 +188,14 @@ export const router = createBrowserRouter([
       {
         path: "users/:userId",
         element: <UserProfilePage />
+      },
+      {
+        path: "users/:userId/report",
+        element: (
+          <RequireAuth>
+            <ReportUserPage />
+          </RequireAuth>
+        )
       },
       {
         path: "my-posts",

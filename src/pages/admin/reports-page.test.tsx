@@ -124,6 +124,41 @@ describe("AdminReportsPage", () => {
     ).toHaveAttribute("href", "/activities/act-1");
   });
 
+  // UGC 安全功能补齐任务卡 2（举报用户）。
+  it("renders the reported user's nickname plus a link to /admin/users when target_type is 'user'", async () => {
+    const userReport = {
+      ...sampleReport,
+      id: "report-user-1",
+      targetType: "user",
+      targetId: "user-9",
+      targetTitle: "Alice"
+    };
+    listReportsForModeration.mockResolvedValue([userReport]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "去账号管理搜索处理" })).toHaveAttribute(
+      "href",
+      "/admin/users"
+    );
+  });
+
+  it("falls back to 'user / :id' when the reported user's nickname isn't available", async () => {
+    const userReport = {
+      ...sampleReport,
+      id: "report-user-2",
+      targetType: "user",
+      targetId: "user-10",
+      targetTitle: null
+    };
+    listReportsForModeration.mockResolvedValue([userReport]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByText("user / user-10")).toBeInTheDocument();
+  });
+
   it("renders the target as plain (non-clickable) text for any other target_type", async () => {
     const commentReport = {
       ...sampleReport,

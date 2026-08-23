@@ -33,7 +33,7 @@ export type ReportReasonCode = (typeof REPORT_REASON_OPTIONS)[number]["value"];
 
 export interface CreateReportInput {
   reporterId: string;
-  targetType: "post" | "comment" | "activity";
+  targetType: "post" | "comment" | "activity" | "user";
   targetId: string;
   reasonCode: string;
   description: string | null;
@@ -108,10 +108,13 @@ export interface AdminReportListItem {
   createdAt: string;
   targetType: string;
   targetId: string;
-  /** 被举报内容的标题（帖子/活动），仅用于列表展示，找不到时（比如
-   *  target_type 是 comment，或标题查询失败）回退成 null，调用方用
-   *  targetId 兜底，不是一个需要报错中断整个列表的情况——见
-   *  fetchTargetTitles 的注释。 */
+  /** 被举报内容的标题（帖子/活动）或被举报用户的昵称（target_type 为
+   *  "user" 时），仅用于列表展示，找不到时（比如 target_type 是
+   *  comment，或查询失败）回退成 null，调用方用 targetId 兜底，不是一个
+   *  需要报错中断整个列表的情况——见 fetchTargetTitles 的注释。字段名
+   *  沿用 targetTitle 没有为"用户昵称"这个场景单独加一个字段，跟调用方
+   *  （reports-page.tsx）"不管 target_type 具体是什么，这一列展示的都是
+   *  被举报对象的一个简短标识"这个统一渲染逻辑保持一致。 */
   targetTitle: string | null;
   reporterName: string;
 }
@@ -136,6 +139,9 @@ interface AdminReportRow {
  * posts_select_public_or_own_or_admin 和新增的 activities_select_admin 这两条
  * RLS 策略都对管理员整表放行，不受 status/deleted_at 限制，所以这里不用
  * 额外处理"帖子已下架/活动已取消"这种情况——管理员本来就应该能看到。
+ * profiles_select_public_or_self 同理对被举报账号是否已经受限/封禁不敏感
+ * （这条 RLS 只按 deleted_at 过滤，账号状态变化不影响能不能查到这一行），
+ * 举报用户功能补齐这次新增的 "user" 分支不需要额外处理这种情况。
  *
  * 标题只是列表展示的辅助信息，这里查询失败不应该让整个举报列表加载失败——
  * 跟 use-toggle-activity-participation-mutation.ts 里 notifyOrganizer
@@ -150,8 +156,9 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<Map<string, st
   const activityIds = rows
     .filter((row) => row.target_type === "activity")
     .map((row) => row.target_id);
+  const userIds = rows.filter((row) => row.target_type === "user").map((row) => row.target_id);
 
-  if (postIds.length === 0 && activityIds.length === 0) {
+  if (postIds.length === 0 && activityIds.length === 0 && userIds.length === 0) {
     return titles;
   }
 
@@ -174,6 +181,17 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<Map<string, st
       if (error) throw error;
       for (const activity of data ?? []) {
         titles.set(`activity:${activity.id}`, activity.title);
+      }
+    }
+
+    if (userIds.length > 0) {
+      const { data, error } = await client
+        .from("profiles")
+        .select("id, display_name")
+        .in("id", userIds);
+      if (error) throw error;
+      for (const profile of data ?? []) {
+        titles.set(`user:${profile.id}`, profile.display_name);
       }
     }
   } catch (titleLookupError) {

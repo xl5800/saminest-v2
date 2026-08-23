@@ -71,6 +71,19 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * 成功了），也不能什么都不提示（管理员会以为帖子真的被删了）。这条提示
  * 挂在页面级而不是行内，因为这一行马上就要消失，没法承载一条持续展示的
  * 行内错误。
+ *
+ * UGC 安全功能补齐任务卡 2（举报用户）：target_type === "user" 的举报行
+ * 展示被举报用户的昵称（复用 reports-repository.ts 已有的
+ * targetTitle/fetchTargetTitles 批量查询模式，只是这次查的是 profiles
+ * 表），旁边加一个跳到 /admin/users 的链接。这个链接刻意不带查询参数
+ * 精确定位到某一行——AdminUsersPage 的搜索框目前只是组件内部的本地
+ * state（见 users-page.tsx 的 searchInput/searchTerm），没有读 URL query
+ * string，传参也不会有效果；改 users-page.tsx 让它支持从 URL 带参数搜索
+ * 属于账号管理页面自身功能的扩展，不在这次任务允许修改的范围内（任务卡
+ * 明确"账号管理页面 set_account_status 相关逻辑本身...不改这个功能内部
+ * 实现"，为了这一个跳转链接去扩展它的搜索能力也算是变相扩大了范围）。
+ * 昵称已经展示在链接旁边，管理员点进去后自己复制/输入这个昵称搜索即可，
+ * 这是任务卡明确认可的简化版本，不强求这次做到精确定位。
  */
 export function AdminReportsPage() {
   const [status, setStatus] = useState<string>("pending");
@@ -293,6 +306,14 @@ export function AdminReportsPage() {
                     <Link to={`/activities/${report.targetId}`} className="text-primary hover:underline">
                       {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
                     </Link>
+                  ) : report.targetType === "user" ? (
+                    <>
+                      {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
+                      {" "}
+                      <Link to="/admin/users" className="text-primary hover:underline">
+                        去账号管理搜索处理
+                      </Link>
+                    </>
                   ) : (
                     `${report.targetType} / ${report.targetId}`
                   )}
