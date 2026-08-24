@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
+import { formatLocationDisplayName } from "../../data/us-states";
 import { useFavoritedPostsQuery } from "../../features/favorites/use-favorited-posts-query";
 import { formatListingDate, formatPrice } from "../../utils/format";
 
@@ -61,7 +62,9 @@ export function FavoritesPage() {
               <span className="text-sm font-semibold text-text">
                 {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
               </span>
-              <span className="text-xs text-text-muted">{post.locationName ?? "地区未填写"}</span>
+              <span className="text-xs text-text-muted">
+                {post.locationName ? formatLocationDisplayName(post.locationName) : "地区未填写"}
+              </span>
               <span className="text-xs text-text-muted">{formatListingDate(post.createdAt)}</span>
             </Link>
             <FavoriteButton postId={post.id} />

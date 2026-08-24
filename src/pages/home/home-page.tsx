@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { TopBar } from "../../components/top-bar";
+import { formatStateLabelByCode } from "../../data/us-states";
 import { CategoryNav } from "../../features/categories/category-nav";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { PostList } from "../../features/posts/post-list";
@@ -26,15 +27,16 @@ const REGION_SELECT_PATH = "/region-select";
 /**
  * 08 号卡：TopBar home 变体胶囊按钮第二行的展示文案。有具体城市数据时
  * （目前只有 DC/VA/MD 三州，用户下钻选了具体某个城市）用"{城市名}, {州
- * 代码}"——精确复刻 Meet5 参考截图"Woodbridge, VA"这个格式；其余大多数州
- * 没有城市可选、直接选中整个州时没有 cityName 可用，退回展示州全名（比
- * 单独显示两字母缩写"CA"更友好，尤其是首页这种第一眼就要认出"这是哪里"
- * 的场景）。这个格式化逻辑只有首页这一个消费者，就地写成一个小函数，不
- * 提到 selected-region-store.ts 里——那个 store 只负责存数据，不应该背上
- * "怎么格式化展示"这种表现层逻辑。
+ * 代码}"——精确复刻 Meet5 参考截图"Woodbridge, VA"这个格式，城市名本身
+ * 不翻译（12 号卡明确"城市名称不用加中文翻译"）；其余大多数州没有城市可选、
+ * 直接选中整个州时没有 cityName 可用，12 号卡起改成"缩写 + 中文州名"
+ * （如"CA 加利福尼亚州"），不再展示英文全名——全站统一格式，见
+ * us-states.ts 的 formatStateLabelByCode。这个格式化逻辑只有首页这一个
+ * 消费者，就地写成一个小函数，不提到 selected-region-store.ts 里——那个
+ * store 只负责存数据，不应该背上"怎么格式化展示"这种表现层逻辑。
  */
 function formatRegionLabel(region: { stateCode: string; stateName: string; cityName: string | null }): string {
-  return region.cityName ? `${region.cityName}, ${region.stateCode}` : region.stateName;
+  return region.cityName ? `${region.cityName}, ${region.stateCode}` : formatStateLabelByCode(region.stateCode);
 }
 
 /**

@@ -1,12 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
 import { TopBar } from "../../components/top-bar";
+import { formatLocationDisplayName, formatStateLabelByCode } from "../../data/us-states";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
-import { useLocationsQuery } from "../../features/locations/use-locations-query";
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
 import { useUpdatePostMutation } from "../../features/my-posts/use-update-post-mutation";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
@@ -16,6 +16,7 @@ import {
 } from "../../repositories/post-images-repository";
 import { createPost, type PostDetailImage } from "../../repositories/posts-repository";
 import { postImageStorageService } from "../../services/storage/post-image-storage-service";
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { getNextPostImageSortOrder } from "../../utils/post-image-sort-order";
@@ -23,7 +24,6 @@ import {
   CONTACT_METHOD_OPTIONS,
   DESCRIPTION_MAX_LENGTH,
   DESCRIPTION_MIN_LENGTH,
-  LOCATION_TEXT_MAX_LENGTH,
   OTHER_LOCATION_VALUE,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
@@ -209,11 +209,6 @@ export function PublishPage() {
     isError: categoriesError
   } = useCategoriesQuery();
   const {
-    data: locations,
-    isPending: locationsPending,
-    isError: locationsError
-  } = useLocationsQuery();
-  const {
     data: existingPost,
     isPending: existingPostPending,
     isError: existingPostIsError
@@ -225,6 +220,10 @@ export function PublishPage() {
   const [categoryId, setCategoryId] = useState("");
   const [locationId, setLocationId] = useState("");
   const [locationText, setLocationText] = useState("");
+  // 12 号卡：地区字段的展示文案，跟 locationId/locationText 这两个提交用的
+  // 值分开存——两者语义不一样（这个只管这一行按钮显示什么字，不参与校验/
+  // 提交），见下面消费 pendingRegion 的 effect 和"地区"字段的渲染。
+  const [regionLabel, setRegionLabel] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
@@ -256,6 +255,16 @@ export function PublishPage() {
       setLocationId("");
       setLocationText("");
     }
+    // 地区字段的展示文案直接复用 locationName（服务端已经算好的"城市名 或
+    // locationText"，见 posts-repository.ts 的 resolveLocationName），不用
+    // 自己重新判断一遍 locationId/locationText 该显示哪个——两边算的是
+    // 同一件事，没必要维护两份逻辑。formatLocationDisplayName 防御性地
+    // 处理"历史数据里 locationName 恰好是裸州代码"这种情况（目前帖子的
+    // location_id 从没引用过 type='state' 的行，理论上不会发生，只是跟
+    // 别处展示 locationName 的地方用同一个函数保持一致）。
+    setRegionLabel(
+      existingPost.locationName ? formatLocationDisplayName(existingPost.locationName) : ""
+    );
     setTitle(existingPost.title);
     setDescription(existingPost.description);
     setPrice(existingPost.priceAmount !== null ? String(existingPost.priceAmount) : "");
@@ -285,6 +294,61 @@ export function PublishPage() {
       setCategoryId(matched.id);
     }
   }, [isEditMode, presetCategorySlug, categories]);
+
+  // 12 号卡：地区字段从原生 <select> 改成跳转 /region-select?mode=form
+  // 整页选择、回填。见 pending-form-region-store.ts 顶部注释——"选完带参数
+  // 返回表单页"这套导航机制复用的是 08 号卡"全美"选项已经验证过的同一个
+  // 形状（写 store → RegionSelectPage navigate(-1) → 这里订阅同一个 store
+  // 拿到新值），只是换了一个专用的、一次性的 store。
+  //
+  // 有 cityId（DC/VA/MD 下钻到具体城市）时，locationId 直接写成这个真实
+  // 城市的 id，跟改版前用户从原生下拉里选中一个城市是完全一样的提交路径。
+  //
+  // 没有 cityId（其余 47 个州，或者 DC/VA/MD 没有下钻直接选中整个州——
+  // 目前 UI 上不会出现后一种情况，但这里不假设一定是前一种）时，没有
+  // 一个 locations.id 可以引用（大多数州在 locations 表里压根没有对应的
+  // 行，见 us-states.ts / activities-repository.ts 08 号卡那批注释里对
+  // 这同一个问题的说明），复用发布表单原本就有的"其他（手动输入）"兜底
+  // 机制（OTHER_LOCATION_VALUE + locationText，见 publish-validation.ts）
+  // ——不是绕开校验，是把"选了一个没有真实城市数据的州"当成跟"手动输入了
+  // 一个地名"完全一样的一种情况处理，locationText 存这个州格式化好的
+  // "缩写 中文州名"，跟别处（帖子卡片/详情页的 locationName）展示的是
+  // 同一个字符串，不需要展示层再判断一次这是不是"其他"分支存的值。
+  //
+  // 消费完立刻 clearPendingRegion()，避免残留值在下一次进入另一个表单
+  // （比如离开这里去发一条不同的帖子）时被误读。
+  const pendingRegion = usePendingFormRegionStore((s) => s.pendingRegion);
+  const clearPendingRegion = usePendingFormRegionStore((s) => s.clearPendingRegion);
+
+  useEffect(() => {
+    if (!pendingRegion) return;
+
+    if (pendingRegion.cityId) {
+      setLocationId(pendingRegion.cityId);
+      setLocationText("");
+      setRegionLabel(pendingRegion.cityName ?? formatStateLabelByCode(pendingRegion.stateCode));
+    } else {
+      const stateLabel = formatStateLabelByCode(pendingRegion.stateCode);
+      setLocationId(OTHER_LOCATION_VALUE);
+      setLocationText(stateLabel);
+      setRegionLabel(stateLabel);
+    }
+    clearPendingRegion();
+  }, [pendingRegion, clearPendingRegion]);
+
+  function handleOpenRegionSelect(): void {
+    navigate("/region-select?mode=form");
+  }
+
+  // 12.4：帖子类表单额外保留一个独立的"不限地区"能力——这不是
+  // /region-select 列表里的一项（那边的"全美"在 form 场景下压根不展示，
+  // 见 region-select-page.tsx），是这个字段自己的"清空"操作，回到改版前
+  // 默认的"不限地区"状态。
+  function handleClearRegion(): void {
+    setLocationId("");
+    setLocationText("");
+    setRegionLabel("");
+  }
 
   const loadingExistingPost = isEditMode && existingPostPending;
   const loadError = isEditMode && !existingPostPending && (existingPostIsError || existingPost === null);
@@ -497,48 +561,38 @@ export function PublishPage() {
               </p>
             ) : null}
 
-            <label className="mb-1 block">
+            <div className="mb-4">
               <span className="mb-2 block text-xs font-semibold text-text">地区</span>
-              <span className="relative block">
-                <select
-                  value={locationId}
-                  onChange={(event) => setLocationId(event.target.value)}
-                  disabled={locationsPending}
-                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+              {/* 外层是普通 div，不是 button——"清除地区"和"跳转整页选择"
+                  是两个独立的可交互控件（两个 <button> 平级放着），不把
+                  "×"清除按钮嵌套进主按钮里，避免"<button> 嵌套 <button>"
+                  这种非法 HTML 结构，跟 activity-card.tsx 顶部注释里
+                  "<a> 嵌套可交互 <button>"是同一类问题、同一个规避方式。 */}
+              <div className="flex items-center gap-1 rounded-xl bg-card px-3.5 py-3">
+                <button
+                  type="button"
+                  onClick={handleOpenRegionSelect}
+                  className="flex min-w-0 flex-1 items-center justify-between text-left text-base"
                 >
-                  <option value="">不限地区</option>
-                  {(locations ?? []).map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.name}
-                    </option>
-                  ))}
-                  <option value={OTHER_LOCATION_VALUE}>其他（手动输入）</option>
-                </select>
-                <ChevronDown
-                  aria-hidden="true"
-                  size={16}
-                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
-                />
-              </span>
-            </label>
-            {locationId === OTHER_LOCATION_VALUE ? (
-              <input
-                type="text"
-                value={locationText}
-                onChange={(event) => setLocationText(event.target.value)}
-                maxLength={LOCATION_TEXT_MAX_LENGTH}
-                placeholder="请输入地区名称"
-                aria-label="地区名称"
-                className="mb-4 mt-2 w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            ) : (
-              <div className="mb-4" />
-            )}
-            {locationsError ? (
-              <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
-                地区加载失败，请刷新页面重试。
-              </p>
-            ) : null}
+                  <span className={`truncate ${regionLabel ? "text-text" : "text-text-muted"}`}>
+                    {regionLabel || "不限地区"}
+                  </span>
+                  <ChevronRight aria-hidden="true" size={16} className="ml-2 shrink-0 text-chevron" />
+                </button>
+                {regionLabel ? (
+                  // 12.4：帖子类表单的"不限地区"是这个字段自己的清空操作，
+                  // 不经过 /region-select——见 handleClearRegion 上方注释。
+                  <button
+                    type="button"
+                    aria-label="清除地区"
+                    onClick={handleClearRegion}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg"
+                  >
+                    <X aria-hidden="true" size={14} />
+                  </button>
+                ) : null}
+              </div>
+            </div>
 
             <label className="mb-4 block">
               <span className="mb-2 block text-xs font-semibold text-text">标题</span>

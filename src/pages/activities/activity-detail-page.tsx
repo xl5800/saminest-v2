@@ -6,6 +6,7 @@ import { ActivityFavoriteButton } from "../../components/activity-favorite-butto
 import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
 import { ActivityParticipationButtonView } from "../../components/activity-participation-button";
 import { TopBar } from "../../components/top-bar";
+import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
@@ -76,7 +77,10 @@ export function ActivityDetailPage() {
       await Share.share({
         title: activity.title,
         text: `${formatActivityStartAt(activity.startAt)}・${
-          activity.isOnline ? "线上活动" : activity.landmarkText ?? activity.locationName ?? "地点待定"
+          activity.isOnline
+            ? "线上活动"
+            : activity.landmarkText ??
+              (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")
         }`,
         url: `${PRODUCTION_ORIGIN}/activities/${id}`,
         dialogTitle: "分享"
@@ -171,9 +175,16 @@ export function ActivityDetailPage() {
             <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>
 
             <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
-              <p>{data.isOnline ? "线上活动" : (data.landmarkText ?? data.locationName ?? "地点待定")}</p>
+              <p>
+                {data.isOnline
+                  ? "线上活动"
+                  : (data.landmarkText ??
+                    (data.locationName ? formatLocationDisplayName(data.locationName) : "地点待定"))}
+              </p>
               {!data.isOnline && data.locationName ? (
-                <p className="mt-1 text-xs text-text-muted">{data.locationName}</p>
+                <p className="mt-1 text-xs text-text-muted">
+                  {formatLocationDisplayName(data.locationName)}
+                </p>
               ) : null}
             </div>
 

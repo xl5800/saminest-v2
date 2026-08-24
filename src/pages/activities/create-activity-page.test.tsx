@@ -19,17 +19,24 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { AppError } from "../../utils/app-error";
 import { CreateActivityPage } from "./create-activity-page";
 
 const initialAuthState = useAuthStore.getState();
+const initialPendingRegionState = usePendingFormRegionStore.getState();
 
+// 12 号卡：地区选择从原生 <select> 换成跳转 /region-select?mode=form + 回填
+// usePendingFormRegionStore（不用真的渲染 RegionSelectPage，直接往 store
+// 里写值模拟"选完回来"这一刻，跟 publish-page.test.tsx 是同一个模式）。
 // 频道从 <select> 换成了 Chips（04 号卡改版），fillRequiredFields 相应地
 // 改成点击对应的 Chip 按钮，其余字段的 <label> 文本没变，继续用
-// getByLabelText。
-function fillRequiredFields() {
+// getByLabelText。这个函数改成 async：地区回填要经过一次 effect + 反查
+// stateCode → locations.id 才生效（那条查询是 mock 的 Promise，不是同步
+// 完成），调用方都要 await 它。
+async function fillRequiredFields() {
   fireEvent.click(screen.getByRole("button", { name: /吃饭搭子/ }));
   fireEvent.change(screen.getByLabelText(/标题/), {
     target: { value: "周末吃火锅" }
@@ -37,7 +44,13 @@ function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/说明/), {
     target: { value: "一起吃火锅，AA制" }
   });
-  fireEvent.change(screen.getByLabelText(/^州/), { target: { value: "loc-1" } });
+  usePendingFormRegionStore.getState().setPendingRegion({
+    stateCode: "VA",
+    stateName: "Virginia",
+    cityId: null,
+    cityName: null
+  });
+  await screen.findByText("VA 弗吉尼亚州");
   fireEvent.change(screen.getByLabelText(/开始时间/), {
     target: { value: "2099-01-01T10:00" }
   });
@@ -54,11 +67,12 @@ describe("CreateActivityPage", () => {
 
   beforeEach(() => {
     useAuthStore.setState(initialAuthState, true);
+    usePendingFormRegionStore.setState(initialPendingRegionState, true);
     listActiveActivityRegions.mockReset();
     createActivity.mockReset();
     navigateMock.mockReset();
 
-    listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA" }]);
+    listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA", stateCode: "VA" }]);
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
   });
 
@@ -69,11 +83,63 @@ describe("CreateActivityPage", () => {
     expect(screen.getByRole("button", { name: "发布" })).toBeInTheDocument();
   });
 
-  it("renders region options loaded from the database, not hardcoded", async () => {
+  // 12 号卡：地区字段不再是原生 <select>，改成跳转 /region-select?mode=form
+  // 整页选择；回填流程本身（含"regions 查询比选完回来晚到"这个时序）单独
+  // 用下面几个测试覆盖，这里只断言默认态和点击跳转。
+  it("shows '请选择州' by default and navigates to /region-select?mode=form when the 州 field is clicked", () => {
     renderWithProviders(<CreateActivityPage />);
 
-    expect(await screen.findByRole("option", { name: "VA" })).toBeInTheDocument();
-    expect(listActiveActivityRegions).toHaveBeenCalled();
+    expect(screen.getByText("请选择州")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("请选择州"));
+
+    expect(navigateMock).toHaveBeenCalledWith("/region-select?mode=form");
+  });
+
+  it("resolves a state-only pick (no city) to the matching locations.id via the regions lookup, even if the regions query hasn't resolved yet", async () => {
+    // 特意不 await 这条查询——模拟"用户从 /region-select 选完返回时，
+    // regions 这条查询碰巧还没返回"这个时序，验证 effect 里那条"先不清空
+    // pendingRegion，等查询回来再重试"的兜底逻辑真的生效，不会静默丢失
+    // 用户的选择。
+    renderWithProviders(<CreateActivityPage />);
+
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "VA",
+      stateName: "Virginia",
+      cityId: null,
+      cityName: null
+    });
+
+    await screen.findByText("VA 弗吉尼亚州");
+    expect(screen.queryByText("请选择州")).not.toBeInTheDocument();
+  });
+
+  it("resolves a city-backed pick (DC/VA/MD drilldown) directly to the city's own locations.id, showing the city name (not translated)", async () => {
+    renderWithProviders(<CreateActivityPage />);
+
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "VA",
+      stateName: "Virginia",
+      cityId: "loc-arlington",
+      cityName: "Arlington"
+    });
+
+    await screen.findByText("Arlington");
+  });
+
+  it("clears a picked region back to '请选择州' when the clear button is clicked", async () => {
+    renderWithProviders(<CreateActivityPage />);
+
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "VA",
+      stateName: "Virginia",
+      cityId: null,
+      cityName: null
+    });
+    await screen.findByText("VA 弗吉尼亚州");
+
+    fireEvent.click(screen.getByRole("button", { name: "清除地区" }));
+
+    expect(screen.getByText("请选择州")).toBeInTheDocument();
   });
 
   it("does not render any field for organizer_id or status", () => {
@@ -96,13 +162,18 @@ describe("CreateActivityPage", () => {
 
   it("blocks submission and shows the validation message when the title is empty", async () => {
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
     fireEvent.click(screen.getByRole("button", { name: /吃饭搭子/ }));
     fireEvent.change(screen.getByLabelText(/说明/), {
       target: { value: "一起吃火锅，AA制" }
     });
-    fireEvent.change(screen.getByLabelText(/^州/), { target: { value: "loc-1" } });
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "VA",
+      stateName: "Virginia",
+      cityId: null,
+      cityName: null
+    });
+    await screen.findByText("VA 弗吉尼亚州");
     fireEvent.change(screen.getByLabelText(/开始时间/), {
       target: { value: "2099-01-01T10:00" }
     });
@@ -114,10 +185,9 @@ describe("CreateActivityPage", () => {
 
   it("blocks submission when the activity is offline and no region is selected", async () => {
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
-    fillRequiredFields();
-    fireEvent.change(screen.getByLabelText(/^州/), { target: { value: "" } });
+    await fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "清除地区" }));
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("线下活动请选择州。");
@@ -127,7 +197,6 @@ describe("CreateActivityPage", () => {
   it("allows submission without a region when '线上活动' is checked", async () => {
     createActivity.mockResolvedValue({ id: "act-999" });
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
     fireEvent.click(screen.getByRole("button", { name: /吃饭搭子/ }));
     fireEvent.change(screen.getByLabelText(/标题/), { target: { value: "线上小聚" } });
@@ -148,9 +217,8 @@ describe("CreateActivityPage", () => {
   it("submits organizerId from the auth store, maps all fields through createActivity, and navigates to the new activity's detail page", async () => {
     createActivity.mockResolvedValue({ id: "act-999" });
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.change(screen.getByLabelText(/细分标签/), { target: { value: "火锅" } });
     fireEvent.change(screen.getByLabelText(/具体地标/), { target: { value: "海底捞" } });
     // 人数上限步进器：从"不限"开始，点 4 次"+"到 4。
@@ -207,9 +275,8 @@ describe("CreateActivityPage", () => {
   it("submits requiresApproval: true when the '需要我同意才能加入' checkbox is checked", async () => {
     createActivity.mockResolvedValue({ id: "act-999" });
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
-    fillRequiredFields();
+    await fillRequiredFields();
     fireEvent.click(screen.getByLabelText(/需要我同意才能加入/));
     submit();
 
@@ -223,9 +290,8 @@ describe("CreateActivityPage", () => {
   it("shows a generic error message and does not navigate when createActivity fails", async () => {
     createActivity.mockRejectedValue(new Error("insert failed"));
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
-    fillRequiredFields();
+    await fillRequiredFields();
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("发布失败，请稍后重试。");
@@ -240,9 +306,8 @@ describe("CreateActivityPage", () => {
       )
     );
     renderWithProviders(<CreateActivityPage />);
-    await screen.findByRole("option", { name: "VA" });
 
-    fillRequiredFields();
+    await fillRequiredFields();
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent(

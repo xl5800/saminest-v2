@@ -72,20 +72,32 @@ export async function listActiveCitiesWithState(): Promise<LocationWithStateItem
 }
 
 /**
- * 找搭子（活动）的地区筛选 + 发起活动地区选择用。跟 listActiveLocations
- * 查同一张 locations 表，但只取 type = 'state' 的 3 条（DC/VA/MD）——
- * 找搭子不再选具体城市，具体城市由发起人自己写进活动标题，这里只提供一个
- * 粗粒度的"州"筛选，见 docs/01_Product/FindBuddy-Design.md 里"按州分组"
- * 那段的取舍说明（DMV 横跨三个州，按州筛虽然不代表真实距离，但对 DMV
- * 本地人来说 DC/NOVA/MD 本来就是日常会用的粗略分法，牺牲精度换发布门槛）。
+ * 找搭子（活动）发起表单选地区用。跟 listActiveLocations 查同一张
+ * locations 表，但只取 type = 'state' 的行——找搭子不选具体城市，具体
+ * 城市由发起人自己写进活动标题，这里只提供一个粗粒度的"州"选择，见
+ * docs/01_Product/FindBuddy-Design.md 里"按州分组"那段的取舍说明（按州
+ * 筛虽然不代表真实距离，但对本地人来说本来就是日常会用的粗略分法，
+ * 牺牲精度换发布门槛）。
  *
- * 返回类型复用 LocationListItem（{id, name}），跟 listActiveLocations 结构
- * 完全一样，没必要为了这三条数据单独定义一个新类型。
+ * 12 号卡「地区选择格式统一 + 全局复用 /region-select」之前，这里只有
+ * DC/VA/MD 3 条（对应 create-activity-page.tsx 原生 <select> 的 3 个选项）；
+ * 12 号卡把 locations 表补全成全美 51 个 type = 'state' 行之后（见
+ * supabase/migrations/20260816223226_.../add_remaining_state_locations
+ * 两次迁移），这里天然跟着变成 51 条，不需要改这个函数本身。
+ *
+ * 返回类型从只有 {id, name} 的 LocationListItem 换成
+ * LocationWithStateItem（多一列 state_code）——12 号卡起，
+ * create-activity-page.tsx 需要把 /region-select 选回来的 stateCode
+ * 反查成这里对应州级行的 locations.id 才能提交（activities.location_id
+ * 是必填外键，没有 posts 那种自由文本兜底字段，见 create-activity-page.tsx
+ * 顶部注释），只靠 name（历史上存的是裸缩写"VA"这种巧合）反查不如显式
+ * 用 state_code 匹配可靠，复用 listActiveCitiesWithState 已经定义好的
+ * 这个类型，不新建一个几乎一样的类型。
  */
-export async function listActiveActivityRegions(): Promise<LocationListItem[]> {
+export async function listActiveActivityRegions(): Promise<LocationWithStateItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("locations")
-    .select("id, name")
+    .select("id, name, state_code")
     .eq("is_active", true)
     .eq("type", "state")
     .order("sort_order", { ascending: true });
@@ -96,7 +108,8 @@ export async function listActiveActivityRegions(): Promise<LocationListItem[]> {
 
   return (data ?? []).map((row) => ({
     id: row.id,
-    name: row.name
+    name: row.name,
+    stateCode: row.state_code
   }));
 }
 

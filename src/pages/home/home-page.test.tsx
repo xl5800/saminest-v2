@@ -109,8 +109,9 @@ describe("HomePage", () => {
     });
 
     // 08 号卡：全美 50 州里大多数州没有城市数据，直接选中整个州时没有
-    // cityName，胶囊第二行应该退回展示州全名，不是裸露的两字母缩写。
-    it("renders the full state name when a state with no city data has been selected directly", () => {
+    // cityName，胶囊第二行应该退回展示州名。12 号卡：格式从英文全名统一
+    // 改成"缩写 + 中文州名"（如"CA 加利福尼亚州"）。
+    it("renders '<code> <中文州名>' when a state with no city data has been selected directly", () => {
       listActiveCategories.mockResolvedValue([]);
       listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
       useSelectedRegionStore.getState().setSelectedRegion({
@@ -122,7 +123,8 @@ describe("HomePage", () => {
 
       renderWithProviders(<HomePage />);
 
-      expect(screen.getByText("California")).toBeInTheDocument();
+      expect(screen.getByText("CA 加利福尼亚州")).toBeInTheDocument();
+      expect(screen.queryByText("California")).not.toBeInTheDocument();
     });
 
     it("renders only icon buttons ('发布'/'搜索') at the top — no visible text '发布' button and no bottom floating publish button", () => {

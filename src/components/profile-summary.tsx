@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { formatLocationDisplayName } from "../data/us-states";
+
 export interface ProfileSummaryProps {
   displayName: string | null;
   avatarUrl: string | null;
@@ -134,7 +136,9 @@ export function ProfileSummary({
         {displayName ?? "未知用户"}
       </h1>
 
-      {locationName ? <p className="mt-1 text-sm text-text-muted">{locationName}</p> : null}
+      {locationName ? (
+        <p className="mt-1 text-sm text-text-muted">{formatLocationDisplayName(locationName)}</p>
+      ) : null}
 
       {bio ? (
         <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">{bio}</p>

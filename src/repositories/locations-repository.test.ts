@@ -138,23 +138,28 @@ describe("listActiveActivityRegions", () => {
     orderMock.mockReset();
   });
 
-  it("only requests active, type = 'state' locations ordered by sort_order", async () => {
+  it("only requests active, type = 'state' locations ordered by sort_order, selecting state_code", async () => {
     orderMock.mockResolvedValue({ data: [], error: null });
 
     await listActiveActivityRegions();
 
     expect(fromMock).toHaveBeenCalledWith("locations");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, name, state_code");
     expect(queryBuilder.eq).toHaveBeenCalledWith("is_active", true);
     expect(queryBuilder.eq).toHaveBeenCalledWith("type", "state");
     expect(orderMock).toHaveBeenCalledWith("sort_order", { ascending: true });
   });
 
-  it("maps rows to LocationListItem", async () => {
+  // 12 号卡：locations 表补全到全美 51 个 type = 'state' 行之后，这里
+  // 天然跟着变成 51 条——这个测试不需要真的塞 51 行数据来"验证数量"，
+  // 只要确认单行的映射（含新增的 stateCode 字段）是对的就够，数量交给
+  // 上面那条"只请求 type = 'state'"的测试断言过滤条件本身。
+  it("maps rows to LocationWithStateItem, including state_code", async () => {
     orderMock.mockResolvedValue({
       data: [
-        { id: "region-1", name: "DC" },
-        { id: "region-2", name: "VA" },
-        { id: "region-3", name: "MD" }
+        { id: "region-1", name: "DC", state_code: "DC" },
+        { id: "region-2", name: "VA", state_code: "VA" },
+        { id: "region-3", name: "CA", state_code: "CA" }
       ],
       error: null
     });
@@ -162,9 +167,9 @@ describe("listActiveActivityRegions", () => {
     const result = await listActiveActivityRegions();
 
     expect(result).toEqual([
-      { id: "region-1", name: "DC" },
-      { id: "region-2", name: "VA" },
-      { id: "region-3", name: "MD" }
+      { id: "region-1", name: "DC", stateCode: "DC" },
+      { id: "region-2", name: "VA", stateCode: "VA" },
+      { id: "region-3", name: "CA", stateCode: "CA" }
     ]);
   });
 

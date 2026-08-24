@@ -19,6 +19,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 });
 
 import { renderWithProviders } from "../../test/render-with-providers";
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { RegionSelectPage } from "./region-select-page";
 
@@ -35,6 +36,7 @@ const CITIES = [
 ];
 
 const initialRegionState = useSelectedRegionStore.getState();
+const initialPendingRegionState = usePendingFormRegionStore.getState();
 
 describe("RegionSelectPage", () => {
   afterEach(() => {
@@ -46,6 +48,7 @@ describe("RegionSelectPage", () => {
     useRegionContentCountsQuery.mockReset();
     navigateMock.mockReset();
     useSelectedRegionStore.setState(initialRegionState, true);
+    usePendingFormRegionStore.setState(initialPendingRegionState, true);
     localStorage.clear();
 
     useCitiesWithStateQuery.mockReturnValue({ data: CITIES, isPending: false, isError: false });
@@ -64,17 +67,20 @@ describe("RegionSelectPage", () => {
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
   });
 
-  // 08 号卡：全美 50 州 + DC，共 51 项，用英文全名展示（不再是裸露的两字母
-  // 缩写）。
-  it("renders all 51 states (as full English names) plus the pinned '全美' option at the top", () => {
+  // 12 号卡：展示格式从裸露的英文全名统一改成"缩写 + 空格 + 中文州名"
+  // （如 "NY 纽约州"）。
+  it("renders all 51 states (as '<缩写> <中文州名>') plus the pinned '全美' option at the top", () => {
     renderWithProviders(<RegionSelectPage />);
 
     expect(screen.getByRole("button", { name: "全美" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Virginia" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Maryland" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "District of Columbia" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "VA 弗吉尼亚州" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "MD 马里兰州" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "DC 哥伦比亚特区" })).toBeInTheDocument();
     // 一个没有任何城市数据的州（08 号卡新增覆盖），确认它也真的渲染出来了。
-    expect(screen.getByRole("button", { name: "California" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "CA 加利福尼亚州" })).toBeInTheDocument();
+    // 不再展示裸露的英文全名。
+    expect(screen.queryByText("Virginia")).not.toBeInTheDocument();
+    expect(screen.queryByText("California")).not.toBeInTheDocument();
 
     // 顶部"返回"按钮（TopBar nav-only 变体自带的 BackButton）只有一个
     // aria-label，可见 textContent 是空字符串（图标带 aria-hidden），不是
@@ -89,9 +95,9 @@ describe("RegionSelectPage", () => {
   it("shows a chevron-bearing row for multi-city states (VA/MD) and a plain row for the single-city state (DC)", () => {
     renderWithProviders(<RegionSelectPage />);
 
-    const dcRow = screen.getByRole("button", { name: "District of Columbia" });
-    const vaRow = screen.getByRole("button", { name: "Virginia" });
-    const mdRow = screen.getByRole("button", { name: "Maryland" });
+    const dcRow = screen.getByRole("button", { name: "DC 哥伦比亚特区" });
+    const vaRow = screen.getByRole("button", { name: "VA 弗吉尼亚州" });
+    const mdRow = screen.getByRole("button", { name: "MD 马里兰州" });
     expect(dcRow.querySelector("svg")).not.toBeInTheDocument();
     expect(vaRow.querySelector("svg")).toBeInTheDocument();
     expect(mdRow.querySelector("svg")).toBeInTheDocument();
@@ -103,7 +109,7 @@ describe("RegionSelectPage", () => {
   it("directly selects a state with no city data (e.g. California) and navigates back, with a null cityId/cityName", () => {
     renderWithProviders(<RegionSelectPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "California" }));
+    fireEvent.click(screen.getByRole("button", { name: "CA 加利福尼亚州" }));
 
     expect(useSelectedRegionStore.getState().selectedRegion).toEqual({
       stateCode: "CA",
@@ -117,7 +123,7 @@ describe("RegionSelectPage", () => {
   it("selects DC's only city directly and navigates back, without drilling down", () => {
     renderWithProviders(<RegionSelectPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "District of Columbia" }));
+    fireEvent.click(screen.getByRole("button", { name: "DC 哥伦比亚特区" }));
 
     expect(useSelectedRegionStore.getState().selectedRegion).toEqual({
       stateCode: "DC",
@@ -131,12 +137,12 @@ describe("RegionSelectPage", () => {
   it("drills into VA's city list on click, then selects a city and navigates back", () => {
     renderWithProviders(<RegionSelectPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Virginia" }));
+    fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
 
     expect(screen.getByRole("button", { name: "Arlington" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Alexandria" })).toBeInTheDocument();
     // 下钻之后州列表本身（以及"全美"）不再展示。
-    expect(screen.queryByRole("button", { name: "District of Columbia" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "DC 哥伦比亚特区" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "全美" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Arlington" }));
@@ -153,12 +159,12 @@ describe("RegionSelectPage", () => {
   it("returns to the state list (not out of the page) when clicking back while drilled down", () => {
     renderWithProviders(<RegionSelectPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Virginia" }));
+    fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
     expect(screen.getByRole("button", { name: "Arlington" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
-    expect(screen.getByRole("button", { name: "District of Columbia" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "DC 哥伦比亚特区" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Arlington" })).not.toBeInTheDocument();
     // 没有真的离开这个页面/触发路由导航。
     expect(navigateMock).not.toHaveBeenCalled();
@@ -188,7 +194,7 @@ describe("RegionSelectPage", () => {
       target: { value: "california" }
     });
 
-    const match = screen.getByRole("button", { name: "California" });
+    const match = screen.getByRole("button", { name: "CA 加利福尼亚州" });
     expect(match).toBeInTheDocument();
     // 搜索结果视图里也不展示"全美"。
     expect(screen.queryByRole("button", { name: "全美" })).not.toBeInTheDocument();
@@ -210,7 +216,18 @@ describe("RegionSelectPage", () => {
       target: { value: "wy" }
     });
 
-    expect(screen.getByRole("button", { name: "Wyoming" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "WY 怀俄明州" })).toBeInTheDocument();
+  });
+
+  // 12 号卡：展示格式改成中文后，搜索词也要能匹配中文州名。
+  it("search also matches a state's Chinese name", () => {
+    renderWithProviders(<RegionSelectPage />);
+
+    fireEvent.change(screen.getByPlaceholderText("请输入地址搜索"), {
+      target: { value: "纽约" }
+    });
+
+    expect(screen.getByRole("button", { name: "NY 纽约州" })).toBeInTheDocument();
   });
 
   it("filters to matching cities across all states when searching, selecting one writes its own state code", () => {
@@ -222,7 +239,7 @@ describe("RegionSelectPage", () => {
 
     // Arlington 命中；未命中的州行/城市行都不再展示。
     expect(screen.getByRole("button", { name: "Arlington" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Virginia" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "VA 弗吉尼亚州" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Rockville" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Arlington" }));
@@ -248,7 +265,7 @@ describe("RegionSelectPage", () => {
   it("re-sorts the currently visible list alphabetically when '按字母' is selected", () => {
     renderWithProviders(<RegionSelectPage />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Virginia" }));
+    fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
     fireEvent.click(screen.getByRole("button", { name: "按字母" }));
 
     const cityButtons = screen
@@ -258,7 +275,8 @@ describe("RegionSelectPage", () => {
   });
 
   // 08 号卡 8.2：「按热度」按活跃内容数量（活动+帖子）降序排列 51 项州
-  // 列表，数量为 0（或并列）的州统一按字母序垫底，不打乱整体顺序。
+  // 列表，数量为 0（或并列）的州统一按字母序垫底，不打乱整体顺序。排序键
+  // 仍然是英文名（12 号卡只改展示格式，不改排序逻辑），这里断言展示文案。
   it("'按热度' sorts the state list by content count descending, with zero/tied states falling back to alphabetical order at the bottom", () => {
     useRegionContentCountsQuery.mockReturnValue({
       data: new Map([
@@ -271,26 +289,20 @@ describe("RegionSelectPage", () => {
 
     renderWithProviders(<RegionSelectPage />);
 
-    const stateNames = [
-      "Virginia",
-      "Maryland",
-      "District of Columbia",
-      "Alabama",
-      "Wyoming"
-    ];
-    const orderedNames = screen
+    const stateLabels = ["VA 弗吉尼亚州", "MD 马里兰州", "DC 哥伦比亚特区", "AL 阿拉巴马州", "WY 怀俄明州"];
+    const orderedLabels = screen
       .getAllByRole("button")
       .map((button) => button.textContent)
-      .filter((text): text is string => !!text && stateNames.includes(text));
+      .filter((text): text is string => !!text && stateLabels.includes(text));
 
-    // VA（5）在最前，MD（2）其次；DC/Alabama/Wyoming 全都是 0，按字母序
-    // 排在后面（Alabama < District of Columbia < Wyoming）。
-    expect(orderedNames).toEqual([
-      "Virginia",
-      "Maryland",
-      "Alabama",
-      "District of Columbia",
-      "Wyoming"
+    // VA（5）在最前，MD（2）其次；DC/Alabama/Wyoming 全都是 0，按（英文）
+    // 字母序排在后面（Alabama < District of Columbia < Wyoming）。
+    expect(orderedLabels).toEqual([
+      "VA 弗吉尼亚州",
+      "MD 马里兰州",
+      "AL 阿拉巴马州",
+      "DC 哥伦比亚特区",
+      "WY 怀俄明州"
     ]);
   });
 
@@ -308,5 +320,78 @@ describe("RegionSelectPage", () => {
     renderWithProviders(<RegionSelectPage />);
 
     expect(screen.getByRole("alert")).toHaveTextContent("地区加载失败，请稍后重试。");
+  });
+
+  // 12 号卡 12.3/12.4：发布表单场景（?mode=form）——不展示"全美"，选中后
+  // 写入 usePendingFormRegionStore 而不是 useSelectedRegionStore，不影响
+  // 首页/找搭子正在生效的浏览筛选。
+  describe("form mode (?mode=form)", () => {
+    it("does not show the '全美' option in the state list view", () => {
+      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
+
+      expect(screen.queryByRole("button", { name: "全美" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "CA 加利福尼亚州" })).toBeInTheDocument();
+    });
+
+    it("does not show '全美' in search results either", () => {
+      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
+
+      fireEvent.change(screen.getByPlaceholderText("请输入地址搜索"), {
+        target: { value: "california" }
+      });
+
+      expect(screen.queryByRole("button", { name: "全美" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "CA 加利福尼亚州" })).toBeInTheDocument();
+    });
+
+    it("writes a state-only pick to usePendingFormRegionStore, not useSelectedRegionStore, and navigates back", () => {
+      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
+
+      fireEvent.click(screen.getByRole("button", { name: "CA 加利福尼亚州" }));
+
+      expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
+        stateCode: "CA",
+        stateName: "California",
+        cityId: null,
+        cityName: null
+      });
+      expect(useSelectedRegionStore.getState().selectedRegion).toBeNull();
+      expect(navigateMock).toHaveBeenCalledWith(-1);
+    });
+
+    it("writes a drilled-down city pick to usePendingFormRegionStore too", () => {
+      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
+
+      fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
+      fireEvent.click(screen.getByRole("button", { name: "Arlington" }));
+
+      expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
+        stateCode: "VA",
+        stateName: "Virginia",
+        cityId: "city-arlington",
+        cityName: "Arlington"
+      });
+      expect(useSelectedRegionStore.getState().selectedRegion).toBeNull();
+    });
+
+    it("does not clear an existing browsing selection in useSelectedRegionStore when picking a region in form mode", () => {
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "NY",
+        stateName: "New York",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
+      fireEvent.click(screen.getByRole("button", { name: "CA 加利福尼亚州" }));
+
+      // 首页/找搭子正在浏览的地区筛选不受表单选地区影响。
+      expect(useSelectedRegionStore.getState().selectedRegion).toEqual({
+        stateCode: "NY",
+        stateName: "New York",
+        cityId: null,
+        cityName: null
+      });
+    });
   });
 });

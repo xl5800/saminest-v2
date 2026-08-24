@@ -2,6 +2,7 @@ import { MapPin } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
+import { formatLocationDisplayName } from "../../data/us-states";
 import { formatPrice, isPriceUnset } from "../../utils/format";
 import { usePostsInfiniteQuery } from "./use-posts-query";
 
@@ -166,7 +167,7 @@ export function PostList({ categoryId, searchQuery, stateCode, onPublishClick }:
                     {post.categoryName}
                   </span>
                   <span className="text-xs text-text-muted">
-                    {post.locationName ?? "地区未填写"}
+                    {post.locationName ? formatLocationDisplayName(post.locationName) : "地区未填写"}
                   </span>
                 </div>
               </div>
