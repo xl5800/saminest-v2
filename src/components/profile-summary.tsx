@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 
 export interface ProfileSummaryProps {
   displayName: string | null;
@@ -10,6 +11,19 @@ export interface ProfileSummaryProps {
    *  profile-page.tsx 顶部注释。组件本身不认识"邮箱"这个具体概念，只负责
    *  在 compact 卡片里摆这么一行文字，调用方决定内容是什么。 */
   tertiaryText?: string | null;
+  /**
+   * 11 号卡新增：提供了这个值时，头像（不是整张卡片，只有头像本身）会
+   * 包一层 `<Link>` 跳过去——"我的"页用这个跳转到自己的公开主页
+   * `/users/:selfId`，预览"别人眼中的我的主页"长什么样。组件不关心跳去
+   * 哪、也不关心调用方是不是自己的主页，只负责"传了就包 Link，没传就是
+   * 纯展示"，跟 tertiaryText 是同一个"中立摆放，不内置业务含义"的原则。
+   *
+   * 目前只有 compact 变体的渲染分支接了这个 prop——11 号卡的需求只在
+   * "我的"页（compact），default 变体（公开主页 user-profile-page.tsx）
+   * 传这个值目前不会有任何效果，不是遗漏：已经站在别人的主页上了，没有
+   * 再跳一次的理由，等哪天 default 变体真的需要这个能力时再补，不在这次
+   * 顺带做一个当前没有调用方用得到的分支。 */
+  avatarHref?: string;
   /**
    * default（96px 居中头像 + 姓名/城市/简介，公开主页 user-profile-page.tsx
    * 用）｜ compact（56px 左对齐横排卡片，"我的"页 profile-page.tsx 用）。
@@ -49,28 +63,34 @@ export function ProfileSummary({
   locationName,
   bio,
   tertiaryText,
+  avatarHref,
   size = "default",
   children
 }: ProfileSummaryProps) {
   const avatarInitial = displayName?.trim().charAt(0).toUpperCase() || "?";
 
+  const avatarContent = avatarUrl ? (
+    <img src={avatarUrl} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
+  ) : (
+    <div
+      aria-hidden="true"
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-bg text-xl font-semibold text-text-muted"
+    >
+      {avatarInitial}
+    </div>
+  );
+  const compactAvatar = avatarHref ? (
+    <Link to={avatarHref} aria-label="预览我的主页" className="shrink-0 rounded-full">
+      {avatarContent}
+    </Link>
+  ) : (
+    avatarContent
+  );
+
   if (size === "compact") {
     return (
       <div className="flex items-center rounded-profile-card bg-card p-3.5">
-        {avatarUrl ? (
-          <img
-            src={avatarUrl}
-            alt=""
-            className="h-14 w-14 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div
-            aria-hidden="true"
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-bg text-xl font-semibold text-text-muted"
-          >
-            {avatarInitial}
-          </div>
-        )}
+        {compactAvatar}
 
         <div className="ml-3.5 min-w-0 flex-1">
           {/* 不用 <h1>——compact 变体只在"我的"页用，那个页面的 <h1> 已经是

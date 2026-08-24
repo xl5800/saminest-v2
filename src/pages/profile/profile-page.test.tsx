@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getCurrentUserRole, getMyProfile, signOut, navigateMock } = vi.hoisted(() => ({
@@ -141,25 +141,66 @@ describe("ProfilePage", () => {
     });
   });
 
-  describe("top bar (TopBar tab variant)", () => {
-    it("renders '我的' as the page heading and a 设置 button, with no brand name/发布 button/? help icon", async () => {
+  // 11 号卡（我的页面收尾）：TopBar（06 号卡加的 tab 变体，标题"我的" +
+  // 设置齿轮）整个删掉，顶部不再有独立顶栏；"设置"从顶栏图标移到功能
+  // 列表最后一行。
+  describe("no TopBar (11 号卡：顶栏精简)", () => {
+    it("has no visible '我的' title text, no 设置 gear button, no brand name/发布 button/? help icon at the top", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      expect(screen.getByRole("heading", { name: "我的" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "设置" })).toBeInTheDocument();
+      // TopBar 整个没了：找不到齿轮按钮（原来是 role=button, name="设置"），
+      // 也没有品牌名/文字"发布"按钮/"?"帮助图标——这些本来就是 TopBar
+      // 才会渲染的东西。
+      expect(screen.queryByRole("button", { name: "设置" })).not.toBeInTheDocument();
       expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "?" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();
     });
 
-    it("navigates to the settings placeholder route when the 设置 gear is clicked", async () => {
+    it("still exposes a single sr-only <h1>我的</h1> landmark for screen readers, even with no visible TopBar title", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      fireEvent.click(screen.getByRole("button", { name: "设置" }));
+      const heading = screen.getByRole("heading", { name: "我的" });
+      expect(heading.tagName).toBe("H1");
+      expect(heading).toHaveClass("sr-only");
+    });
+  });
 
-      expect(navigateMock).toHaveBeenCalledWith("/settings");
+  describe("'设置' as the last settings-list row (moved down from the old TopBar gear)", () => {
+    it("shows a '设置' link to /settings as the last row in the functional list", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      expect(screen.getByRole("link", { name: "设置" })).toHaveAttribute("href", "/settings");
+    });
+
+    it("orders the functional list as 编辑资料/我的发布/我的活动/我的收藏/联系客服/设置", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      const list = screen.getByRole("navigation", { name: "我的功能" });
+      // textContent 会把装饰性 chevron（"›"，aria-hidden）也带出来，先去掉
+      // 它再比对——真正要验证的是标签文字的顺序，不是原样字符串。
+      const labels = within(list)
+        .getAllByRole("link")
+        .map((link) => link.textContent?.replace("›", ""));
+
+      expect(labels).toEqual(["编辑资料", "我的发布", "我的活动", "我的收藏", "联系客服", "设置"]);
+    });
+  });
+
+  describe("avatar links to the self public-profile preview (11 号卡 11.2)", () => {
+    it("wraps the avatar in a link to /users/<self id>", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      expect(screen.getByRole("link", { name: "预览我的主页" })).toHaveAttribute(
+        "href",
+        "/users/user-1"
+      );
     });
   });
 
