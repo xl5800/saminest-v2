@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ProfileSummary } from "./profile-summary";
@@ -106,5 +107,32 @@ describe("ProfileSummary", () => {
     render(<ProfileSummary displayName="Bob" avatarUrl={null} />);
 
     expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
+  });
+
+  describe("avatarHref (11 号卡：头像跳转到自己的公开主页预览)", () => {
+    it("does not wrap the avatar in a link when avatarHref is not provided", () => {
+      const { container } = render(<ProfileSummary size="compact" displayName="Bob" avatarUrl={null} />);
+
+      expect(container.querySelector("a")).not.toBeInTheDocument();
+    });
+
+    it("wraps the avatar (only) in a link to avatarHref when provided, in the compact variant", () => {
+      render(
+        <MemoryRouter>
+          <ProfileSummary
+            size="compact"
+            displayName="Bob"
+            avatarUrl={null}
+            avatarHref="/users/user-1"
+          />
+        </MemoryRouter>
+      );
+
+      const link = screen.getByRole("link", { name: "预览我的主页" });
+      expect(link).toHaveAttribute("href", "/users/user-1");
+      // 昵称本身不应该也被包进这个链接——只有头像可点击，卡片其余部分
+      // 视觉/结构不变。
+      expect(screen.getByText("Bob").closest("a")).toBeNull();
+    });
   });
 });
