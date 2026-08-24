@@ -1,21 +1,23 @@
 import { Bell } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
-import { formatPublishedAt } from "../../utils/format";
+import { useAuthStore } from "../../store/auth-store";
+import { useConversationListPreferencesStore } from "../../store/conversation-list-preferences-store";
+import { ConversationSwipeRow } from "./conversation-swipe-row";
 
 const EMPTY_LIST_MESSAGE = "暂无消息";
 const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
-const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
 
 /**
  * 顶部栏通知铃铛的目标路径——06 号卡只要求"消息"Tab 顶部右侧有一个通知
  * 铃铛图标，这个仓库目前没有独立的"系统通知列表"页面（系统通知目前是
- * 混在会话列表里的一条特殊会话，见下面 originType === 'system' 那部分
- * 注释），跟 profile-page.tsx 的 SETTINGS_PATH 是同一个"先接入占位路径"
- * 处理方式：routes.tsx 里没有匹配的路由，点击会落到全局通配符
- * NotFoundPage，不是死链接/报错。
+ * 混在会话列表里的一条特殊会话，见 conversation-swipe-row.tsx 里
+ * originType === 'system' 那部分处理），跟 profile-page.tsx 的
+ * SETTINGS_PATH 是同一个"先接入占位路径"处理方式：routes.tsx 里没有
+ * 匹配的路由，点击会落到全局通配符 NotFoundPage，不是死链接/报错。
  */
 const NOTIFICATIONS_PATH = "/notifications";
 
@@ -23,57 +25,57 @@ const NOTIFICATIONS_PATH = "/notifications";
  * 会话列表页（/messages），登录态鉴权统一由路由层的 RequireAuth 包裹实现
  * （见 routes.tsx），页面内部不做登录检查/跳转（CLAUDE.md 的统一规则）。
  *
- * 每一行改成左边头像 + 右边信息列，显示对方的真实头像/昵称，不再是"买家/
- * 卖家"这种身份标签——头像有图用 <img>，没有就用昵称首字母圆形占位，跟
- * profile-page.tsx 现有的头像展示逻辑是同一套写法。
+ * 10 号卡（消息列表扁平化 + 左滑屏蔽入口）：单行渲染逻辑（头像/昵称/预览/
+ * 时间/未读点/左滑菜单/屏蔽状态）整个下沉到新的 conversation-swipe-row.tsx
+ * 组件——这个页面现在只负责"取数据 → 过滤掉本地隐藏/已删除的会话 → 決定
+ * 哪一行处于滑开状态 → 渲染扁平的 <ul>"，不再直接拼一行的 DOM。
  *
- * 最后一条消息预览 + 未读标记：`lastMessagePreview`/`isUnread` 都已经在
- * listMyConversations() 里算好，这一层只负责展示，不重复判断——系统通知
- * 会话的预览文字走的是同一个字段（触发器已经把 notification_payload 的
- * summary/title 归一成同一列），不需要为系统会话单独取一份文案。
- * `lastMessagePreview` 为 null（这条会话从来没有过消息）时不展示这一行，
- * 不用"暂无消息"这种占位文案去填一个本来就没有内容的位置。预览文字必须
- * 单行截断（truncate），长消息不能把卡片撑高。
+ * 列表容器改成 divide-y divide-border（对应 saminest_final_screens.html
+ * 的 --line token，这个仓库已经落地成 --color-border/border-border，
+ * 两者是同一个值 #ececef），去掉每行原来的圆角/投影/白底卡片/行间距——
+ * 通栏铺满，只靠这一条分隔线区隔，是这次任务卡明确要求的视觉改动。
  *
- * 未读的视觉区分选择"昵称/预览文字加粗 + 行尾一个小红点"，跟系统通知
- * 现有的 Bell 图标视觉语言保持同一个克制的调性（不用醒目的数字徽标或者
- * 大色块）——红点用 aria-hidden，未读状态本身已经靠加粗的文字传达给
- * 屏幕阅读器，不需要额外语义。
+ * openRowId：同一时间最多一行处于"左滑菜单打开"状态，滑开新的一行会
+ * 自动收起上一行——这个状态提到页面这一层持有（而不是每行自己独立维护），
+ * 是实现"只能有一行打开"这条常见交互约束最直接的办法，不需要每一行反过来
+ * 感知其它行的开合状态。
  *
- * 这一轮之前"仍然不展示最后一条消息预览文字"的限制已经解除；社交资料页
- * 第一批留下的"整行拆成头像/昵称 Link → /users/:userId、标题/时间 Link →
- * /messages/:id"这个双 Link 结构不变，理由见下面各注释块。
+ * "标为未读/不显示/删除"三项走 useConversationListPreferencesStore（纯
+ * 本地、localStorage 持久化，不涉及后端关系表）——具体为什么不接后端字段，
+ * 见那个 store 文件顶部的详细说明。这个页面负责：
+ *   - 用 hiddenConversationIds/deletedConversationIds 过滤掉不应该再显示
+ *     的会话（"不显示"和"删除"目前行为上是同一件事——都是从我的列表视图里
+ *     移除这一行，只是分别记在两个独立的集合里，为将来可能的"不显示"可
+ *     撤销、"删除"更彻底这类产品分化留出空间，不是重复实现）。
+ *   - 把 manuallyUnreadIds 里对应会话 id 的"手动标为未读"状态传给每一行，
+ *     行内部跟服务端算出来的 isUnread 合并展示；行内真正被点击导航进入
+ *     会话时（onNavigate），顺带调用 clearManualUnread 清掉这个标记。
  *
- * 社交资料页第一批：头像和昵称各自包一层指向公开个人主页的
- * `<Link to={`/users/${otherUserId}`}>`——不能把整行卡片继续做成一个大
- * `<Link to="/messages/:id">`再把头像/昵称嵌套一层 Link 进去（`<a>` 不能
- * 嵌套 `<a>`，浏览器会打断/产生非法 DOM），所以这里把原来"整行一个大
- * Link"拆成两个独立的 Link：头像+昵称指向 /users/:userId，帖子标题+时间
- * 那部分指向 /messages/:id，视觉上还是同一张卡片，只是点不同区域跳转到
- * 不同目的地。otherUserId 为 null 时（对方已退出会话这种边界情况）头像/
- * 昵称退回纯展示，不渲染任何链接——没有 userId 也没有页面可以跳。
- *
- * 系统通知（origin_type === 'system'）是另一种、原因完全不同的
- * "otherUserId 为 null"——不是"对方退出了"，是这类会话本来就没有"对方"这
- * 个概念（只有接收者自己一个成员）。不能沿用上面那条"otherUserId 为 null
- * 就退回纯展示"的判断去处理这种情况，否则会显示成一个昵称是 null、退回
- * "对方"文案的普通会话，跟真的"对方退出了"混在一起分不清——必须显式用
- * originType === 'system' 识别，头像换成 Bell 图标（不是 img/首字母
- * 占位），昵称固定显示"Saminest 通知"，同样不包 /users/:id 链接（没有
- * 用户可以跳）。
- *
- * 06 号卡（profile-region-misc）改版：顶部栏换成 TopBar 的 tab 变体
- * （标题"消息"，右侧通知铃铛），不再是全局 AppHeader；组件自己的 <h1>
- * 已经是这个页面的标题，原来手写的 <h1>消息</h1> 删掉，避免同一个页面
- * 出现两个 <h1>（见 top-bar.tsx 顶部注释）。这个路由已经加进
- * app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS。其余内容（搜索框、筛选
- * Chips、聊天列表）——这个页面改版前本来就没有搜索框/筛选 Chips，任务卡
- * "保持不变"这条对这个页面没有实际影响，聊天列表本身（下面这部分）没有
- * 任何改动。
+ * "屏蔽"这一项在 conversation-swipe-row.tsx 内部直接用现成的
+ * useIsBlockingQuery/useBlockUserMutation/useUnblockUserMutation 三个
+ * hook，这个页面不需要关心屏蔽状态本身，只负责把 currentUserId 传下去。
  */
 export function ConversationListPage() {
   const navigate = useNavigate();
+  const currentUserId = useAuthStore((s) => s.session)?.user.id;
   const { data: conversations, isPending, isError } = useMyConversationsQuery();
+
+  const manuallyUnreadIds = useConversationListPreferencesStore((s) => s.manuallyUnreadIds);
+  const hiddenConversationIds = useConversationListPreferencesStore((s) => s.hiddenConversationIds);
+  const deletedConversationIds = useConversationListPreferencesStore(
+    (s) => s.deletedConversationIds
+  );
+  const markAsUnread = useConversationListPreferencesStore((s) => s.markAsUnread);
+  const clearManualUnread = useConversationListPreferencesStore((s) => s.clearManualUnread);
+  const hideConversation = useConversationListPreferencesStore((s) => s.hideConversation);
+  const deleteConversation = useConversationListPreferencesStore((s) => s.deleteConversation);
+
+  const [openRowId, setOpenRowId] = useState<string | null>(null);
+
+  const visibleConversations = (conversations ?? []).filter(
+    (conversation) =>
+      !hiddenConversationIds[conversation.id] && !deletedConversationIds[conversation.id]
+  );
 
   return (
     <main className="pb-20 md:pb-6">
@@ -87,109 +89,42 @@ export function ConversationListPage() {
         }}
       />
       {/* TopBar 本身不套 max-w（全宽横跨视口，跟 categories-page.tsx/
-          activity-list-page.tsx 同一个约定），页面内容单独套 max-w-2xl，
-          跟改版前这个页面的宽度保持一致。 */}
-      <div className="mx-auto max-w-2xl px-4 py-6">
-        {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+          activity-list-page.tsx 同一个约定）；列表容器这次也不再套水平
+          内边距（px-4）——扁平通栏列表要求内容真正铺满到视口边缘，内边距
+          放进了 conversation-swipe-row.tsx 每一行自己的 px-4，不是这个
+          容器的责任，跟改版前的 max-w-2xl 宽度限制保持一致（仍然套在
+          最外层）。 */}
+      <div className="mx-auto max-w-2xl py-2">
+        {isPending ? (
+          <p role="status" className="px-4 text-sm text-text-muted">加载中…</p>
+        ) : null}
         {isError ? (
-          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          <p role="alert" className="mx-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
             {LOAD_ERROR_MESSAGE}
           </p>
         ) : null}
-        {!isPending && !isError && conversations && conversations.length === 0 ? (
-          <p role="status" className="text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
+        {!isPending && !isError && conversations && visibleConversations.length === 0 ? (
+          <p role="status" className="px-4 text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
         ) : null}
-        {!isPending && !isError && conversations && conversations.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {conversations.map((conversation) => {
-              const isSystemConversation = conversation.originType === "system";
-              const avatarInitial =
-                conversation.otherDisplayName?.trim().charAt(0).toUpperCase() || "?";
-              const nickname = isSystemConversation
-                ? SYSTEM_NOTIFICATION_LABEL
-                : conversation.otherDisplayName ?? "对方";
-              const avatarElement = isSystemConversation ? (
-                <div
-                  aria-hidden="true"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
-                >
-                  <Bell size={18} />
-                </div>
-              ) : conversation.otherAvatarUrl ? (
-                <img
-                  src={conversation.otherAvatarUrl}
-                  alt=""
-                  className="h-10 w-10 shrink-0 rounded-full object-cover"
-                />
-              ) : (
-                <div
-                  aria-hidden="true"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
-                >
-                  {avatarInitial}
-                </div>
-              );
-              const showProfileLink = !isSystemConversation && conversation.otherUserId;
-              const nicknameClassName = conversation.isUnread
-                ? "block truncate text-sm font-bold text-text"
-                : "block truncate text-sm font-medium text-text";
-              const previewClassName = conversation.isUnread
-                ? "mt-0.5 truncate whitespace-nowrap text-xs font-semibold text-text"
-                : "mt-0.5 truncate whitespace-nowrap text-xs text-text-muted";
-
-              return (
-                <li
-                  key={conversation.id}
-                  className="flex items-center gap-3 rounded-lg border border-border bg-white p-4 hover:border-primary"
-                >
-                  {showProfileLink ? (
-                    <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
-                      {avatarElement}
-                    </Link>
-                  ) : (
-                    avatarElement
-                  )}
-                  <div className="min-w-0 flex-1">
-                    {showProfileLink ? (
-                      <Link
-                        to={`/users/${conversation.otherUserId}`}
-                        className={`${nicknameClassName} hover:underline`}
-                      >
-                        {nickname}
-                      </Link>
-                    ) : (
-                      <span className={nicknameClassName}>{nickname}</span>
-                    )}
-                    <Link
-                      to={`/messages/${conversation.id}`}
-                      data-testid="conversation-link"
-                      className="block"
-                    >
-                      {conversation.postTitle ? (
-                        <span className="mt-0.5 block truncate text-xs text-text-muted">
-                          关于：{conversation.postTitle}
-                        </span>
-                      ) : null}
-                      {conversation.lastMessagePreview ? (
-                        <span data-testid="conversation-preview" className={previewClassName}>
-                          {conversation.lastMessagePreview}
-                        </span>
-                      ) : null}
-                      <span className="mt-0.5 block text-xs text-text-muted">
-                        {formatPublishedAt(conversation.lastActivityAt)}
-                      </span>
-                    </Link>
-                  </div>
-                  {conversation.isUnread ? (
-                    <span
-                      aria-hidden="true"
-                      data-testid="unread-dot"
-                      className="h-2 w-2 shrink-0 rounded-full bg-danger"
-                    />
-                  ) : null}
-                </li>
-              );
-            })}
+        {!isPending && !isError && visibleConversations.length > 0 ? (
+          <ul className="divide-y divide-border">
+            {visibleConversations.map((conversation) => (
+              <ConversationSwipeRow
+                key={conversation.id}
+                conversation={conversation}
+                currentUserId={currentUserId}
+                isOpen={openRowId === conversation.id}
+                onOpen={() => setOpenRowId(conversation.id)}
+                onClose={() =>
+                  setOpenRowId((current) => (current === conversation.id ? null : current))
+                }
+                isManuallyUnread={!!manuallyUnreadIds[conversation.id]}
+                onMarkAsUnread={() => markAsUnread(conversation.id)}
+                onHide={() => hideConversation(conversation.id)}
+                onDelete={() => deleteConversation(conversation.id)}
+                onNavigate={() => clearManualUnread(conversation.id)}
+              />
+            ))}
           </ul>
         ) : null}
       </div>
