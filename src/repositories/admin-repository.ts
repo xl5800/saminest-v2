@@ -93,6 +93,53 @@ export async function deletePost(
 }
 
 /**
+ * 删除评论（软删除：设置 comments.deleted_at + 记一条 moderation_actions
+ * 日志，原子性由 delete_comment 这个 security definer 函数保证，见
+ * supabase/migrations/20260823030000_admin_delete_comment_function.sql）。
+ * UGC 安全功能补齐任务卡 4：跟 deletePost 是同一个模式，参数名
+ * target_comment_id / delete_reason 跟该迁移文件里函数签名完全一致。
+ */
+export async function deleteComment(
+  commentId: string,
+  deleteReason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("delete_comment", {
+    target_comment_id: commentId,
+    delete_reason: deleteReason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_DELETE_COMMENT_FAILED", error);
+  }
+}
+
+/**
+ * 管理员下架活动（把 activities.status 改成 'cancelled' + 记一条
+ * moderation_actions 日志，原子性由 admin_cancel_activity 这个 security
+ * definer 函数保证，见
+ * supabase/migrations/20260823040000_admin_cancel_activity_function.sql）。
+ * UGC 安全功能补齐任务卡 4：故意不叫 cancelActivity——那个名字已经被
+ * src/repositories/activities-repository.ts 的发起人自助取消函数占用了，
+ * 两者是完全独立的两条授权路径（`organizer_id = auth.uid()` 的直接 UPDATE
+ * vs `is_admin()` 的 security definer 函数），不共用同一个前端函数，见该
+ * 迁移文件顶部"关于要不要复用 cancelActivity 现有的实现"的说明。参数名
+ * target_activity_id / cancel_reason 跟该迁移文件里函数签名完全一致。
+ */
+export async function adminCancelActivity(
+  activityId: string,
+  cancelReason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_cancel_activity", {
+    target_activity_id: activityId,
+    cancel_reason: cancelReason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_CANCEL_ACTIVITY_FAILED", error);
+  }
+}
+
+/**
  * 设置某个用户的 account_status（active/restricted/suspended），走
  * set_account_status 这个 security definer 函数（见
  * supabase/migrations/20260717000700_account_status_enforcement.sql）。

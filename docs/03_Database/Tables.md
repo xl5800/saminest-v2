@@ -1027,7 +1027,22 @@ restrict_user
 suspend_user
 resolve_report
 dismiss_report
+delete_comment
+cancel_activity
 ```
+
+> 2026-08-23 补充：`delete_comment`/`cancel_activity` 是 UGC 安全功能补齐
+> 任务卡 4（管理员删除违规评论/下架违规活动）新增的两个取值，分别对应
+> `public.delete_comment(uuid, text)`/`public.admin_cancel_activity(uuid,
+> text)` 这两个新增的 `security definer` 函数（见
+> `supabase/migrations/20260823030000_admin_delete_comment_function.sql`/
+> `20260823040000_admin_cancel_activity_function.sql`）。没有复用
+> `archive_post`——那个值语义上专指帖子（`posts.deleted_at`），评论用的是
+> `comments.deleted_at`、活动用的是 `activities.status = 'cancelled'`，
+> 是完全不同的表/字段，`target_type` 也不同（`comment`/`activity`），
+> 混用同一个 `action_type` 会让审计日志的 `action_type` 和 `target_type`
+> 对不上，所以延续 `restrict_user`/`suspend_user` 那种"每种对象类型各自
+> 一个 verb_noun 值"的命名风格，各自新增一个。
 
 ## 17.4 权限原则
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AdminNav } from "../../components/admin-nav";
+import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
+import { useDeleteCommentMutation } from "../../features/admin/use-delete-comment-mutation";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
 import { useReportsQuery } from "../../features/admin/use-reports-query";
@@ -14,19 +16,70 @@ import { formatPublishedAt } from "../../utils/format";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const NOTE_REQUIRED_MESSAGE = "请填写处理说明。";
-const DELETE_REASON_REQUIRED_MESSAGE = "请填写删除原因。";
-// 处理举报成功，但紧接着的删帖失败——这是"举报"和"删帖"两个各自独立原子
-// 的操作串联起来才会出现的新情况，不能用通用的 GENERIC_ERROR_MESSAGE
-// （会让管理员误以为举报处理本身失败了、这一行没变化，实际上举报这一步
-// 已经成功、这一行马上就要从列表消失），需要一条单独的文案说清楚"举报
-// 处理好了，但删帖没成功，需要另外去补"。
-const PARTIAL_DELETE_FAILURE_MESSAGE =
-  "举报已处理，但删除帖子失败，请稍后前往「全部帖子」页面重试删除。";
 
 // 复用 reports-repository.ts 里已经定义好的中文文案，不在这里重复维护一份。
 const REASON_LABELS: Record<string, string> = Object.fromEntries(
   REPORT_REASON_OPTIONS.map((option) => [option.value, option.label])
 );
+
+/**
+ * UGC 安全功能补齐任务卡 4："同时删除"这个复选框从只支持 target_type ===
+ * "post" 扩展到 post/comment/activity 三种，每种类型底层调用不同的删除/
+ * 下架函数（deletePost/deleteComment/adminCancelActivity），复选框文案、
+ * 原因输入框标签、必填校验提示、"处理成功但删除/下架失败"的降级提示都
+ * 跟着换成对应的说法——活动那边是"下架"不是"删除"（数据库层是把 status
+ * 改成 cancelled，不是设置某个 deleted_at 字段，见
+ * supabase/migrations/20260823040000_admin_cancel_activity_function.sql
+ * 顶部说明），文案上也不应该说"删除活动"，否则会让管理员误以为活动数据
+ * 被物理清除了。三种类型底层状态字段/函数虽然不同，但对这个页面而言都是
+ * 同一个形状的"可选、需要填原因、失败要用页面级提示区分于举报处理本身"
+ * 交互，所以仍然复用同一套 UI 状态（deleteChecked/deleteReasonDrafts/
+ * deleteValidationErrors/partialFailureMessage），只是显示的文案和分发到
+ * 哪个 mutation 由 targetType 决定——不需要重新设计这部分状态处理，这也是
+ * 任务卡明确要求的"现有降级提示逻辑已经是通用的，改成按 targetType 调用
+ * 不同函数即可"。
+ *
+ * 帖子有独立的"全部帖子"管理页（/admin/posts/all）可以在失败后手动重试，
+ * 评论和活动都没有对应的管理列表页——降级提示文案因此没有像帖子那条一样
+ * 指向一个具体页面，只建议"稍后重试"或去内容本身所在的详情页确认，避免
+ * 引用一个实际上不存在的管理入口。
+ */
+interface DeleteActionCopy {
+  checkboxLabel: string;
+  reasonLabel: string;
+  reasonRequiredMessage: string;
+  partialFailureMessage: string;
+}
+
+const POST_DELETE_COPY: DeleteActionCopy = {
+  checkboxLabel: "同时删除该帖子",
+  reasonLabel: "删除原因",
+  reasonRequiredMessage: "请填写删除原因。",
+  partialFailureMessage: "举报已处理，但删除帖子失败，请稍后前往「全部帖子」页面重试删除。"
+};
+
+const COMMENT_DELETE_COPY: DeleteActionCopy = {
+  checkboxLabel: "同时删除该评论",
+  reasonLabel: "删除原因",
+  reasonRequiredMessage: "请填写删除原因。",
+  partialFailureMessage:
+    "举报已处理，但删除评论失败，请稍后重试，或前往该评论所在的帖子详情页确认处理结果。"
+};
+
+const ACTIVITY_CANCEL_COPY: DeleteActionCopy = {
+  checkboxLabel: "同时下架该活动",
+  reasonLabel: "下架原因",
+  reasonRequiredMessage: "请填写下架原因。",
+  partialFailureMessage:
+    "举报已处理，但下架活动失败，请稍后重试，或前往该活动详情页确认处理结果。"
+};
+
+function getDeleteActionCopy(targetType: string): DeleteActionCopy | null {
+  if (targetType === "post") return POST_DELETE_COPY;
+  if (targetType === "comment") return COMMENT_DELETE_COPY;
+  if (targetType === "activity") return ACTIVITY_CANCEL_COPY;
+  return null;
+}
 
 // 跟 reports.status 的 check 约束（reports_status_check）取值一致，默认
 // "pending"——这是"如果复杂就先只做 pending 列表"里判断下来的低成本可选项，
@@ -56,12 +109,16 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * "同时删除该帖子"：产品明确要求在举报处理表单上加一个可选的删帖入口，
  * 减少管理员来回切换到 /admin/posts/all 的操作。这里刻意不新建一个
  * "resolve-and-delete"数据库函数——resolveReport/dismissReport 和
- * deletePost 各自已经是独立原子的（状态变更 + 审计日志各自在自己的
- * security definer 函数里一次完成），从 UI 层顺序调用两个已经原子的操作
- * 不需要第三个数据库原语来保证"更大的原子性"，产品这次要的只是操作上的
- * 便利，不是新的后端一致性保证。删帖原因单独用一个输入框收集，不复用
- * 处理说明（resolutionNote）——两条审计日志（resolve_report/dismiss_report
- * 一条，archive_post 一条）各自独立有意义，理由不应该被强行合并成一份。
+ * deletePost/deleteComment/adminCancelActivity 各自已经是独立原子的
+ * （状态变更 + 审计日志各自在自己的 security definer 函数里一次完成），
+ * 从 UI 层顺序调用两个已经原子的操作不需要第三个数据库原语来保证"更大的
+ * 原子性"，产品这次要的只是操作上的便利，不是新的后端一致性保证。删除/
+ * 下架原因单独用一个输入框收集，不复用处理说明（resolutionNote）——两条
+ * 审计日志（resolve_report/dismiss_report 一条，archive_post/
+ * delete_comment/cancel_activity 一条）各自独立有意义，理由不应该被强行
+ * 合并成一份。UGC 安全功能补齐任务卡 4：这个复选框从只支持帖子扩展到
+ * 评论/活动，具体文案/校验/降级提示的取舍见上面 getDeleteActionCopy 的
+ * 注释。
  *
  * 失败处理是顺序调用带来的一个新分支：如果 resolveReport/dismissReport
  * 失败，跟今天完全一样（这一行还在、错误提示、处理说明保留）；如果
@@ -84,6 +141,20 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * 实现"，为了这一个跳转链接去扩展它的搜索能力也算是变相扩大了范围）。
  * 昵称已经展示在链接旁边，管理员点进去后自己复制/输入这个昵称搜索即可，
  * 这是任务卡明确认可的简化版本，不强求这次做到精确定位。
+ *
+ * UGC 安全功能补齐任务卡 3：target_type === "comment" 的举报行不再显示
+ * "comment / <id>" 纯文本——目标 span 里改成一个跳到所属帖子（
+ * /post/:postId）的链接，链接文字是帖子标题；紧接着单独一块用
+ * blockquote 展示评论原文（管理员需要看到"到底是哪句话"），下面一行是
+ * 评论作者昵称，评论已经被用户自己软删除时额外加一个"该评论已被用户
+ * 删除"的小标签——但原文仍然完整展示，不能因为用户删了就不处理这条举报。
+ * 这些信息全部来自 reports-repository.ts 新增的 commentPreview 字段
+ * （批量查询，见该文件 fetchTargetTitles 的注释），不需要跳出这个页面单独
+ * 去查评论。commentPreview 为 null（比如批量查询失败）时退回跟其它未知
+ * target_type 一样的纯文本兜底，不阻断这一行举报的展示。任务卡 3 这次
+ * 只做"看得见"，不做删除评论——"同时删除"复选框当时还只在
+ * target_type === "post" 时显示，删除评论/下架活动是任务卡 4 补的，见
+ * 上面 getDeleteActionCopy 的注释。
  */
 export function AdminReportsPage() {
   const [status, setStatus] = useState<string>("pending");
@@ -91,6 +162,8 @@ export function AdminReportsPage() {
   const resolveMutation = useResolveReportMutation();
   const dismissMutation = useDismissReportMutation();
   const deletePostMutation = useDeletePostMutation();
+  const deleteCommentMutation = useDeleteCommentMutation();
+  const adminCancelActivityMutation = useAdminCancelActivityMutation();
 
   const [reports, setReports] = useState<AdminReportListItem[] | null>(null);
   const [actioningReportId, setActioningReportId] = useState<string | null>(null);
@@ -150,8 +223,11 @@ export function AdminReportsPage() {
   }
 
   async function handleConfirm(reportId: string, action: PendingAction): Promise<void> {
+    const report = (reports ?? []).find((item) => item.id === reportId);
+    const deleteCopy = report ? getDeleteActionCopy(report.targetType) : null;
+
     const note = (noteDrafts[reportId] ?? "").trim();
-    const shouldDeletePost = deleteChecked[reportId] ?? false;
+    const shouldDeleteTarget = deleteChecked[reportId] ?? false;
     const deleteReason = (deleteReasonDrafts[reportId] ?? "").trim();
 
     let hasValidationError = false;
@@ -163,10 +239,10 @@ export function AdminReportsPage() {
       setValidationErrors((prev) => withoutKey(prev, reportId));
     }
 
-    if (shouldDeletePost && !deleteReason) {
+    if (shouldDeleteTarget && !deleteReason) {
       setDeleteValidationErrors((prev) => ({
         ...prev,
-        [reportId]: DELETE_REASON_REQUIRED_MESSAGE
+        [reportId]: deleteCopy?.reasonRequiredMessage ?? GENERIC_ERROR_MESSAGE
       }));
       hasValidationError = true;
     } else {
@@ -187,13 +263,22 @@ export function AdminReportsPage() {
         await dismissMutation.mutateAsync({ reportId, resolutionNote: note });
       }
 
-      // 举报处理（resolve/dismiss）这一步已经成功——不管接下来的删帖是否
-      // 还要做、做不做得成，这一行都要从列表移除，因为举报处理本身已经是
-      // 既成事实。
-      if (shouldDeletePost) {
-        const report = (reports ?? []).find((item) => item.id === reportId);
+      // 举报处理（resolve/dismiss）这一步已经成功——不管接下来的删除/下架
+      // 是否还要做、做不做得成，这一行都要从列表移除，因为举报处理本身
+      // 已经是既成事实。
+      if (shouldDeleteTarget && report) {
         try {
-          if (report) {
+          if (report.targetType === "comment") {
+            await deleteCommentMutation.mutateAsync({
+              commentId: report.targetId,
+              deleteReason
+            });
+          } else if (report.targetType === "activity") {
+            await adminCancelActivityMutation.mutateAsync({
+              activityId: report.targetId,
+              cancelReason: deleteReason
+            });
+          } else {
             await deletePostMutation.mutateAsync({
               postId: report.targetId,
               deleteReason
@@ -206,7 +291,9 @@ export function AdminReportsPage() {
           setNoteDrafts((prev) => withoutKey(prev, reportId));
           setDeleteChecked((prev) => withoutKey(prev, reportId));
           setDeleteReasonDrafts((prev) => withoutKey(prev, reportId));
-          setPartialFailureMessage(PARTIAL_DELETE_FAILURE_MESSAGE);
+          setPartialFailureMessage(
+            deleteCopy?.partialFailureMessage ?? POST_DELETE_COPY.partialFailureMessage
+          );
           return;
         }
       }
@@ -314,11 +401,37 @@ export function AdminReportsPage() {
                         去账号管理搜索处理
                       </Link>
                     </>
+                  ) : report.targetType === "comment" ? (
+                    report.commentPreview ? (
+                      <Link
+                        to={`/post/${report.commentPreview.postId}`}
+                        className="text-primary hover:underline"
+                      >
+                        {report.commentPreview.postTitle ?? `post / ${report.commentPreview.postId}`}
+                      </Link>
+                    ) : (
+                      `${report.targetType} / ${report.targetId}`
+                    )
                   ) : (
                     `${report.targetType} / ${report.targetId}`
                   )}
                 </span>
                 <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(report.createdAt)}</span>
+                {report.targetType === "comment" && report.commentPreview ? (
+                  <div className="mt-2">
+                    <blockquote className="border-l-4 border-border bg-bg px-3 py-2 text-sm text-text">
+                      {report.commentPreview.content}
+                    </blockquote>
+                    <p className="mt-1 text-xs text-text-muted">
+                      评论作者：{report.commentPreview.authorDisplayName}
+                      {report.commentPreview.isDeleted ? (
+                        <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                          该评论已被用户删除
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                ) : null}
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm text-text">
                   {report.description ? report.description : "（举报人未填写补充说明）"}
                 </p>
@@ -369,49 +482,54 @@ export function AdminReportsPage() {
                         className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                       />
                     </label>
-                    {report.targetType === "post" ? (
-                      <div>
-                        <label className="mb-2 flex items-center gap-2 text-sm text-text">
-                          <input
-                            type="checkbox"
-                            checked={deleteChecked[report.id] ?? false}
-                            onChange={(event) =>
-                              setDeleteChecked((prev) => ({
-                                ...prev,
-                                [report.id]: event.target.checked
-                              }))
-                            }
-                            disabled={isActioning}
-                            className="accent-primary"
-                          />
-                          同时删除该帖子
-                        </label>
-                        {deleteChecked[report.id] ? (
-                          <>
-                            {deleteValidationErrors[report.id] ? (
-                              <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                                {deleteValidationErrors[report.id]}
-                              </p>
-                            ) : null}
-                            <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                              删除原因
-                              <input
-                                type="text"
-                                value={deleteReasonDrafts[report.id] ?? ""}
-                                onChange={(event) =>
-                                  setDeleteReasonDrafts((prev) => ({
-                                    ...prev,
-                                    [report.id]: event.target.value
-                                  }))
-                                }
-                                disabled={isActioning}
-                                className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                              />
-                            </label>
-                          </>
-                        ) : null}
-                      </div>
-                    ) : null}
+                    {(() => {
+                      const deleteCopy = getDeleteActionCopy(report.targetType);
+                      if (!deleteCopy) return null;
+
+                      return (
+                        <div>
+                          <label className="mb-2 flex items-center gap-2 text-sm text-text">
+                            <input
+                              type="checkbox"
+                              checked={deleteChecked[report.id] ?? false}
+                              onChange={(event) =>
+                                setDeleteChecked((prev) => ({
+                                  ...prev,
+                                  [report.id]: event.target.checked
+                                }))
+                              }
+                              disabled={isActioning}
+                              className="accent-primary"
+                            />
+                            {deleteCopy.checkboxLabel}
+                          </label>
+                          {deleteChecked[report.id] ? (
+                            <>
+                              {deleteValidationErrors[report.id] ? (
+                                <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                                  {deleteValidationErrors[report.id]}
+                                </p>
+                              ) : null}
+                              <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
+                                {deleteCopy.reasonLabel}
+                                <input
+                                  type="text"
+                                  value={deleteReasonDrafts[report.id] ?? ""}
+                                  onChange={(event) =>
+                                    setDeleteReasonDrafts((prev) => ({
+                                      ...prev,
+                                      [report.id]: event.target.value
+                                    }))
+                                  }
+                                  disabled={isActioning}
+                                  className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                />
+                              </label>
+                            </>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"

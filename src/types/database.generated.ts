@@ -1002,6 +1002,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_cancel_activity: {
+        Args: { cancel_reason: string; target_activity_id: string }
+        Returns: undefined
+      }
       approve_activity_participant: {
         Args: { target_participant_id: string }
         Returns: undefined
@@ -1019,6 +1023,10 @@ export type Database = {
       create_profile_conversation: {
         Args: { target_user_id: string }
         Returns: string
+      }
+      delete_comment: {
+        Args: { delete_reason: string; target_comment_id: string }
+        Returns: undefined
       }
       delete_post: {
         Args: { delete_reason: string; target_post_id: string }
