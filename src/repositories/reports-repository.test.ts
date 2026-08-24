@@ -1,12 +1,23 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, insertMock, singleMock, overrideTypesMock, inMock } = vi.hoisted(() => {
+const {
+  queryBuilder,
+  insertMock,
+  singleMock,
+  overrideTypesMock,
+  inMock,
+  commentQueryBuilder,
+  commentInMock,
+  commentOverrideTypesMock,
+  fromMock
+} = vi.hoisted(() => {
   const insertMock = vi.fn();
   const singleMock = vi.fn();
   const overrideTypesMock = vi.fn();
-  // fetchTargetTitles 对 posts/activities 表的查询链路是 select().in()——
-  // in() 直接被 await（本身是个 thenable），不像 select/eq/order 那样返回
-  // builder 继续链式调用，所以单独给它一个 mock，而不是塞进下面的 chain 数组。
+  // fetchTargetTitles 对 posts/activities/profiles 表的查询链路是
+  // select().in()——in() 直接被 await（本身是个 thenable），不像
+  // select/eq/order 那样返回 builder 继续链式调用，所以单独给它一个 mock，
+  // 而不是塞进下面的 chain 数组。
   const inMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   builder.insert = insertMock;
@@ -17,10 +28,36 @@ const { queryBuilder, insertMock, singleMock, overrideTypesMock, inMock } = vi.h
   builder.single = singleMock;
   builder.overrideTypes = overrideTypesMock;
   builder.in = inMock;
-  return { queryBuilder: builder, insertMock, singleMock, overrideTypesMock, inMock };
-});
 
-const fromMock = vi.fn(() => queryBuilder);
+  // fetchTargetTitles 对 comments 表的查询链路比 posts/activities/profiles
+  // 多一步 .overrideTypes()（select().in().overrideTypes()，因为这条查询
+  // 带嵌套 select，见 reports-repository.ts 对应注释），跟上面共享的
+  // builder 形状不一样，用独立的 builder，通过 fromMock 按表名切换，跟
+  // feedback-repository.test.ts 是同一个处理方式（那边是按不同函数切换，
+  // 这里是同一个函数内部按表名切换）。
+  const commentInMock = vi.fn();
+  const commentOverrideTypesMock = vi.fn();
+  const commentQueryBuilder: Record<string, ReturnType<typeof vi.fn>> = {};
+  commentQueryBuilder.select = vi.fn(() => commentQueryBuilder);
+  commentQueryBuilder.in = commentInMock;
+  commentQueryBuilder.overrideTypes = commentOverrideTypesMock;
+
+  const fromMock = vi.fn((table: string) =>
+    table === "comments" ? commentQueryBuilder : builder
+  );
+
+  return {
+    queryBuilder: builder,
+    insertMock,
+    singleMock,
+    overrideTypesMock,
+    inMock,
+    commentQueryBuilder,
+    commentInMock,
+    commentOverrideTypesMock,
+    fromMock
+  };
+});
 
 vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
@@ -146,10 +183,19 @@ describe("listReportsForModeration", () => {
     }
     overrideTypesMock.mockReset();
     inMock.mockReset();
-    // 默认没有举报命中 post/activity 分支时 fetchTargetTitles 直接短路返回，
-    // 不会调用 in()；但为了不让没显式设置 inMock 的测试因为"上一个测试留下的
-    // resolved value"而串味，这里给个保底的空结果。
+    // 默认没有举报命中 post/activity/user 分支时 fetchTargetTitles 直接
+    // 短路返回，不会调用 in()；但为了不让没显式设置 inMock 的测试因为
+    // "上一个测试留下的 resolved value"而串味，这里给个保底的空结果。
     inMock.mockResolvedValue({ data: [], error: null });
+
+    commentQueryBuilder.select.mockClear();
+    commentInMock.mockReset();
+    commentOverrideTypesMock.mockReset();
+    // comment 分支多一步 .overrideTypes()，所以 in() 要能继续链式调用
+    // （返回 commentQueryBuilder 本身），真正被 await 的是 overrideTypes()，
+    // 同样给个保底的空结果，理由跟上面 inMock 一致。
+    commentInMock.mockReturnValue(commentQueryBuilder);
+    commentOverrideTypesMock.mockResolvedValue({ data: [], error: null });
   });
 
   it("defaults to status = pending, ordered by created_at ascending, with a nested reporter select", async () => {
@@ -200,6 +246,7 @@ describe("listReportsForModeration", () => {
         targetType: "post",
         targetId: "post-1",
         targetTitle: null,
+        commentPreview: null,
         reporterName: "Bob"
       }
     ]);
@@ -282,6 +329,160 @@ describe("listReportsForModeration", () => {
     expect(result[0].targetTitle).toBe("Alice");
   });
 
+  // UGC 安全功能补齐任务卡 3（举报队列展示评论原文）。
+  describe("comment target type", () => {
+    it("looks up and attaches the reported comment's full preview (content/author/post)", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "report-4",
+            reason_code: "harassment",
+            description: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            target_type: "comment",
+            target_id: "comment-1",
+            reporter: { display_name: "Bob" }
+          }
+        ],
+        error: null
+      });
+      commentOverrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "comment-1",
+            content: "这句话很过分",
+            deleted_at: null,
+            post_id: "post-1",
+            author: { display_name: "Carol" },
+            post: { title: "全新沙发出售" }
+          }
+        ],
+        error: null
+      });
+
+      const result = await listReportsForModeration();
+
+      expect(fromMock).toHaveBeenCalledWith("comments");
+      expect(commentQueryBuilder.select).toHaveBeenCalledWith(
+        "id, content, deleted_at, post_id, author:profiles(display_name), post:posts(title)"
+      );
+      expect(commentInMock).toHaveBeenCalledWith("id", ["comment-1"]);
+      expect(result[0].targetTitle).toBeNull();
+      expect(result[0].commentPreview).toEqual({
+        content: "这句话很过分",
+        isDeleted: false,
+        authorDisplayName: "Carol",
+        postId: "post-1",
+        postTitle: "全新沙发出售"
+      });
+    });
+
+    it("marks isDeleted true and still returns the original content when the comment has been soft-deleted", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "report-4",
+            reason_code: "harassment",
+            description: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            target_type: "comment",
+            target_id: "comment-1",
+            reporter: { display_name: "Bob" }
+          }
+        ],
+        error: null
+      });
+      commentOverrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "comment-1",
+            content: "这句话很过分",
+            deleted_at: "2026-07-02T00:00:00.000Z",
+            post_id: "post-1",
+            author: { display_name: "Carol" },
+            post: { title: "全新沙发出售" }
+          }
+        ],
+        error: null
+      });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].commentPreview).toEqual({
+        content: "这句话很过分",
+        isDeleted: true,
+        authorDisplayName: "Carol",
+        postId: "post-1",
+        postTitle: "全新沙发出售"
+      });
+    });
+
+    it("falls back to null postTitle/'未知用户' author without throwing when the joins don't resolve", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "report-4",
+            reason_code: "harassment",
+            description: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            target_type: "comment",
+            target_id: "comment-1",
+            reporter: { display_name: "Bob" }
+          }
+        ],
+        error: null
+      });
+      commentOverrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "comment-1",
+            content: "这句话很过分",
+            deleted_at: null,
+            post_id: "post-1",
+            author: null,
+            post: null
+          }
+        ],
+        error: null
+      });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].commentPreview).toEqual({
+        content: "这句话很过分",
+        isDeleted: false,
+        authorDisplayName: "未知用户",
+        postId: "post-1",
+        postTitle: null
+      });
+    });
+
+    it("falls back to a null commentPreview, without throwing, when the comment lookup query errors", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          {
+            id: "report-4",
+            reason_code: "harassment",
+            description: null,
+            created_at: "2026-07-01T00:00:00.000Z",
+            target_type: "comment",
+            target_id: "comment-1",
+            reporter: { display_name: "Bob" }
+          }
+        ],
+        error: null
+      });
+      commentOverrideTypesMock.mockResolvedValue({
+        data: null,
+        error: { message: "network down", code: "500" }
+      });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].commentPreview).toBeNull();
+    });
+  });
+
   it("falls back to a null title, without throwing, when the title lookup query errors", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
@@ -304,7 +505,7 @@ describe("listReportsForModeration", () => {
     expect(result[0].targetTitle).toBeNull();
   });
 
-  it("skips the title lookup entirely for target types other than post/activity/user", async () => {
+  it("skips both the title and comment-preview lookups entirely for target types other than post/activity/user/comment", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -312,8 +513,11 @@ describe("listReportsForModeration", () => {
           reason_code: "spam",
           description: null,
           created_at: "2026-07-01T00:00:00.000Z",
-          target_type: "comment",
-          target_id: "comment-1",
+          // "message" 不是 reports_target_type_check 约束里真实存在的取值，
+          // 这里只是用来验证"未来可能出现的未知 target_type 不会触发任何
+          // 批量查询"这条防御性行为，不代表这个仓库真的支持这个类型。
+          target_type: "message",
+          target_id: "message-1",
           reporter: { display_name: "Bob" }
         }
       ],
@@ -323,7 +527,9 @@ describe("listReportsForModeration", () => {
     const result = await listReportsForModeration();
 
     expect(inMock).not.toHaveBeenCalled();
+    expect(commentInMock).not.toHaveBeenCalled();
     expect(result[0].targetTitle).toBeNull();
+    expect(result[0].commentPreview).toBeNull();
   });
 
   it("falls back to placeholder text when the joined reporter is missing", async () => {
