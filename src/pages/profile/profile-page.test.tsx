@@ -105,6 +105,17 @@ describe("ProfilePage", () => {
     );
   });
 
+  // 13 号卡（"我的"页新增"已屏蔽"管理入口）。
+  it("shows the '已屏蔽' link to /blocked-users", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(screen.getByRole("link", { name: "已屏蔽" })).toHaveAttribute(
+      "href",
+      "/blocked-users"
+    );
+  });
+
   it("shows the '我的发布' link to /my-posts", async () => {
     renderWithProviders(<ProfilePage />);
 
@@ -177,7 +188,9 @@ describe("ProfilePage", () => {
       expect(screen.getByRole("link", { name: "设置" })).toHaveAttribute("href", "/settings");
     });
 
-    it("orders the functional list as 编辑资料/我的发布/我的活动/我的收藏/联系客服/设置", async () => {
+    // 13 号卡："已屏蔽"插进"联系客服"和"设置"之间——归到列表靠后、跟设置类
+    // 放一起，不是插进中间的业务功能行之间。
+    it("orders the functional list as 编辑资料/我的发布/我的活动/我的收藏/联系客服/已屏蔽/设置", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
@@ -188,7 +201,15 @@ describe("ProfilePage", () => {
         .getAllByRole("link")
         .map((link) => link.textContent?.replace("›", ""));
 
-      expect(labels).toEqual(["编辑资料", "我的发布", "我的活动", "我的收藏", "联系客服", "设置"]);
+      expect(labels).toEqual([
+        "编辑资料",
+        "我的发布",
+        "我的活动",
+        "我的收藏",
+        "联系客服",
+        "已屏蔽",
+        "设置"
+      ]);
     });
   });
 

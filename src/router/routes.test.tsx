@@ -36,7 +36,8 @@ const {
   getActivityDetail,
   createActivity,
   listMyOrganizedActivities,
-  listMyJoinedActivities
+  listMyJoinedActivities,
+  listMyBlockedUsers
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listAllCategoriesForAdmin: vi.fn(),
@@ -70,7 +71,8 @@ const {
   getActivityDetail: vi.fn(),
   createActivity: vi.fn(),
   listMyOrganizedActivities: vi.fn(),
-  listMyJoinedActivities: vi.fn()
+  listMyJoinedActivities: vi.fn(),
+  listMyBlockedUsers: vi.fn()
 }));
 
 vi.mock("../repositories/categories-repository", () => ({
@@ -144,6 +146,20 @@ vi.mock("../repositories/activities-repository", async () => {
     listMyJoinedActivities
   };
 });
+// 13 号卡新增的 /blocked-users 路由会真的触发 listMyBlockedUsers（不像
+// 别的路由测试场景里屏蔽相关 hook 大多因为 enabled 条件不满足而根本不会
+// 发起请求），跟其它几个用 importActual 合并的 mock 是同一个理由——只
+// 覆盖这一个函数，isBlockingUser/blockUser/unblockUser/isBlockedWithUser
+// 保留真实实现，不影响其它已有路由测试里对这个模块的既有行为。
+vi.mock("../repositories/user-blocks-repository", async () => {
+  const actual = await vi.importActual<typeof import("../repositories/user-blocks-repository")>(
+    "../repositories/user-blocks-repository"
+  );
+  return {
+    ...actual,
+    listMyBlockedUsers
+  };
+});
 
 import { AppShell } from "../components/app-shell";
 import { ActivityDetailPage } from "../pages/activities/activity-detail-page";
@@ -168,6 +184,7 @@ import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PrivacyPage } from "../pages/privacy/privacy-page";
+import { BlockedUsersPage } from "../pages/profile/blocked-users-page";
 import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { UserProfilePage } from "../pages/profile/user-profile-page";
@@ -255,6 +272,14 @@ function renderAt(path: string | string[]) {
             element: (
               <RequireAuth>
                 <FavoritesPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "blocked-users",
+            element: (
+              <RequireAuth>
+                <BlockedUsersPage />
               </RequireAuth>
             )
           },
@@ -426,6 +451,7 @@ describe("app routes", () => {
     createActivity.mockReset();
     listMyOrganizedActivities.mockReset();
     listMyJoinedActivities.mockReset();
+    listMyBlockedUsers.mockReset();
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
     ]);
@@ -461,6 +487,7 @@ describe("app routes", () => {
     getActivityDetail.mockResolvedValue(null);
     listMyOrganizedActivities.mockResolvedValue([]);
     listMyJoinedActivities.mockResolvedValue([]);
+    listMyBlockedUsers.mockResolvedValue([]);
   });
 
   it("renders the home page at /", () => {
@@ -764,6 +791,23 @@ describe("app routes", () => {
     renderAt("/favorites");
 
     expect(await screen.findByRole("heading", { name: "我的收藏" })).toBeInTheDocument();
+  });
+
+  // 13 号卡（"我的"页新增"已屏蔽"管理入口）。
+  it("redirects /blocked-users to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/blocked-users");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the blocked-users page at /blocked-users when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/blocked-users");
+
+    expect(await screen.findByRole("heading", { name: "已屏蔽" })).toBeInTheDocument();
   });
 
   it("redirects /profile to /login when there is no session (reuses RequireAuth)", () => {

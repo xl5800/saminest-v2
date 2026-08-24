@@ -23,6 +23,7 @@ import { MyPostsPage } from "../pages/my-posts/my-posts-page";
 import { NotFoundPage } from "../pages/not-found/not-found-page";
 import { PostDetailPage } from "../pages/post/post-detail-page";
 import { PrivacyPage } from "../pages/privacy/privacy-page";
+import { BlockedUsersPage } from "../pages/profile/blocked-users-page";
 import { EditProfilePage } from "../pages/profile/edit-profile-page";
 import { ProfilePage } from "../pages/profile/profile-page";
 import { UserProfilePage } from "../pages/profile/user-profile-page";
@@ -182,6 +183,17 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <DeleteAccountPage />
+          </RequireAuth>
+        )
+      },
+      {
+        // 13 号卡（"我的"页新增"已屏蔽"管理入口）：跟 favorites/settings 是
+        // 同一类"从我的页跳过来的二级页面"，同样用 RequireAuth 包裹，不用
+        // TopBar（沿用默认全局 AppHeader 的返回按钮）。
+        path: "blocked-users",
+        element: (
+          <RequireAuth>
+            <BlockedUsersPage />
           </RequireAuth>
         )
       },
