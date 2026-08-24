@@ -51,12 +51,14 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { AppError } from "../../utils/app-error";
 import { PublishPage } from "./publish-page";
 
 const initialAuthState = useAuthStore.getState();
+const initialPendingRegionState = usePendingFormRegionStore.getState();
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText("分类"), {
@@ -124,6 +126,7 @@ describe("PublishPage", () => {
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
     navigateMock.mockReset();
+    usePendingFormRegionStore.setState(initialPendingRegionState, true);
 
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
@@ -138,17 +141,28 @@ describe("PublishPage", () => {
     } as never);
   });
 
-  it("renders category and location options loaded from the database, not hardcoded", async () => {
+  it("renders category options loaded from the database, not hardcoded", async () => {
     renderWithProviders(<PublishPage />);
 
     expect(
       await screen.findByRole("option", { name: "租房" })
     ).toBeInTheDocument();
-    expect(
-      await screen.findByRole("option", { name: "Rockville" })
-    ).toBeInTheDocument();
     expect(listActiveCategories).toHaveBeenCalled();
-    expect(listActiveLocations).toHaveBeenCalled();
+  });
+
+  // 12 号卡：地区字段不再是原生 <select>（也不再直接查 locations 表拿城市
+  // 列表，见 publish-page.tsx 顶部注释），改成跳转 /region-select?mode=form
+  // 整页选择。这里只断言"点了会跳转到对的路径"，回填逻辑（消费
+  // usePendingFormRegionStore）单独用下面几个测试覆盖，不依赖真的渲染
+  // RegionSelectPage（那是它自己文件里的测试范围）。
+  it("shows '不限地区' by default and navigates to /region-select?mode=form when the 地区 field is clicked", async () => {
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    expect(screen.getByText("不限地区")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("不限地区"));
+
+    expect(navigateMock).toHaveBeenCalledWith("/region-select?mode=form");
   });
 
   it("preselects the category from a ?category=<slug> query param (used by the publish action sheet's 发布租房/求租/二手 entries)", async () => {
@@ -565,42 +579,99 @@ describe("PublishPage", () => {
     expect(insertPostImages).not.toHaveBeenCalled();
   });
 
-  it("submits a custom locationText and a null locationId when 'other' is selected", async () => {
+  // 12 号卡：地区选择从原生下拉换成跳转 /region-select?mode=form + 回填
+  // usePendingFormRegionStore（回填机制本身的单测在
+  // pending-form-region-store.test.ts / region-select-page.test.tsx，
+  // 这里只测 PublishPage 消费这个 store 之后的表现——不用真的渲染
+  // RegionSelectPage，直接往 store 里写值，模拟"从那个页面选完回来"这一刻）。
+  //
+  // 原来"输入任意手动文字"的"其他（手动输入）"UI 已经被这个新流程取代——
+  // 没有城市数据的州（大多数州）复用的正是同一个 OTHER_LOCATION_VALUE +
+  // locationText 机制，只是 locationText 的值现在来自选中的州（格式化好的
+  // "缩写 中文州名"），不是用户手打的任意文字，见 publish-page.tsx 消费
+  // pendingRegion 的 effect 顶部注释。"OTHER_LOCATION_VALUE 但 locationText
+  // 为空"这个校验分支现在在 UI 层已经不可达（effect 总是把两者一起设），
+  // 那条校验规则本身仍然由 publish-validation.test.ts 直接测纯函数覆盖，
+  // 不需要在这里再模拟一次不可达的路径。
+  it("submits a state-only region (no city data) picked via /region-select as locationText, with a null locationId", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
     await screen.findByRole("option", { name: "租房" });
 
     fillRequiredFields();
-    fireEvent.change(screen.getByLabelText("地区"), {
-      target: { value: "__other__" }
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "CA",
+      stateName: "California",
+      cityId: null,
+      cityName: null
     });
-    fireEvent.change(screen.getByLabelText("地区名称"), {
-      target: { value: "Somewhere not listed" }
-    });
+    await screen.findByText("CA 加利福尼亚州");
+
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
     await waitFor(() => {
       expect(createPost).toHaveBeenCalledWith(
         expect.objectContaining({
           locationId: null,
-          locationText: "Somewhere not listed"
+          locationText: "CA 加利福尼亚州"
         })
       );
     });
   });
 
-  it("blocks submission when 'other' is selected but no location name is typed", async () => {
+  it("submits a city-backed region (DC/VA/MD drilldown) picked via /region-select as locationId, with a null locationText", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
     await screen.findByRole("option", { name: "租房" });
 
     fillRequiredFields();
-    fireEvent.change(screen.getByLabelText("地区"), {
-      target: { value: "__other__" }
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "VA",
+      stateName: "Virginia",
+      cityId: "loc-arlington",
+      cityName: "Arlington"
     });
+    await screen.findByText("Arlington");
+
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("请输入地区名称。");
-    expect(createPost).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locationId: "loc-arlington",
+          locationText: null
+        })
+      );
+    });
+  });
+
+  it("clears a picked region back to '不限地区' (locationId/locationText both null) when the clear button is clicked", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "CA",
+      stateName: "California",
+      cityId: null,
+      cityName: null
+    });
+    await screen.findByText("CA 加利福尼亚州");
+
+    fireEvent.click(screen.getByRole("button", { name: "清除地区" }));
+    expect(screen.getByText("不限地区")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locationId: null,
+          locationText: null
+        })
+      );
+    });
   });
 });
 
@@ -641,6 +712,7 @@ describe("PublishPage in edit mode", () => {
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
     navigateMock.mockReset();
+    usePendingFormRegionStore.setState(initialPendingRegionState, true);
 
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
@@ -671,7 +743,10 @@ describe("PublishPage in edit mode", () => {
       screen.getByDisplayValue("Original description that is long enough.")
     ).toBeInTheDocument();
     expect(screen.getByLabelText("分类")).toHaveValue("cat-1");
-    expect(screen.getByLabelText("地区")).toHaveValue("loc-1");
+    // 地区字段不再是原生 <select>——展示文案直接复用服务端已经解析好的
+    // locationName（见 publish-page.tsx 顶部注释），这里断言那行按钮上
+    // 显示的文字，而不是某个表单控件的 value。
+    expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(getPostDetail).toHaveBeenCalledWith("post-1");
   });
 
@@ -685,7 +760,7 @@ describe("PublishPage in edit mode", () => {
     expect(screen.queryByLabelText("标题")).not.toBeInTheDocument();
   });
 
-  it("pre-selects the 'other' location option and fills locationText when the post used a custom location", async () => {
+  it("shows the post's free-text location (locationText) as the region field's display label when it used a custom location", async () => {
     getPostDetail.mockResolvedValue({
       ...existingPostDetail,
       locationId: null,
@@ -695,8 +770,7 @@ describe("PublishPage in edit mode", () => {
     renderEditPage();
 
     await screen.findByDisplayValue("Original title");
-    expect(screen.getByLabelText("地区")).toHaveValue("__other__");
-    expect(screen.getByLabelText("地区名称")).toHaveValue("Somewhere custom");
+    expect(screen.getByText("Somewhere custom")).toBeInTheDocument();
   });
 
   it("calls updatePost (not createPost) on submit, passing the loaded currentStatus", async () => {

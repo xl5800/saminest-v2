@@ -1,12 +1,13 @@
 import { ChevronRight, Globe } from "lucide-react";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
-import { US_STATES, type UsState } from "../../data/us-states";
+import { formatStateLabel, US_STATES, type UsState } from "../../data/us-states";
 import { useCitiesWithStateQuery } from "../../features/locations/use-cities-with-state-query";
 import { useRegionContentCountsQuery } from "../../features/locations/use-region-content-counts-query";
 import type { LocationWithStateItem } from "../../repositories/locations-repository";
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 
 type SortMode = "popularity" | "alphabetical";
@@ -14,6 +15,9 @@ type SortMode = "popularity" | "alphabetical";
 interface StateRow {
   code: string;
   name: string;
+  /** 中文州名（12 号卡新增）——跟 code 一起喂给 formatStateLabel() 拼展示
+   *  文案，见下面渲染州列表的地方。 */
+  nameZh: string;
   /** 这个州在 locations 表里已有的真实城市（可能是空数组——全美 51 项里
    *  绝大多数州目前是这种情况）。长度决定这一行是"下钻"还是"直接选中"，
    *  见 handleStateRowClick。 */
@@ -111,14 +115,30 @@ function findStateName(code: string): string {
  * 某一种列表生效——州列表用 sortStateRows（真实按内容数量排序），其余两
  * 种列表继续用 sortByMode（见该函数上方注释）。
  *
- * 选中后写入 useSelectedRegionStore 并 navigate(-1) 返回上一页——跟 TopBar
- * 默认返回按钮是同一个"回到进入这个页面之前那一页"的语义，不假设一定是
- * 首页（虽然目前唯一入口确实是首页）。
+ * 选中后写入对应 store 并 navigate(-1) 返回上一页——跟 TopBar 默认返回
+ * 按钮是同一个"回到进入这个页面之前那一页"的语义，不假设一定是首页。
+ *
+ * 12 号卡「地区选择格式统一 + 全局复用」新增"场景"支持，用一个 URL 查询
+ * 参数 `?mode=form` 区分：
+ * - 默认（不传/其它值）＝筛选场景（首页顶部胶囊、找搭子列表筛选入口），
+ *   跟 08 号卡之前完全一样——展示"全美"、选中后写入 useSelectedRegionStore
+ *   （这是"我现在想浏览哪个地区"，全局、持久化）。
+ * - `mode=form` ＝发布表单选地区场景（发起搭子/发布租房/求租/二手），
+ *   不展示"全美"（发帖子/发活动必须选一个具体的州，不能选"全美"，"不限
+ *   地区"是这几个表单自己的字段语义，不是这个页面的选项，见各表单自己的
+ *   实现）；选中后写入 usePendingFormRegionStore 而不是
+ *   useSelectedRegionStore——这是"我这次在表单里选了哪个地区"，一次性、
+ *   不该影响首页/找搭子正在生效的筛选，见 pending-form-region-store.ts
+ *   顶部注释。除了写入哪个 store、要不要展示"全美"这两点，两种场景下的
+ *   列表/搜索/排序/下钻逻辑完全一样，不是两份重复代码。
  */
 export function RegionSelectPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const isFormMode = searchParams.get("mode") === "form";
   const setSelectedRegion = useSelectedRegionStore((s) => s.setSelectedRegion);
   const clearSelectedRegion = useSelectedRegionStore((s) => s.clearSelectedRegion);
+  const setPendingRegion = usePendingFormRegionStore((s) => s.setPendingRegion);
 
   const {
     data: cities,
@@ -140,6 +160,7 @@ export function RegionSelectPage() {
     return US_STATES.map((state) => ({
       code: state.code,
       name: state.name,
+      nameZh: state.nameZh,
       cities: cities.filter((city) => city.stateCode === state.code)
     }));
   }, [cities]);
@@ -157,16 +178,20 @@ export function RegionSelectPage() {
   // 08 号卡：搜索扩展到全部 51 项——州名/两字母缩写、城市名分别匹配，命中
   // 的合并成一个扁平列表。州名/缩写用 US_STATES 这份静态数据匹配（不依赖
   // 已加载的 cities/stateRows），城市继续用 useCitiesWithStateQuery 的结果。
+  // 12 号卡：展示格式统一成中文后，搜索词也顺带支持匹配中文州名（比如输入
+  // "纽约"能搜到 NY）——展示的是中文，搜不出中文会显得像 bug，这条不是
+  // 单独的任务卡要求，是格式改成中文后自然需要配套的行为。
   const searchResults: SelectableEntry[] | null = useMemo(() => {
     if (!trimmedQuery) return null;
 
     const matchedStates: SelectableEntry[] = US_STATES.filter(
       (state) =>
         state.name.toLowerCase().includes(trimmedQuery) ||
-        state.code.toLowerCase().includes(trimmedQuery)
+        state.code.toLowerCase().includes(trimmedQuery) ||
+        state.nameZh.includes(trimmedQuery)
     ).map((state) => ({
       key: `state-${state.code}`,
-      name: state.name,
+      name: formatStateLabel(state),
       onSelect: () => selectState(state)
     }));
 
@@ -183,22 +208,32 @@ export function RegionSelectPage() {
   }, [cities, trimmedQuery, sortMode]);
 
   function selectCity(city: LocationWithStateItem, stateCode: string): void {
-    setSelectedRegion({
+    const region = {
       stateCode,
       stateName: findStateName(stateCode),
       cityId: city.id,
       cityName: city.name
-    });
+    };
+    if (isFormMode) {
+      setPendingRegion(region);
+    } else {
+      setSelectedRegion(region);
+    }
     navigate(-1);
   }
 
   function selectState(state: UsState): void {
-    setSelectedRegion({
+    const region = {
       stateCode: state.code,
       stateName: state.name,
       cityId: null,
       cityName: null
-    });
+    };
+    if (isFormMode) {
+      setPendingRegion(region);
+    } else {
+      setSelectedRegion(region);
+    }
     navigate(-1);
   }
 
@@ -284,8 +319,9 @@ export function RegionSelectPage() {
         {!isPending && !isError ? (
           <ul className="mt-3 divide-y divide-border rounded-2xl bg-card">
             {/* 「全美」只在最外层的州列表视图展示——不属于 51 项、不参与
-                排序/搜索，见组件顶部注释。 */}
-            {!searchResults && !drilldownGroup ? (
+                排序/搜索，见组件顶部注释；12 号卡起额外要求 form 场景
+                （发布表单选地区）完全不展示这个选项。 */}
+            {!isFormMode && !searchResults && !drilldownGroup ? (
               <li>
                 <button
                   type="button"
@@ -336,7 +372,7 @@ export function RegionSelectPage() {
                     onClick={() => handleStateRowClick(row)}
                     className="flex h-12 w-full items-center justify-between px-4 text-left text-base text-text"
                   >
-                    <span>{row.name}</span>
+                    <span>{formatStateLabel(row)}</span>
                     {row.cities.length > 1 ? (
                       <ChevronRight aria-hidden="true" size={18} className="text-chevron" />
                     ) : null}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { formatLocationDisplayName } from "../../data/us-states";
 import { useArchivePostMutation } from "../../features/my-posts/use-archive-post-mutation";
 import { useDeleteMyPostMutation } from "../../features/my-posts/use-delete-my-post-mutation";
 import { useMyPostsQuery } from "../../features/my-posts/use-my-posts-query";
@@ -250,7 +251,8 @@ export function MyPostsPage() {
                     </span>
                   </div>
                   <p className="mt-1 truncate text-xs text-text-muted">
-                    {post.categoryName} · {post.locationName ?? "地区未填写"}
+                    {post.categoryName} ·{" "}
+                    {post.locationName ? formatLocationDisplayName(post.locationName) : "地区未填写"}
                   </p>
                   <p className="mt-1 text-xs text-text-muted">{formatPublishedAt(post.createdAt)}</p>
                   {post.status === "rejected" ? (

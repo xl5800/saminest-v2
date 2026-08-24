@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 
+import { formatLocationDisplayName } from "../data/us-states";
 import type { ActivityListItem, ActivityParticipant } from "../repositories/activities-repository";
 import { getActivityChannelMeta } from "../repositories/activities-repository";
 import { formatActivityStartAt } from "../utils/format";
@@ -56,7 +57,10 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
         {emoji} {activity.title}
       </p>
       <p className="mt-1 text-xs text-text-muted">
-        {activity.isOnline ? "线上" : activity.landmarkText ?? activity.locationName ?? "地点待定"}
+        {activity.isOnline
+          ? "线上"
+          : activity.landmarkText ??
+            (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
       </p>
       <p className="mt-1 text-xs text-text-muted">{formatActivityStartAt(activity.startAt)}</p>
     </Link>

@@ -1,13 +1,15 @@
-import { Minus, Plus } from "lucide-react";
-import { type FormEvent, useRef, useState } from "react";
+import { ChevronRight, Minus, Plus, X } from "lucide-react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
+import { formatStateLabelByCode } from "../../data/us-states";
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import {
   ACTIVITY_CHANNEL_OPTIONS,
   createActivity
 } from "../../repositories/activities-repository";
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { CONTACT_METHOD_OPTIONS } from "../publish/publish-validation";
@@ -55,14 +57,29 @@ const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
  * "需要我同意才能加入"（P2 报名审核制）默认关闭，是唯一一个发布后不能再
  * 改的开关（这批任务没有编辑活动的入口）——发起人发布前需要想清楚要不要
  * 开审核，不是可以随时切换的设置。
+ *
+ * 12 号卡「地区选择格式统一 + 全局复用 /region-select」：地点这个字段组
+ * 里的"州"从原生 <select> 换成跳转 /region-select?mode=form 整页选择，
+ * 跟 publish-page.tsx 用的是同一套回填机制（usePendingFormRegionStore，
+ * 见该 store 顶部注释）。但提交时的映射方式不一样——posts 有
+ * locationText 自由文本兜底，activities 没有（location_id 是线下必填
+ * 外键，见 docs/01_Product/FindBuddy-Design.md 3.1 节），所以这里选中一个
+ * 没有真实城市数据的州（全美 51 项里的大多数）时，不能像发帖表单那样存
+ * 一段格式化好的文字了事，必须真的反查出这个州在 locations 表里对应的
+ * type = 'state' 行的 id 才能提交——这正是 12 号卡要求先给 locations 表
+ * 补全全美 51 个州级行（migration
+ * add_remaining_state_locations，照抄已有的 20260816223226 那条）的原因：
+ * 补全之前，这个反查对 DMV 之外的州找不到对应行，activities 表单没法
+ * 支持全美选择。反查用的 stateCode → id 映射来自
+ * useActivityRegionsQuery()（已经在查这张表，只是不再渲染成 <select>
+ * 选项，见 regionsByStateCode）。
  */
 export function CreateActivityPage() {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
   const formRef = useRef<HTMLFormElement>(null);
 
-  const { data: regions, isPending: regionsPending, isError: regionsError } =
-    useActivityRegionsQuery();
+  const { data: regions, isError: regionsError } = useActivityRegionsQuery();
 
   const [channel, setChannel] = useState("");
   const [tagText, setTagText] = useState("");
@@ -70,6 +87,10 @@ export function CreateActivityPage() {
   const [description, setDescription] = useState("");
   const [isOnline, setIsOnline] = useState(false);
   const [locationId, setLocationId] = useState("");
+  // 12 号卡：地区字段的展示文案，跟 publish-page.tsx 同一个道理，不直接
+  // 复用 locationId（那是要提交的 locations.id，这个只管这一行按钮显示
+  // 什么字）。
+  const [regionLabel, setRegionLabel] = useState("");
   const [landmarkText, setLandmarkText] = useState("");
   const [startAt, setStartAt] = useState("");
   const [capacity, setCapacity] = useState("");
@@ -80,6 +101,60 @@ export function CreateActivityPage() {
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // stateCode → locations.id 的反查表，见组件顶部注释。补全 51 州之后，
+  // 全美任意一个州都能在这里找到对应的行——理论上不会查不到，但"查不到"
+  // 和"regions 这条查询还没返回"目前是同一种表现（Map 是空的），下面这个
+  // effect 特意区分了这两种情况，不能简单地当成"这个州没有数据"直接丢弃。
+  const regionsByStateCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const region of regions ?? []) {
+      if (region.stateCode) {
+        map.set(region.stateCode, region.id);
+      }
+    }
+    return map;
+  }, [regions]);
+
+  const pendingRegion = usePendingFormRegionStore((s) => s.pendingRegion);
+  const clearPendingRegion = usePendingFormRegionStore((s) => s.clearPendingRegion);
+
+  useEffect(() => {
+    if (!pendingRegion) return;
+
+    if (pendingRegion.cityId) {
+      // DC/VA/MD 下钻到具体城市——城市本身就是 locations 表里的真实行，
+      // 直接拿它的 id 提交，跟原生 <select> 里以前能选的粒度更细，属于
+      // 额外获得的精度，不影响校验（activities_update_own 之类的规则
+      // 只关心 location_id 是不是合法外键，不区分州级/城市级）。
+      setLocationId(pendingRegion.cityId);
+      setRegionLabel(pendingRegion.cityName ?? formatStateLabelByCode(pendingRegion.stateCode));
+      clearPendingRegion();
+      return;
+    }
+
+    const resolvedId = regionsByStateCode.get(pendingRegion.stateCode);
+    if (resolvedId) {
+      setLocationId(resolvedId);
+      setRegionLabel(formatStateLabelByCode(pendingRegion.stateCode));
+      clearPendingRegion();
+    }
+    // resolvedId 暂时查不到时，先不 clearPendingRegion()：大概率是用户从
+    // /region-select 选完返回的时候，regions 这条查询碰巧还没返回（这个
+    // effect 的依赖里有 regionsByStateCode，查询完成、这个 Map 更新后会
+    // 重新跑一遍再重试）。如果这里提前清空 pendingRegion，一旦踩中这个
+    // 时序，用户刚选的地区会被静默丢弃、州字段停在"请选择州"，且再也没有
+    // 机会重试——这比让用户多等一两百毫秒严重得多。
+  }, [pendingRegion, regionsByStateCode, clearPendingRegion]);
+
+  function handleOpenRegionSelect(): void {
+    navigate("/region-select?mode=form");
+  }
+
+  function handleClearRegion(): void {
+    setLocationId("");
+    setRegionLabel("");
+  }
 
   function adjustCapacity(delta: 1 | -1): void {
     const current = capacity.trim() ? Number(capacity) : 0;
@@ -238,22 +313,36 @@ export function CreateActivityPage() {
               线上活动（不需要选州）
             </label>
 
-            <label className="mb-1 block text-sm font-medium text-text">
-              州{isOnline ? "（可选）" : ""}
-              <select
-                value={locationId}
-                onChange={(event) => setLocationId(event.target.value)}
-                disabled={regionsPending}
-                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-              >
-                <option value="">{isOnline ? "不选择州" : "请选择州"}</option>
-                {(regions ?? []).map((region) => (
-                  <option key={region.id} value={region.id}>
-                    {region.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="mb-1">
+              <span className="mb-1 block text-sm font-medium text-text">
+                州{isOnline ? "（可选）" : ""}
+              </span>
+              {/* 外层是普通 div，不是 button，理由跟 publish-page.tsx 地区
+                  字段那里完全一样——"清除"和"跳转整页选择"是两个平级的
+                  独立 <button>，不嵌套。 */}
+              <div className="flex items-center gap-1 rounded border border-border px-3 py-2">
+                <button
+                  type="button"
+                  onClick={handleOpenRegionSelect}
+                  className="flex min-w-0 flex-1 items-center justify-between text-left text-base"
+                >
+                  <span className={`truncate ${regionLabel ? "text-text" : "text-text-muted"}`}>
+                    {regionLabel || (isOnline ? "不选择州" : "请选择州")}
+                  </span>
+                  <ChevronRight aria-hidden="true" size={16} className="ml-2 shrink-0 text-chevron" />
+                </button>
+                {regionLabel ? (
+                  <button
+                    type="button"
+                    aria-label="清除地区"
+                    onClick={handleClearRegion}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-text-muted hover:bg-bg"
+                  >
+                    <X aria-hidden="true" size={14} />
+                  </button>
+                ) : null}
+              </div>
+            </div>
             {regionsError ? (
               <p className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
                 州加载失败，请刷新页面重试。

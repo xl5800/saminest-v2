@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { formatLocationDisplayName } from "../../data/us-states";
 import { useCancelActivityMutation } from "../../features/activities/use-cancel-activity-mutation";
 import { useModerateActivityParticipantMutation } from "../../features/activities/use-moderate-activity-participant-mutation";
 import { useMyJoinedActivitiesQuery } from "../../features/activities/use-my-joined-activities-query";
@@ -82,7 +83,11 @@ function ActivityCard({ activity, error, note, action, extra }: ActivityCardProp
           </span>
         </div>
         <p className="mt-1 truncate text-xs text-text-muted">
-          {label} · {activity.isOnline ? "线上" : activity.landmarkText ?? activity.locationName ?? "地点待定"}
+          {label} ·{" "}
+          {activity.isOnline
+            ? "线上"
+            : activity.landmarkText ??
+              (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
         </p>
         <p className="mt-1 text-xs text-text-muted">{formatActivityStartAt(activity.startAt)}</p>
         <p className="mt-1 text-xs text-accent">

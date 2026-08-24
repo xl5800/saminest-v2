@@ -431,7 +431,7 @@ describe("app routes", () => {
     ]);
     listAllCategoriesForAdmin.mockResolvedValue([]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
-    listActiveActivityRegions.mockResolvedValue([{ id: "region-1", name: "VA" }]);
+    listActiveActivityRegions.mockResolvedValue([{ id: "region-1", name: "VA", stateCode: "VA" }]);
     listActiveCitiesWithState.mockResolvedValue([
       { id: "loc-1", name: "Rockville", stateCode: "VA" }
     ]);
@@ -557,11 +557,10 @@ describe("app routes", () => {
     renderAt("/activities/new");
 
     // 04 号卡改版：顶部 TopBar create 变体的标题从旧版"发起一起去"换成了
-    // "发布搭子内容"。
+    // "发布搭子内容"。12 号卡起，地区字段不再是原生 <select>，改成跳转
+    // /region-select?mode=form 的一行按钮，默认展示"请选择州"占位文案。
     expect(screen.getByRole("heading", { name: "发布搭子内容" })).toBeInTheDocument();
-    expect(
-      await screen.findByRole("option", { name: "VA" })
-    ).toBeInTheDocument();
+    expect(await screen.findByText("请选择州")).toBeInTheDocument();
   });
 
   it("redirects /activities/:id/report to /login when there is no session (reuses RequireAuth)", () => {

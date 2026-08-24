@@ -7,6 +7,7 @@ import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
+import { formatLocationDisplayName } from "../../data/us-states";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import type { PostDetail } from "../../repositories/posts-repository";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
@@ -183,7 +184,7 @@ export function PostDetailPage() {
               <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
                 {data.categoryName}
               </span>
-              <span>{data.locationName ?? "地区未填写"}</span>
+              <span>{data.locationName ? formatLocationDisplayName(data.locationName) : "地区未填写"}</span>
             </div>
             <p>{formatListingDate(data.createdAt)}</p>
             <p>发布者：{data.authorDisplayName}</p>
