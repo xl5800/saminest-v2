@@ -3,12 +3,26 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // 跟 favorites-repository.test.ts 是同一套 mock 风格：一个共享的链式
 // query builder，每个方法各自一个可控的 mock，eq() 需要能连续链式调用两次
 // （blocker_id / blocked_id）才走到 maybeSingle() 这个终点，所以在
-// beforeEach 里让它 mockReturnValue(builder) 而不是直接 resolve。
-const { queryBuilder, eqMock, insertMock, matchMock, maybeSingleMock, rpcMock } = vi.hoisted(() => {
+// beforeEach 里让它 mockReturnValue(builder) 而不是直接 resolve。order/
+// overrideTypes 是 13 号卡新增的 listMyBlockedUsers 用的（select().eq().
+// order().overrideTypes() 这条链路），跟 reports-repository.test.ts 里
+// listReportsForModeration 的 mock 方式一致。
+const {
+  queryBuilder,
+  eqMock,
+  insertMock,
+  matchMock,
+  maybeSingleMock,
+  orderMock,
+  overrideTypesMock,
+  rpcMock
+} = vi.hoisted(() => {
   const eqMock = vi.fn();
   const insertMock = vi.fn();
   const matchMock = vi.fn();
   const maybeSingleMock = vi.fn();
+  const orderMock = vi.fn();
+  const overrideTypesMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   builder.select = vi.fn(() => builder);
   builder.eq = eqMock;
@@ -16,8 +30,19 @@ const { queryBuilder, eqMock, insertMock, matchMock, maybeSingleMock, rpcMock } 
   builder.delete = vi.fn(() => builder);
   builder.match = matchMock;
   builder.maybeSingle = maybeSingleMock;
+  builder.order = orderMock;
+  builder.overrideTypes = overrideTypesMock;
   const rpcMock = vi.fn();
-  return { queryBuilder: builder, eqMock, insertMock, matchMock, maybeSingleMock, rpcMock };
+  return {
+    queryBuilder: builder,
+    eqMock,
+    insertMock,
+    matchMock,
+    maybeSingleMock,
+    orderMock,
+    overrideTypesMock,
+    rpcMock
+  };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -26,7 +51,13 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
-import { blockUser, isBlockedWithUser, isBlockingUser, unblockUser } from "./user-blocks-repository";
+import {
+  blockUser,
+  isBlockedWithUser,
+  isBlockingUser,
+  listMyBlockedUsers,
+  unblockUser
+} from "./user-blocks-repository";
 
 describe("isBlockingUser", () => {
   beforeEach(() => {
@@ -171,6 +202,73 @@ describe("isBlockedWithUser", () => {
 
     await expect(isBlockedWithUser("user-2")).rejects.toMatchObject({
       code: "USER_BLOCKED_PAIR_CHECK_FAILED"
+    });
+  });
+});
+
+// 13 号卡（"我的"页新增"已屏蔽"管理入口）。
+describe("listMyBlockedUsers", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    eqMock.mockReset();
+    eqMock.mockReturnValue(queryBuilder);
+    orderMock.mockReset();
+    orderMock.mockReturnValue(queryBuilder);
+    overrideTypesMock.mockReset();
+  });
+
+  it("queries user_blocks filtered by blocker_id, disambiguating the profiles join via the blocked_id fkey, ordered by created_at desc", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          blocked_id: "user-2",
+          blocked: { display_name: "Bob", avatar_url: "https://img.example.com/bob.jpg" }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyBlockedUsers("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("user_blocks");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "blocked_id, blocked:profiles!user_blocks_blocked_id_fkey(display_name, avatar_url)"
+    );
+    expect(eqMock).toHaveBeenCalledWith("blocker_id", "user-1");
+    expect(orderMock).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result).toEqual([
+      { blockedUserId: "user-2", displayName: "Bob", avatarUrl: "https://img.example.com/bob.jpg" }
+    ]);
+  });
+
+  it("falls back to '未知用户' and a null avatar when the joined profile is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [{ blocked_id: "user-2", blocked: null }],
+      error: null
+    });
+
+    const result = await listMyBlockedUsers("user-1");
+
+    expect(result).toEqual([
+      { blockedUserId: "user-2", displayName: "未知用户", avatarUrl: null }
+    ]);
+  });
+
+  it("returns an empty array when the user hasn't blocked anyone", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listMyBlockedUsers("user-1")).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listMyBlockedUsers("user-1")).rejects.toMatchObject({
+      code: "MY_BLOCKED_USERS_LIST_FAILED"
     });
   });
 });

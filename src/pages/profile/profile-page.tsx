@@ -1,4 +1,13 @@
-import { Calendar, FileText, MessageSquare, Pencil, Settings, Star, type LucideIcon } from "lucide-react";
+import {
+  Ban,
+  Calendar,
+  FileText,
+  MessageSquare,
+  Pencil,
+  Settings,
+  Star,
+  type LucideIcon
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -93,6 +102,11 @@ function SettingsRow({ to, icon: Icon, label }: SettingsRowProps) {
  * SettingsRow 组件/同一套样式，点击进入现成的 /settings 页面（不是占位
  * 路由）。"联系客服"这一行本身（文案/路由）是更早的任务卡改的，这次
  * 只动了它在列表里的位置（还是排在我的收藏后面，只是后面多了"设置"）。
+ *
+ * 13 号卡（"我的"页新增"已屏蔽"管理入口）：在"设置"上面插入"已屏蔽"这一
+ * 行，跳转到新的 /blocked-users 列表页。位置故意不是插进"我的收藏"/"联系
+ * 客服"这类业务功能行之间——"已屏蔽"跟隐私/账号管理更相关，归到列表靠后、
+ * 紧挨着"设置"，这也是任务卡明确要求的位置，不是随手加在列表末尾。
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -150,6 +164,7 @@ export function ProfilePage() {
           <SettingsRow to="/my-activities" icon={Calendar} label="我的活动" />
           <SettingsRow to="/favorites" icon={Star} label="我的收藏" />
           <SettingsRow to="/feedback" icon={MessageSquare} label="联系客服" />
+          <SettingsRow to="/blocked-users" icon={Ban} label="已屏蔽" />
           <SettingsRow to={SETTINGS_PATH} icon={Settings} label="设置" />
         </nav>
 

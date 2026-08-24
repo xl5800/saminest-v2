@@ -94,6 +94,58 @@ export async function unblockUser(input: UnblockUserInput): Promise<void> {
   }
 }
 
+export interface BlockedUserListItem {
+  blockedUserId: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+interface BlockedUserRow {
+  blocked_id: string;
+  blocked: { display_name: string; avatar_url: string | null } | null;
+}
+
+/**
+ * "我（blockerId）屏蔽的全部用户"——13 号卡（"我的"页新增"已屏蔽"管理
+ * 入口）新增，供 blocked-users-page.tsx 展示列表用。跟上面 isBlockingUser
+ * 是同一条 user_blocks_select_own RLS（blocker_id = auth.uid()）授权，
+ * 那个是"查某一对用户之间的关系"，这个是"查我发起的全部屏蔽记录"，
+ * 场景不同所以是两个独立函数，不是同一个函数改个参数就能复用的关系。
+ *
+ * user_blocks 对 profiles 有两个外键（blocker_id/blocked_id），嵌套 select
+ * 写 `profiles(display_name)` 时 PostgREST 分不清该走哪一个，会直接报错
+ * PGRST201（跟 reports-repository.ts 的 listReportsForModeration 遇到的是
+ * 同一个坑），必须显式用
+ * `profiles!user_blocks_blocked_id_fkey(...)` 指定走哪一个外键。
+ *
+ * 按 created_at 倒序（最近屏蔽的排在最前面），跟这个仓库其它列表页
+ * （消息列表、举报队列）默认按时间新→旧排序是同一个约定。
+ *
+ * blocked 为 null（理论上不应该发生——blocked_id 有外键约束、且
+ * profiles_select_public_or_self 这条 RLS 即使账号已注销也仍然放行读取，
+ * 见 account_deletion_requests 那次改动的说明）时退回"未知用户"文案，
+ * 不让这一行因为一次意外的空值而直接报错中断整个列表——跟
+ * reports-repository.ts 对 reporter 的 null 兜底是同一个原则。
+ */
+export async function listMyBlockedUsers(blockerId: string): Promise<BlockedUserListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("user_blocks")
+    .select("blocked_id, blocked:profiles!user_blocks_blocked_id_fkey(display_name, avatar_url)")
+    .eq("blocker_id", blockerId)
+    .order("created_at", { ascending: false })
+    .overrideTypes<BlockedUserRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_BLOCKED_USERS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    blockedUserId: row.blocked_id,
+    displayName: row.blocked?.display_name ?? "未知用户",
+    avatarUrl: row.blocked?.avatar_url ?? null
+  }));
+}
+
 /**
  * "当前登录用户和 otherUserId 之间是否存在任一方向的屏蔽关系"——走
  * is_blocked_with(uuid) 这个 security definer RPC（见
