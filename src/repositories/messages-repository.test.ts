@@ -174,7 +174,11 @@ describe("sendMessage", () => {
     ).rejects.toMatchObject({ code: "MESSAGE_SEND_FAILED" });
   });
 
-  it("throws a distinct ACCOUNT_RESTRICTED AppError with a friendly message on an RLS violation (42501)", async () => {
+  it("throws a distinct MESSAGE_SEND_FORBIDDEN AppError with a friendly message on an RLS violation (42501)", async () => {
+    // 42501 现在可能来自账号受限或屏蔽关系两种真实原因（见
+    // messages-repository.ts 里 sendMessage() 的注释），这里只验证映射到
+    // 了一个不预设具体原因、但明确"重试没用"的专门错误码/文案，不是原始的
+    // "违反行级安全策略"或者被误判定成单一原因。
     singleMock.mockResolvedValue({
       data: null,
       error: {
@@ -190,8 +194,8 @@ describe("sendMessage", () => {
         body: "你好"
       })
     ).rejects.toMatchObject({
-      code: "ACCOUNT_RESTRICTED",
-      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+      code: "MESSAGE_SEND_FORBIDDEN",
+      message: "消息未能发送：你的账号可能处于限制状态，或你与对方之间存在屏蔽关系。"
     });
   });
 

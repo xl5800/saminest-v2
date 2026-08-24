@@ -176,6 +176,7 @@ import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
+import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { TermsPage } from "../pages/terms/terms-page";
 import { RequireAdmin } from "./require-admin";
@@ -282,6 +283,14 @@ function renderAt(path: string | string[]) {
             )
           },
           { path: "users/:userId", element: <UserProfilePage /> },
+          {
+            path: "users/:userId/report",
+            element: (
+              <RequireAuth>
+                <ReportUserPage />
+              </RequireAuth>
+            )
+          },
           {
             path: "my-posts",
             element: (
@@ -807,6 +816,22 @@ describe("app routes", () => {
     renderAt("/users/user-2");
 
     expect(await screen.findByRole("heading", { name: "Bob" })).toBeInTheDocument();
+  });
+
+  it("redirects /users/:userId/report to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/users/user-2/report");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  it("renders the report-user form at /users/:userId/report when a session exists (UGC 安全功能补齐任务卡 2)", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/users/user-2/report");
+
+    expect(screen.getByRole("heading", { name: "举报用户" })).toBeInTheDocument();
   });
 
   it("redirects /feedback to /login when there is no session (reuses RequireAuth)", () => {

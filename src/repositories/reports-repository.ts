@@ -33,7 +33,7 @@ export type ReportReasonCode = (typeof REPORT_REASON_OPTIONS)[number]["value"];
 
 export interface CreateReportInput {
   reporterId: string;
-  targetType: "post" | "comment" | "activity";
+  targetType: "post" | "comment" | "activity" | "user";
   targetId: string;
   reasonCode: string;
   description: string | null;
@@ -101,6 +101,27 @@ export async function createReport(
   return { id: data.id };
 }
 
+/**
+ * 被举报评论的完整上下文——UGC 安全功能补齐任务卡 3：管理员需要在举报行
+ * 内直接看到评论原文，不用跳出这个页面自己拿 target_id 去数据库查。
+ * isDeleted 为 true 时（用户已经自助软删除这条评论）content 仍然是原文，
+ * 不是占位文字——评论表是软删除（deleted_at），content 字段原样留在
+ * 数据库里，"用户删了不代表举报可以不处理"，管理员需要看到原始内容才能
+ * 判断要不要顺带处置这个账号，具体设计取舍见
+ * docs/04_Development/Apple-UGC-Compliance-Review.md 第六节（含"为什么不
+ * 需要额外做举报时的内容快照"的完整论证——评论软删除 + 无编辑功能，天然
+ * 达到别的平台需要额外建快照表才能达到的效果）。postTitle 找不到时（比如
+ * 帖子查询失败）回退成 null，调用方用 postId 兜底展示链接文案，不是需要
+ * 报错中断整个列表的情况。
+ */
+export interface CommentPreview {
+  content: string;
+  isDeleted: boolean;
+  authorDisplayName: string;
+  postId: string;
+  postTitle: string | null;
+}
+
 export interface AdminReportListItem {
   id: string;
   reasonCode: string;
@@ -108,11 +129,20 @@ export interface AdminReportListItem {
   createdAt: string;
   targetType: string;
   targetId: string;
-  /** 被举报内容的标题（帖子/活动），仅用于列表展示，找不到时（比如
-   *  target_type 是 comment，或标题查询失败）回退成 null，调用方用
-   *  targetId 兜底，不是一个需要报错中断整个列表的情况——见
-   *  fetchTargetTitles 的注释。 */
+  /** 被举报内容的标题（帖子/活动）或被举报用户的昵称（target_type 为
+   *  "user" 时），仅用于列表展示，找不到时（比如 target_type 是
+   *  comment，或查询失败）回退成 null，调用方用 targetId 兜底，不是一个
+   *  需要报错中断整个列表的情况——见 fetchTargetTitles 的注释。字段名
+   *  沿用 targetTitle 没有为"用户昵称"这个场景单独加一个字段，跟调用方
+   *  （reports-page.tsx）"不管 target_type 具体是什么，这一列展示的都是
+   *  被举报对象的一个简短标识"这个统一渲染逻辑保持一致。target_type 为
+   *  "comment" 时这个字段固定是 null——评论的展示信息量比一个标题大得多
+   *  （原文/作者/是否已删除/所属帖子），单独放进下面的 commentPreview，
+   *  不硬塞进这个只适合"一句话标题"的字段。 */
   targetTitle: string | null;
+  /** target_type 为 "comment" 时的评论原文及上下文，其它 target_type
+   *  恒为 null。见上面 CommentPreview 的注释。 */
+  commentPreview: CommentPreview | null;
   reporterName: string;
 }
 
@@ -126,33 +156,64 @@ interface AdminReportRow {
   reporter: { display_name: string } | null;
 }
 
+interface CommentPreviewRow {
+  id: string;
+  content: string;
+  deleted_at: string | null;
+  post_id: string;
+  author: { display_name: string } | null;
+  post: { title: string } | null;
+}
+
+interface FetchTargetTitlesResult {
+  titles: Map<string, string>;
+  commentPreviews: Map<string, CommentPreview>;
+}
+
 /**
- * reports.target_id 是多态引用——同一列根据 target_type 指向 posts 或
- * activities 的 id，数据库层面没有（也不可能有）外键约束，PostgREST 没法用
- * 嵌套 select 一次性把标题带出来。这里按 target_type 分组，各自去对应的表
- * 批量查一次 id+title，再在内存里拼回去，跟外键 join 效果等价，只是分两次
- * 查询。
+ * reports.target_id 是多态引用——同一列根据 target_type 指向 posts /
+ * activities / profiles / comments 的 id，数据库层面没有（也不可能有）
+ * 外键约束，PostgREST 没法用嵌套 select 一次性把标题/内容带出来。这里
+ * 按 target_type 分组，各自去对应的表批量查一次，再在内存里拼回去，跟
+ * 外键 join 效果等价，只是分开查询。
  *
- * posts_select_public_or_own_or_admin 和新增的 activities_select_admin 这两条
- * RLS 策略都对管理员整表放行，不受 status/deleted_at 限制，所以这里不用
- * 额外处理"帖子已下架/活动已取消"这种情况——管理员本来就应该能看到。
+ * posts_select_public_or_own_or_admin、activities_select_admin 这两条
+ * RLS 策略都对管理员整表放行，不受 status/deleted_at 限制；
+ * comments_select_of_approved_or_own_posts 这次任务补上了 is_admin() 例外
+ * （见 supabase/migrations/20260823020000_comments_select_admin_exception.sql），
+ * 管理员现在同样不受"帖子是否已审核公开"限制。profiles_select_public_or_self
+ * 同理对被举报账号是否已经受限/封禁不敏感（这条 RLS 只按 deleted_at 过滤，
+ * 账号状态变化不影响能不能查到这一行）。这几个查询因此都不用额外处理
+ * "帖子已下架/评论所属帖子还在待审核/活动已取消"这类情况——管理员本来就
+ * 应该能看到。
  *
- * 标题只是列表展示的辅助信息，这里查询失败不应该让整个举报列表加载失败——
- * 跟 use-toggle-activity-participation-mutation.ts 里 notifyOrganizer
- * 失败只 console.error、不影响报名/退出本身成功判定是同一个"核心数据与
- * 辅助信息分开判定成败"的原则，查不到就让调用方用 targetId 兜底展示。
+ * 标题/评论内容只是列表展示的辅助信息，这里查询失败不应该让整个举报列表
+ * 加载失败——跟 use-toggle-activity-participation-mutation.ts 里
+ * notifyOrganizer 失败只 console.error、不影响报名/退出本身成功判定是
+ * 同一个"核心数据与辅助信息分开判定成败"的原则，查不到就让调用方用
+ * targetId 兜底展示。
  *
- * "comment" 及其它未来可能出现的 target_type 直接跳过，不去查任何表。
+ * 其它未来可能出现的 target_type 直接跳过，不去查任何表。
  */
-async function fetchTargetTitles(rows: AdminReportRow[]): Promise<Map<string, string>> {
+async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTitlesResult> {
   const titles = new Map<string, string>();
+  const commentPreviews = new Map<string, CommentPreview>();
   const postIds = rows.filter((row) => row.target_type === "post").map((row) => row.target_id);
   const activityIds = rows
     .filter((row) => row.target_type === "activity")
     .map((row) => row.target_id);
+  const userIds = rows.filter((row) => row.target_type === "user").map((row) => row.target_id);
+  const commentIds = rows
+    .filter((row) => row.target_type === "comment")
+    .map((row) => row.target_id);
 
-  if (postIds.length === 0 && activityIds.length === 0) {
-    return titles;
+  if (
+    postIds.length === 0 &&
+    activityIds.length === 0 &&
+    userIds.length === 0 &&
+    commentIds.length === 0
+  ) {
+    return { titles, commentPreviews };
   }
 
   const client = getSupabaseClient();
@@ -176,11 +237,46 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<Map<string, st
         titles.set(`activity:${activity.id}`, activity.title);
       }
     }
+
+    if (userIds.length > 0) {
+      const { data, error } = await client
+        .from("profiles")
+        .select("id, display_name")
+        .in("id", userIds);
+      if (error) throw error;
+      for (const profile of data ?? []) {
+        titles.set(`user:${profile.id}`, profile.display_name);
+      }
+    }
+
+    if (commentIds.length > 0) {
+      // author:profiles(display_name) / post:posts(title) 都只对应
+      // comments 表上唯一的一个外键（user_id / post_id），不会像 reports
+      // 表对 profiles 有两个外键（reporter_id/reviewer_id）那样触发
+      // PGRST201 关系消歧错误，不需要 `profiles!comments_user_id_fkey(...)`
+      // 这种显式写法——跟 comments-repository.ts 的 listPostComments()
+      // 是同一个结论。
+      const { data, error } = await client
+        .from("comments")
+        .select("id, content, deleted_at, post_id, author:profiles(display_name), post:posts(title)")
+        .in("id", commentIds)
+        .overrideTypes<CommentPreviewRow[]>();
+      if (error) throw error;
+      for (const comment of data ?? []) {
+        commentPreviews.set(`comment:${comment.id}`, {
+          content: comment.content,
+          isDeleted: comment.deleted_at !== null,
+          authorDisplayName: comment.author?.display_name ?? "未知用户",
+          postId: comment.post_id,
+          postTitle: comment.post?.title ?? null
+        });
+      }
+    }
   } catch (titleLookupError) {
-    console.error("举报目标标题查询失败：", titleLookupError);
+    console.error("举报目标标题/评论内容查询失败：", titleLookupError);
   }
 
-  return titles;
+  return { titles, commentPreviews };
 }
 
 /**
@@ -217,7 +313,7 @@ export async function listReportsForModeration(
   }
 
   const rows = data ?? [];
-  const targetTitles = await fetchTargetTitles(rows);
+  const { titles, commentPreviews } = await fetchTargetTitles(rows);
 
   return rows.map((row) => ({
     id: row.id,
@@ -226,7 +322,8 @@ export async function listReportsForModeration(
     createdAt: row.created_at,
     targetType: row.target_type,
     targetId: row.target_id,
-    targetTitle: targetTitles.get(`${row.target_type}:${row.target_id}`) ?? null,
+    targetTitle: titles.get(`${row.target_type}:${row.target_id}`) ?? null,
+    commentPreview: commentPreviews.get(`${row.target_type}:${row.target_id}`) ?? null,
     reporterName: row.reporter?.display_name ?? "未知用户"
   }));
 }

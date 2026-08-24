@@ -961,11 +961,51 @@ export type Database = {
           },
         ]
       }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_blocks_blocked_id_fkey"
+            columns: ["blocked_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_blocks_blocker_id_fkey"
+            columns: ["blocker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      admin_cancel_activity: {
+        Args: { cancel_reason: string; target_activity_id: string }
+        Returns: undefined
+      }
       approve_activity_participant: {
         Args: { target_participant_id: string }
         Returns: undefined
@@ -983,6 +1023,10 @@ export type Database = {
       create_profile_conversation: {
         Args: { target_user_id: string }
         Returns: string
+      }
+      delete_comment: {
+        Args: { delete_reason: string; target_comment_id: string }
+        Returns: undefined
       }
       delete_post: {
         Args: { delete_reason: string; target_post_id: string }
@@ -1081,6 +1125,14 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_blocked_in_conversation: {
+        Args: { target_conversation_id: string; target_user_id: string }
+        Returns: boolean
+      }
+      is_blocked_with: {
+        Args: { other_user_id: string }
+        Returns: boolean
+      }
       is_conversation_member: {
         Args: { target_conversation_id: string }
         Returns: boolean

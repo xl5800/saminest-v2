@@ -7,7 +7,9 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  adminCancelActivity,
   approvePost,
+  deleteComment,
   deletePost,
   dismissReport,
   rejectPost,
@@ -150,6 +152,64 @@ describe("deletePost", () => {
 
     await expect(deletePost("post-1", "")).rejects.toMatchObject({
       code: "ADMIN_DELETE_POST_FAILED"
+    });
+  });
+});
+
+// UGC 安全功能补齐任务卡 4。
+describe("deleteComment", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls delete_comment with target_comment_id and delete_reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await deleteComment("comment-1", "骚扰性言论");
+
+    expect(rpcMock).toHaveBeenCalledWith("delete_comment", {
+      target_comment_id: "comment-1",
+      delete_reason: "骚扰性言论"
+    });
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. empty reason or already deleted)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "delete_reason is required" }
+    });
+
+    await expect(deleteComment("comment-1", "")).rejects.toMatchObject({
+      code: "ADMIN_DELETE_COMMENT_FAILED"
+    });
+  });
+});
+
+// UGC 安全功能补齐任务卡 4。
+describe("adminCancelActivity", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_cancel_activity with target_activity_id and cancel_reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminCancelActivity("act-1", "违反平台规则");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_cancel_activity", {
+      target_activity_id: "act-1",
+      cancel_reason: "违反平台规则"
+    });
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. empty reason or already cancelled)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "cancel_reason is required" }
+    });
+
+    await expect(adminCancelActivity("act-1", "")).rejects.toMatchObject({
+      code: "ADMIN_CANCEL_ACTIVITY_FAILED"
     });
   });
 });

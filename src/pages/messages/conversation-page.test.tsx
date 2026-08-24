@@ -7,13 +7,25 @@ const {
   useSendMessageMutation,
   useMyConversationsQuery,
   mutateAsyncMock,
-  markConversationAsRead
+  markConversationAsRead,
+  useIsBlockingQuery,
+  useIsBlockedPairQuery,
+  useBlockUserMutation,
+  useUnblockUserMutation,
+  blockMutateAsyncMock,
+  unblockMutateAsyncMock
 } = vi.hoisted(() => ({
   useMessagesQuery: vi.fn(),
   useSendMessageMutation: vi.fn(),
   useMyConversationsQuery: vi.fn(),
   mutateAsyncMock: vi.fn(),
-  markConversationAsRead: vi.fn()
+  markConversationAsRead: vi.fn(),
+  useIsBlockingQuery: vi.fn(),
+  useIsBlockedPairQuery: vi.fn(),
+  useBlockUserMutation: vi.fn(),
+  useUnblockUserMutation: vi.fn(),
+  blockMutateAsyncMock: vi.fn(),
+  unblockMutateAsyncMock: vi.fn()
 }));
 
 vi.mock("../../features/messages/use-messages-query", () => ({
@@ -30,6 +42,21 @@ vi.mock("../../features/conversations/use-my-conversations-query", () => ({
 // 系统通知会话的测试真的打到 Supabase。
 vi.mock("../../repositories/conversations-repository", () => ({
   markConversationAsRead
+}));
+// UGC 安全功能补齐任务卡 1：屏蔽相关的四个 hook 也要 mock 掉，否则会真的
+// 调用底层仓库函数（进而打到 Supabase 客户端），跟上面几个已有 hook 是
+// 同一个理由。
+vi.mock("../../features/blocks/use-is-blocking-query", () => ({
+  useIsBlockingQuery
+}));
+vi.mock("../../features/blocks/use-is-blocked-pair-query", () => ({
+  useIsBlockedPairQuery
+}));
+vi.mock("../../features/blocks/use-block-user-mutation", () => ({
+  useBlockUserMutation
+}));
+vi.mock("../../features/blocks/use-unblock-user-mutation", () => ({
+  useUnblockUserMutation
 }));
 
 import { useAuthStore } from "../../store/auth-store";
@@ -61,6 +88,12 @@ describe("MessageConversationPage", () => {
     useMyConversationsQuery.mockReset();
     markConversationAsRead.mockReset();
     markConversationAsRead.mockResolvedValue(undefined);
+    useIsBlockingQuery.mockReset();
+    useIsBlockedPairQuery.mockReset();
+    useBlockUserMutation.mockReset();
+    useUnblockUserMutation.mockReset();
+    blockMutateAsyncMock.mockReset();
+    unblockMutateAsyncMock.mockReset();
 
     useMessagesQuery.mockReturnValue({
       data: [],
@@ -71,6 +104,10 @@ describe("MessageConversationPage", () => {
       mutateAsync: mutateAsyncMock,
       isPending: false
     });
+    useIsBlockingQuery.mockReturnValue({ data: false });
+    useIsBlockedPairQuery.mockReturnValue({ data: false });
+    useBlockUserMutation.mockReturnValue({ mutateAsync: blockMutateAsyncMock, isPending: false });
+    useUnblockUserMutation.mockReturnValue({ mutateAsync: unblockMutateAsyncMock, isPending: false });
     useMyConversationsQuery.mockReturnValue({
       data: [
         {
@@ -95,7 +132,9 @@ describe("MessageConversationPage", () => {
     expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
     expect(screen.getByText("关于 木桌")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "更多会话选项（暂不可用）" })).toBeDisabled();
+    // 屏蔽功能补齐之后，非系统会话且 otherUserId 存在时，原来那个禁用的
+    // 占位按钮换成了真正可点的"…"菜单——见下面 "blocking" describe 区块。
+    expect(screen.getByRole("button", { name: "更多会话选项" })).toBeEnabled();
   });
 
   it("falls back to '对方' in the header when otherDisplayName is null", () => {
@@ -416,11 +455,14 @@ describe("MessageConversationPage", () => {
     expect(screen.getByLabelText("消息内容")).toHaveValue("这条消息发不出去");
   });
 
-  it("shows the account-restricted message and preserves the typed text when sending rejects with ACCOUNT_RESTRICTED", async () => {
+  it("shows the repository's specific message and preserves the typed text when sending rejects with MESSAGE_SEND_FORBIDDEN", async () => {
+    // 这个 code 现在涵盖账号受限和屏蔽关系两种可能（见
+    // messages-repository.ts 里 sendMessage() 的注释），页面只负责"展示
+    // AppError 自带的具体文案而不是通用兜底文案"，不关心背后具体是哪种。
     mutateAsyncMock.mockRejectedValue(
       new AppError(
-        "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
-        "ACCOUNT_RESTRICTED"
+        "消息未能发送：你的账号可能处于限制状态，或你与对方之间存在屏蔽关系。",
+        "MESSAGE_SEND_FORBIDDEN"
       )
     );
 
@@ -432,9 +474,171 @@ describe("MessageConversationPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+      "消息未能发送：你的账号可能处于限制状态，或你与对方之间存在屏蔽关系。"
     );
     expect(screen.getByLabelText("消息内容")).toHaveValue("这条消息发不出去");
+  });
+
+  // UGC 安全功能补齐任务卡 1（屏蔽用户）：header "…"菜单 + 输入框换成
+  // 屏蔽提示——见 conversation-page.tsx 顶部对应的注释段落。
+  describe("blocking", () => {
+    it("disables the more-options button when otherUserId is null (other party has left the conversation)", () => {
+      useMyConversationsQuery.mockReturnValue({
+        data: [
+          {
+            id: "conversation-1",
+            postId: "post-1",
+            postTitle: "木桌",
+            originType: "post",
+            otherUserId: null,
+            otherDisplayName: null,
+            otherAvatarUrl: null,
+            lastActivityAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("button", { name: "更多会话选项（暂不可用）" })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "更多会话选项" })).not.toBeInTheDocument();
+    });
+
+    it("disables the more-options button for a system conversation", () => {
+      useMyConversationsQuery.mockReturnValue({
+        data: [
+          {
+            id: "conversation-1",
+            postId: null,
+            postTitle: null,
+            originType: "system",
+            otherUserId: null,
+            otherDisplayName: null,
+            otherAvatarUrl: null,
+            lastActivityAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("button", { name: "更多会话选项（暂不可用）" })).toBeDisabled();
+    });
+
+    it("opens the more-options menu on click, showing '屏蔽此人' when not currently blocking, and closes it after the item is clicked", async () => {
+      renderPage();
+
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "更多会话选项" }));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+      const menuItem = screen.getByRole("menuitem", { name: "屏蔽此人" });
+
+      fireEvent.click(menuItem);
+
+      expect(blockMutateAsyncMock).toHaveBeenCalledWith({
+        blockerId: "user-1",
+        blockedId: "seller-1"
+      });
+      await waitFor(() => {
+        expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+      });
+    });
+
+    it("shows '取消屏蔽' and calls the unblock mutation when already blocking", () => {
+      useIsBlockingQuery.mockReturnValue({ data: true });
+
+      renderPage();
+
+      fireEvent.click(screen.getByRole("button", { name: "更多会话选项" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "取消屏蔽" }));
+
+      expect(unblockMutateAsyncMock).toHaveBeenCalledWith({
+        blockerId: "user-1",
+        blockedId: "seller-1"
+      });
+      expect(blockMutateAsyncMock).not.toHaveBeenCalled();
+    });
+
+    it("closes the more-options menu when clicking outside it", () => {
+      renderPage();
+
+      fireEvent.click(screen.getByRole("button", { name: "更多会话选项" }));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+
+      fireEvent.mouseDown(screen.getByTestId("conversation-messages"));
+
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("closes the more-options menu when pressing Escape", () => {
+      renderPage();
+
+      fireEvent.click(screen.getByRole("button", { name: "更多会话选项" }));
+      expect(screen.getByRole("menu")).toBeInTheDocument();
+
+      fireEvent.keyDown(window, { key: "Escape" });
+
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
+
+    it("shows a generic error alert in the message list when the block action fails", async () => {
+      blockMutateAsyncMock.mockRejectedValue(new Error("network down"));
+
+      renderPage();
+
+      fireEvent.click(screen.getByRole("button", { name: "更多会话选项" }));
+      fireEvent.click(screen.getByRole("menuitem", { name: "屏蔽此人" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
+    });
+
+    it("replaces the composer with a blocked-relationship banner when isBlockedPair is true, for a non-system conversation", () => {
+      useIsBlockedPairQuery.mockReturnValue({ data: true });
+
+      renderPage();
+
+      expect(screen.getByTestId("conversation-blocked-banner")).toHaveTextContent(
+        "你们之间存在屏蔽关系，无法互发消息。"
+      );
+      expect(screen.queryByTestId("conversation-composer")).not.toBeInTheDocument();
+    });
+
+    it("does not render the blocked-relationship banner when isBlockedPair is false", () => {
+      renderPage();
+
+      expect(screen.queryByTestId("conversation-blocked-banner")).not.toBeInTheDocument();
+      expect(screen.getByTestId("conversation-composer")).toBeInTheDocument();
+    });
+
+    it("does not render the blocked-relationship banner for a system conversation even if isBlockedPair were somehow true", () => {
+      useIsBlockedPairQuery.mockReturnValue({ data: true });
+      useMyConversationsQuery.mockReturnValue({
+        data: [
+          {
+            id: "conversation-1",
+            postId: null,
+            postTitle: null,
+            originType: "system",
+            otherUserId: null,
+            otherDisplayName: null,
+            otherAvatarUrl: null,
+            lastActivityAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.queryByTestId("conversation-blocked-banner")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("conversation-composer")).not.toBeInTheDocument();
+    });
   });
 
   describe("system notification conversations (originType: 'system')", () => {
