@@ -556,9 +556,9 @@ describe("app routes", () => {
   it("renders the activity list page at /activities without requiring a session", async () => {
     renderAt("/activities");
 
-    // 04 号卡改版：顶部 TopBar tab 变体的标题从旧版"🤝 一起去"换成了
-    // "找搭子"。
-    expect(await screen.findByRole("heading", { name: "找搭子" })).toBeInTheDocument();
+    // 14 号卡改版：居中的"找搭子"标题换成了 TopBar home 变体的"Saminest"
+    // 品牌胶囊（不再有任何居中大标题），见 activity-list-page.tsx。
+    expect(await screen.findByText("Saminest")).toBeInTheDocument();
   });
 
   it("renders the activity detail page at /activities/:id (not-found state when the activity doesn't resolve)", async () => {

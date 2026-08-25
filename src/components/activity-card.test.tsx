@@ -51,13 +51,36 @@ describe("ActivityCard", () => {
     expect(link).toHaveAttribute("href", "/activities/act-1");
   });
 
-  // 07 号卡：卡片内边距从 12px（p-3）放大到 20px（p-5）。
-  it("uses the new 20px card padding (p-5), not the old 12px (p-3)", () => {
+  // 07 号卡：文字区内边距从 12px（p-3）放大到 20px（p-5）。14 号卡把这个
+  // p-5 从最外层 <Link> 挪到了头像区下面单独的文字区 <div> 上（外层
+  // <Link> 本身不再带内边距，才能让头像拼图贴到卡片边缘），见
+  // activity-card.tsx 顶部注释。
+  it("uses the new 20px padding (p-5) on the text section below the avatar grid, not the old 12px (p-3)", () => {
     const { container } = renderCard();
 
     const link = container.querySelector("a");
-    expect(link).toHaveClass("p-5");
+    expect(link?.className).not.toContain("p-5");
     expect(link?.className).not.toContain("p-3");
+
+    // container.querySelector("a > div") 会先匹配到 ActivityParticipantAvatars
+    // 自己的头像+文案外层 <div>（它是 <a> 的第一个子元素，见
+    // activity-participant-avatars.tsx 的返回结构），不是这里要断言的文字区
+    // <div>，所以用 class 选择器直接定位。
+    const textSection = container.querySelector("a > div.p-5");
+    expect(textSection).toHaveClass("p-5");
+    expect(textSection?.className).not.toContain("p-3");
+  });
+
+  // 14 号卡：头像拼图铺满卡片整宽、贴着卡片顶部，不能再有卡片自己的左右
+  // 内边距——外层 <Link> 因此不带 p-5，只带 overflow-hidden（配合卡片圆角，
+  // 见组件顶部注释），头像格是 <Link> 的第一个直接子元素。
+  it("renders the avatar grid flush against the card's edges (no outer padding on the <Link>), clipped to the card's rounded corners", () => {
+    const { container } = renderCard();
+
+    const link = container.querySelector("a");
+    expect(link).toHaveClass("overflow-hidden");
+    expect(link).toHaveClass("rounded-2xl");
+    expect(link?.firstElementChild?.querySelector("ul")).toBeInTheDocument();
   });
 
   it("passes participants/capacity through to the avatar stack in non-interactive mode (no <button> empty slots, since the whole card is already a <Link>)", () => {

@@ -11,7 +11,13 @@ import { formatActivityParticipantSummary } from "../utils/format";
  * 那样靠 maxVisibleSlots 这个 prop 各自传一个不同的数字定制列表/详情两种
  * 场景。视觉位置总数固定最多 8 个（发起人+参与者+空位/溢出徽标合计），用
  * 下面两个常量取代原来的 MAX_VISIBLE_SLOTS 常量 + maxVisibleSlots prop。
- */
+ *
+ * 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）在此基础上让"共用同一
+ * 套规则"这句话出现了一个例外：活动卡片的头像形状从圆形叠加改成正方形
+ * 拼图，详情页维持圆形不变——"8 个视觉位置"这套 slot 计算规则（下面的
+ * computeSlots）两处仍然完全共用，只有形状（shape prop）和"要不要在超过
+ * 8 人时展示'+N'溢出徽标"（allowOverflowBadge）这两点按场景分叉，避免为
+ * 了一个纯视觉差异把 slot 计算逻辑拆成两份重复代码。 */
 export const MAX_TOTAL_SLOTS = 8;
 /**
  * 真实头像（发起人+参与者）数量超过这个数字才会出现"+N"溢出徽标——比
@@ -40,6 +46,35 @@ const EMPTY_SLOT_CLASS_NAME =
 // 行，最多两行（8 个格子 / 每行 4 个）。
 const AVATAR_GRID_CLASS_NAME = "grid grid-cols-[repeat(4,4rem)] gap-3";
 
+/**
+ * 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：活动卡片（列表页）
+ * 的头像从"圆形叠加"改成 Meet5 风格的"正方形拼图"——四列铺满卡片整宽、
+ * 贴着卡片顶部和左右边缘（不留卡片自己的左右内边距），格子之间只留 2px
+ * 缝隙透出卡片背景色当分隔线，不再是圆形+白色描边。活动详情页的头像行
+ * （shape 默认 "round"）保持 07 号卡那套 64px 圆形网格完全不变——这次任务
+ * 卡的原话是"活动卡片头像"，没有要求改详情页，所以两种形状都保留、用
+ * shape prop 区分，不是把详情页也一起换掉。
+ *
+ * 列宽用 grid-cols-4（4 等分，跟随卡片实际宽度）而不是圆形版本那种固定
+ * 4rem 列宽——"铺满整卡宽度"这条要求意味着格子大小必须跟着卡片宽度变，不能
+ * 是一个固定像素值。gap-0.5（Tailwind 默认刻度里正好是 2px）就是任务卡
+ * 明确要求的"格子间 2px 左右的缝隙"。
+ */
+const SQUARE_AVATAR_GRID_CLASS_NAME = "grid grid-cols-4 gap-0.5";
+// 正方形格子本身：aspect-square 让高度跟着 grid-cols-4 算出来的动态宽度走，
+// w-full 撑满所在格子（不能再用圆形版本那种固定 h-16 w-16）。故意不带
+// ring/shadow——07 号卡那圈白色描边是圆形叠放时代用来分隔相邻头像的，现在
+// 分隔线已经改成 gap-0.5 露出的卡片背景色，再叠一圈描边只会跟 2px 缝隙
+// 重复、显得多余，任务卡原话"格子之间留 2px 左右的小缝隙（让卡片背景色
+// 透出来当分隔线）"没有再提描边。
+const SQUARE_AVATAR_TILE_CLASS_NAME = "aspect-square w-full object-cover";
+// 空位：跟头像同尺寸的正方形、浅色底 + "+"，不再是虚线圆圈——任务卡原话
+// "空位（还没人报名的位置）改成跟头像同尺寸的正方形，浅色底 + 一个'＋'，
+// 不再用虚线圆圈"，所以这里没有沿用圆形版本 EMPTY_SLOT_CLASS_NAME 的
+// border-dashed。
+const SQUARE_EMPTY_SLOT_CLASS_NAME =
+  "flex aspect-square w-full items-center justify-center bg-bg text-text-muted";
+
 export interface ActivityParticipantAvatarsProps {
   organizerId: string;
   organizerDisplayName: string;
@@ -64,6 +99,11 @@ export interface ActivityParticipantAvatarsProps {
    *  interactive === false 时不需要传（纯展示模式下这个 prop 不生效）。 */
   canTapEmptySlot?: boolean;
   onTapEmptySlot?: () => void;
+  /** 14 号卡新增：头像格的形状——"round"（默认）是 07 号卡那套 64px 圆形
+   *  网格，活动详情页用；"square"是这次改版给活动卡片用的正方形拼图，铺满
+   *  卡片整宽、格子间只留 2px 缝隙。不传就是 "round"，详情页调用点因此
+   *  不需要改代码。 */
+  shape?: "round" | "square";
 }
 
 type Slot =
@@ -75,17 +115,47 @@ interface SlotAvatarProps {
   avatarUrl: string | null;
   initial: string;
   isOrganizer?: boolean;
+  shape: "round" | "square";
 }
 
 /**
- * 单个头像格：有图用 <img>，没有就用昵称首字母圆形占位——跟
- * conversation-page.tsx 的 Avatar 组件是同一套展示逻辑。发起人角标
- * （lucide-react 的 Crown）绝对定位在右下角，大约是头像的 1/3
- * 大小——这是设计稿之外、参照 Meetup"发起人身份要显眼"原则主动加的，
- * 不是可选项；07 号卡把头像放大到 64px 时，角标也按同一比例从 16px 放大
- * 到 20px，图标本身从 10px 放大到 12px。
+ * 单个头像格：有图用 <img>，没有就用昵称首字母占位——跟 conversation-page.tsx
+ * 的 Avatar 组件是同一套展示逻辑。发起人角标（lucide-react 的 Crown）绝对
+ * 定位在右下角，大约是头像的 1/3 大小——这是设计稿之外、参照 Meetup"发起人
+ * 身份要显眼"原则主动加的，不是可选项；07 号卡把头像放大到 64px 时，角标
+ * 也按同一比例从 16px 放大到 20px，图标本身从 10px 放大到 12px。
+ *
+ * 14 号卡：shape="square" 时整块头像格改成正方形拼图（活动卡片用），
+ * 不再是圆形——没有 rounded-full，也不带圆形版本那圈 ring 描边（缝隙已经
+ * 靠外层 grid 的 gap-0.5 露出背景色实现，见 SQUARE_AVATAR_GRID_CLASS_NAME
+ * 的注释），角标本身的圆形徽章样式不受影响，两种形状共用同一个 Crown 角标。
  */
-function SlotAvatar({ avatarUrl, initial, isOrganizer }: SlotAvatarProps) {
+function SlotAvatar({ avatarUrl, initial, isOrganizer, shape }: SlotAvatarProps) {
+  if (shape === "square") {
+    return (
+      <div className="relative">
+        {avatarUrl ? (
+          <img src={avatarUrl} alt="" className={SQUARE_AVATAR_TILE_CLASS_NAME} />
+        ) : (
+          <span
+            aria-hidden="true"
+            className={`flex ${SQUARE_AVATAR_TILE_CLASS_NAME} items-center justify-center bg-primary/10 text-sm font-semibold text-primary`}
+          >
+            {initial}
+          </span>
+        )}
+        {isOrganizer ? (
+          <span
+            aria-hidden="true"
+            className="absolute bottom-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white ring-2 ring-white"
+          >
+            <Crown size={12} />
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="relative">
       {avatarUrl ? (
@@ -128,11 +198,21 @@ function SlotAvatar({ avatarUrl, initial, isOrganizer }: SlotAvatarProps) {
  * 3. capacity 为 null 或 > 8，且已加入人数 > 8：只展示前 7 个真实头像，
  *    第 8 个位置换成"+N"溢出徽标（N = 已加入人数 - 7），不展示任何虚线
  *    空位。
+ *
+ * 14 号卡：活动卡片（shape="square"）这次不做"超过 8 人"的特殊处理——任务
+ * 卡原话"这批先不做'超过 8 人'的处理……先简单只显示前 8 个（不用报错也
+ * 不用做特殊提示）"，所以 allowOverflowBadge=false 时第 3 条规则直接展示
+ * 前 8 个真实头像（不是 7 个），不再挤出一个位置放"+N"徽标，overflowCount
+ * 恒为 0。默认 true，保留详情页（shape="round"）原有的"+N"溢出徽标行为不
+ * 变——这条规则只是任务卡对"活动卡片"这一种展示场景的要求，没有说要连带
+ * 改掉详情页已经在用的"+N"提示。
  */
 function computeSlots(
   participants: ActivityParticipant[],
-  capacity: number | null
+  capacity: number | null,
+  options: { allowOverflowBadge?: boolean } = {}
 ): { slots: Slot[]; overflowCount: number } {
+  const { allowOverflowBadge = true } = options;
   const joinedCount = 1 + participants.length;
   const realEntries: Slot[] = [
     { type: "organizer" },
@@ -161,6 +241,13 @@ function computeSlots(
         ...realEntries,
         ...Array.from({ length: emptyCount }, (): Slot => ({ type: "empty" }))
       ],
+      overflowCount: 0
+    };
+  }
+
+  if (!allowOverflowBadge) {
+    return {
+      slots: realEntries.slice(0, MAX_TOTAL_SLOTS),
       overflowCount: 0
     };
   }
@@ -197,13 +284,19 @@ export function ActivityParticipantAvatars({
   capacity,
   interactive = true,
   canTapEmptySlot = false,
-  onTapEmptySlot
+  onTapEmptySlot,
+  shape = "round"
 }: ActivityParticipantAvatarsProps) {
-  const { slots, overflowCount } = computeSlots(participants, capacity);
+  const isSquare = shape === "square";
+  const { slots, overflowCount } = computeSlots(participants, capacity, {
+    allowOverflowBadge: !isSquare
+  });
+  const gridClassName = isSquare ? SQUARE_AVATAR_GRID_CLASS_NAME : AVATAR_GRID_CLASS_NAME;
+  const emptySlotClassName = isSquare ? SQUARE_EMPTY_SLOT_CLASS_NAME : EMPTY_SLOT_CLASS_NAME;
 
   return (
     <div>
-      <ul className={AVATAR_GRID_CLASS_NAME}>
+      <ul className={gridClassName}>
         {slots.map((slot, index) => {
           if (slot.type === "organizer") {
             return (
@@ -212,6 +305,7 @@ export function ActivityParticipantAvatars({
                   avatarUrl={organizerAvatarUrl}
                   initial={organizerDisplayName.trim().charAt(0).toUpperCase() || "?"}
                   isOrganizer
+                  shape={shape}
                 />
               </li>
             );
@@ -223,6 +317,7 @@ export function ActivityParticipantAvatars({
               <SlotAvatar
                 avatarUrl={participant.avatarUrl}
                 initial={participant.displayName.trim().charAt(0).toUpperCase() || "?"}
+                shape={shape}
               />
             );
 
@@ -245,7 +340,7 @@ export function ActivityParticipantAvatars({
           if (!interactive) {
             return (
               <li key={`empty-${index}`}>
-                <span aria-hidden="true" className={EMPTY_SLOT_CLASS_NAME}>
+                <span aria-hidden="true" className={emptySlotClassName}>
                   <Plus size={18} />
                 </span>
               </li>
@@ -259,7 +354,7 @@ export function ActivityParticipantAvatars({
                 aria-label="报名加入活动"
                 disabled={!canTapEmptySlot}
                 onClick={canTapEmptySlot ? onTapEmptySlot : undefined}
-                className={`${EMPTY_SLOT_CLASS_NAME} disabled:cursor-not-allowed disabled:opacity-60 ${canTapEmptySlot ? "hover:border-primary hover:text-primary" : ""}`}
+                className={`${emptySlotClassName} disabled:cursor-not-allowed disabled:opacity-60 ${canTapEmptySlot ? "hover:border-primary hover:text-primary" : ""}`}
               >
                 <Plus size={18} />
               </button>
@@ -269,7 +364,10 @@ export function ActivityParticipantAvatars({
         {overflowCount > 0 ? (
           <li>
             {/* 07 号卡明确要求"+N"溢出徽标是"灰底深字"，不是原来的
-                text-text-muted 浅灰字——这里换成 text-text。 */}
+                text-text-muted 浅灰字——这里换成 text-text。overflowCount
+                在 shape="square" 时恒为 0（见 computeSlots 的
+                allowOverflowBadge），这个分支实际只有 shape="round" 会
+                触发，沿用圆形版本的样式没有问题。 */}
             <span
               aria-hidden="true"
               className={`flex ${AVATAR_SIZE_CLASS_NAME} ${AVATAR_RING_CLASS_NAME} items-center justify-center rounded-full bg-bg text-sm font-semibold text-text`}
@@ -279,7 +377,12 @@ export function ActivityParticipantAvatars({
           </li>
         ) : null}
       </ul>
-      <p className="mt-2 text-xs text-text-muted">
+      {/* shape="square" 时头像格铺满卡片整宽、没有左右内边距（见
+          SQUARE_AVATAR_GRID_CLASS_NAME 的注释），但这一行"还差 N 人"文字
+          不是拼图的一部分，需要单独补回横向内边距，才能跟卡片下半部分
+          标题/地点/时间那些文字（在 activity-card.tsx 里用同一个 p-5）
+          左右对齐，不是让文字也跟着贴到卡片边缘。 */}
+      <p className={`mt-2 text-xs text-text-muted ${isSquare ? "px-5" : ""}`}>
         {formatActivityParticipantSummary(participants.length, capacity)}
       </p>
     </div>

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { TopBar } from "../../components/top-bar";
-import { formatStateLabelByCode } from "../../data/us-states";
+import { formatSelectedRegionLabel } from "../../data/us-states";
 import { CategoryNav } from "../../features/categories/category-nav";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { PostList } from "../../features/posts/post-list";
@@ -23,21 +23,6 @@ const SEARCH_DEBOUNCE_MS = 400;
  * 实现完全一致，只是数据源从写死的 null 换成了"可能是 null 的真实状态"。
  */
 const REGION_SELECT_PATH = "/region-select";
-
-/**
- * 08 号卡：TopBar home 变体胶囊按钮第二行的展示文案。有具体城市数据时
- * （目前只有 DC/VA/MD 三州，用户下钻选了具体某个城市）用"{城市名}, {州
- * 代码}"——精确复刻 Meet5 参考截图"Woodbridge, VA"这个格式，城市名本身
- * 不翻译（12 号卡明确"城市名称不用加中文翻译"）；其余大多数州没有城市可选、
- * 直接选中整个州时没有 cityName 可用，12 号卡起改成"缩写 + 中文州名"
- * （如"CA 加利福尼亚州"），不再展示英文全名——全站统一格式，见
- * us-states.ts 的 formatStateLabelByCode。这个格式化逻辑只有首页这一个
- * 消费者，就地写成一个小函数，不提到 selected-region-store.ts 里——那个
- * store 只负责存数据，不应该背上"怎么格式化展示"这种表现层逻辑。
- */
-function formatRegionLabel(region: { stateCode: string; stateName: string; cityName: string | null }): string {
-  return region.cityName ? `${region.cityName}, ${region.stateCode}` : formatStateLabelByCode(region.stateCode);
-}
 
 /**
  * 首页（Meet5 风格改版，02-home-page.md，08 号卡修订了顶部地区入口的
@@ -69,8 +54,10 @@ function formatRegionLabel(region: { stateCode: string; stateName: string; cityN
  *
  * 08 号卡（地区选择扩展全美 + 按州筛选）：
  * - 顶部胶囊按钮从"只显示州代码的单行文字"改成两行堆叠，第二行文案见
- *   formatRegionLabel；onStateClick 改名 onRegionClick，语义从"点州名"
- *   变成"点整个胶囊"，见 top-bar.tsx 对应 prop 的注释。
+ *   formatSelectedRegionLabel（14 号卡从这个文件挪到了 us-states.ts，
+ *   变成首页和找搭子列表页共用的格式化函数）；onStateClick 改名
+ *   onRegionClick，语义从"点州名"变成"点整个胶囊"，见 top-bar.tsx 对应
+ *   prop 的注释。
  * - selectedRegion.stateCode 现在真正喂给 PostList 做服务端过滤（透传到
  *   listApprovedPosts 的 stateCode 参数），不再只是首页胶囊按钮的展示
  *   文本——四个分类 tab 复用的都是同一个 PostList，筛选逻辑天然对四个
@@ -108,7 +95,7 @@ export function HomePage() {
     <main data-testid="home-page">
       <TopBar
         variant="home"
-        regionLabel={selectedRegion ? formatRegionLabel(selectedRegion) : null}
+        regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={handleToggleSearch}

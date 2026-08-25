@@ -17,9 +17,14 @@ import { useNavigate } from "react-router-dom";
  *
  * 组件本身不认识"品牌名""发布按钮"这些具体业务概念——只有 home 变体会
  * 渲染"Saminest"文案，其余变体的标题/图标/菜单内容都由调用方传入，从源头
- * 保证"除首页外不出现品牌名/发布按钮"这条规则不会被后续开发者不小心
- * 破坏（不需要每个页面自己记得"别加品牌名"，因为组件里压根没有别的地方
- * 能加）。
+ * 保证"除非显式选用 home 变体，不会出现品牌名胶囊"这条规则不会被后续
+ * 开发者不小心破坏（不需要每个页面自己记得"别加品牌名"，因为组件里压根
+ * 没有别的地方能加）。14 号卡起 home 变体不再只有首页一个调用点——找搭子
+ * 列表页视觉改版要求同一个"Saminest + 当前地区"胶囊，产品明确要求"跟首页
+ * 那个按钮完全一致"，所以直接复用同一个 variant（而不是照着截图新建一个
+ * 几乎一样的变体），只是找搭子列表页不需要"＋发布"入口——onCreateClick
+ * 因此改成可选，不传时不渲染那个图标按钮，"＋"和"搜索"两个图标不再必然
+ * 成对出现。
  *
  * 返回/关闭按钮默认用 navigate(-1)，调用方传了 onBack/onClose 就用调用方
  * 的——大多数二级页直接用默认值就够（跟 app-header.tsx 现有的返回按钮是
@@ -140,7 +145,7 @@ interface TopBarHomeProps {
   /** 右侧"＋"图标点击——首页点它弹出"选择发布类型"弹层（⑨），具体弹层
    *  由调用方决定，这个组件只负责暴露点击事件。（这条注释原来误写成"左边"，
    *  顺手改成跟实际渲染位置一致的"右侧"，跟这次改动本身无关。） */
-  onCreateClick: () => void;
+  onCreateClick?: () => void;
   onSearchClick: () => void;
 }
 
@@ -212,14 +217,16 @@ export function TopBar(props: TopBarProps) {
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            aria-label="发布"
-            onClick={props.onCreateClick}
-            className={ICON_BUTTON_CLASS_NAME}
-          >
-            <Plus size={18} aria-hidden="true" />
-          </button>
+          {props.onCreateClick ? (
+            <button
+              type="button"
+              aria-label="发布"
+              onClick={props.onCreateClick}
+              className={ICON_BUTTON_CLASS_NAME}
+            >
+              <Plus size={18} aria-hidden="true" />
+            </button>
+          ) : null}
           <button
             type="button"
             aria-label="搜索"

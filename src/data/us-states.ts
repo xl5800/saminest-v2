@@ -119,3 +119,22 @@ export function formatLocationDisplayName(name: string): string {
   const isBareStateCode = /^[A-Z]{2}$/.test(name) && US_STATES.some((state) => state.code === name);
   return isBareStateCode ? formatStateLabelByCode(name) : name;
 }
+
+/** 08 号卡起首页顶部胶囊按钮第二行的文案格式，14 号卡把找搭子列表页的
+ *  顶部栏也换成同一个胶囊（见 TopBar home 变体），这里从 home-page.tsx
+ *  挪出来变成共享函数——两个页面读的是同一个 useSelectedRegionStore，
+ *  展示格式也不该各写一份、以后改格式要改两处。有具体城市数据时（目前只
+ *  有 DC/VA/MD 三州，用户下钻选了具体某个城市）用"{城市名}, {州代码}"，
+ *  精确复刻 Meet5 参考截图"Woodbridge, VA"这个格式，城市名本身不翻译
+ *  （12 号卡明确"城市名称不用加中文翻译"）；其余大多数州没有城市可选、
+ *  直接选中整个州时没有 cityName 可用，改用 formatStateLabelByCode 的
+ *  "缩写 + 中文州名"格式（如"CA 加利福尼亚州"）。参数用结构类型而不是
+ *  导入 store 的 SelectedRegion——这个文件（us-states.ts）是纯展示层的
+ *  格式化工具集，不应该反过来依赖 store/ 目录。 */
+export function formatSelectedRegionLabel(region: {
+  stateCode: string;
+  stateName: string;
+  cityName: string | null;
+}): string {
+  return region.cityName ? `${region.cityName}, ${region.stateCode}` : formatStateLabelByCode(region.stateCode);
+}

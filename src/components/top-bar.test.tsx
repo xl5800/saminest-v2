@@ -99,6 +99,20 @@ describe("TopBar", () => {
       expect(onRegionClick).toHaveBeenCalledTimes(1);
     });
 
+    // 14 号卡（找搭子页改版）：home 变体这次开始被找搭子列表页复用（同一个
+    // "Saminest + 地区"胶囊），但那个页面不需要"＋发布"入口——onCreateClick
+    // 因此改成可选，不传时只渲染搜索图标一个按钮（胶囊 + 搜索 = 2 个），
+    // 不是首页那种胶囊 + 发布 + 搜索 = 3 个。
+    it("does not render the '＋' create button when onCreateClick is omitted, only the pill and the search icon", () => {
+      renderWithProviders(
+        <TopBar variant="home" regionLabel={null} onRegionClick={vi.fn()} onSearchClick={vi.fn()} />
+      );
+
+      expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "搜索" })).toBeInTheDocument();
+      expect(screen.getAllByRole("button")).toHaveLength(2);
+    });
+
     it("calls onCreateClick and onSearchClick from their respective icon buttons", () => {
       const onCreateClick = vi.fn();
       const onSearchClick = vi.fn();

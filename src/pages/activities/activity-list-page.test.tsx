@@ -53,13 +53,74 @@ describe("ActivityListPage", () => {
     localStorage.clear();
   });
 
-  it("renders the TopBar tab heading '找搭子' (not the old '🤝 一起去' title)", () => {
+  // 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：居中的"找搭子"
+  // 标题整个删掉了，顶部换成 TopBar home 变体的"Saminest + 当前地区"
+  // 胶囊——不再有任何居中大标题，也不再有改版前的"🤝 一起去"。
+  it("no longer renders a centered '找搭子'/'🤝 一起去' heading — the TopBar is now the home-variant brand pill", () => {
     listActivities.mockReturnValue(new Promise(() => {}));
 
     renderWithProviders(<ActivityListPage />);
 
-    expect(screen.getByRole("heading", { name: "找搭子" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "找搭子" })).not.toBeInTheDocument();
     expect(screen.queryByText("🤝 一起去")).not.toBeInTheDocument();
+  });
+
+  describe("TopBar (14 号卡：顶部栏合并成一个胶囊按钮)", () => {
+    it("renders the 'Saminest' brand pill (same as the home page), with a placeholder when no region is selected", () => {
+      listActivities.mockReturnValue(new Promise(() => {}));
+
+      renderWithProviders(<ActivityListPage />);
+
+      expect(screen.getByText("Saminest")).toBeInTheDocument();
+      expect(screen.getByText("选择地区")).toBeInTheDocument();
+    });
+
+    it("shows the globally selected region's label on the pill's second line — same store/format as the home page", () => {
+      listActivities.mockReturnValue(new Promise(() => {}));
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "VA",
+        stateName: "Virginia",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<ActivityListPage />);
+
+      expect(screen.getByText("VA 弗吉尼亚州")).toBeInTheDocument();
+    });
+
+    it("navigates to /region-select when the pill is clicked, same route as the home page's entry point", () => {
+      listActivities.mockReturnValue(new Promise(() => {}));
+
+      renderWithProviders(<ActivityListPage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Saminest 选择地区" }));
+
+      expect(navigateMock).toHaveBeenCalledWith("/region-select");
+    });
+
+    it("renders only a search icon on the right — no '＋' create button (this page's FAB is the only publish entry point)", () => {
+      listActivities.mockReturnValue(new Promise(() => {}));
+
+      renderWithProviders(<ActivityListPage />);
+
+      expect(screen.getByRole("button", { name: "搜索" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+    });
+
+    it("toggles a search input open/closed when the search icon is clicked", () => {
+      listActivities.mockReturnValue(new Promise(() => {}));
+
+      renderWithProviders(<ActivityListPage />);
+
+      expect(screen.queryByPlaceholderText("搜找搭子活动…")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      expect(screen.getByPlaceholderText("搜找搭子活动…")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      expect(screen.queryByPlaceholderText("搜找搭子活动…")).not.toBeInTheDocument();
+    });
   });
 
   it("shows a loading message before the query resolves", () => {
