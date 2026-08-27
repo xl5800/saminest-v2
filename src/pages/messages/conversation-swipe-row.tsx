@@ -385,11 +385,14 @@ export function ConversationSwipeRow({
             {avatarElement}
             <div className="min-w-0 flex-1">
               <span className={nicknameClassName}>{nickname}</span>
-              {conversation.postTitle ? (
-                <span className="mt-0.5 block truncate text-xs text-text-muted">
-                  关于：{conversation.postTitle}
-                </span>
-              ) : null}
+              {/* 16 号卡「对话去重」：去掉了原来"关于：{conversation.postTitle}"
+                  这一行——会话不再唯一绑定一个帖子/活动之后（联系上下文
+                  改成会话内的引用消息，见 conversations-repository.ts 顶部
+                  注释），postTitle 对新产生的会话大多是 null，这行会经常
+                  拿不到值；而且已经有 lastMessagePreview 在展示"最近一条
+                  消息文字预览"，最近一条正好是引用消息时，预览文字本身就
+                  是"关于：《标题》"，效果上等价，不需要保留两套展示同一件
+                  事的文案。 */}
               {conversation.lastMessagePreview ? (
                 <span data-testid="conversation-preview" className={previewClassName}>
                   {conversation.lastMessagePreview}

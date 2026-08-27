@@ -32,8 +32,8 @@ async function notifyApplicant(input: ModerateActivityParticipantInput): Promise
   if (input.applicantId === input.organizerId) return;
 
   const conversation = await findExistingActivityConversation({
-    createdByUserId: input.applicantId,
-    otherUserId: input.organizerId
+    applicantUserId: input.applicantId,
+    organizerUserId: input.organizerId
   });
   if (!conversation) return;
 
