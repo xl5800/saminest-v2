@@ -162,6 +162,11 @@ export function ActivityDetailPage() {
               </p>
             </div>
 
+            {/* 17 号卡：详情页头像换成跟活动卡片一样的方块（带小圆角）
+                形状，并且不再封顶/不出现"+N"——showAllParticipants 让
+                组件展示全部参与者、并在网格上方加一行"共 X 人参加"。空位
+                点击（canTapEmptySlot/onTapEmptySlot）这一套逻辑完全没动，
+                只是空位格子本身也从圆形变成了方块。 */}
             <ActivityParticipantAvatars
               organizerId={data.organizerId}
               organizerDisplayName={data.organizerDisplayName}
@@ -170,6 +175,8 @@ export function ActivityDetailPage() {
               capacity={data.capacity}
               canTapEmptySlot={canTapEmptySlot}
               onTapEmptySlot={participationAction.handleClick}
+              shape="square"
+              showAllParticipants
             />
 
             <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>

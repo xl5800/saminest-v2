@@ -17,7 +17,21 @@ import { formatActivityParticipantSummary } from "../utils/format";
  * 拼图，详情页维持圆形不变——"8 个视觉位置"这套 slot 计算规则（下面的
  * computeSlots）两处仍然完全共用，只有形状（shape prop）和"要不要在超过
  * 8 人时展示'+N'溢出徽标"（allowOverflowBadge）这两点按场景分叉，避免为
- * 了一个纯视觉差异把 slot 计算逻辑拆成两份重复代码。 */
+ * 了一个纯视觉差异把 slot 计算逻辑拆成两份重复代码。
+ *
+ * 17 号卡（找搭子详情页头像改版：方块化 + 圆角 + 显示全部参与者）：
+ * 详情页头像格形状从圆形换成跟活动卡片一样的正方形拼图（shape="square"，
+ * 详情页调用点显式传），同时给正方形格子加了一圈小圆角（见下面
+ * SQUARE_AVATAR_TILE_CLASS_NAME / SQUARE_EMPTY_SLOT_CLASS_NAME 的
+ * rounded-md）——这一圈圆角是共享样式，活动卡片跟详情页头像会同时跟着变
+ * 圆角，这是任务卡明确要的效果，不是只改详情页那一份。另外详情页不应该再
+ * 像圆形版本那样"超过 8 人就截断成 7 个 + '+N' 徽标"，而是要不封顶展示全部
+ * 参与者——computeSlots 的 allowOverflowBadge 布尔值因此升级成三态的
+ * overflowStrategy（"badge" | "cap" | "showAll"），新增的 "showAll" 只
+ * 影响原来的规则 3（溢出）分支，规则 1/2（capacity 封顶 / 补空位到 8）逐字
+ * 不变；组件新增 showAllParticipants prop 驱动这一支，默认 false，不影响
+ * 活动卡片现有的 shape="square" + 封顶 8 个不做 "+N" 这条行为（卡片调用点
+ * 没有传这个新 prop）。 */
 export const MAX_TOTAL_SLOTS = 8;
 /**
  * 真实头像（发起人+参与者）数量超过这个数字才会出现"+N"溢出徽标——比
@@ -67,13 +81,18 @@ const SQUARE_AVATAR_GRID_CLASS_NAME = "grid grid-cols-4 gap-0.5";
 // 分隔线已经改成 gap-0.5 露出的卡片背景色，再叠一圈描边只会跟 2px 缝隙
 // 重复、显得多余，任务卡原话"格子之间留 2px 左右的小缝隙（让卡片背景色
 // 透出来当分隔线）"没有再提描边。
-const SQUARE_AVATAR_TILE_CLASS_NAME = "aspect-square w-full object-cover";
+// 17 号卡：加一圈小圆角（rounded-md，Tailwind 里是 6px）——反馈原话"方块带
+// 小圆角，不是接近全圆"，微信群头像那种"方块化 + 小圆角"的观感，不能大到
+// 接近 rounded-full（那样就跟原来圆形版本没区别了）。这是共享样式，活动
+// 卡片和详情页头像会同时跟着变圆角，两处都是预期效果。
+const SQUARE_AVATAR_TILE_CLASS_NAME = "aspect-square w-full rounded-md object-cover";
 // 空位：跟头像同尺寸的正方形、浅色底 + "+"，不再是虚线圆圈——任务卡原话
 // "空位（还没人报名的位置）改成跟头像同尺寸的正方形，浅色底 + 一个'＋'，
 // 不再用虚线圆圈"，所以这里没有沿用圆形版本 EMPTY_SLOT_CLASS_NAME 的
-// border-dashed。
+// border-dashed。17 号卡：同样加 rounded-md，跟真实头像格保持一致的圆角，
+// 不然网格里空位格子和头像格子的角会长得不一样。
 const SQUARE_EMPTY_SLOT_CLASS_NAME =
-  "flex aspect-square w-full items-center justify-center bg-bg text-text-muted";
+  "flex aspect-square w-full items-center justify-center rounded-md bg-bg text-text-muted";
 
 export interface ActivityParticipantAvatarsProps {
   organizerId: string;
@@ -100,10 +119,15 @@ export interface ActivityParticipantAvatarsProps {
   canTapEmptySlot?: boolean;
   onTapEmptySlot?: () => void;
   /** 14 号卡新增：头像格的形状——"round"（默认）是 07 号卡那套 64px 圆形
-   *  网格，活动详情页用；"square"是这次改版给活动卡片用的正方形拼图，铺满
-   *  卡片整宽、格子间只留 2px 缝隙。不传就是 "round"，详情页调用点因此
-   *  不需要改代码。 */
+   *  网格；"square"是正方形拼图（带小圆角，见 SQUARE_AVATAR_TILE_CLASS_NAME）。
+   *  14 号卡时只有活动卡片用 "square"，17 号卡把详情页也改成了 "square"，
+   *  不传就还是 "round"。 */
   shape?: "round" | "square";
+  /** 17 号卡新增：详情页专用——不封顶展示全部参与者（不截断、不出现
+   *  "+N" 溢出徽标），并在头像格上方加一行"共 X 人参加"。默认 false，
+   *  活动卡片调用点不传这个 prop，继续保留"封顶 8 个、不做 '+N'"的既有
+   *  行为不变（见 computeSlots 的 overflowStrategy）。 */
+  showAllParticipants?: boolean;
 }
 
 type Slot =
@@ -201,18 +225,24 @@ function SlotAvatar({ avatarUrl, initial, isOrganizer, shape }: SlotAvatarProps)
  *
  * 14 号卡：活动卡片（shape="square"）这次不做"超过 8 人"的特殊处理——任务
  * 卡原话"这批先不做'超过 8 人'的处理……先简单只显示前 8 个（不用报错也
- * 不用做特殊提示）"，所以 allowOverflowBadge=false 时第 3 条规则直接展示
+ * 不用做特殊提示）"，所以 overflowStrategy="cap" 时第 3 条规则直接展示
  * 前 8 个真实头像（不是 7 个），不再挤出一个位置放"+N"徽标，overflowCount
- * 恒为 0。默认 true，保留详情页（shape="round"）原有的"+N"溢出徽标行为不
- * 变——这条规则只是任务卡对"活动卡片"这一种展示场景的要求，没有说要连带
+ * 恒为 0。默认 "badge"，保留详情页原来（17 号卡之前）用的"+N"溢出徽标
+ * 行为——这条规则只是任务卡对"活动卡片"这一种展示场景的要求，没有说要连带
  * 改掉详情页已经在用的"+N"提示。
+ *
+ * 17 号卡新增第三种取值 "showAll"：详情页要求"不封顶、展示全部参与者"，
+ * 第 3 条规则在这个取值下直接原样返回全部 realEntries、不截断、
+ * overflowCount 恒为 0——只新增了这一个分支，规则 1（capacity 封顶）和
+ * 规则 2（补空位到 8）完全没有改动，跟"只管形状换成方块 + 去掉封顶显示
+ * 全部，不改要不要画空位这件事本身"的任务卡要求对应。
  */
 function computeSlots(
   participants: ActivityParticipant[],
   capacity: number | null,
-  options: { allowOverflowBadge?: boolean } = {}
+  options: { overflowStrategy?: "badge" | "cap" | "showAll" } = {}
 ): { slots: Slot[]; overflowCount: number } {
-  const { allowOverflowBadge = true } = options;
+  const { overflowStrategy = "badge" } = options;
   const joinedCount = 1 + participants.length;
   const realEntries: Slot[] = [
     { type: "organizer" },
@@ -245,7 +275,14 @@ function computeSlots(
     };
   }
 
-  if (!allowOverflowBadge) {
+  if (overflowStrategy === "showAll") {
+    return {
+      slots: realEntries,
+      overflowCount: 0
+    };
+  }
+
+  if (overflowStrategy === "cap") {
     return {
       slots: realEntries.slice(0, MAX_TOTAL_SLOTS),
       overflowCount: 0
@@ -285,17 +322,29 @@ export function ActivityParticipantAvatars({
   interactive = true,
   canTapEmptySlot = false,
   onTapEmptySlot,
-  shape = "round"
+  shape = "round",
+  showAllParticipants = false
 }: ActivityParticipantAvatarsProps) {
   const isSquare = shape === "square";
-  const { slots, overflowCount } = computeSlots(participants, capacity, {
-    allowOverflowBadge: !isSquare
-  });
+  const joinedCount = 1 + participants.length;
+  const overflowStrategy: "badge" | "cap" | "showAll" = showAllParticipants
+    ? "showAll"
+    : isSquare
+      ? "cap"
+      : "badge";
+  const { slots, overflowCount } = computeSlots(participants, capacity, { overflowStrategy });
   const gridClassName = isSquare ? SQUARE_AVATAR_GRID_CLASS_NAME : AVATAR_GRID_CLASS_NAME;
   const emptySlotClassName = isSquare ? SQUARE_EMPTY_SLOT_CLASS_NAME : EMPTY_SLOT_CLASS_NAME;
 
   return (
     <div>
+      {/* 17 号卡：只在详情页（showAllParticipants）显示这行实际报名人数——
+          X 是"发起人 + 参与者"的真实已加入人数，跟活动的 capacity 设置无关
+          （capacity 只决定要不要补空位/封顶，不是这里要展示的数字）。活动
+          卡片不传 showAllParticipants，不会多出这一行。 */}
+      {showAllParticipants ? (
+        <p className="mb-2 text-sm text-text-muted">共 {joinedCount} 人参加</p>
+      ) : null}
       <ul className={gridClassName}>
         {slots.map((slot, index) => {
           if (slot.type === "organizer") {
@@ -381,8 +430,14 @@ export function ActivityParticipantAvatars({
           SQUARE_AVATAR_GRID_CLASS_NAME 的注释），但这一行"还差 N 人"文字
           不是拼图的一部分，需要单独补回横向内边距，才能跟卡片下半部分
           标题/地点/时间那些文字（在 activity-card.tsx 里用同一个 p-5）
-          左右对齐，不是让文字也跟着贴到卡片边缘。 */}
-      <p className={`mt-2 text-xs text-text-muted ${isSquare ? "px-5" : ""}`}>
+          左右对齐，不是让文字也跟着贴到卡片边缘。
+          17 号卡：详情页（showAllParticipants）不需要这条 px-5 补偿——
+          详情页整个内容列已经在页面级容器上统一加了 px-4（见
+          activity-detail-page.tsx），头像格本身跟其它段落一样贴着容器
+          内边缘对齐，这里再叠一层 px-5 反而会让这行文字比页面上其它文字
+          多缩进一截，所以只在"卡片场景"（isSquare 但不是 showAllParticipants）
+          才补这个内边距。 */}
+      <p className={`mt-2 text-xs text-text-muted ${isSquare && !showAllParticipants ? "px-5" : ""}`}>
         {formatActivityParticipantSummary(participants.length, capacity)}
       </p>
     </div>
