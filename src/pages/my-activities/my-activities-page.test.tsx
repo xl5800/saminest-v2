@@ -457,8 +457,8 @@ describe("MyActivitiesPage", () => {
       expect(sendMessage).toHaveBeenCalled();
     });
     expect(findExistingActivityConversation).toHaveBeenCalledWith({
-      createdByUserId: "applicant-1",
-      otherUserId: "user-1"
+      applicantUserId: "applicant-1",
+      organizerUserId: "user-1"
     });
     expect(sendMessage).toHaveBeenCalledWith({
       conversationId: "conv-1",

@@ -281,6 +281,17 @@ export async function listMyConversations(
  * 函数在"帖子不存在/已删除"或"买家就是帖子作者自己"等情况下会抛出 Postgres
  * 异常，PostgREST 把它转成 { data: null, error } 返回，这里统一包装成
  * AppError，不尝试解析具体是哪一种失败原因（UI 只需要一个通用的失败提示）。
+ *
+ * 16 号卡「对话去重」之后，这个前端函数的调用方式/签名完全没变（依然是
+ * "给一个帖子 id，拿回一个会话 id"），变的是数据库函数内部：不再靠
+ * (post_id, created_by) 这个部分唯一索引去重（那样换一个帖子、哪怕卖家
+ * 是同一个人也会另开一条会话），改成调用共享的
+ * get_or_create_direct_conversation()，按"买家-卖家"这一对用户双向查找，
+ * 不限来源（帖子/活动/个人主页建的会话都会被找到、复用）。新建的会话
+ * post_id 恒为 null——不再把会话绑死在某一个具体帖子上。联系的上下文
+ * （因为哪个帖子联系的）这一版不做记录，点"联系"直接进这条会话（新建的
+ * 话就是空的，复用的话就是双方已有的聊天记录），不插入任何提示/系统
+ * 消息——"关于哪个帖子"这类引用信息如果以后要做，是另一张任务卡的事。
  */
 export async function createDirectConversation(
   postId: string
@@ -307,9 +318,8 @@ export async function createDirectConversation(
 }
 
 /**
- * 查找发起人和某个申请人之间"因为一起去活动而建立"的已有会话（P2 报名
- * 审核制：发起人同意/拒绝申请时要反过来通知申请人，见
- * use-moderate-activity-participant-mutation.ts）。
+ * 查找发起人和某个申请人之间已有的会话（P2 报名审核制：发起人同意/拒绝
+ * 申请时要反过来通知申请人，见 use-moderate-activity-participant-mutation.ts）。
  *
  * 为什么不能像 createActivityConversation 那样直接调一个 RPC 拿到/建出
  * 会话——create_activity_conversation(target_activity_id) 内部固定把
@@ -321,29 +331,36 @@ export async function createDirectConversation(
  * "发起人主动联系某个参与者"这个方向，仿造一个新 RPC 专门支持这个方向、
  * 或者放宽现有 RPC 接受任意目标用户 id，都会重新打开"可以拉任意用户建
  * 私聊"这个在 P0 阶段特意堵上的口子（见 create_activity_conversation 那份
- * 迁移文件的说明），这次任务明确"数据库已完成，不用碰"，不新增数据库
- * 对象，所以这里换一个不需要新 RPC 的思路：
+ * 迁移文件的说明），所以这里换一个不需要新 RPC 的思路：直接查
+ * conversation_members 表找"申请人和发起人是不是同一条会话的成员"。
  *
  * 申请人申请加入时触发的 notifyOrganizer 已经用
- * create_activity_conversation 建好了一条"申请人 created_by、post_id
- * 为空"的会话，并把发起人也拉进了 conversation_members（该 RPC 内部一次
- * 完成两步）。这条会话本来就存在，发起人已经是成员，可以直接用
- * sendMessage() 往里面发消息（messages_insert_own_as_active_member 这条
- * RLS 只要求 sender_id = auth.uid() 且是这个会话的活跃成员，不要求
- * sender 是会话创建者）——不需要新建会话，只需要"找到"它。
+ * create_activity_conversation 建好（或复用了一条已有）会话，并把发起人
+ * 也拉进了 conversation_members（该 RPC 内部一次完成两步）。这条会话本来
+ * 就存在，发起人已经是成员，可以直接用 sendMessage() 往里面发消息
+ * （messages_insert_own_as_active_member 这条 RLS 只要求 sender_id =
+ * auth.uid() 且是这个会话的活跃成员，不要求 sender 是会话创建者）——不需要
+ * 新建会话，只需要"找到"它。
  *
- * 查找方式：conversations 表只记录了 created_by（申请人），没有直接存
- * "对方是谁"这一列，所以分两步：
- *   1. 查所有 created_by = 申请人、type=direct、post_id 为空（排除跟帖子
- *      绑定的会话，避免误把一个不相关的二手交易私聊当成活动会话）的会话
- *      id——申请人可能对不同发起人分别建过这类会话，所以可能不止一条。
- *   2. 在这批候选会话里，找一条发起人也是成员的——conversation_members_
- *      select_of_own_conversations 这条 RLS（"能看到同一会话里的其它
- *      成员，不只是自己那一行"）保证发起人能读到自己所在会话的其它成员，
- *      这一步能查到。
- * create_activity_conversation 自己的"获取或创建"逻辑保证同一对（申请人,
- * 发起人）之间最多只有一条这类会话，所以第 2 步用 .maybeSingle() 是安全
- * 的，不会因为命中多行而报错。
+ * 16 号卡「对话去重」之后查找方式改了一处关键的地方：不再要求
+ * created_by = 申请人、post_id 为空——两个人之间现在只会有一条 direct
+ * 会话（不管最初是通过帖子/活动/个人主页哪个入口建的、也不管是谁先发起
+ * 联系的，见 get_or_create_direct_conversation() 那份迁移），所以查找
+ * 必须是双向的、不限来源：先查申请人参与的所有会话，再看发起人是不是
+ * 也在其中某一条里，不能再假设"申请人是这条会话的 created_by"或者"这条
+ * 会话没有挂在任何帖子下"——这两个假设在改版前成立（当时活动会话是
+ * 唯一一种 post_id 为空的会话），改版后不再成立：比如发起人之前已经通过
+ * 帖子联系过这个申请人，这次报名会复用那条会话，created_by 是发起人、
+ * post_id 也可能是 null（新建的都是 null）或者历史遗留的某个帖子 id，
+ * 原来那两个过滤条件在这种情况下会漏掉它。
+ *
+ * 分两步（conversation_members_select_of_own_conversations 这条 RLS
+ * "能看到同一会话里的其它成员，不只是自己那一行"保证第二步能查到）：
+ *   1. 查申请人参与的所有会话 id。
+ *   2. 在这批候选里，找一条发起人也是成员的——16 号卡保证同一对用户之间
+ *      最多只有一条未软删除的 direct 会话，.maybeSingle() 是安全的。
+ *   3. 确认这条会话确实是 type = 'direct' 且未软删除（conversation_members
+ *      本身不区分会话软删除状态，这一步在 conversations 表上单独确认）。
  *
  * 找不到时返回 null（不抛错）——调用方把这个当成"没有已有会话可以发通知"，
  * 静默跳过，不阻塞同意/拒绝这个核心操作本身，见
@@ -357,43 +374,65 @@ export async function createDirectConversation(
  * RPC，选择接受这个已知的小概率静默失败。
  */
 export async function findExistingActivityConversation(input: {
-  createdByUserId: string;
-  otherUserId: string;
+  applicantUserId: string;
+  organizerUserId: string;
 }): Promise<{ conversationId: string } | null> {
-  const { data: candidates, error: candidatesError } = await getSupabaseClient()
-    .from("conversations")
-    .select("id")
-    .eq("type", "direct")
-    .is("post_id", null)
-    .is("deleted_at", null)
-    .eq("created_by", input.createdByUserId)
-    .overrideTypes<{ id: string }[]>();
+  const client = getSupabaseClient();
 
-  if (candidatesError) {
+  const { data: applicantMemberships, error: applicantError } = await client
+    .from("conversation_members")
+    .select("conversation_id")
+    .eq("user_id", input.applicantUserId)
+    .overrideTypes<{ conversation_id: string }[]>();
+
+  if (applicantError) {
     throw new AppError(
-      candidatesError.message,
+      applicantError.message,
       "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
-      candidatesError
+      applicantError
     );
   }
 
-  const candidateIds = (candidates ?? []).map((row) => row.id);
+  const candidateIds = (applicantMemberships ?? []).map((row) => row.conversation_id);
   if (candidateIds.length === 0) {
     return null;
   }
 
-  const { data: member, error: memberError } = await getSupabaseClient()
+  const { data: organizerMembership, error: organizerError } = await client
     .from("conversation_members")
     .select("conversation_id")
-    .eq("user_id", input.otherUserId)
+    .eq("user_id", input.organizerUserId)
     .in("conversation_id", candidateIds)
     .maybeSingle();
 
-  if (memberError) {
-    throw new AppError(memberError.message, "ACTIVITY_CONVERSATION_LOOKUP_FAILED", memberError);
+  if (organizerError) {
+    throw new AppError(
+      organizerError.message,
+      "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
+      organizerError
+    );
+  }
+  if (!organizerMembership) {
+    return null;
   }
 
-  return member ? { conversationId: member.conversation_id } : null;
+  const { data: conversation, error: conversationError } = await client
+    .from("conversations")
+    .select("id")
+    .eq("id", organizerMembership.conversation_id)
+    .eq("type", "direct")
+    .is("deleted_at", null)
+    .maybeSingle();
+
+  if (conversationError) {
+    throw new AppError(
+      conversationError.message,
+      "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
+      conversationError
+    );
+  }
+
+  return conversation ? { conversationId: conversation.id } : null;
 }
 
 /**
@@ -422,6 +461,15 @@ export async function findExistingActivityConversation(input: {
  * 错误处理跟 createDirectConversation 完全一致（同一段账号受限判断文本、
  * 同一套 AppError 包装方式），只是错误码前缀换成 ACTIVITY_CONVERSATION_
  * 以区分调用来源，方便日后排查是哪个入口报的错。
+ *
+ * 16 号卡「对话去重」：跟 createDirectConversation 同一批改动——数据库
+ * 函数内部改成调用共享的 get_or_create_direct_conversation()，按
+ * "操作者-发起人"这一对用户双向查找（不再只按 created_by = 操作者这一个
+ * 方向，那样如果发起人之前先联系过操作者，这里会漏掉那条已有会话），
+ * 也不再局限于"post_id 为空"这个范围，不管这两个人之间的会话最初是从
+ * 哪个入口建的都会被找到、复用。不插入任何"关于哪个活动"的提示消息，
+ * 找到/建好会话后直接把会话 id 返回给前端跳转过去。这个前端函数本身的
+ * 签名/调用方式不变。
  */
 export async function createActivityConversation(
   activityId: string
@@ -459,6 +507,18 @@ export async function createActivityConversation(
  * 结构照抄 createActivityConversation（同一套 rpc 调用 + AppError 包装
  * 方式），错误处理在账号受限判断旁边多一段限流判断，其它未知失败原因
  * 统一落到通用的 PROFILE_CONVERSATION_CREATE_FAILED。
+ *
+ * 16 号卡「对话去重」：这个函数本来就是三个入口里唯一一开始就做对了
+ * "双向查找已有会话"的（见原本的设计要点，一直没有 createDirectConversation/
+ * createActivityConversation 那两个的方向性 bug），这次改动只是把查找
+ * 范围从"只在 origin_type = 'profile' 里找"放开成"不限来源，两个人之间
+ * 任意一条已有 direct 会话都算"——数据库函数内部改成调用共享的
+ * find_direct_conversation_between()/create_direct_conversation_row()
+ * （原来重复写的那两段 SQL 现在跟另外两个入口共用同一份实现，见
+ * get_or_create_direct_conversation() 那份迁移），限流的位置/统计口径
+ * 完全不变（依然只统计"真的新建"的 profile 会话，找到已有会话直接返回、
+ * 不计入限流）。这个前端函数本身的签名/调用方式不变——15 号卡"发消息"
+ * 按钮如果要用这里，直接传目标用户 id 即可。
  */
 export async function createProfileConversation(
   targetUserId: string

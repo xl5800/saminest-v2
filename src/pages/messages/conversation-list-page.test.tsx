@@ -166,7 +166,7 @@ describe("ConversationListPage", () => {
     }
   });
 
-  it("renders each conversation's nickname/avatar/post-title/time inside a single link to /messages/:id (no separate /users/:id link)", () => {
+  it("renders each conversation's nickname/avatar/preview/time inside a single link to /messages/:id (no separate /users/:id link)", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
         {
@@ -177,7 +177,8 @@ describe("ConversationListPage", () => {
           otherUserId: "user-2",
           otherDisplayName: "Bob",
           otherAvatarUrl: null,
-          lastActivityAt: "2026-07-10T00:00:00.000Z"
+          lastActivityAt: "2026-07-10T00:00:00.000Z",
+          lastMessagePreview: "关于：《Sunny room》"
         },
         {
           id: "conv-2",
@@ -187,7 +188,8 @@ describe("ConversationListPage", () => {
           otherUserId: "user-3",
           otherDisplayName: "Carol",
           otherAvatarUrl: null,
-          lastActivityAt: "2026-07-09T00:00:00.000Z"
+          lastActivityAt: "2026-07-09T00:00:00.000Z",
+          lastMessagePreview: "关于：《Used sofa》"
         }
       ],
       isPending: false,
@@ -203,14 +205,18 @@ describe("ConversationListPage", () => {
     expect(links).toHaveLength(2);
     expect(links.every((link) => !link.getAttribute("href")?.startsWith("/users/"))).toBe(true);
 
+    // 16 号卡：不再单独展示"关于：{postTitle}"这一行，最近一条消息预览
+    // （lastMessagePreview）承担了展示"联系上下文"的作用——如果最近一条
+    // 正好是发起联系时插入的引用消息，预览文字本身就是"关于：《标题》"，
+    // 见 conversation-swipe-row.tsx 顶部这次改动的注释。
     const conversationLinks = screen.getAllByTestId("conversation-link");
     expect(conversationLinks).toHaveLength(2);
     expect(conversationLinks[0]).toHaveAttribute("href", "/messages/conv-1");
     expect(conversationLinks[0]).toHaveTextContent("Bob");
-    expect(conversationLinks[0]).toHaveTextContent("关于：Sunny room");
+    expect(conversationLinks[0]).toHaveTextContent("关于：《Sunny room》");
     expect(conversationLinks[1]).toHaveAttribute("href", "/messages/conv-2");
     expect(conversationLinks[1]).toHaveTextContent("Carol");
-    expect(conversationLinks[1]).toHaveTextContent("关于：Used sofa");
+    expect(conversationLinks[1]).toHaveTextContent("关于：《Used sofa》");
   });
 
   it("falls back to '对方' when otherDisplayName is null", () => {
@@ -306,7 +312,10 @@ describe("ConversationListPage", () => {
     expect(screen.getByText("C")).toBeInTheDocument();
   });
 
-  it("renders without a broken 关于： fragment when postTitle is null", () => {
+  // 16 号卡：这一行整个已经去掉了（不再是"postTitle 为空时才不显示"，
+  // 而是不管 postTitle 是什么都不再单独展示这一行），这里保留一个最简单
+  // 的回归断言确认它真的不出现。
+  it("never renders a 关于： line (removed in favor of lastMessagePreview)", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
         {

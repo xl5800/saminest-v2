@@ -222,6 +222,11 @@ describe("createProfileConversation", () => {
   });
 });
 
+// 16 号卡「对话去重」：这个函数不再假设"申请人是 created_by"或者"会话
+// 没有挂在任何帖子下"（两个人之间现在只有一条 direct 会话，不管最初是
+// 从哪个入口、由谁建的），改成三步都查 conversation_members/conversations，
+// 不再联表带 created_by/post_id 条件，见 conversations-repository.ts 里
+// 这个函数的详细注释。
 describe("findExistingActivityConversation", () => {
   beforeEach(() => {
     fromMock.mockClear();
@@ -232,65 +237,88 @@ describe("findExistingActivityConversation", () => {
     maybeSingleMock.mockReset();
   });
 
-  it("queries direct, non-post conversations created by the applicant, then looks for the organizer among their members", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
-    maybeSingleMock.mockResolvedValue({ data: { conversation_id: "conv-1" }, error: null });
+  it("queries the applicant's conversation memberships, then looks for the organizer among the same conversations' members, then confirms the conversation is a non-deleted direct one", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ conversation_id: "conv-1" }], error: null });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { conversation_id: "conv-1" }, error: null })
+      .mockResolvedValueOnce({ data: { id: "conv-1" }, error: null });
 
     await findExistingActivityConversation({
-      createdByUserId: "applicant-1",
-      otherUserId: "organizer-1"
+      applicantUserId: "applicant-1",
+      organizerUserId: "organizer-1"
     });
 
-    expect(fromMock).toHaveBeenNthCalledWith(1, "conversations");
-    expect(queryBuilder.select).toHaveBeenNthCalledWith(1, "id");
-    expect(queryBuilder.eq).toHaveBeenCalledWith("type", "direct");
-    expect(queryBuilder.is).toHaveBeenCalledWith("post_id", null);
-    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
-    expect(queryBuilder.eq).toHaveBeenCalledWith("created_by", "applicant-1");
+    expect(fromMock).toHaveBeenNthCalledWith(1, "conversation_members");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(1, "conversation_id");
+    expect(queryBuilder.eq).toHaveBeenNthCalledWith(1, "user_id", "applicant-1");
 
     expect(fromMock).toHaveBeenNthCalledWith(2, "conversation_members");
     expect(queryBuilder.select).toHaveBeenNthCalledWith(2, "conversation_id");
-    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "organizer-1");
+    expect(queryBuilder.eq).toHaveBeenNthCalledWith(2, "user_id", "organizer-1");
     expect(queryBuilder.in).toHaveBeenCalledWith("conversation_id", ["conv-1"]);
+
+    expect(fromMock).toHaveBeenNthCalledWith(3, "conversations");
+    expect(queryBuilder.select).toHaveBeenNthCalledWith(3, "id");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "conv-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("type", "direct");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
   });
 
-  it("returns the conversation id when a matching conversation is found", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
-    maybeSingleMock.mockResolvedValue({ data: { conversation_id: "conv-1" }, error: null });
+  it("returns the conversation id when a matching, non-deleted direct conversation is found", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ conversation_id: "conv-1" }], error: null });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { conversation_id: "conv-1" }, error: null })
+      .mockResolvedValueOnce({ data: { id: "conv-1" }, error: null });
 
     await expect(
       findExistingActivityConversation({
-        createdByUserId: "applicant-1",
-        otherUserId: "organizer-1"
+        applicantUserId: "applicant-1",
+        organizerUserId: "organizer-1"
       })
     ).resolves.toEqual({ conversationId: "conv-1" });
   });
 
-  it("returns null without a second query when the applicant has no matching direct/non-post conversations at all", async () => {
+  it("returns null without further queries when the applicant is not a member of any conversation at all", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     const result = await findExistingActivityConversation({
-      createdByUserId: "applicant-1",
-      otherUserId: "organizer-1"
+      applicantUserId: "applicant-1",
+      organizerUserId: "organizer-1"
     });
 
     expect(result).toBeNull();
     expect(fromMock).toHaveBeenCalledTimes(1);
   });
 
-  it("returns null when the applicant has candidate conversations but none include the organizer as a member", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
-    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+  it("returns null when the applicant has conversations but the organizer is not a member of any of them", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ conversation_id: "conv-1" }], error: null });
+    maybeSingleMock.mockResolvedValueOnce({ data: null, error: null });
 
     await expect(
       findExistingActivityConversation({
-        createdByUserId: "applicant-1",
-        otherUserId: "organizer-1"
+        applicantUserId: "applicant-1",
+        organizerUserId: "organizer-1"
       })
     ).resolves.toBeNull();
   });
 
-  it("throws an AppError when the first (conversations) query fails", async () => {
+  // 找到了一条两人都在的会话，但那条会话其实已经被软删除（或者理论上
+  // 不是 direct 类型）——第三步查不到，同样返回 null，不当成"找到了"。
+  it("returns null when a shared conversation is found but it is soft-deleted (or not type=direct)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ conversation_id: "conv-1" }], error: null });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { conversation_id: "conv-1" }, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(
+      findExistingActivityConversation({
+        applicantUserId: "applicant-1",
+        organizerUserId: "organizer-1"
+      })
+    ).resolves.toBeNull();
+  });
+
+  it("throws an AppError when the first (applicant memberships) query fails", async () => {
     overrideTypesMock.mockResolvedValue({
       data: null,
       error: { message: "network down", code: "500" }
@@ -298,23 +326,40 @@ describe("findExistingActivityConversation", () => {
 
     await expect(
       findExistingActivityConversation({
-        createdByUserId: "applicant-1",
-        otherUserId: "organizer-1"
+        applicantUserId: "applicant-1",
+        organizerUserId: "organizer-1"
       })
     ).rejects.toMatchObject({ code: "ACTIVITY_CONVERSATION_LOOKUP_FAILED" });
   });
 
-  it("throws an AppError when the second (conversation_members) query fails", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [{ id: "conv-1" }], error: null });
-    maybeSingleMock.mockResolvedValue({
+  it("throws an AppError when the second (organizer membership) query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ conversation_id: "conv-1" }], error: null });
+    maybeSingleMock.mockResolvedValueOnce({
       data: null,
       error: { message: "network down", code: "500" }
     });
 
     await expect(
       findExistingActivityConversation({
-        createdByUserId: "applicant-1",
-        otherUserId: "organizer-1"
+        applicantUserId: "applicant-1",
+        organizerUserId: "organizer-1"
+      })
+    ).rejects.toMatchObject({ code: "ACTIVITY_CONVERSATION_LOOKUP_FAILED" });
+  });
+
+  it("throws an AppError when the third (conversation confirmation) query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [{ conversation_id: "conv-1" }], error: null });
+    maybeSingleMock
+      .mockResolvedValueOnce({ data: { conversation_id: "conv-1" }, error: null })
+      .mockResolvedValueOnce({
+        data: null,
+        error: { message: "network down", code: "500" }
+      });
+
+    await expect(
+      findExistingActivityConversation({
+        applicantUserId: "applicant-1",
+        organizerUserId: "organizer-1"
       })
     ).rejects.toMatchObject({ code: "ACTIVITY_CONVERSATION_LOOKUP_FAILED" });
   });

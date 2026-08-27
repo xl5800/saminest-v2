@@ -587,6 +587,8 @@ export type Database = {
           id: string
           message_type: string
           notification_payload: Json | null
+          ref_activity_id: string | null
+          ref_post_id: string | null
           reply_to_id: string | null
           sender_id: string | null
         }
@@ -599,6 +601,8 @@ export type Database = {
           id?: string
           message_type?: string
           notification_payload?: Json | null
+          ref_activity_id?: string | null
+          ref_post_id?: string | null
           reply_to_id?: string | null
           sender_id?: string | null
         }
@@ -611,6 +615,8 @@ export type Database = {
           id?: string
           message_type?: string
           notification_payload?: Json | null
+          ref_activity_id?: string | null
+          ref_post_id?: string | null
           reply_to_id?: string | null
           sender_id?: string | null
         }
@@ -620,6 +626,20 @@ export type Database = {
             columns: ["conversation_id"]
             isOneToOne: false
             referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_ref_activity_id_fkey"
+            columns: ["ref_activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_ref_post_id_fkey"
+            columns: ["ref_post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
             referencedColumns: ["id"]
           },
           {
@@ -1020,6 +1040,14 @@ export type Database = {
         Args: { target_post_id: string }
         Returns: string
       }
+      create_direct_conversation_row: {
+        Args: {
+          p_actor_id: string
+          p_origin_type: string
+          p_other_user_id: string
+        }
+        Returns: string
+      }
       create_profile_conversation: {
         Args: { target_user_id: string }
         Returns: string
@@ -1035,6 +1063,10 @@ export type Database = {
       dismiss_report: {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined
+      }
+      find_direct_conversation_between: {
+        Args: { p_user_a: string; p_user_b: string }
+        Returns: string
       }
       get_comment_snapshot: {
         Args: { target_id: string }
@@ -1054,6 +1086,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      get_or_create_direct_conversation: {
+        Args: {
+          p_actor_id: string
+          p_new_origin_type: string
+          p_other_user_id: string
+        }
+        Returns: string
       }
       get_post_image_snapshot: {
         Args: { target_id: string }
@@ -1114,6 +1154,16 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      insert_conversation_reference_message: {
+        Args: {
+          p_body: string
+          p_conversation_id: string
+          p_ref_activity_id: string
+          p_ref_post_id: string
+          p_sender_id: string
+        }
+        Returns: undefined
+      }
       is_account_restricted: { Args: never; Returns: boolean }
       is_account_suspended: { Args: never; Returns: boolean }
       is_active_conversation_member: {
@@ -1129,10 +1179,7 @@ export type Database = {
         Args: { target_conversation_id: string; target_user_id: string }
         Returns: boolean
       }
-      is_blocked_with: {
-        Args: { other_user_id: string }
-        Returns: boolean
-      }
+      is_blocked_with: { Args: { other_user_id: string }; Returns: boolean }
       is_conversation_member: {
         Args: { target_conversation_id: string }
         Returns: boolean
