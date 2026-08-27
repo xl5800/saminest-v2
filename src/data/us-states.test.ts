@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatStateLabel, formatStateLabelByCode, US_STATES } from "./us-states";
+import { formatSelectedRegionLabel, formatStateLabel, formatStateLabelByCode, US_STATES } from "./us-states";
 
 describe("US_STATES", () => {
   it("has exactly 51 entries (50 states + DC)", () => {
@@ -84,5 +84,21 @@ describe("formatStateLabelByCode", () => {
 
   it("falls back to the raw code when it does not match any known state", () => {
     expect(formatStateLabelByCode("ZZ")).toBe("ZZ");
+  });
+});
+
+// 14 号卡从 home-page.tsx 挪过来的共享函数——首页顶部胶囊和找搭子列表页
+// 顶部胶囊现在都读这一个函数格式化第二行文案。
+describe("formatSelectedRegionLabel", () => {
+  it("formats as '<城市名>, <州代码>' when a specific city is selected, e.g. 'Arlington, VA'", () => {
+    expect(
+      formatSelectedRegionLabel({ stateCode: "VA", stateName: "Virginia", cityName: "Arlington" })
+    ).toBe("Arlington, VA");
+  });
+
+  it("falls back to formatStateLabelByCode's '<缩写> <中文州名>' format when no city is selected", () => {
+    expect(
+      formatSelectedRegionLabel({ stateCode: "CA", stateName: "California", cityName: null })
+    ).toBe("CA 加利福尼亚州");
   });
 });

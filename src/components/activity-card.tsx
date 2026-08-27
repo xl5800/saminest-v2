@@ -26,13 +26,15 @@ export interface ActivityCardProps {
  * <button>，避免"<a> 嵌套可交互 <button>"这种非法 HTML 结构，见
  * activity-participant-avatars.tsx 里 interactive prop 的注释。
  *
- * 07 号卡（活动卡片头像区放大）：内边距从 12px（p-3）放大到 20px
- * （p-5），配合头像从 48px 叠放放大成 64px 网格平铺后需要的呼吸空间；
- * 不再显式传 maxVisibleSlots 给头像堆叠——"最多 8 个视觉位置"的规则已经
- * 统一收进 ActivityParticipantAvatars 内部（列表卡片和详情页共用同一套
- * 规则，不需要调用方各自定制一个更小的数字，见该组件顶部注释）。卡片高度
- * 允许随头像行数（1 行/2 行）变化，不强制跟同一列表里其它卡片等高——07
- * 号卡明确写了这条，这里没有额外加 min-h 之类的东西去抹平差异。
+ * 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：头像区改成
+ * shape="square" 的正方形拼图，且要求"紧贴卡片左右边缘、贴着卡片顶部、
+ * 铺满整个卡片宽度，不要有卡片自己的左右内边距"——这跟 07 号卡定下的
+ * "整张卡片统一 p-5 内边距"直接冲突，所以这次把 p-5 从最外层 <Link> 挪到
+ * 头像区下面单独一个 <div> 上，只包标题/地点/时间这几行文字；头像区本身
+ * 变成 <Link> 的第一个直接子元素，不再套在任何有内边距的容器里，才能真的
+ * 顶到卡片边缘。外层 <Link> 加 overflow-hidden——头像格铺满卡片整宽后四个
+ * 角会紧贴卡片的 rounded-2xl 圆角，不加这个的话方形头像格的直角会盖住卡片
+ * 本来的圆角，视觉上变成方卡片。
  */
 export function ActivityCard({ activity, participants }: ActivityCardProps) {
   const { emoji } = getActivityChannelMeta(activity.channel);
@@ -40,7 +42,7 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
   return (
     <Link
       to={`/activities/${activity.id}`}
-      className="block rounded-2xl border border-border bg-white p-5 shadow-card"
+      className="block overflow-hidden rounded-2xl border border-border bg-white shadow-card"
     >
       <ActivityParticipantAvatars
         organizerId={activity.organizerId}
@@ -49,20 +51,20 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
         participants={participants}
         capacity={activity.capacity}
         interactive={false}
+        shape="square"
       />
-      {/* 头像区到标题的间距跟着内边距的放大比例一起放大（8px → 12px）：
-          12px/20px 跟原来 8px/12px 是同一个"内边距的 60%"比例，维持视觉
-          节奏一致，不是任意取值。 */}
-      <p className="mt-3 line-clamp-2 break-words text-base text-text">
-        {emoji} {activity.title}
-      </p>
-      <p className="mt-1 text-xs text-text-muted">
-        {activity.isOnline
-          ? "线上"
-          : activity.landmarkText ??
-            (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
-      </p>
-      <p className="mt-1 text-xs text-text-muted">{formatActivityStartAt(activity.startAt)}</p>
+      <div className="p-5 pt-3">
+        <p className="line-clamp-2 break-words text-base text-text">
+          {emoji} {activity.title}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">
+          {activity.isOnline
+            ? "线上"
+            : activity.landmarkText ??
+              (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">{formatActivityStartAt(activity.startAt)}</p>
+      </div>
     </Link>
   );
 }

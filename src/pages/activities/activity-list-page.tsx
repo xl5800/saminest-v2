@@ -5,10 +5,13 @@ import { useNavigate } from "react-router-dom";
 import { ActivityCard } from "../../components/activity-card";
 import { Fab } from "../../components/fab";
 import { TopBar } from "../../components/top-bar";
+import { formatSelectedRegionLabel } from "../../data/us-states";
 import { useActivitiesQuery } from "../../features/activities/use-activities-query";
 import { useActivityParticipantPreviewsQuery } from "../../features/activities/use-activity-participant-previews-query";
 import { ACTIVITY_CHANNEL_OPTIONS } from "../../repositories/activities-repository";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
+
+const REGION_SELECT_PATH = "/region-select";
 
 /**
  * "找搭子"活动列表页（/activities，公开，不需要登录，游客也能刷）。
@@ -33,13 +36,34 @@ import { useSelectedRegionStore } from "../../store/selected-region-store";
  * 州压根没有对应的 locationId 可选，这个本地下拉框的机制天然覆盖不了，
  * 与其维护两套互相独立、容易让用户困惑"到底是哪个筛选在生效"的地区筛选
  * （页面本地下拉 + 全局 useSelectedRegionStore），不如直接改成跟首页一样
- * 读同一个全局 store——地区筛选统一只有一个入口（首页顶部胶囊 → 地区选择
- * 页），这个页面不再需要自己的 TopBar 右侧图标，退回 tab 变体不传 right
- * 的默认外观（无右侧按钮）。
+ * 读同一个全局 store。
+ *
+ * 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：
+ * - 居中的「找搭子」标题 + tab 变体整个换掉，改用 TopBar 的 home
+ *   变体——左侧是跟首页左上角完全一样的"Saminest + 当前地区"胶囊
+ *   （regionLabel/onRegionClick 直接复用首页那一套：同一个
+ *   useSelectedRegionStore、同一个 formatSelectedRegionLabel 格式化函数、
+ *   同一个 /region-select 路由，没有另起一套地区选择逻辑），只是不传
+ *   onCreateClick——home 变体这次改成 onCreateClick 可选（见
+ *   top-bar.tsx），不传就不渲染"＋"，找搭子页右侧因此只剩一个搜索图标，
+ *   不需要新建一个近乎一样的 variant。
+ * - 08 号卡已经把这个页面原来"筛选"图标背后绑定的州下拉框整个删掉了（见
+ *   上一段），读代码确认过现在这个位置不再挂着任何功能——14 号卡任务卡里
+ *   提到的"顶部栏右侧 ▽ 图标"在当前代码里已经不存在，没有需要迁移或保留
+ *   的功能，这次改版前后对得上号的只是"右侧一个图标按钮"这个视觉位置，
+ *   不是同一个图标/同一份逻辑。
+ * - 搜索图标目前还没有对应的后端搜索能力（activities-repository.ts /
+ *   useActivitiesQuery 都没有 searchQuery 参数，这次任务卡也没有要求新增
+ *   一套搜索筛选逻辑——明确写的是"纯前端视觉改动"）。onSearchClick 这次
+ *   只做"跟首页搜索图标同一套显隐开关"（isSearchOpen 本地 state + 一个
+ *   输入框），不接任何过滤逻辑——不给一个完全不响应点击的图标按钮，但也
+ *   不擅自多做一套本卡没要求的搜索筛选功能；这部分输入框以后要不要真的
+ *   接一套找搭子搜索，交给专门的任务卡决定。
  */
 export function ActivityListPage() {
   const navigate = useNavigate();
   const [channel, setChannel] = useState<string>("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
   const { data: activities, isPending, isError } = useActivitiesQuery({
@@ -68,7 +92,23 @@ export function ActivityListPage() {
 
   return (
     <main data-testid="activity-list-page" className="pb-24">
-      <TopBar variant="tab" title="找搭子" />
+      <TopBar
+        variant="home"
+        regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
+        onRegionClick={() => navigate(REGION_SELECT_PATH)}
+        onSearchClick={() => setIsSearchOpen((current) => !current)}
+      />
+
+      {isSearchOpen ? (
+        <div className="px-4 pb-2">
+          <input
+            type="search"
+            autoFocus
+            placeholder="搜找搭子活动…"
+            className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
+          />
+        </div>
+      ) : null}
 
       <div className="mx-auto max-w-2xl px-4 pt-2">
         <nav aria-label="频道筛选" className="mb-2 flex gap-2 overflow-x-auto py-1">

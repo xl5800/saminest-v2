@@ -91,7 +91,8 @@ describe("HomePage", () => {
 
     // 06 号卡：地区选择页写入的 useSelectedRegionStore 现在是首页地区文案的
     // 真实数据源，不再是写死的 null——见 home-page.tsx 顶部注释。08 号卡：
-    // 展示格式从"裸露的 stateCode"改成 formatRegionLabel 的两种情形。
+    // 展示格式从"裸露的 stateCode"改成 formatSelectedRegionLabel（14 号卡
+    // 挪到了 us-states.ts，见该文件）的两种情形。
     it("renders '{cityName}, {stateCode}' when a DMV city has been selected (has real city data)", () => {
       listActiveCategories.mockResolvedValue([]);
       listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });

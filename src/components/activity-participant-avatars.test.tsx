@@ -377,6 +377,126 @@ describe("ActivityParticipantAvatars", () => {
     expect(container.querySelectorAll("a")).toHaveLength(2);
   });
 
+  // 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：shape="square" 是
+  // 活动卡片专用的正方形拼图变体，round 变体（上面那些测试，也是默认值）
+  // 保持完全不变——这组测试只覆盖 square 特有的行为，不重复 round 已经
+  // 测过的"8 个视觉位置"slot 计算规则本身（两种形状共用同一份
+  // computeSlots，round 那些测试已经充分覆盖了 0~9+ 人数下的空位/溢出
+  // 数量计算）。
+  describe("shape='square' (14 号卡：活动卡片头像)", () => {
+    it("lays the grid out as a fluid 4-column grid with a 2px gap, not the round variant's fixed-4rem-column grid", () => {
+      const { container } = renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(3),
+        capacity: null,
+        shape: "square"
+      });
+
+      const list = container.querySelector("ul");
+      expect(list).toHaveClass("grid", "grid-cols-4", "gap-0.5");
+      expect(list?.className).not.toContain("grid-cols-[repeat(4,4rem)]");
+    });
+
+    it("renders square (not round) avatar tiles with no ring/shadow border, since separation now comes from the grid gap", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: [],
+        capacity: null,
+        shape: "square"
+      });
+
+      const organizerAvatar = screen.getByText("A");
+      expect(organizerAvatar).toHaveClass("aspect-square", "w-full");
+      expect(organizerAvatar.className).not.toContain("rounded-full");
+      expect(organizerAvatar.className).not.toContain("ring-2");
+      expect(organizerAvatar.className).not.toContain("h-16");
+    });
+
+    it("renders empty slots as light-background squares with a '+' icon, not the round variant's dashed circle", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: [],
+        capacity: 4,
+        interactive: false,
+        shape: "square"
+      });
+
+      const emptySlots = document.querySelectorAll("li span[aria-hidden='true']");
+      const emptySlot = Array.from(emptySlots).find((el) => el.querySelector("svg.lucide-plus"));
+      expect(emptySlot).toHaveClass("aspect-square", "w-full", "bg-bg");
+      expect(emptySlot?.className).not.toContain("border-dashed");
+      expect(emptySlot?.className).not.toContain("rounded-full");
+    });
+
+    // 任务卡 14.2 明确要求"这批先不做'超过 8 人'的处理……先简单只显示前
+    // 8 个（不用报错也不用做特殊提示）"——跟 round 变体规则 3 的"+N"溢出
+    // 徽标行为不同，这是两种形状唯一的一处 slot 计算分叉（allowOverflowBadge，
+    // 见 computeSlots）。
+    it("with more than 8 joined (organizer + participants), shows exactly the first 8 real avatars and no '+N' overflow badge", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(8),
+        capacity: null,
+        shape: "square"
+      });
+
+      // 发起人 Alice + 前 7 个参与者（Bob..Henry）= 8 个真实头像，第 8 个
+      // 参与者 Ivy 被直接截掉，不显示、也不报错、不提示。
+      expect(screen.getByText("A")).toBeInTheDocument();
+      expect(screen.getByText("B")).toBeInTheDocument();
+      expect(screen.getByText("C")).toBeInTheDocument();
+      expect(screen.getByText("D")).toBeInTheDocument();
+      expect(screen.getByText("E")).toBeInTheDocument();
+      expect(screen.getByText("F")).toBeInTheDocument();
+      expect(screen.getByText("G")).toBeInTheDocument();
+      expect(screen.getByText("H")).toBeInTheDocument();
+      expect(screen.queryByText("I")).not.toBeInTheDocument();
+      expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+    });
+
+    it("still fills empty-slot placeholders up to 8 total when joined count is 8 or fewer (same slot math as the round variant)", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(2),
+        capacity: null,
+        interactive: false,
+        shape: "square"
+      });
+
+      // 已加入 3 人（发起人 + 2 参与者），补到 8 个总位置 = 5 个空位。
+      const emptySlots = Array.from(document.querySelectorAll("li")).filter((li) =>
+        li.querySelector("svg.lucide-plus")
+      );
+      expect(emptySlots).toHaveLength(5);
+    });
+
+    it("gives the participant-summary caption its own horizontal padding (px-5), since the grid above it has none", () => {
+      const { container } = renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(2),
+        capacity: 4,
+        interactive: false,
+        shape: "square"
+      });
+
+      const caption = screen.getByText(formatActivityParticipantSummary(2, 4));
+      expect(caption).toHaveClass("px-5");
+      expect(container.querySelector("ul")?.className).not.toContain("px-5");
+    });
+  });
+
   it("shows the shared formatActivityParticipantSummary caption as small, non-emphasized text", () => {
     const { container } = renderAvatars({
       organizerId: "org-1",
