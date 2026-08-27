@@ -2,7 +2,6 @@ import { MapPin } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
-import { formatLocationDisplayName } from "../../data/us-states";
 import { formatPrice, isPriceUnset } from "../../utils/format";
 import { usePostsInfiniteQuery } from "./use-posts-query";
 
@@ -23,43 +22,46 @@ export interface PostListProps {
 }
 
 /**
- * 可复用的帖子列表：首页和分类页都用这一个组件，靠 categoryId 区分。
+ * 可复用的帖子列表：首页（唯一实际渲染入口，见该文件顶部注释）用这一个
+ * 组件，靠 categoryId 区分推荐/租房/求租/二手四个 Tab——19 号卡确认过，
+ * "分类"独立页面（categories-page.tsx）本身不渲染帖子卡片，只是一组
+ * tile，点击后跳回首页带 `?category=` 参数，实际渲染卡片的地方只有这里
+ * 一处，改这一个文件就覆盖了全部四个 Tab，不需要额外找别的卡片组件。
  * 以后"我的帖子"、"收藏列表"如果也是"无限滚动 + 列表项"的形态，优先扩展
  * 这里而不是照抄一份。
  *
- * 渲染成"瀑布流双列"卡片网格：用原生 CSS 多栏布局（columns-2）而不是
- * CSS grid——grid 会强制同一行的卡片等高，做不出瀑布流那种"高矮不一、
- * 哪栏矮就往哪栏排"的效果；也不引入额外的 JS masonry 库，多栏布局本身
- * 就能达到效果。每张卡片加 break-inside-avoid，防止内容被从中间断开
- * 到下一栏。
+ * 两列网格（grid grid-cols-2）保持整齐对齐，不做瀑布流——19 号卡「参考
+ * Craigslist 简化布局」明确要求"这次选的是折中方案，不是真瀑布流"：两列
+ * 保持等高对齐，只把图片区域的高宽比调高，不做"每张图保持各自原始比例、
+ * 两列参差不齐"那种真瀑布流（那个实现复杂、容易有布局跳动问题）。
  *
- * 卡片改版成 Facebook Marketplace 那种"扫一眼知道是什么、多少钱、在哪"的
- * 精简样式：只保留封面图、标题、价格、分类/地区。原来卡片上的作者名字、
- * 发布时间、收藏数/评论数、FavoriteButton 都去掉了——列表页不需要承载这些
- * 社交互动信息，详情页仍然完整展示（详情页是单独的次要信息区块）。
+ * 19 号卡「帖子卡片改版」把卡片精简成 Craigslist App 那种"图片区域占比
+ * 更大、底部只有标题+价格"的风格：
+ * - 图片区域从 16:9（Meet5 风格改版留下的横向比例）改成 4:5（更接近人像
+ *   照片的竖向比例，落在任务卡给的 3:4～4:5 区间内，取区间内观感更协调
+ *   的一端，不强求跟参考图像素级一致），用 Tailwind 任意值 `aspect-[4/5]`
+ *   （没有对应的内置刻度）。
+ * - 底部文字区域从"标题（2 行）+ 价格 + 分类/地区"四行精简成"标题
+ *   （单行，超出用省略号截断）+ 价格"两行——分类标签 pill 和地点文字
+ *   整个去掉，不再展示在卡片上（详情页仍然完整展示这些信息，卡片只是
+ *   列表页的精简入口）。
+ * - 价格行**只有真的有价格数据时才渲染**：`isPriceUnset` 命中（既没有
+ *   价格标签也没有具体金额）时价格这个 `<p>` 整个不渲染，不是渲染出来
+ *   显示"价格未填写"这几个字——标题下面直接是卡片底边，不留一行占位的
+ *   空隙。这是这次改动的行为变化：改版前 `isPriceUnset` 命中时会展示灰色
+ *   的"价格未填写"占位文案，见 format.ts 里 `formatPrice`/`isPriceUnset`
+ *   这两个函数本身没有改（依然是同一套判断/格式化逻辑，只是这一层展示
+ *   决定"不 unset 才渲染"，不是"unset 时换一种文案/颜色渲染"）。
  *
- * Meet5 风格改版（02-home-page.md）：布局从原生 CSS 多栏瀑布流
- * （columns-2，高矮不一、哪栏矮就往哪栏排）换成规规矩矩的两列网格
- * （grid grid-cols-2），跟设计稿"两列网格"的措辞和视觉稿的 CSS Grid 布局
- * 一致——这个组件是首页和分类页共用的（见上面这段注释），改动会同时影响
- * 两个页面的卡片排布，这是预期内的，不是意外扩大范围：分类页目前还没有
- * 自己的视觉稿，沿用跟首页同一套卡片视觉是合理的默认，而不是保留一份
- * 旧样式制造两套不一致的信息流卡片。图片比例从 4:3 改成 16:9（Tailwind
- * 内置的 aspect-video 正好是 16:9，不需要写 aspect-[16/9] 这种任意值）；
- * 卡片本身去掉边框和投影（`shadow-card`/`border-border`）——设计稿明确
- * 要求这批新卡片"圆角 16px、白底、无阴影"。
+ * 原来卡片上的作者名字、发布时间、收藏数/评论数、FavoriteButton 更早之前
+ * 就已经去掉了（Facebook Marketplace 风格那次改版）——列表页不需要承载
+ * 这些社交互动信息，详情页仍然完整展示。卡片本身依旧无边框/无投影
+ * （`overflow-hidden rounded-2xl bg-card`），这条这次没有变。
  *
- * 价格文字：`isPriceUnset` 命中时（既没有价格标签也没有具体金额）用弱化的
- * 灰色展示"价格未填写"，跟真实价格的黑色加粗区分开，见 format.ts 里
- * 这个函数的注释。分类标签从原来的中性灰底改成 `bg-primary-light` +
- * `text-primary`（浅蓝底蓝字），呼应设计稿"分类标签：浅蓝底 + 蓝字"的
- * 要求。
- *
- * 分页按钮已经删掉了（今晚早些时候的改动），这里用"哨兵元素 +
- * IntersectionObserver"实现无限滚动：列表底部放一个不可见的哨兵 div，
- * 它进入视口时触发 fetchNextPage()。哨兵只在 hasNextPage 为真时渲染——
- * 没有下一页时彻底不挂这个元素，而不是渲染出来但不响应，避免它一直
- * 空占着 DOM/被观察却永远不会有意义地触发。
+ * 分页：用"哨兵元素 + IntersectionObserver"实现无限滚动：列表底部放一个
+ * 不可见的哨兵 div，它进入视口时触发 fetchNextPage()。哨兵只在
+ * hasNextPage 为真时渲染——没有下一页时彻底不挂这个元素，而不是渲染出来
+ * 但不响应，避免它一直空占着 DOM/被观察却永远不会有意义地触发。
  */
 export function PostList({ categoryId, searchQuery, stateCode, onPublishClick }: PostListProps) {
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -140,36 +142,24 @@ export function PostList({ categoryId, searchQuery, stateCode, onPublishClick }:
                 <img
                   src={post.coverImageUrl}
                   alt={post.title}
-                  className="aspect-video w-full object-cover"
+                  className="aspect-[4/5] w-full object-cover"
                 />
               ) : (
                 <div
                   aria-hidden="true"
                   data-testid="post-thumbnail-placeholder"
-                  className="flex aspect-video w-full items-center justify-center bg-border text-2xl"
+                  className="flex aspect-[4/5] w-full items-center justify-center bg-border text-2xl"
                 >
                   🖼
                 </div>
               )}
-              <div className="space-y-1 p-2.5">
-                <p className="line-clamp-2 break-words text-sm text-text">{post.title}</p>
-                <p
-                  className={
-                    priceUnset
-                      ? "text-sm font-medium text-text-muted"
-                      : "text-base font-semibold text-text"
-                  }
-                >
-                  {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="rounded-md bg-primary-light px-1.5 py-0.5 text-xs font-medium text-primary">
-                    {post.categoryName}
-                  </span>
-                  <span className="text-xs text-text-muted">
-                    {post.locationName ? formatLocationDisplayName(post.locationName) : "地区未填写"}
-                  </span>
-                </div>
+              <div className="space-y-0.5 p-2.5">
+                <p className="truncate text-sm text-text">{post.title}</p>
+                {priceUnset ? null : (
+                  <p className="text-base font-semibold text-text">
+                    {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
+                  </p>
+                )}
               </div>
             </Link>
           );

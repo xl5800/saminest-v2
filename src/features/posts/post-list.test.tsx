@@ -68,7 +68,7 @@ describe("PostList", () => {
     );
   });
 
-  it("renders each post's title, price, location, category tag, and a link to /post/:id", async () => {
+  it("renders each post's title, price, and a link to /post/:id", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
@@ -77,8 +77,32 @@ describe("PostList", () => {
     expect(link).toHaveAttribute("href", "/post/post-1");
     expect(link).toHaveTextContent("Sunny room near metro");
     expect(link).toHaveTextContent("USD 1,200");
-    expect(link).toHaveTextContent("Rockville");
-    expect(link).toHaveTextContent("租房");
+  });
+
+  // 19 号卡（帖子卡片改版）：分类标签 pill 和地点文字整个从卡片上去掉了，
+  // 不再展示（详情页仍然完整展示这些信息，只是列表卡片不再承载）。
+  it("does not render the category tag pill or the location text on the card", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    const link = await screen.findByRole("link");
+    expect(link).not.toHaveTextContent("租房");
+    expect(link).not.toHaveTextContent("Rockville");
+  });
+
+  it("truncates a very long title to a single line with an ellipsis (no multi-line wrap)", async () => {
+    const longTitlePost = {
+      ...samplePost,
+      title:
+        "这是一个非常非常非常非常非常非常非常非常非常非常非常非常长的标题用来测试省略号截断效果"
+    };
+    listApprovedPosts.mockResolvedValue({ posts: [longTitlePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    const title = await screen.findByText(longTitlePost.title);
+    expect(title).toHaveClass("truncate");
   });
 
   // 精简卡片改版（Facebook Marketplace 风格）之后，作者昵称、发布时间、
@@ -107,27 +131,23 @@ describe("PostList", () => {
     expect(container.querySelector(".columns-2")).not.toBeInTheDocument();
   });
 
-  it("renders the cover image at a 16:9 aspect ratio, and the card itself with no border/shadow", async () => {
+  // 19 号卡：图片区域从 16:9 改成更接近人像照片的 4:5（任务卡给的 3:4～4:5
+  // 区间内）。
+  it("renders the cover image at a 4:5 aspect ratio, and the card itself with no border/shadow", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
 
     const img = await screen.findByRole("img");
-    expect(img).toHaveClass("aspect-video");
+    expect(img).toHaveClass("aspect-[4/5]");
 
     const link = screen.getByRole("link");
     expect(link).not.toHaveClass("border-border", "shadow-card");
   });
 
-  it("renders the category tag with the light-blue chip styling", async () => {
-    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
-
-    renderWithProviders(<PostList />);
-
-    expect(await screen.findByText("租房")).toHaveClass("bg-primary-light", "text-primary");
-  });
-
-  it("styles the '价格未填写' placeholder in muted gray, distinct from a real price", async () => {
+  // 19 号卡：价格为空时，那一整行文字完全不渲染——不是渲染出来但显示
+  // "价格未填写"这几个字，也不是留一行空白占位。
+  it("renders no price row at all (not a '价格未填写' placeholder, not an empty line) when the post has no price", async () => {
     listApprovedPosts.mockResolvedValue({
       posts: [{ ...samplePost, priceAmount: null, priceLabel: null }],
       hasNextPage: false
@@ -135,9 +155,17 @@ describe("PostList", () => {
 
     renderWithProviders(<PostList />);
 
-    const priceText = await screen.findByText("价格未填写");
-    expect(priceText).toHaveClass("text-text-muted");
-    expect(priceText).not.toHaveClass("text-text");
+    await screen.findByText(samplePost.title);
+    expect(screen.queryByText("价格未填写")).not.toBeInTheDocument();
+    expect(screen.queryByText(/USD/)).not.toBeInTheDocument();
+  });
+
+  it("still renders the price row (with the real amount) when the post has a price", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
+
+    renderWithProviders(<PostList />);
+
+    expect(await screen.findByText("USD 1,200")).toBeInTheDocument();
   });
 
   it("renders an <img> with the cover image url when coverImageUrl is present", async () => {
@@ -161,17 +189,6 @@ describe("PostList", () => {
     await screen.findByRole("link");
     expect(screen.getByTestId("post-thumbnail-placeholder")).toBeInTheDocument();
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
-  });
-
-  it("falls back to a placeholder label when a post has no location", async () => {
-    listApprovedPosts.mockResolvedValue({
-      posts: [{ ...samplePost, locationName: null }],
-      hasNextPage: false
-    });
-
-    renderWithProviders(<PostList />);
-
-    expect(await screen.findByRole("link")).toHaveTextContent("地区未填写");
   });
 
   it("passes categoryId through to the query", async () => {
