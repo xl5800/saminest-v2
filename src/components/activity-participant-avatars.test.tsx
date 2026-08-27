@@ -21,6 +21,18 @@ function makeParticipants(count: number): ActivityParticipant[] {
   }));
 }
 
+// showAllParticipants 的测试需要覆盖到 20 人这种远超 8 个不同首字母名字
+// 库存的量级，这里不追求"每个人首字母都不同"（那组测试关心的是溢出徽标
+// 具体折掉了谁），只用同一个首字母的生成名字，靠数量断言（getAllByText 的
+// 长度、li 元素个数）而不是逐个字母断言。
+function makeGenericParticipants(count: number): ActivityParticipant[] {
+  return Array.from({ length: count }, (_, index) => ({
+    userId: `user-${index + 1}`,
+    displayName: `P${index + 1}`,
+    avatarUrl: null
+  }));
+}
+
 // 组件内部只在 interactive（默认 true）时才会给参与者头像包一层
 // react-router 的 <Link>，所以任何默认参数下的渲染都需要一个 Router
 // 上下文——跟 render-with-providers.tsx 是同一个原因，但这个组件不用
@@ -434,6 +446,31 @@ describe("ActivityParticipantAvatars", () => {
       expect(emptySlot?.className).not.toContain("rounded-full");
     });
 
+    // 17 号卡：反馈原话"方块带小圆角，不是接近全圆"（微信群头像那种观感）
+    // ——真实头像格和空位格子都要有一圈小圆角，但不能是 rounded-full（那
+    // 样就跟圆形版本没区别了）。这是共享样式，14 号卡上线的活动卡片头像
+    // 会跟着这次改动一起变圆角，不是只影响详情页。
+    it("gives square avatar tiles and empty slots a small rounded-md corner, not the near-circular rounded-full", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: [],
+        capacity: 2,
+        interactive: false,
+        shape: "square"
+      });
+
+      const organizerAvatar = screen.getByText("A");
+      expect(organizerAvatar).toHaveClass("rounded-md");
+      expect(organizerAvatar.className).not.toContain("rounded-full");
+
+      const emptySlots = document.querySelectorAll("li span[aria-hidden='true']");
+      const emptySlot = Array.from(emptySlots).find((el) => el.querySelector("svg.lucide-plus"));
+      expect(emptySlot).toHaveClass("rounded-md");
+      expect(emptySlot?.className).not.toContain("rounded-full");
+    });
+
     // 任务卡 14.2 明确要求"这批先不做'超过 8 人'的处理……先简单只显示前
     // 8 个（不用报错也不用做特殊提示）"——跟 round 变体规则 3 的"+N"溢出
     // 徽标行为不同，这是两种形状唯一的一处 slot 计算分叉（allowOverflowBadge，
@@ -494,6 +531,194 @@ describe("ActivityParticipantAvatars", () => {
       const caption = screen.getByText(formatActivityParticipantSummary(2, 4));
       expect(caption).toHaveClass("px-5");
       expect(container.querySelector("ul")?.className).not.toContain("px-5");
+    });
+  });
+
+  // 17 号卡（找搭子详情页头像改版）：showAllParticipants 只给详情页用，
+  // 关掉"封顶 8 个/'+N' 溢出徽标"这条行为，改成不封顶展示全部参与者，外加
+  // 头像格上方一行"共 X 人参加"（X = 发起人 + 参与者的真实已加入人数，
+  // 不是 capacity）。这组测试只覆盖 showAllParticipants 新增的行为本身，
+  // 不重复 computeSlots 规则 1/2（capacity 封顶、补空位到 8）——那两条
+  // 规则完全没有改动，round/square 已有的测试已经覆盖过。
+  describe("showAllParticipants (17 号卡：详情页显示全部参与者)", () => {
+    it("with 0 participants (organizer only), shows just the organizer and '共 1 人参加'", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: [],
+        capacity: null,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      expect(screen.getByText("共 1 人参加")).toBeInTheDocument();
+      expect(screen.getByText("A")).toBeInTheDocument();
+      expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+    });
+
+    it("with 1 participant, shows '共 2 人参加' and both real avatars", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(1),
+        capacity: null,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      expect(screen.getByText("共 2 人参加")).toBeInTheDocument();
+      expect(screen.getByText("A")).toBeInTheDocument();
+      expect(screen.getByText("B")).toBeInTheDocument();
+    });
+
+    it("with 4 participants, shows '共 5 人参加' and all 5 real avatars", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(4),
+        capacity: null,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      expect(screen.getByText("共 5 人参加")).toBeInTheDocument();
+      for (const letter of ["A", "B", "C", "D", "E"]) {
+        expect(screen.getByText(letter)).toBeInTheDocument();
+      }
+    });
+
+    it("with 8 participants (joined count exactly 9), shows '共 9 人参加' and every real avatar — no cap, no '+N' badge", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(8),
+        capacity: null,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      expect(screen.getByText("共 9 人参加")).toBeInTheDocument();
+      // Ivy（第 8 个参与者）在卡片的 shape="square" + 不传 showAllParticipants
+      // 场景下会被封顶截掉（见上面 14 号卡那组测试），这里必须显示出来，
+      // 才能证明详情页确实不再封顶。
+      expect(screen.getByText("I")).toBeInTheDocument();
+      expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+    });
+
+    it("with 9 participants (joined count 10, past the old 8-slot cap), shows all 10 real avatars with no truncation", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeGenericParticipants(9),
+        capacity: null,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      expect(screen.getByText("共 10 人参加")).toBeInTheDocument();
+      expect(screen.getByText("A")).toBeInTheDocument();
+      // 9 个参与者昵称都以 "P" 开头，占位文字都是 "P"。
+      expect(screen.getAllByText("P")).toHaveLength(9);
+      expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+    });
+
+    it("with 20 participants (joined count 21), shows all 21 real avatars with no truncation and no upper limit", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeGenericParticipants(20),
+        capacity: null,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      expect(screen.getByText("共 21 人参加")).toBeInTheDocument();
+      expect(screen.getByText("A")).toBeInTheDocument();
+      expect(screen.getAllByText("P")).toHaveLength(20);
+      expect(screen.queryByText(/^\+\d+$/)).not.toBeInTheDocument();
+      // 网格允许换行到多行，不设上限——21 个真实头像 + 0 个空位（已加入
+      // 人数已经远超 8，规则 2 的补空位分支不会触发）。
+      expect(document.querySelectorAll("li").length).toBe(21);
+    });
+
+    it("the '共 X 人参加' count reflects actual joined headcount, not the activity's capacity setting", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(2),
+        capacity: 50,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      // 已加入 3 人（发起人 + 2 参与者），跟 capacity=50 完全无关——注意
+      // 底部原有的 formatActivityParticipantSummary caption 本来就会显示
+      // capacity（"还差 N 人（2/50）"），这里只断言新加的这行标题本身不
+      // 包含 50，不是断言整个文档都不出现这个数字。
+      const heading = screen.getByText("共 3 人参加");
+      expect(heading).toBeInTheDocument();
+      expect(heading.textContent).not.toContain("50");
+    });
+
+    it("preserves the empty-slot click wiring unchanged — only the tile shape changes, not whether empty slots are drawn", () => {
+      const onTapEmptySlot = vi.fn();
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(1),
+        capacity: 4,
+        canTapEmptySlot: true,
+        onTapEmptySlot,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      // capacity=4 走的是规则 1（capacity ≤ 8），跟 showAllParticipants 无
+      // 关（17.4：这张卡不改"要不要画空位"这件事本身）——4 - 发起人1 -
+      // 参与者1 = 2 个空位，点击应该还是触发同一个 onTapEmptySlot。
+      const emptySlotButtons = screen.getAllByRole("button", { name: "报名加入活动" });
+      expect(emptySlotButtons).toHaveLength(2);
+      fireEvent.click(emptySlotButtons[0]);
+      expect(onTapEmptySlot).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not show the '共 X 人参加' heading when showAllParticipants is left at its default (false) — locks in the card's unaffected behavior", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(2),
+        capacity: null,
+        shape: "square"
+      });
+
+      expect(screen.queryByText(/^共 \d+ 人参加$/)).not.toBeInTheDocument();
+    });
+
+    // 17 号卡：详情页整个内容列已经在页面级容器统一加了横向内边距，头像
+    // 格子跟其它段落一样贴着容器边缘对齐；这个底部 caption 不应该再像卡片
+    // 场景那样额外补 px-5，否则会比页面上其它文字多缩进一截。
+    it("does not add the card-only px-5 compensation to the bottom caption when showAllParticipants is true", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(2),
+        capacity: 4,
+        shape: "square",
+        showAllParticipants: true
+      });
+
+      const caption = screen.getByText(formatActivityParticipantSummary(2, 4));
+      expect(caption.className).not.toContain("px-5");
     });
   });
 
