@@ -39,6 +39,17 @@ const sampleActivity = {
   status: "open"
 };
 
+// 18 号卡（找搭子搜索按钮真正生效）测试专用的第二条样本——标题不含
+// "火锅"，用来断言关键字筛选真的把不匹配的活动排除掉了，不是碰巧全部
+// 活动标题都命中。
+const anotherActivity = {
+  ...sampleActivity,
+  id: "act-2",
+  title: "周末拼车去纽约",
+  channel: "carpool",
+  tagText: "拼车"
+};
+
 describe("ActivityListPage", () => {
   afterEach(() => {
     cleanup();
@@ -120,6 +131,191 @@ describe("ActivityListPage", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
       expect(screen.queryByPlaceholderText("搜找搭子活动…")).not.toBeInTheDocument();
+    });
+  });
+
+  // 18 号卡（找搭子搜索按钮真正生效）：按标题客户端筛选，debounce 复用
+  // useDebouncedValue（跟 home-page.test.tsx 测搜索框防抖的方式一致，用
+  // 真实定时器 + waitFor，不用 fake timers）。
+  describe("search input filtering (18 号卡)", () => {
+    it("does not filter immediately after a keystroke — the query only applies once debounced", async () => {
+      listActivities.mockResolvedValue([sampleActivity, anotherActivity]);
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /周末吃火锅/ });
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+        target: { value: "火锅" }
+      });
+
+      // 防抖还没到时间，两张卡应该都还在。
+      expect(screen.getByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
+    });
+
+    it("filters the rendered cards by title substring after the debounce settles, leaving non-matching titles out", async () => {
+      listActivities.mockResolvedValue([sampleActivity, anotherActivity]);
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /周末吃火锅/ });
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+        target: { value: "火锅" }
+      });
+
+      await waitFor(
+        () => {
+          expect(screen.queryByRole("link", { name: /周末拼车去纽约/ })).not.toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
+      expect(screen.getByRole("link", { name: /周末吃火锅/ })).toBeInTheDocument();
+    });
+
+    it("matches case-insensitively on a simple substring (no pinyin/fuzzy matching)", async () => {
+      listActivities.mockResolvedValue([{ ...sampleActivity, title: "Board Game Night" }]);
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /Board Game Night/ });
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+        target: { value: "game" }
+      });
+
+      await waitFor(
+        () => {
+          expect(screen.getByRole("link", { name: /Board Game Night/ })).toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
+    });
+
+    it("shows the generic 'no matching activities' empty state (not the region 发起第一个 prompt) when the keyword matches nothing", async () => {
+      listActivities.mockResolvedValue([sampleActivity]);
+      useSelectedRegionStore.getState().setSelectedRegion({
+        stateCode: "VA",
+        stateName: "Virginia",
+        cityId: null,
+        cityName: null
+      });
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /周末吃火锅/ });
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+        target: { value: "不存在的关键字" }
+      });
+
+      expect(
+        await screen.findByText(
+          "暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。",
+          {},
+          { timeout: 2000 }
+        )
+      ).toBeInTheDocument();
+      expect(screen.queryByText("这个地区还没有搭子活动，发起第一个吧")).not.toBeInTheDocument();
+    });
+
+    it("restores the full (channel-filtered) list once the keyword is cleared from the input", async () => {
+      listActivities.mockResolvedValue([sampleActivity, anotherActivity]);
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /周末吃火锅/ });
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      const input = screen.getByPlaceholderText("搜找搭子活动…");
+      fireEvent.change(input, { target: { value: "火锅" } });
+      await waitFor(
+        () => {
+          expect(screen.queryByRole("link", { name: /周末拼车去纽约/ })).not.toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
+
+      fireEvent.change(input, { target: { value: "" } });
+
+      await waitFor(
+        () => {
+          expect(screen.getByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
+    });
+
+    it("restores the full list when the search box is closed (not just when the text is manually cleared)", async () => {
+      listActivities.mockResolvedValue([sampleActivity, anotherActivity]);
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /周末吃火锅/ });
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+        target: { value: "火锅" }
+      });
+      await waitFor(
+        () => {
+          expect(screen.queryByRole("link", { name: /周末拼车去纽约/ })).not.toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
+
+      // 关闭搜索框（不是手动删空输入框）。
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+
+      await waitFor(
+        () => {
+          expect(screen.getByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
+        },
+        { timeout: 2000 }
+      );
+
+      // 再打开一次搜索框，输入框应该是空的，不是残留上次的关键字。
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      expect(screen.getByPlaceholderText("搜找搭子活动…")).toHaveValue("");
+    });
+
+    // 18.3：关键字筛选是在服务端已经按分类过滤过的 activities 数组基础上
+    // 再叠一层客户端 filter，两者是"且"的关系——切换分类不会清空关键字，
+    // 关键字也不会清空/覆盖分类选择。
+    it("combines the channel filter and the keyword filter as AND, not overriding or clearing each other", async () => {
+      listActivities.mockImplementation(({ channel }: { channel?: string; stateCode?: string }) =>
+        Promise.resolve(
+          [sampleActivity, anotherActivity].filter((activity) => !channel || activity.channel === channel)
+        )
+      );
+
+      renderWithProviders(<ActivityListPage />);
+      await screen.findByRole("link", { name: /周末吃火锅/ });
+      expect(screen.getByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
+
+      // 先输入一个两条活动标题都包含的关键字"周末"。
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+        target: { value: "周末" }
+      });
+      await waitFor(
+        () => {
+          expect(listActivities).toHaveBeenCalled();
+        },
+        { timeout: 2000 }
+      );
+      expect(screen.getByRole("link", { name: /周末吃火锅/ })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
+
+      // 再切换分类到"拼车/一起采购"——关键字应该还在生效（不会被切换分类
+      // 清空），服务端按分类过滤后只剩"周末拼车去纽约"这一条，标题也确实
+      // 包含"周末"，两个条件叠加下应该继续显示。
+      fireEvent.click(screen.getByRole("button", { name: /拼车/ }));
+
+      await waitFor(() => {
+        expect(listActivities).toHaveBeenCalledWith({ channel: "carpool", stateCode: undefined });
+      });
+      expect(screen.getByPlaceholderText("搜找搭子活动…")).toHaveValue("周末");
+      expect(await screen.findByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /周末吃火锅/ })).not.toBeInTheDocument();
     });
   });
 

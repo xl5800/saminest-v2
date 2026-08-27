@@ -10,8 +10,12 @@ import { useActivitiesQuery } from "../../features/activities/use-activities-que
 import { useActivityParticipantPreviewsQuery } from "../../features/activities/use-activity-participant-previews-query";
 import { ACTIVITY_CHANNEL_OPTIONS } from "../../repositories/activities-repository";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
+import { useDebouncedValue } from "../../utils/use-debounced-value";
 
 const REGION_SELECT_PATH = "/region-select";
+// 跟 home-page.tsx 的 SEARCH_DEBOUNCE_MS 用同一个值——18 号卡明确要求"复用
+// 首页同款的 debounce 模式"，这里没有理由取一个不同的延迟数字。
+const SEARCH_DEBOUNCE_MS = 400;
 
 /**
  * "找搭子"活动列表页（/activities，公开，不需要登录，游客也能刷）。
@@ -52,27 +56,63 @@ const REGION_SELECT_PATH = "/region-select";
  *   提到的"顶部栏右侧 ▽ 图标"在当前代码里已经不存在，没有需要迁移或保留
  *   的功能，这次改版前后对得上号的只是"右侧一个图标按钮"这个视觉位置，
  *   不是同一个图标/同一份逻辑。
- * - 搜索图标目前还没有对应的后端搜索能力（activities-repository.ts /
- *   useActivitiesQuery 都没有 searchQuery 参数，这次任务卡也没有要求新增
- *   一套搜索筛选逻辑——明确写的是"纯前端视觉改动"）。onSearchClick 这次
- *   只做"跟首页搜索图标同一套显隐开关"（isSearchOpen 本地 state + 一个
- *   输入框），不接任何过滤逻辑——不给一个完全不响应点击的图标按钮，但也
- *   不擅自多做一套本卡没要求的搜索筛选功能；这部分输入框以后要不要真的
- *   接一套找搭子搜索，交给专门的任务卡决定。
+ * - 搜索图标 14 号卡上线时只是纯开关（isSearchOpen + 一个不接筛选逻辑的
+ *   输入框），18 号卡在此基础上把筛选真正接上，见下面 18 号卡的说明段落。
+ *
+ * 18 号卡（找搭子搜索按钮真正生效）：
+ * - 按标题客户端筛选——活动数据本来就是 useActivitiesQuery 一次性整批拉
+ *   下来的（不分页），不需要新增 searchQuery 参数传给后端/数据库，直接在
+ *   已经查回来的 activities 数组上再 filter 一层标题子串匹配即可。防抖
+ *   （inputValue → debouncedSearchQuery）复用 useDebouncedValue，跟
+ *   home-page.tsx 的搜索框是同一个 hook、同一个 SEARCH_DEBOUNCE_MS 数值，
+ *   没有另外写一套防抖逻辑。
+ * - 跟分类 Tab（channel）的关系：读代码确认 channel 筛选是通过
+ *   useActivitiesQuery 的参数传给后端做服务端过滤的（真正的 SQL
+ *   where 条件），不是客户端过滤；这次新加的关键字筛选在服务端返回的
+ *   activities 数组基础上再叠一层客户端 filter，天然就是"分类 AND
+ *   关键字"——不需要、也不应该把 channel 和 debouncedSearchQuery 揉进
+ *   同一个 state 或者互相清空对方，两者各自管各自的过滤维度，只是
+ *   filter 链的先后两级。isRegionEmptyState（"这个地区还没有搭子活动"
+ *   引导文案）判断依旧只看服务端过滤后的原始 activities.length，不受
+ *   关键字影响——关键字把结果筛没了属于"没有符合条件的活动，换个筛选
+ *   条件试试"，不是"这个地区真的没有活动"，两种空态文案不能混。
+ * - 收起搜索框（点击搜索图标关闭）时清空 inputValue，恢复完整列表——跟
+ *   home-page.tsx 的 handleToggleSearch 同一个做法，不用等用户自己删完
+ *   输入框内容。
  */
 export function ActivityListPage() {
   const navigate = useNavigate();
   const [channel, setChannel] = useState<string>("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const debouncedSearchQuery = useDebouncedValue(inputValue, SEARCH_DEBOUNCE_MS);
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
   const { data: activities, isPending, isError } = useActivitiesQuery({
     channel: channel || undefined,
     stateCode: selectedRegion?.stateCode
   });
+  // 关键字筛选是纯客户端的一层再过滤，键还是用未过滤的 activities（不是
+  // visibleActivities）——预览数据跟标题关键字无关，用完整列表查一次就
+  // 够了，不需要每敲一个字就重新算一遍批量查询的参数。
   const { data: participantPreviews } = useActivityParticipantPreviewsQuery(
     (activities ?? []).map((activity) => activity.id)
   );
+
+  const trimmedQuery = debouncedSearchQuery.trim().toLowerCase();
+  const visibleActivities = trimmedQuery
+    ? (activities ?? []).filter((activity) => activity.title.toLowerCase().includes(trimmedQuery))
+    : activities;
+
+  function handleToggleSearch(): void {
+    setIsSearchOpen((current) => {
+      const next = !current;
+      if (!next) {
+        setInputValue("");
+      }
+      return next;
+    });
+  }
 
   const inactivePillClassName =
     "flex h-11 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
@@ -86,7 +126,9 @@ export function ActivityListPage() {
   // 地区还没有搭子活动"这句话必须在"没有任何频道过滤"的前提下才是准确的：
   // 如果用户同时选了某个频道，零结果更可能是"这个地区有活动、只是不是这个
   // 频道"，那种情况用回下面的通用文案更贴切，不应该误导用户以为整个地区
-  // 都没有内容。
+  // 都没有内容。18 号卡：这里故意继续只看服务端过滤后的原始 activities
+  // （不是 visibleActivities），关键字筛没了结果不代表"这个地区没有活动"，
+  // 那种情况应该走下面的通用空态文案，不能触发这条"发起第一个"引导。
   const isRegionEmptyState =
     !isPending && !isError && activities && activities.length === 0 && channel === "" && selectedRegion;
 
@@ -96,7 +138,7 @@ export function ActivityListPage() {
         variant="home"
         regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
-        onSearchClick={() => setIsSearchOpen((current) => !current)}
+        onSearchClick={handleToggleSearch}
       />
 
       {isSearchOpen ? (
@@ -105,6 +147,8 @@ export function ActivityListPage() {
             type="search"
             autoFocus
             placeholder="搜找搭子活动…"
+            value={inputValue}
+            onChange={(event) => setInputValue(event.target.value)}
             className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
           />
         </div>
@@ -152,13 +196,13 @@ export function ActivityListPage() {
           </div>
         ) : null}
 
-        {!isPending && !isError && activities && activities.length === 0 && !isRegionEmptyState ? (
+        {!isPending && !isError && visibleActivities && visibleActivities.length === 0 && !isRegionEmptyState ? (
           <p role="status">暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。</p>
         ) : null}
 
-        {!isPending && !isError && activities && activities.length > 0 ? (
+        {!isPending && !isError && visibleActivities && visibleActivities.length > 0 ? (
           <div className="flex flex-col gap-3">
-            {activities.map((activity) => (
+            {visibleActivities.map((activity) => (
               <ActivityCard
                 key={activity.id}
                 activity={activity}
