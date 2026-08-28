@@ -38,6 +38,9 @@ function renderShell(path = "/") {
             <Route path="profile" element={<p>profile page</p>} />
             <Route path="messages" element={<p>messages page</p>} />
             <Route path="region-select" element={<p>region-select page</p>} />
+            <Route path="my-activities" element={<p>my-activities page</p>} />
+            <Route path="favorites" element={<p>favorites page</p>} />
+            <Route path="post/:id" element={<p>post-detail page</p>} />
           </Route>
         </Routes>
       </MemoryRouter>
@@ -119,6 +122,24 @@ describe("AppShell", () => {
       ["/profile", "profile page"],
       ["/messages", "messages page"],
       ["/region-select", "region-select page"]
+    ])(
+      "renders BottomNav but NOT AppHeader on the migrated \"%s\" page",
+      (path) => {
+        renderShell(path);
+
+        expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+        expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+      }
+    );
+
+    // 21 号卡（二级页面顶部栏简化）：我的活动/我的收藏/帖子详情页三个页面
+    // 换成了自己的 TopBar nav-only 变体，同样只关 AppHeader、留着
+    // BottomNav——帖子详情页用 "/post/123" 而不是裸的 "/post/:id" 验证
+    // matchPath 对动态路径参数也生效，不是只匹配了静态路径这一种情况。
+    it.each([
+      ["/my-activities", "my-activities page"],
+      ["/favorites", "favorites page"],
+      ["/post/123", "post-detail page"]
     ])(
       "renders BottomNav but NOT AppHeader on the migrated \"%s\" page",
       (path) => {

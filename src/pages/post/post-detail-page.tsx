@@ -6,6 +6,7 @@ import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
+import { TopBar } from "../../components/top-bar";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
@@ -51,6 +52,12 @@ interface PostDetailLocationState {
  * window.location.origin 拼。这一批只做"分享到微信/更多应用"这一个
  * 入口，站内分享给好友（比如分享进站内私信）不在这次范围内，等这个上线
  * 后再单独出任务卡。
+ *
+ * 21 号卡（二级页面顶部栏简化）：顶部栏从全局 AppHeader（品牌名+发布
+ * 按钮）换成 TopBar 的 nav-only 变体、不传 title——这个页面本来就没有
+ * 额外的"页面名称"标题（页面标题就是下面的帖子标题本身），顶部栏只留一个
+ * 返回箭头即可，不需要在 nav-only 上再补一份标题文字。对应地这个路径也
+ * 挪进了 app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS。
  */
 export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -110,7 +117,9 @@ export function PostDetailPage() {
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+    <main>
+      <TopBar variant="nav-only" />
+      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
       <WechatBrowserBanner />
 
       {publishSuccessMessage ? (
@@ -230,6 +239,7 @@ export function PostDetailPage() {
           onClose={() => setLightboxIndex(null)}
         />
       ) : null}
+      </div>
     </main>
   );
 }

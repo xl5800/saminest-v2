@@ -143,6 +143,25 @@ describe("PostDetailPage", () => {
     expect(screen.getAllByRole("status")[0]).toHaveTextContent("加载中…");
   });
 
+  // 21 号卡（二级页面顶部栏简化）：顶部栏换成 TopBar 的 nav-only 变体，
+  // 不再是全局 AppHeader 的"← Saminest 发布"——跟
+  // region-select-page.test.tsx "renders the nav-only TopBar..." 是同一个
+  // 断言模式。这个页面本来就没有额外的"页面名称"标题（标题就是帖子标题
+  // 本身），所以这里不需要像"我的活动"/"我的收藏"那样再断言一个页面内
+  // <h1>。
+  it("renders the nav-only TopBar (back arrow only, no title/brand/publish text), even while the post detail query is pending", () => {
+    usePostDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+  });
+
   it("shows a friendly not-found message, without leaking whether the post exists but is unapproved, when the query resolves to null", () => {
     usePostDetailQuery.mockReturnValue({ data: null, isPending: false, isError: false });
 

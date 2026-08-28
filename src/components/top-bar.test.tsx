@@ -348,5 +348,18 @@ describe("TopBar", () => {
       fireEvent.click(screen.getByRole("button", { name: "返回" }));
       expect(navigateMock).toHaveBeenCalledWith(-1);
     });
+
+    // 21 号卡（二级页面顶部栏简化）：title 变成可选——不传时只剩返回箭头，
+    // 不渲染任何标题 <h1>，"我的活动"/"我的收藏"/帖子详情页这类已经有自己
+    // 页面内大标题的二级页面用这个用法，不需要在顶部栏重复一份标题。
+    it("renders no heading at all when title is omitted, just the back button", () => {
+      renderWithProviders(<TopBar variant="nav-only" />);
+
+      expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+      expect(screen.getAllByRole("button")).toHaveLength(1);
+
+      fireEvent.click(screen.getByRole("button", { name: "返回" }));
+      expect(navigateMock).toHaveBeenCalledWith(-1);
+    });
   });
 });

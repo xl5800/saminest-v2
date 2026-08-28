@@ -184,7 +184,12 @@ interface TopBarCreateProps {
 
 interface TopBarNavOnlyProps {
   variant: "nav-only";
-  title: string;
+  /** 不传就是纯返回箭头，不展示任何标题文字——21 号卡（二级页面顶部栏
+   *  简化）新增的用法："我的活动"/"我的收藏"/帖子详情页这类二级页面本来
+   *  就有自己的页面内大标题（或者像帖子详情页那样标题就是内容本身），
+   *  顶部栏不需要再重复一遍标题，只留一个返回箭头。地区选择页这种确实
+   *  需要顶部栏标题的场景继续传 title 就行，不用改调用点代码。 */
+  title?: string;
   onBack?: () => void;
 }
 
@@ -311,7 +316,13 @@ export function TopBar(props: TopBarProps) {
   return (
     <header className="flex h-14 items-center justify-between px-4">
       <BackButton onBack={props.onBack} />
-      <h1 className="flex-1 truncate text-center text-base font-bold text-text">{props.title}</h1>
+      {props.title ? (
+        <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+          {props.title}
+        </h1>
+      ) : (
+        <span className="flex-1" />
+      )}
       <EmptySlot />
     </header>
   );

@@ -68,6 +68,20 @@ const NO_CHROME_PATTERNS = [
  * 还在"的常规场景，不是沉浸式（地区选择虽然是从首页州名点进来的二级
  * 导航页，但设计稿⑪屏本身也带着底部 Tab 栏，不属于 NO_CHROME_PATTERNS
  * 那种完全沉浸式）。
+ *
+ * 21 号卡（二级页面顶部栏简化）新加三条：我的活动（/my-activities）、
+ * 我的收藏（/favorites）、帖子详情页（/post/:id）——这三个页面之前一直
+ * 沿用改版前的全局 AppHeader（品牌名+发布按钮那一版），这次改成各自渲染
+ * 自己的 TopBar nav-only 变体（纯返回箭头，不显示标题/品牌/发布按钮），
+ * 因此也要挪进这个名单，跟其它已迁移页面一样只关掉 AppHeader、保留
+ * BottomNav——三个页面本来就有底部 Tab 栏，不是沉浸式表单页。
+ *
+ * 举报页（activities/:id/report、post/:id/report、users/:userId/report）、
+ * 编辑个人资料页（/profile/edit）、设置页（/settings、
+ * /settings/delete-account）、已屏蔽用户列表（/blocked-users）、我的帖子
+ * （/my-posts）、意见反馈（/feedback）、后台管理页（/admin/*）目前也还是
+ * 同样的全局 AppHeader（品牌名+发布按钮），21 号卡任务卡明确只要求这三个
+ * 页面，没有要求这几个一起改，这次没有顺带挪它们——见 21 号卡完工报告。
  */
 const TOPBAR_MIGRATED_PATTERNS = [
   "/",
@@ -77,7 +91,10 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/categories",
   "/profile",
   "/messages",
-  "/region-select"
+  "/region-select",
+  "/my-activities",
+  "/favorites",
+  "/post/:id"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {
