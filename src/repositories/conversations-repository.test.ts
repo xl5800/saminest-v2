@@ -378,13 +378,13 @@ describe("listMyConversations", () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
   });
 
-  it("queries conversations with a nested posts(title) select (including last_message_preview), ordered by created_at desc, and skips the member/profile queries when there are no conversations", async () => {
+  it("queries conversations with a nested posts(title) select (including last_message_preview/last_message_sender_id), ordered by created_at desc, and skips the member/profile queries when there are no conversations", async () => {
     await listMyConversations("user-1");
 
     expect(fromMock).toHaveBeenCalledTimes(1);
     expect(fromMock).toHaveBeenCalledWith("conversations");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, origin_type, last_message_at, last_message_preview, created_at, posts(title)"
+      "id, post_id, origin_type, last_message_at, last_message_preview, last_message_sender_id, created_at, posts(title)"
     );
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
@@ -399,6 +399,10 @@ describe("listMyConversations", () => {
             origin_type: "post",
             last_message_at: "2026-07-10T00:00:00.000Z",
             last_message_preview: "在的，什么事？",
+            // 最后一条消息是对方（user-2）发的，不是当前用户自己——见 20 号
+            // 卡的 isUnread computation 那组测试，这里只是确认这个字段本身
+            // 有被正确从数据库行读取/传下去。
+            last_message_sender_id: "user-2",
             created_at: "2026-07-01T00:00:00.000Z",
             posts: { title: "Sunny room" }
           }
@@ -676,6 +680,9 @@ describe("listMyConversations", () => {
             origin_type: "system",
             last_message_at: "2026-08-18T00:00:00.000Z",
             last_message_preview: "你的帖子审核通过，现在可以在首页看到啦。",
+            // 系统通知消息没有真实发送者，见 20260818162648 迁移——这里是
+            // null，"是不是自己发的"这条判断天然不成立，不会抑制未读红点。
+            last_message_sender_id: null,
             created_at: "2026-08-18T00:00:00.000Z",
             posts: null
           }
@@ -713,6 +720,9 @@ describe("listMyConversations", () => {
     // 每个用例都只放一条 conversation_members 行（当前用户自己），不涉及
     // "对方是谁"这条支线逻辑，专门验证 computeIsUnread 通过
     // fetchConversationMemberInfo 接到 listMyConversations 之后的行为。
+    // 除非用例本身在测"是不是自己发的"这条分支，否则一律把
+    // last_message_sender_id 设成对方（user-2），排除"没传这个字段时也
+    // 恰好和 currentUserId 不相等"这种巧合掩盖了断言的可能。
 
     it("is false when the conversation has never had a message (last_message_at is null), regardless of last_read_at", async () => {
       overrideTypesMock
@@ -724,6 +734,7 @@ describe("listMyConversations", () => {
               origin_type: "post",
               last_message_at: null,
               last_message_preview: null,
+              last_message_sender_id: null,
               created_at: "2026-07-01T00:00:00.000Z",
               posts: null
             }
@@ -756,6 +767,7 @@ describe("listMyConversations", () => {
               origin_type: "post",
               last_message_at: "2026-07-10T00:00:00.000Z",
               last_message_preview: "hi",
+              last_message_sender_id: "user-2",
               created_at: "2026-07-01T00:00:00.000Z",
               posts: null
             }
@@ -782,6 +794,7 @@ describe("listMyConversations", () => {
               origin_type: "post",
               last_message_at: "2026-07-10T00:00:00.000Z",
               last_message_preview: "hi",
+              last_message_sender_id: "user-2",
               created_at: "2026-07-01T00:00:00.000Z",
               posts: null
             }
@@ -814,6 +827,7 @@ describe("listMyConversations", () => {
               origin_type: "post",
               last_message_at: null,
               last_message_preview: null,
+              last_message_sender_id: null,
               created_at: "2026-07-01T00:00:00.000Z",
               posts: null
             }
@@ -825,6 +839,107 @@ describe("listMyConversations", () => {
       const result = await listMyConversations("user-1");
 
       expect(result[0].isUnread).toBe(false);
+    });
+
+    // 20 号卡：修复"自己发的消息点亮自己的未读红点"这个 bug 的核心用例。
+    describe("20 号卡：不该是自己发的消息点亮自己的红点", () => {
+      it("is false when the current user sent the last message themself, even though they have never explicitly marked this (brand-new) conversation as read", async () => {
+        overrideTypesMock
+          .mockResolvedValueOnce({
+            data: [
+              {
+                id: "conv-1",
+                post_id: null,
+                origin_type: "post",
+                last_message_at: "2026-07-10T00:00:00.000Z",
+                last_message_preview: "你好，请问还在吗？",
+                last_message_sender_id: "user-1",
+                created_at: "2026-07-10T00:00:00.000Z",
+                posts: null
+              }
+            ],
+            error: null
+          })
+          // 全新会话，用户自己还从来没有被 markConversationAsRead 标记过
+          // （last_read_at 为 null）——改版前这种情况会先落进"没读过就算
+          // 未读"分支，错误地判成未读；"是不是自己发的"这条判断必须排在
+          // 它前面。
+          .mockResolvedValueOnce({
+            data: [{ conversation_id: "conv-1", user_id: "user-1", last_read_at: null }],
+            error: null
+          });
+
+        const result = await listMyConversations("user-1");
+
+        expect(result[0].isUnread).toBe(false);
+      });
+
+      it("is false when the current user sent the last message themself, even though last_message_at is newer than their own last_read_at (the exact regression scenario: opened the conversation, then sent a message)", async () => {
+        overrideTypesMock
+          .mockResolvedValueOnce({
+            data: [
+              {
+                id: "conv-1",
+                post_id: null,
+                origin_type: "post",
+                last_message_at: "2026-07-10T00:05:00.000Z",
+                last_message_preview: "在的，什么事？",
+                last_message_sender_id: "user-1",
+                created_at: "2026-07-01T00:00:00.000Z",
+                posts: null
+              }
+            ],
+            error: null
+          })
+          // last_read_at 是打开会话页那一刻写的（早于发出这条消息的时间）。
+          .mockResolvedValueOnce({
+            data: [
+              {
+                conversation_id: "conv-1",
+                user_id: "user-1",
+                last_read_at: "2026-07-10T00:00:00.000Z"
+              }
+            ],
+            error: null
+          });
+
+        const result = await listMyConversations("user-1");
+
+        expect(result[0].isUnread).toBe(false);
+      });
+
+      it("is true when the other party replies after the current user's own last message (their reply becomes the new last message, sent by someone else)", async () => {
+        overrideTypesMock
+          .mockResolvedValueOnce({
+            data: [
+              {
+                id: "conv-1",
+                post_id: null,
+                origin_type: "post",
+                last_message_at: "2026-07-10T00:10:00.000Z",
+                last_message_preview: "在的，什么事？",
+                last_message_sender_id: "user-2",
+                created_at: "2026-07-01T00:00:00.000Z",
+                posts: null
+              }
+            ],
+            error: null
+          })
+          .mockResolvedValueOnce({
+            data: [
+              {
+                conversation_id: "conv-1",
+                user_id: "user-1",
+                last_read_at: "2026-07-10T00:00:00.000Z"
+              }
+            ],
+            error: null
+          });
+
+        const result = await listMyConversations("user-1");
+
+        expect(result[0].isUnread).toBe(true);
+      });
     });
   });
 });
@@ -935,6 +1050,25 @@ describe("hasUnreadSystemNotification", () => {
       data: { last_read_at: "2026-08-18T12:00:00.000Z" },
       error: null
     });
+
+    await expect(hasUnreadSystemNotification("user-1")).resolves.toBe(false);
+  });
+
+  // 20 号卡：跟 listMyConversations 共用同一个 computeIsUnread()，这里
+  // 补一条对称的用例——理论上系统通知的输入框已经在 UI 层隐藏（见
+  // conversation-page.tsx），不会真的发生，但函数本身的判断逻辑应该对
+  // 这种情况也正确。
+  it("returns false when the last system-notification message's sender happens to be the current user themself", async () => {
+    maybeSingleMock.mockReturnValueOnce(queryBuilder);
+    overrideTypesMock.mockResolvedValueOnce({
+      data: {
+        id: "conv-system-1",
+        last_message_at: "2026-08-18T00:00:00.000Z",
+        last_message_sender_id: "user-1"
+      },
+      error: null
+    });
+    maybeSingleMock.mockResolvedValueOnce({ data: { last_read_at: null }, error: null });
 
     await expect(hasUnreadSystemNotification("user-1")).resolves.toBe(false);
   });
