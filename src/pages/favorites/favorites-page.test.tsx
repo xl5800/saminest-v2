@@ -63,6 +63,24 @@ describe("FavoritesPage", () => {
     expect(await screen.findByText("暂无收藏。")).toBeInTheDocument();
   });
 
+  // 21 号卡（二级页面顶部栏简化）：顶部栏换成 TopBar 的 nav-only 变体，
+  // 不再是全局 AppHeader 的"← Saminest 发布"——跟 region-select-page.test.tsx
+  // "renders the nav-only TopBar..." 是同一个断言模式。页面下面本来就有
+  // "我的收藏"这行 <h1> 大标题，顶部栏不需要再重复一份标题文字。
+  it("renders the nav-only TopBar (back arrow only, no title/brand/publish text)", async () => {
+    listFavoritedPosts.mockResolvedValue([]);
+
+    renderWithProviders(<FavoritesPage />);
+
+    await screen.findByText("暂无收藏。");
+
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+    // "我的收藏"页面内大标题还在，不受顶部栏简化影响。
+    expect(screen.getByRole("heading", { name: "我的收藏" })).toBeInTheDocument();
+  });
+
   it("renders the favorited posts with title/price/location", async () => {
     listFavoritedPosts.mockResolvedValue([
       {

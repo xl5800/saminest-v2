@@ -136,6 +136,19 @@ describe("MyActivitiesPage", () => {
     );
   });
 
+  // 21 号卡（二级页面顶部栏简化）：顶部栏换成 TopBar 的 nav-only 变体，
+  // 不再是全局 AppHeader 的"← Saminest 发布"——跟
+  // region-select-page.test.tsx "renders the nav-only TopBar..." 是同一个
+  // 断言模式。页面下面本来就有"我的活动"这行 <h1> 大标题，不受影响。
+  it("renders the nav-only TopBar (back arrow only, no title/brand/publish text)", () => {
+    renderWithProviders(<MyActivitiesPage />);
+
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "我的活动" })).toBeInTheDocument();
+  });
+
   it("shows a loading state before the organized-activities query resolves", () => {
     listMyOrganizedActivities.mockReturnValue(new Promise(() => {}));
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useCancelActivityMutation } from "../../features/activities/use-cancel-activity-mutation";
 import { useModerateActivityParticipantMutation } from "../../features/activities/use-moderate-activity-participant-mutation";
@@ -215,6 +216,12 @@ function PendingApplicantsPanel({
  *    同意"的提示——数据源是 listMyJoinedActivities 返回的
  *    participationStatus 字段（rejected 的申请已经在 repository 层被
  *    过滤掉，不会出现在这个 tab，见该函数注释）。
+ *
+ * 21 号卡（二级页面顶部栏简化）：顶部栏从全局 AppHeader（品牌名+发布
+ * 按钮）换成 TopBar 的 nav-only 变体、不传 title——这个页面下面本来就有
+ * "我的活动"这行 <h1> 大标题当页面名称用，顶部栏没必要重复展示一遍标题，
+ * 只留一个返回箭头。对应地，这个路径也要挪进 app-shell.tsx 的
+ * TOPBAR_MIGRATED_PATTERNS，才能关掉全局 AppHeader（BottomNav 继续保留）。
  */
 export function MyActivitiesPage() {
   const session = useAuthStore((s) => s.session);
@@ -403,142 +410,145 @@ export function MyActivitiesPage() {
   const visibleCount = isOrganizedTab ? visibleOrganizedActivities.length : visibleJoinedActivities.length;
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-4 text-xl font-bold text-text">我的活动</h1>
-      {tabNav}
+    <main>
+      <TopBar variant="nav-only" />
+      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+        <h1 className="mb-4 text-xl font-bold text-text">我的活动</h1>
+        {tabNav}
 
-      {activeQuery.isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+        {activeQuery.isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
 
-      {activeQuery.isError ? (
-        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          活动加载失败，请稍后重试。
-        </p>
-      ) : null}
-
-      {!activeQuery.isPending && !activeQuery.isError && visibleCount === 0 ? (
-        isOrganizedTab ? (
-          <p role="status" className="text-sm text-text-muted">
-            还没有发起过活动，
-            <Link to="/activities/new" className="text-primary hover:underline">
-              去发起一个
-            </Link>
-            。
+        {activeQuery.isError ? (
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            活动加载失败，请稍后重试。
           </p>
-        ) : (
-          <p role="status" className="text-sm text-text-muted">
-            还没有报名过活动，
-            <Link to="/activities" className="text-primary hover:underline">
-              去看看有什么活动
-            </Link>
-            。
-          </p>
-        )
-      ) : null}
+        ) : null}
 
-      {!activeQuery.isPending && !activeQuery.isError && isOrganizedTab && visibleOrganizedActivities.length > 0 ? (
-        <ul className="flex flex-col gap-3">
-          {visibleOrganizedActivities.map((activity) => {
-            const isActioning = actioningId === activity.id;
-            const applicantsForThisActivity = (pendingParticipants ?? []).filter(
-              (applicant) => applicant.activityId === activity.id
-            );
-            return (
-              <ActivityCard
-                key={activity.id}
-                activity={activity}
-                error={rowErrors[activity.id]}
-                action={
-                  CANCELLABLE_STATUSES.has(activity.status) ? (
+        {!activeQuery.isPending && !activeQuery.isError && visibleCount === 0 ? (
+          isOrganizedTab ? (
+            <p role="status" className="text-sm text-text-muted">
+              还没有发起过活动，
+              <Link to="/activities/new" className="text-primary hover:underline">
+                去发起一个
+              </Link>
+              。
+            </p>
+          ) : (
+            <p role="status" className="text-sm text-text-muted">
+              还没有报名过活动，
+              <Link to="/activities" className="text-primary hover:underline">
+                去看看有什么活动
+              </Link>
+              。
+            </p>
+          )
+        ) : null}
+
+        {!activeQuery.isPending && !activeQuery.isError && isOrganizedTab && visibleOrganizedActivities.length > 0 ? (
+          <ul className="flex flex-col gap-3">
+            {visibleOrganizedActivities.map((activity) => {
+              const isActioning = actioningId === activity.id;
+              const applicantsForThisActivity = (pendingParticipants ?? []).filter(
+                (applicant) => applicant.activityId === activity.id
+              );
+              return (
+                <ActivityCard
+                  key={activity.id}
+                  activity={activity}
+                  error={rowErrors[activity.id]}
+                  action={
+                    CANCELLABLE_STATUSES.has(activity.status) ? (
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => setConfirmCancelId(activity.id)}
+                        className="rounded-xl border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        取消活动
+                      </button>
+                    ) : null
+                  }
+                  extra={
+                    activity.requiresApproval ? (
+                      <PendingApplicantsPanel
+                        applicants={applicantsForThisActivity}
+                        actioningParticipantId={actioningParticipantId}
+                        participantErrors={participantErrors}
+                        onApprove={(applicant) => void handleModerate(applicant, "approve")}
+                        onReject={(applicant) => void handleModerate(applicant, "reject")}
+                      />
+                    ) : null
+                  }
+                />
+              );
+            })}
+          </ul>
+        ) : null}
+
+        {!activeQuery.isPending && !activeQuery.isError && !isOrganizedTab && visibleJoinedActivities.length > 0 ? (
+          <ul className="flex flex-col gap-3">
+            {visibleJoinedActivities.map((activity) => {
+              const isActioning = actioningId === activity.id;
+              return (
+                <ActivityCard
+                  key={activity.id}
+                  activity={activity}
+                  error={rowErrors[activity.id]}
+                  note={
+                    activity.participationStatus === "pending" ? "申请中，等待发起人同意" : undefined
+                  }
+                  action={
                     <button
                       type="button"
                       disabled={isActioning}
-                      onClick={() => setConfirmCancelId(activity.id)}
-                      className="rounded-xl border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => void handleLeave(activity)}
+                      className="rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      取消活动
+                      {isActioning ? "处理中…" : "退出"}
                     </button>
-                  ) : null
-                }
-                extra={
-                  activity.requiresApproval ? (
-                    <PendingApplicantsPanel
-                      applicants={applicantsForThisActivity}
-                      actioningParticipantId={actioningParticipantId}
-                      participantErrors={participantErrors}
-                      onApprove={(applicant) => void handleModerate(applicant, "approve")}
-                      onReject={(applicant) => void handleModerate(applicant, "reject")}
-                    />
-                  ) : null
-                }
-              />
-            );
-          })}
-        </ul>
-      ) : null}
+                  }
+                />
+              );
+            })}
+          </ul>
+        ) : null}
 
-      {!activeQuery.isPending && !activeQuery.isError && !isOrganizedTab && visibleJoinedActivities.length > 0 ? (
-        <ul className="flex flex-col gap-3">
-          {visibleJoinedActivities.map((activity) => {
-            const isActioning = actioningId === activity.id;
-            return (
-              <ActivityCard
-                key={activity.id}
-                activity={activity}
-                error={rowErrors[activity.id]}
-                note={
-                  activity.participationStatus === "pending" ? "申请中，等待发起人同意" : undefined
-                }
-                action={
-                  <button
-                    type="button"
-                    disabled={isActioning}
-                    onClick={() => void handleLeave(activity)}
-                    className="rounded-xl border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isActioning ? "处理中…" : "退出"}
-                  </button>
-                }
-              />
-            );
-          })}
-        </ul>
-      ) : null}
-
-      {confirmCancelId ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="确认取消"
-          className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-4"
-        >
-          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-card">
-            <p className="mb-4 text-base text-text">确定要取消这场活动吗？取消后无法恢复。</p>
-            {rowErrors[confirmCancelId] ? (
-              <p role="alert" className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                {rowErrors[confirmCancelId]}
-              </p>
-            ) : null}
-            <div className="flex gap-2">
-              <button
-                type="button"
-                disabled={actioningId === confirmCancelId}
-                onClick={() => setConfirmCancelId(null)}
-                className="flex-1 rounded-xl border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                disabled={actioningId === confirmCancelId}
-                onClick={() => handleConfirmCancel(confirmCancelId)}
-                className="flex-1 rounded-xl border border-danger bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                确认取消
-              </button>
+        {confirmCancelId ? (
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="确认取消"
+            className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-4"
+          >
+            <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-card">
+              <p className="mb-4 text-base text-text">确定要取消这场活动吗？取消后无法恢复。</p>
+              {rowErrors[confirmCancelId] ? (
+                <p role="alert" className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                  {rowErrors[confirmCancelId]}
+                </p>
+              ) : null}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={actioningId === confirmCancelId}
+                  onClick={() => setConfirmCancelId(null)}
+                  className="flex-1 rounded-xl border border-border px-3 py-2 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  disabled={actioningId === confirmCancelId}
+                  onClick={() => handleConfirmCancel(confirmCancelId)}
+                  className="flex-1 rounded-xl border border-danger bg-danger px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  确认取消
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </main>
   );
 }
