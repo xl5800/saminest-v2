@@ -33,50 +33,54 @@ describe("ProfileSummary", () => {
     expect(screen.getByText("?")).toBeInTheDocument();
   });
 
-  // 22 号卡（用户主页改版）：清理掉不再有调用方的 "default" 变体之后，这个
-  // 组件只剩"我的"页用的横排卡片这一种形态——那个页面的 <h1> 已经是 TopBar
-  // tab 变体渲染的标题"我的"，这里不应该再渲染出第二个 <h1>。
-  it("does not render an <h1> — the caller's TopBar already owns the page's single <h1>", () => {
+  // 22 号卡（用户主页改版）清理掉不再有调用方的 "default" 变体、24 号卡
+  // 又去掉了 bio/tertiaryText 之后，这个组件只剩"我的"页用的这一种横排
+  // 卡片形态——那个页面的 <h1> 已经是 sr-only 的"我的"，这里不应该再渲染
+  // 出第二个 <h1>。
+  it("does not render an <h1> — the caller's page already owns the single <h1>", () => {
     render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  it("shows nickname/bio/tertiaryText, matching the old profile-redesign card's 3-line spec", () => {
-    render(
-      <ProfileSummary
-        displayName="Alice"
-        avatarUrl={null}
-        bio="喜欢 hiking"
-        tertiaryText="alice@example.com"
-      />
-    );
+  describe("editHref (24 号卡：右上角编辑资料铅笔图标)", () => {
+    it("does not render an edit icon-button when editHref is not provided", () => {
+      render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
-    expect(screen.getByText("Alice")).toBeInTheDocument();
-    expect(screen.getByText("喜欢 hiking")).toBeInTheDocument();
-    expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "编辑资料" })).not.toBeInTheDocument();
+    });
+
+    it("renders a small circular '编辑资料' icon-button link when editHref is provided", () => {
+      render(
+        <MemoryRouter>
+          <ProfileSummary displayName="Alice" avatarUrl={null} editHref="/profile/edit" />
+        </MemoryRouter>
+      );
+
+      expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
+        "href",
+        "/profile/edit"
+      );
+    });
   });
 
-  it("shows the bio only when it is non-empty, without a '暂无简介' placeholder", () => {
-    const { rerender } = render(
-      <ProfileSummary displayName="Bob" avatarUrl={null} bio="Hi there, I like hiking." />
-    );
-    expect(screen.getByText("Hi there, I like hiking.")).toBeInTheDocument();
+  describe("children (24 号卡：入口紧跟在头像/昵称行下面，不加分割线)", () => {
+    it("renders children directly below the avatar/name/edit-icon row, with no border/divider element between them", () => {
+      const { container } = render(
+        <ProfileSummary displayName="Alice" avatarUrl={null}>
+          <div data-testid="stats-row">我的发布 我的收藏</div>
+        </ProfileSummary>
+      );
 
-    rerender(<ProfileSummary displayName="Bob" avatarUrl={null} bio={null} />);
-    expect(screen.queryByText("Hi there, I like hiking.")).not.toBeInTheDocument();
-    expect(screen.queryByText(/暂无简介/)).not.toBeInTheDocument();
-  });
-
-  it("renders children below the avatar/name/bio block, regardless of what the caller passes", () => {
-    render(
-      <ProfileSummary displayName="Bob" avatarUrl={null}>
-        <button type="button">发消息</button>
-      </ProfileSummary>
-    );
-
-    expect(screen.getByRole("button", { name: "发消息" })).toBeInTheDocument();
+      const statsRow = screen.getByTestId("stats-row");
+      expect(statsRow).toBeInTheDocument();
+      // 卡片最外层容器（statsRow 的爷爷节点）不应该带任何 border-*/
+      // divide-* 类名——24.2.2 明确要求"头像和下面的入口之间不要加分割线"。
+      const card = container.firstElementChild;
+      expect(card?.className).not.toMatch(/\bborder\b/);
+      expect(card?.className).not.toMatch(/\bdivide-/);
+    });
   });
 
   describe("avatarHref (11 号卡：头像跳转到自己的公开主页预览)", () => {

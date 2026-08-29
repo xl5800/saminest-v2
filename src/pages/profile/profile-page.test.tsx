@@ -44,24 +44,15 @@ describe("ProfilePage", () => {
     getMyProfile.mockResolvedValue({ displayName: "Alice" });
   });
 
-  it("shows the display name and email", async () => {
+  it("shows the display name", async () => {
     renderWithProviders(<ProfilePage />);
 
     expect(await screen.findByText("Alice")).toBeInTheDocument();
-    expect(screen.getByText("alice@example.com")).toBeInTheDocument();
   });
 
-  it("shows a '编辑资料' button pointing to /profile/edit", async () => {
-    renderWithProviders(<ProfilePage />);
-
-    await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
-      "href",
-      "/profile/edit"
-    );
-  });
-
-  it("shows the bio (个性签名) when the profile has one, but not the city — the compact card only has nickname/signature/email per codex_task_profile_redesign.md", async () => {
+  // 24 号卡：头像卡片不再展示简介/邮箱这两行文字——邮箱以前是靠
+  // ProfileSummary 的 tertiaryText 传的，这个 prop 已经整个删掉了。
+  it("does not show the bio or the email under the avatar (24 号卡：头像卡片精简)", async () => {
     getMyProfile.mockResolvedValue({
       displayName: "Alice",
       bio: "Hi there, I like hiking.",
@@ -72,68 +63,55 @@ describe("ProfilePage", () => {
     renderWithProviders(<ProfilePage />);
 
     await screen.findByText("Alice");
-    expect(screen.getByText("Hi there, I like hiking.")).toBeInTheDocument();
+    expect(screen.queryByText("Hi there, I like hiking.")).not.toBeInTheDocument();
+    expect(screen.queryByText("alice@example.com")).not.toBeInTheDocument();
     expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
   });
 
-  it("does not show a city/bio section when the profile has neither", async () => {
-    renderWithProviders(<ProfilePage />);
+  describe("avatar card: edit-profile pencil icon (24.2)", () => {
+    it("shows a small circular '编辑资料' icon-button link to /profile/edit, not a full-width list row", async () => {
+      renderWithProviders(<ProfilePage />);
 
-    await screen.findByText("Alice");
-    // getMyProfile 这次只 mock 了 displayName（beforeEach 里
-    // { displayName: "Alice" }），bio/locationName 都是 undefined。
-    expect(screen.queryByText(/暂无简介/)).not.toBeInTheDocument();
+      await screen.findByText("Alice");
+      expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
+        "href",
+        "/profile/edit"
+      );
+    });
   });
 
-  it("shows the '我的收藏' link to /favorites", async () => {
-    renderWithProviders(<ProfilePage />);
+  // 头像卡片下面这两栏最初一版展示真实数字（复用 useMyPostsQuery/
+  // useFavoritePostIdsQuery 取 .length），用户反馈不需要显示数字，改成了
+  // 纯文字+图标的入口——不再调用那两个 hook，这里只验证"文字入口存在、
+  // 点击能跳转"，不再断言具体数字。
+  describe("avatar card: 我的发布/我的收藏 entries (24.2)", () => {
+    it("shows a '我的发布' entry linking to /my-posts, with no count number", async () => {
+      renderWithProviders(<ProfilePage />);
 
-    await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "我的收藏" })).toHaveAttribute(
-      "href",
-      "/favorites"
-    );
+      const link = await screen.findByRole("link", { name: "我的发布" });
+      expect(link).toHaveAttribute("href", "/my-posts");
+      expect(link).not.toHaveTextContent(/\d/);
+    });
+
+    it("shows a '我的收藏' entry linking to /favorites, with no count number", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      const link = await screen.findByRole("link", { name: "我的收藏" });
+      expect(link).toHaveAttribute("href", "/favorites");
+      expect(link).not.toHaveTextContent(/\d/);
+    });
   });
 
-  it("shows the '联系客服' link to /feedback", async () => {
-    renderWithProviders(<ProfilePage />);
+  describe("avatar links to the self public-profile preview (11 号卡 11.2)", () => {
+    it("wraps the avatar in a link to /users/<self id>", async () => {
+      renderWithProviders(<ProfilePage />);
 
-    await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "联系客服" })).toHaveAttribute(
-      "href",
-      "/feedback"
-    );
-  });
-
-  // 13 号卡（"我的"页新增"已屏蔽"管理入口）。
-  it("shows the '已屏蔽' link to /blocked-users", async () => {
-    renderWithProviders(<ProfilePage />);
-
-    await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "已屏蔽" })).toHaveAttribute(
-      "href",
-      "/blocked-users"
-    );
-  });
-
-  it("shows the '我的发布' link to /my-posts", async () => {
-    renderWithProviders(<ProfilePage />);
-
-    await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "我的发布" })).toHaveAttribute(
-      "href",
-      "/my-posts"
-    );
-  });
-
-  it("shows the '我的活动' link to /my-activities", async () => {
-    renderWithProviders(<ProfilePage />);
-
-    await screen.findByText("Alice");
-    expect(screen.getByRole("link", { name: "我的活动" })).toHaveAttribute(
-      "href",
-      "/my-activities"
-    );
+      await screen.findByText("Alice");
+      expect(screen.getByRole("link", { name: "预览我的主页" })).toHaveAttribute(
+        "href",
+        "/users/user-1"
+      );
+    });
   });
 
   it("calls authService.signOut and navigates home when logging out", async () => {
@@ -153,21 +131,29 @@ describe("ProfilePage", () => {
   });
 
   // 11 号卡（我的页面收尾）：TopBar（06 号卡加的 tab 变体，标题"我的" +
-  // 设置齿轮）整个删掉，顶部不再有独立顶栏；"设置"从顶栏图标移到功能
-  // 列表最后一行。
-  describe("no TopBar (11 号卡：顶栏精简)", () => {
+  // 设置齿轮）整个删掉，顶部不再有独立顶栏。24 号卡 24.1 调查确认：这个
+  // 页面本来就没有 14 号卡那套地区 pill + 搜索栏（任务卡描述的顶部现状跟
+  // 当前代码不符，24.2.1 因此本来就已经满足），这里继续断言"顶部什么都
+  // 没有"这条不变的事实，同时明确覆盖一下"地区/搜索"这两个具体元素。
+  describe("no TopBar, no region pill, no search bar at the top (11 号卡 + 24 号卡 24.1 结论)", () => {
     it("has no visible '我的' title text, no 设置 gear button, no brand name/发布 button/? help icon at the top", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      // TopBar 整个没了：找不到齿轮按钮（原来是 role=button, name="设置"），
-      // 也没有品牌名/文字"发布"按钮/"?"帮助图标——这些本来就是 TopBar
-      // 才会渲染的东西。
       expect(screen.queryByRole("button", { name: "设置" })).not.toBeInTheDocument();
       expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "?" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();
+    });
+
+    it("has no region-select pill button and no search icon/input", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      expect(screen.queryByText("选择地区")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "搜索" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
     });
 
     it("still exposes a single sr-only <h1>我的</h1> landmark for screen readers, even with no visible TopBar title", async () => {
@@ -180,69 +166,87 @@ describe("ProfilePage", () => {
     });
   });
 
-  describe("'设置' as the last settings-list row (moved down from the old TopBar gear)", () => {
-    it("shows a '设置' link to /settings as the last row in the functional list", async () => {
+  // 24.3：合并成一张"我的内容"卡片，只有我的活动/已屏蔽两行。
+  describe("'我的内容' group card (24.3)", () => {
+    it("contains exactly 我的活动/已屏蔽 two rows, in that order, linking to the existing pages", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      expect(screen.getByRole("link", { name: "设置" })).toHaveAttribute("href", "/settings");
+      const group = screen.getByRole("navigation", { name: "我的内容" });
+      const links = within(group).getAllByRole("link");
+      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual(["我的活动", "已屏蔽"]);
+      expect(links[0]).toHaveAttribute("href", "/my-activities");
+      expect(links[1]).toHaveAttribute("href", "/blocked-users");
     });
 
-    // 13 号卡："已屏蔽"插进"联系客服"和"设置"之间——归到列表靠后、跟设置类
-    // 放一起，不是插进中间的业务功能行之间。
-    it("orders the functional list as 编辑资料/我的发布/我的活动/我的收藏/联系客服/已屏蔽/设置", async () => {
+    // 24.2：我的发布/我的收藏挪到头像卡片下面的入口，不再是这张卡片/任何
+    // 列表里的一行。
+    it("no longer contains 我的发布/我的收藏 as list rows (moved under the avatar card)", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      const group = await screen.findByRole("navigation", { name: "我的内容" });
+      expect(within(group).queryByText("我的发布")).not.toBeInTheDocument();
+      expect(within(group).queryByText("我的收藏")).not.toBeInTheDocument();
+    });
+  });
+
+  // 24.4：合并成一张"账号与服务"卡片——帮助与客服（原"联系客服"文案）/
+  // 设置/后台管理（仅管理员）。
+  describe("'账号与服务' group card (24.4)", () => {
+    it("shows '帮助与客服' (renamed from '联系客服') linking to /feedback, and '设置' linking to /settings, for a non-admin user (no 后台管理 row)", async () => {
+      getCurrentUserRole.mockResolvedValue("user");
+
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      const list = screen.getByRole("navigation", { name: "我的功能" });
-      // textContent 会把装饰性 chevron（"›"，aria-hidden）也带出来，先去掉
-      // 它再比对——真正要验证的是标签文字的顺序，不是原样字符串。
-      const labels = within(list)
-        .getAllByRole("link")
-        .map((link) => link.textContent?.replace("›", ""));
+      const group = screen.getByRole("navigation", { name: "账号与服务" });
+      const links = within(group).getAllByRole("link");
+      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual(["帮助与客服", "设置"]);
+      expect(links[0]).toHaveAttribute("href", "/feedback");
+      expect(links[1]).toHaveAttribute("href", "/settings");
+      expect(screen.queryByText("联系客服")).not.toBeInTheDocument();
+    });
 
-      expect(labels).toEqual([
-        "编辑资料",
-        "我的发布",
-        "我的活动",
-        "我的收藏",
-        "联系客服",
-        "已屏蔽",
-        "设置"
+    it("shows '后台管理' as the third row, linking to /admin/posts, only for an admin account", async () => {
+      getCurrentUserRole.mockResolvedValue("admin");
+
+      renderWithProviders(<ProfilePage />);
+
+      const group = await screen.findByRole("navigation", { name: "账号与服务" });
+      // isAdmin 是独立的一次异步查询（useIsAdminQuery），跟分组卡片本身
+      // 的渲染时机不是同一个 tick——先等"后台管理"这一行真的出现，再取
+      // 整组链接顺序，避免在 isAdmin 还没回来之前就断言。
+      await within(group).findByRole("link", { name: /后台管理/ });
+      const links = within(group).getAllByRole("link");
+      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual([
+        "帮助与客服",
+        "设置",
+        "后台管理"
       ]);
+      expect(links[2]).toHaveAttribute("href", "/admin/posts");
     });
-  });
 
-  describe("avatar links to the self public-profile preview (11 号卡 11.2)", () => {
-    it("wraps the avatar in a link to /users/<self id>", async () => {
+    // 24.1 调查结论：这个权限判断（useIsAdminQuery，跟 RequireAdmin 路由
+    // 守卫共用同一个 hook）在改版前就已经存在，这次只是原样保留，不是新增。
+    it("does not show '后台管理' for a non-admin account, even after the profile has loaded", async () => {
+      getCurrentUserRole.mockResolvedValue("user");
+
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      expect(screen.getByRole("link", { name: "预览我的主页" })).toHaveAttribute(
-        "href",
-        "/users/user-1"
-      );
+      expect(screen.queryByRole("link", { name: /后台管理/ })).not.toBeInTheDocument();
     });
   });
 
-  it("does not show the admin section for a non-admin user", async () => {
-    getCurrentUserRole.mockResolvedValue("user");
+  // 24.5：退出登录改成单独一张白色圆角卡片，红色文字，不再是描边按钮。
+  describe("退出登录 (24.5)", () => {
+    it("renders as a centered red-text button, not the old bordered-outline button", async () => {
+      renderWithProviders(<ProfilePage />);
 
-    renderWithProviders(<ProfilePage />);
-
-    await screen.findByText("Alice");
-    expect(screen.queryByRole("link", { name: "后台管理" })).not.toBeInTheDocument();
-  });
-
-  it("shows the admin section for an admin user", async () => {
-    getCurrentUserRole.mockResolvedValue("admin");
-
-    renderWithProviders(<ProfilePage />);
-
-    await screen.findByText("Alice");
-    expect(await screen.findByRole("link", { name: "后台管理" })).toHaveAttribute(
-      "href",
-      "/admin/posts"
-    );
+      await screen.findByText("Alice");
+      const button = screen.getByRole("button", { name: "退出登录" });
+      expect(button).toHaveClass("text-danger");
+      expect(button.className).not.toContain("border");
+    });
   });
 });
