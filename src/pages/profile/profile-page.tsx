@@ -173,7 +173,6 @@ export function ProfilePage() {
         {!isPending && !isError ? (
           <div className="mb-6">
             <ProfileSummary
-              size="compact"
               displayName={profile?.displayName ?? null}
               avatarUrl={profile?.avatarUrl ?? null}
               avatarHref={currentUserId ? `/users/${currentUserId}` : undefined}

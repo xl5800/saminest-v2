@@ -1,9 +1,8 @@
-import { Flag } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Flag, MoreHorizontal } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
-import { ProfileSummary } from "../../components/profile-summary";
-import { TopBar } from "../../components/top-bar";
+import { PostList } from "../../features/posts/post-list";
 import { useCreateProfileConversationMutation } from "../../features/conversations/use-create-profile-conversation-mutation";
 import { useBlockUserMutation } from "../../features/blocks/use-block-user-mutation";
 import { useIsBlockingQuery } from "../../features/blocks/use-is-blocking-query";
@@ -16,6 +15,82 @@ const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
 const BLOCK_ERROR_MESSAGE = "操作失败，请稍后重试。";
 
+// 悬浮在头图上的圆形图标按钮——半透明黑底、白色图标，跟 22 号卡任务卡
+// 要求的"跟 23 号卡详情页的关闭按钮同一个视觉语言"对齐。写这段代码时
+// 23 号卡（帖子详情页头图操作按钮）那个 worktree 还没有任何提交（只是
+// 刚从 main 分出来的空分支），没有现成组件可以直接 import 复用，这里先
+// 按任务卡描述的样式独立实现；如果 23 号卡落地后两边写法不一致，再考虑
+// 抽成共享组件。
+const FLOATING_ICON_BUTTON_CLASS_NAME =
+  "fixed top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white";
+
+interface FloatingMoreMenuProps {
+  userId: string;
+}
+
+/**
+ * 头图右上角悬浮的"更多操作"圆形图标按钮，点开一个只有"举报用户"一项的
+ * 下拉菜单——交互（点击外部/Esc 关闭、点菜单项自动收起）照抄 top-bar.tsx
+ * 里 detail 变体用的 MoreMenuButton，那个组件没有导出、样式也是
+ * bg-card 图标按钮（不是这次要的半透明黑底悬浮圆形），这里在本文件内
+ * 单独实现一份，不跨文件复用，见函数级注释第 5 点。
+ */
+function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function handlePointerDown(event: MouseEvent): void {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="fixed right-4 top-4 z-10">
+      <button
+        type="button"
+        aria-label="更多操作"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
+      >
+        <MoreHorizontal size={18} aria-hidden="true" />
+      </button>
+      {open ? (
+        <div
+          role="menu"
+          onClick={() => setOpen(false)}
+          className="absolute right-0 top-11 min-w-[132px] overflow-hidden rounded-xl bg-card py-1 shadow-lg"
+        >
+          <Link
+            to={`/users/${userId}/report`}
+            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
+          >
+            <Flag size={16} aria-hidden="true" />
+            举报用户
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /**
  * 公开个人主页 / 04 号卡里的"发起者主页"（/users/:userId，路由没有用
  * RequireAuth 包裹，游客也能看——跟 post-detail-page.tsx/
@@ -27,9 +102,50 @@ const BLOCK_ERROR_MESSAGE = "操作失败，请稍后重试。";
  * 联系需求，统一收进"点头像/整行 → 进这个页面 → 点发消息"这一套机制，不用
  * 分别建两套 UI。
  *
- * 头像/昵称/城市/简介 + 发消息，不做"编辑资料"（那是"我的"页
- * profile-page.tsx 的事）。简介为空时整个简介区块不渲染，不显示"暂无简介"
- * 这种占位文案。
+ * 22 号卡（用户主页改版——参考 Meet5 大图头像风格）：这次改版之前先读了一遍
+ * 现有代码，发现任务卡描述的起点（顶部地区pill+搜索栏、"关注"按钮、
+ * "发布/搭子/收藏"三个切换标签）其实都不存在——这个页面顶部早就只是一个
+ * 纯返回箭头（04 号卡换成 TopBar detail 变体之后就是这样），"关注"功能
+ * 从来没有建过（没有数据库表、没有路由、没有 UI，不是被隐藏），"发布/
+ * 搭子/收藏"三个标签也从没出现过。所以这次实际改动是：
+ *   1. 不再用 TopBar——换成悬浮在头图上的圆形返回按钮（半透明黑底），
+ *      点击行为不变，还是 navigate(-1)。
+ *   2. 头像从 ProfileSummary 的 96px 圆形，换成通栏大方块（aspect-square
+ *      + w-full）——用的还是同一个 avatarUrl 字段，没有新增"封面图"字段，
+ *      跟任务卡要求一致。这个页面因此不再使用 ProfileSummary，它的
+ *      default 变体（96px 圆形居中头像那一版）因此没有调用方了——确认过
+ *      24 号卡"我的"页 profile-page.tsx 用的是同一个组件的另一种布局
+ *      （原来的 size="compact" 横排卡片，不受这次改动影响）之后，把
+ *      default 变体连同它专属的 size 判别式、locationName prop 一起从
+ *      profile-summary.tsx 删掉了，不留死代码——"我的"页现在直接不传
+ *      size（组件只剩一种布局），行为完全不变。
+ *   3. 昵称+简介左对齐；不再展示 locationName 那一行——任务卡给的顺序原话
+ *      是"头像下面是昵称 + 个人简介"，没有提城市，这次按字面顺序去掉了
+ *      城市这一行（数据本身没删，PublicProfile.locationName 这个字段和
+ *      查询都没动，只是页面不渲染；用户确认过按这版就好，不用加回来）。
+ *   4. 操作区只留"发消息"+"屏蔽此人"两个按钮并排——任务卡原话"只保留
+ *      发消息一个按钮"，但"屏蔽此人"是任务卡完全没提到的真实存在功能
+ *      （UGC 安全合规用），这点已经跟用户确认过，明确保留，不属于"关注"
+ *      那种"暂时不放入口"的按钮。
+ *   5. "举报用户"维持改版前的形态——头图右上角悬浮一个"更多操作"圆形
+ *      图标按钮（半透明黑底，跟左上角返回箭头同一个视觉语言），点开一个
+ *      只有"举报用户"一项的下拉菜单，交互（点击外部/Esc 关闭、点菜单项
+ *      自动收起）照抄 top-bar.tsx 里 detail 变体的 MoreMenuButton；这次
+ *      最初一版曾经改成直接跳转的图标链接，用户反馈要改回下拉菜单形式，
+ *      已经改回来了。MoreMenuButton 本身在 top-bar.tsx 里不是导出的组件，
+ *      这里没有跨文件复用它，是照同一个交互模式在本文件内单独实现了一份
+ *      （悬浮黑底圆形样式跟 TopBar 的 bg-card 图标按钮本来就不一样，直接
+ *      导入也没法直接复用样式），如果以后这个模式还有第三处需要，再考虑
+ *      抽成共享组件。
+ *   6. 新增"发布的作品"标题 + 两列卡片网格，复用首页/分类页共用的
+ *      PostList 组件（连同它背后的 usePostsInfiniteQuery/
+ *      listApprovedPosts），新增一个可选的 authorId 筛选参数，不建新组件、
+ *      不建新查询函数——这三层（PostList → usePostsInfiniteQuery →
+ *      listApprovedPosts）原来就已经支持 categoryId/stateCode 这类可选
+ *      筛选维度，这次只是照着同一个模式再加一维，见这三个文件里
+ *      authorId 相关的改动。这个网格背后是"posts_select_public_or_own_
+ *      or_admin"这条 RLS 策略本身已经限定的"approved + public"集合，不是
+ *      这次新加的可见性判断。
  *
  * "发消息"按钮结构照抄 contact-seller-button.tsx（同一个"未登录点击跳
  * /login、已登录调用 mutation、成功后跳转到会话详情页"的模式），区别是
@@ -39,69 +155,27 @@ const BLOCK_ERROR_MESSAGE = "操作失败，请稍后重试。";
  * 给用户的中文），直接展示；其它未知失败原因才回退到通用文案——跟
  * conversation-page.tsx 处理 ACCOUNT_RESTRICTED 的方式是同一个原则。
  *
- * userId 是当前登录用户自己时不显示"发消息"按钮（不能给自己发消息，
- * 对应数据库 create_profile_conversation 里"cannot start a direct
- * conversation with yourself"这条防御检查）——在 UI 层提前隐藏，不让
- * 用户点了之后才从后端报错，跟 contact-seller-button.tsx 对帖子作者本人
- * 隐藏按钮是同一个原则。未登录访客不算"自己"，仍然会看到按钮，点击后
+ * userId 是当前登录用户自己时不显示"发消息"/"屏蔽此人"按钮（不能给自己
+ * 发消息/屏蔽自己，对应数据库 create_profile_conversation 里"cannot start
+ * a direct conversation with yourself"这条防御检查）——在 UI 层提前隐藏，
+ * 不让用户点了之后才从后端报错，跟 contact-seller-button.tsx 对帖子作者
+ * 本人隐藏按钮是同一个原则。未登录访客不算"自己"，仍然会看到按钮，点击后
  * 跳转登录页，不在这里就隐藏掉。
  *
- * 头像/姓名/城市/简介这一段展示逻辑抽成了共享组件 ProfileSummary（"我的"
- * 页 profile-page.tsx 也在用，两个页面头部视觉这次统一），这里只把"发
- * 消息"+"屏蔽此人"这两个按钮（连同它们各自的错误提示）作为 children 传
- * 进去——ProfileSummary 只负责摆放，不关心 children 具体是什么。
- * ProfileSummary 本身用 flex-col items-center，两个按钮包在同一个
- * flex 行容器里水平并排、整体居中，04 号卡要求的"发消息按钮居中"不受
- * 影响（04 号卡"不跟收藏/关注等按钮并排"这条针对的是"额外的收藏/关注
- * 功能"，屏蔽是这次任务卡明确要求跟发消息放在一起的入口，不在那条限制
- * 范围内）。
+ * UGC 安全功能补齐任务卡 1（屏蔽用户）：屏蔽状态查询（useIsBlockingQuery）
+ * 判断当前用户有没有屏蔽这个人，决定按钮文案；点击调用
+ * useBlockUserMutation/useUnblockUserMutation，成功后 invalidate 状态
+ * 查询，按钮文案自动切换，不需要本地维护一份"是否已屏蔽"的 state。
+ * 屏蔽之后这个页面本身不做任何额外处理（比如不隐藏"发消息"按钮）——屏蔽
+ * 生效在数据库层（create_profile_conversation 会拒绝创建新会话），点击
+ * "发消息"仍然会真的发起请求、拿到一条明确的失败提示。
  *
- * 04 号卡（find-buddy-flow）改版：顶部换成 TopBar 的 detail 变体（返回
- * 箭头），不再是页面自己手写的"←"按钮。当初这里特意不传 moreMenu——那时
- * 这个仓库还没有"举报用户"功能（只有举报活动/举报帖子），不想在菜单里
- * 放一个点了会 404 的空壳入口。UGC 安全功能补齐任务卡 2（举报用户）
- * 补上之后，现在恢复传 moreMenu，见下面新增的说明段落。
- *
- * 07 号卡（活动卡片头像区放大 + 发起者联系参与者）：删掉了 04 号卡最初
- * 引入的"TA 发起的搭子"活动列表区块（连同它用到的
- * useOrganizerActivitiesQuery/useActivityParticipantPreviewsQuery/
- * ActivityCard——这几个 import 因此也一并去掉了）。产品决定不需要在发起
- * 者主页单独展示一份"TA 发起的活动"列表，联系发起人/参与者已经有更直接
- * 的入口（活动详情页的发起人整行 + 参与者头像，见
- * activity-participant-avatars.tsx），这个页面重新变回"只有资料 + 发消息"
- * 的最简单形态，没有必要为了一个没有额外产品价值的列表继续维护
- * listOrganizerActivities 这条专门为了避开 RLS 假阴性而写的查询（已经在
- * activities-repository.ts 里一并删掉，见该文件对应位置的说明）。
- *
- * UGC 安全功能补齐任务卡 1（屏蔽用户）：加"屏蔽此人/取消屏蔽"按钮，跟
- * "发消息"并排。屏蔽状态查询（useIsBlockingQuery）判断当前用户有没有
- * 屏蔽这个人，决定按钮文案；点击调用 useBlockUserMutation/
- * useUnblockUserMutation，成功后 invalidate 状态查询，按钮文案自动切换，
- * 不需要本地维护一份"是否已屏蔽"的 state。屏蔽/取消屏蔽都要求登录——跟
- * "发消息"按钮同一个判断（未登录点击跳 /login），isOwnProfile 时不显示
- * （不能屏蔽自己）。
- *
- * 屏蔽之后这个页面本身不做任何额外处理（比如不隐藏"发消息"按钮）——
- * 屏蔽生效在数据库层（create_profile_conversation 会拒绝创建新会话），
- * 点击"发消息"仍然会真的发起请求、拿到一条明确的失败提示，这跟
- * conversation-page.tsx 用 useIsBlockedPairQuery 提前隐藏输入框、给出
- * 更友好体验的做法不同——这个页面的"发消息"按钮本来就已经有一套完整的
- * 错误展示机制（AppError.message 直接展示），额外加一次"屏蔽预检"查询
- * 只是为了把同一个错误提前一步展示，收益有限，不是这次任务要求的范围，
- * 没有跟着做。
- *
- * UGC 安全功能补齐任务卡 2（举报用户）：TopBar 的"…"更多菜单里加一个
- * "举报用户"入口（Flag 图标 + 文案，样式照抄 activity-detail-page.tsx
- * 举报活动那一项），跳转到独立路由 /users/:userId/report（见
- * report-user-page.tsx）。只有 !isOwnProfile 且 data 已经加载出来时才传
- * moreMenu，跟"发消息"/"屏蔽此人"两个按钮同一个"自己主页不显示"的判断——
- * 不能举报自己，见 report-user-page.tsx 顶部注释里更完整的说明（那边除了
- * 入口隐藏之外，还在页面自己内部加了一道防御性判断，应对用户手动拼 URL
- * 直接访问这个路由的情况）。data 未加载完成时不渲染 moreMenu（保持
- * undefined，TopBar 就完全不显示"…"按钮），等 isOwnProfile 能被正确判断
- * 之后再决定要不要显示，避免在加载过程中先闪一下"举报用户"入口——跟
- * activity-detail-page.tsx `moreMenu={data ? {...} : undefined}` 是同一个
- * 处理方式。
+ * UGC 安全功能补齐任务卡 2（举报用户）：跳转到独立路由
+ * /users/:userId/report（见 report-user-page.tsx）。只有 !isOwnProfile
+ * 且 data 已经加载出来时才渲染这个入口，跟"发消息"/"屏蔽此人"两个按钮
+ * 同一个"自己主页不显示、加载完成前不展示"的判断——不能举报自己，也不能
+ * 在还不确定 isOwnProfile 之前先闪一下这个入口，见 report-user-page.tsx
+ * 顶部注释里更完整的说明。
  */
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -169,52 +243,73 @@ export function UserProfilePage() {
 
   const isOwnProfile = !!currentUserId && currentUserId === userId;
   const isBlockActionPending = blockMutation.isPending || unblockMutation.isPending;
+  const avatarInitial = data?.displayName?.trim().charAt(0).toUpperCase() || "?";
 
   return (
     <main data-testid="user-profile-page">
-      <TopBar
-        variant="detail"
-        moreMenu={
-          data && !isOwnProfile
-            ? {
-                label: "更多操作",
-                content: (
-                  <Link
-                    to={`/users/${userId}/report`}
-                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
-                  >
-                    <Flag size={16} aria-hidden="true" />
-                    举报用户
-                  </Link>
-                )
-              }
-            : undefined
-        }
-      />
+      {/* 悬浮返回箭头：不放进下面按数据加载状态才渲染的分支里——不管加载
+          中/加载失败/用户不存在，都应该能点这个箭头离开这个页面，跟改版
+          前 TopBar 一直渲染返回按钮是同一个行为，只是这次视觉上是悬浮在
+          内容上方的半透明圆形，不是一整条顶部栏。 */}
+      <button
+        type="button"
+        aria-label="返回"
+        onClick={() => navigate(-1)}
+        className={`${FLOATING_ICON_BUTTON_CLASS_NAME} left-4`}
+      >
+        <ArrowLeft size={18} aria-hidden="true" />
+      </button>
 
-      <div className="mx-auto max-w-md px-4 pb-20 md:pb-6">
-        {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+      {/* "更多操作"（举报用户）：跟"发消息"/"屏蔽此人"同一个"自己主页不
+          显示、数据没加载完不展示"的判断，见上面函数级注释第 5 点。 */}
+      {data && !isOwnProfile && userId ? <FloatingMoreMenu userId={userId} /> : null}
 
-        {isError ? (
-          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            {LOAD_ERROR_MESSAGE}
-          </p>
-        ) : null}
+      {isPending ? (
+        <p role="status" className="p-4 text-sm text-text-muted">
+          加载中…
+        </p>
+      ) : null}
 
-        {!isPending && !isError && data === null ? (
-          <>
-            <h1>用户未找到</h1>
-            <p role="alert">用户不存在。</p>
-          </>
-        ) : null}
+      {isError ? (
+        <p
+          role="alert"
+          className="m-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
+        >
+          {LOAD_ERROR_MESSAGE}
+        </p>
+      ) : null}
 
-        {!isPending && !isError && data ? (
-          <ProfileSummary
-            displayName={data.displayName}
-            avatarUrl={data.avatarUrl}
-            locationName={data.locationName}
-            bio={data.bio}
-          >
+      {!isPending && !isError && data === null ? (
+        <div className="p-4">
+          <h1>用户未找到</h1>
+          <p role="alert">用户不存在。</p>
+        </div>
+      ) : null}
+
+      {!isPending && !isError && data ? (
+        <>
+          {/* 大方块头图——占屏幕宽度、接近 1:1 比例，用现有头像图裁剪展示，
+              没有为此新增"封面图"字段。这里故意放在下面 max-w-md 容器
+              外面，才能真的贴到页面左右边缘，不被那个容器的居中宽度限制
+              住，跟 17 号卡活动卡片方块头像"铺满整宽"是同一个道理。 */}
+          {data.avatarUrl ? (
+            <img src={data.avatarUrl} alt="" className="aspect-square w-full object-cover" />
+          ) : (
+            <div
+              aria-hidden="true"
+              className="flex aspect-square w-full items-center justify-center bg-bg text-6xl font-semibold text-text-muted"
+            >
+              {avatarInitial}
+            </div>
+          )}
+
+          <div className="mx-auto max-w-md px-4 pb-20 pt-4 text-left md:pb-6">
+            <h1 className="text-xl font-bold text-text">{data.displayName}</h1>
+
+            {data.bio ? (
+              <p className="mt-2 whitespace-pre-wrap break-words text-sm text-text">{data.bio}</p>
+            ) : null}
+
             {error ? (
               <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                 {error}
@@ -227,7 +322,7 @@ export function UserProfilePage() {
             ) : null}
 
             {!isOwnProfile ? (
-              <div className="mt-4 flex items-center justify-center gap-3">
+              <div className="mt-4 flex items-center gap-3">
                 <button
                   type="button"
                   onClick={handleMessage}
@@ -246,9 +341,19 @@ export function UserProfilePage() {
                 </button>
               </div>
             ) : null}
-          </ProfileSummary>
-        ) : null}
-      </div>
+
+            {/* 发布的作品：去掉了"发布/搭子/收藏"三个切换标签（这个仓库里
+                本来就没建过），直接展示"发布"这一类——复用 PostList 组件
+                背后的数据请求和卡片组件，只是多传一个 authorId，不是重新
+                做一套。不管是不是自己的主页都展示这个区块，纯展示内容，
+                不是一个需要区分身份的操作入口。 */}
+            <h2 className="mt-6 text-base font-semibold text-text">发布的作品</h2>
+            <div className="mt-3">
+              <PostList authorId={userId} />
+            </div>
+          </div>
+        </>
+      ) : null}
     </main>
   );
 }
