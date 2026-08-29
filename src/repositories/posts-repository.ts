@@ -275,6 +275,15 @@ export interface PostDetail {
   locationName: string | null;
   createdAt: string;
   authorDisplayName: string;
+  /** 23 号卡新增——发帖者卡片（PersonCard）跳转 /users/:authorId 用，同
+   *  posts.author_id，跟 getPostAuthorId() 查的是同一个数据源，但那个函数
+   *  是单独一个更轻量的查询（只给 ContactSellerButton 判断"是不是自己"
+   *  用），这里是详情页主查询顺带带出来的，不是新发一次请求。 */
+  authorId: string;
+  /** 23 号卡新增——发帖者卡片的头像，跟 activities-repository.ts 的
+   *  organizerAvatarUrl 是同一个模式（`author:profiles(display_name,
+   *  avatar_url)` 嵌套 select），不是另开一次查询。 */
+  authorAvatarUrl: string | null;
   contactMethod: string | null;
   contactValue: string | null;
   images: PostDetailImage[];
@@ -300,12 +309,13 @@ interface PostDetailRow {
   location_id: string | null;
   location_text: string | null;
   created_at: string;
+  author_id: string;
   contact_method: string | null;
   contact_value: string | null;
   comment_count: number;
   location: { name: string } | null;
   category: { name_zh: string } | null;
-  author: { display_name: string } | null;
+  author: { display_name: string; avatar_url: string | null } | null;
   post_images: PostDetailImageRow[] | null;
 }
 
@@ -343,7 +353,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -382,6 +392,8 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     locationName: resolveLocationName(data.location, data.location_text),
     createdAt: data.created_at,
     authorDisplayName: data.author?.display_name ?? "未知用户",
+    authorId: data.author_id,
+    authorAvatarUrl: data.author?.avatar_url ?? null,
     contactMethod: data.contact_method,
     contactValue: data.contact_value,
     images,

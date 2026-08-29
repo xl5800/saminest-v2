@@ -33,7 +33,15 @@ const NO_CHROME_PATTERNS = [
   // 05 号卡（publish-flow）：发布帖子表单（新建 /publish、编辑 /publish/:id
   // 共用同一个 PublishPage），创建流程页面，AppHeader 和 BottomNav 都不要。
   "/publish",
-  "/publish/:id"
+  "/publish/:id",
+  // 23 号卡（帖子详情页顶部+操作区改版）：从 TOPBAR_MIGRATED_PATTERNS 挪
+  // 过来——21 号卡当初给这个页面加的是 TopBar nav-only 变体（一条常规的
+  // 返回箭头顶栏，跟其它保留 BottomNav 的页面同一类）；这次连 TopBar 都不
+  // 用了，改成悬浮在图片上的关闭按钮（页面自己渲染，不是全局组件），底部
+  // 也从 BottomNav 换成页面自己的常驻"咨询"大按钮——AppHeader、BottomNav
+  // 现在都不需要，这个页面自己就是唯一的 chrome，语义上跟发布表单这类
+  // 沉浸式页面是同一类，不是"顶部栏换了、底部 Tab 栏还在"那种了。
+  "/post/:id"
 ];
 
 /**
@@ -69,12 +77,15 @@ const NO_CHROME_PATTERNS = [
  * 导航页，但设计稿⑪屏本身也带着底部 Tab 栏，不属于 NO_CHROME_PATTERNS
  * 那种完全沉浸式）。
  *
- * 21 号卡（二级页面顶部栏简化）新加三条：我的活动（/my-activities）、
- * 我的收藏（/favorites）、帖子详情页（/post/:id）——这三个页面之前一直
- * 沿用改版前的全局 AppHeader（品牌名+发布按钮那一版），这次改成各自渲染
- * 自己的 TopBar nav-only 变体（纯返回箭头，不显示标题/品牌/发布按钮），
- * 因此也要挪进这个名单，跟其它已迁移页面一样只关掉 AppHeader、保留
- * BottomNav——三个页面本来就有底部 Tab 栏，不是沉浸式表单页。
+ * 21 号卡（二级页面顶部栏简化）新加两条：我的活动（/my-activities）、
+ * 我的收藏（/favorites）——这两个页面之前一直沿用改版前的全局 AppHeader
+ * （品牌名+发布按钮那一版），这次改成各自渲染自己的 TopBar nav-only
+ * 变体（纯返回箭头，不显示标题/品牌/发布按钮），因此也要挪进这个名单，
+ * 跟其它已迁移页面一样只关掉 AppHeader、保留 BottomNav——这两个页面本来
+ * 就有底部 Tab 栏，不是沉浸式表单页。21 号卡当时把帖子详情页
+ * （/post/:id）也一起加了同一个 nav-only 处理，但 23 号卡把它整个换成
+ * 完全沉浸式了，见上面 NO_CHROME_PATTERNS 里 23 号卡那条注释，这里不再
+ * 保留它。
  *
  * 举报页（activities/:id/report、post/:id/report、users/:userId/report）、
  * 编辑个人资料页（/profile/edit）、设置页（/settings、
@@ -93,8 +104,7 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/messages",
   "/region-select",
   "/my-activities",
-  "/favorites",
-  "/post/:id"
+  "/favorites"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {

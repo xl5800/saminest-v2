@@ -1,18 +1,19 @@
 import { Share } from "@capacitor/share";
+import { Flag, Share2, X } from "lucide-react";
 import { type UIEvent, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
-import { TopBar } from "../../components/top-bar";
+import { PersonCard } from "../../components/person-card";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import type { PostDetail } from "../../repositories/posts-repository";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
-import { formatListingDate, formatPrice } from "../../utils/format";
+import { formatPrice, formatRelativeTimeAgo, isPriceUnset } from "../../utils/format";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -31,37 +32,89 @@ interface PostDetailLocationState {
  * 信息，getPostDetail 在 repository 层已经把这两种情况都收敛成同一个
  * null 返回值，页面这一层不应该、也没有能力再把它们分开。
  *
- * 图片区是横向大图轮播，不是原来的两列小图网格：用原生 CSS scroll-snap
- * （横向 overflow-x-auto 容器 + snap-x snap-mandatory、每张图 snap-center
- * + flex-none w-full）实现，不引入额外的手势/轮播库。当前滑到第几张靠
- * onScroll 读容器的 scrollLeft / 容器宽度换算，驱动底部"1 / N"计数
- * 指示器（只有 1 张图时不显示，跟 ImageLightbox 自己"只有一张图不显示
- * 计数/切换按钮"的判断是同一个逻辑）。点击当前这张大图打开的还是
- * ImageLightbox 全屏查看器，触发方式从"点小图格"变成"点当前大图"，
+ * 图片区是横向大图轮播：用原生 CSS scroll-snap（横向 overflow-x-auto
+ * 容器 + snap-x snap-mandatory、每张图 snap-center + flex-none w-full）
+ * 实现，不引入额外的手势/轮播库。当前滑到第几张靠 onScroll 读容器的
+ * scrollLeft / 容器宽度换算，驱动底部"1 / N"计数指示器（只有 1 张图时
+ * 不显示，跟 ImageLightbox 自己"只有一张图不显示计数/切换按钮"的判断是
+ * 同一个逻辑）。点击当前这张大图打开的还是 ImageLightbox 全屏查看器，
  * ImageLightbox 组件本身没有改动。
- *
- * 页面信息排布顺序：图片轮播 → 价格（放大突出）→ 标题 → 描述 → 次要信息
- * （分类/地区/发布时间/作者，字号调小、加大行间距——这几项对买家来说
- * 是"看一眼图和价格就能判断感不感兴趣"之外的次要信息，不需要跟标题挤在
- * 最上面）。联系方式/收藏/举报按钮和评论区顺序不变，仍然在这块之后。
  *
  * "分享"按钮用官方 @capacitor/share 插件调系统原生分享面板，不接入微信
  * SDK；这个插件在纯浏览器环境下会自动降级用标准 Web Share API
  * （navigator.share()），网页版访问详情页也能用同一个按钮，不用写
  * App/网页两套逻辑。分享链接见上面 PRODUCTION_ORIGIN 的注释——不能用
- * window.location.origin 拼。这一批只做"分享到微信/更多应用"这一个
- * 入口，站内分享给好友（比如分享进站内私信）不在这次范围内，等这个上线
- * 后再单独出任务卡。
+ * window.location.origin 拼。
  *
- * 21 号卡（二级页面顶部栏简化）：顶部栏从全局 AppHeader（品牌名+发布
- * 按钮）换成 TopBar 的 nav-only 变体、不传 title——这个页面本来就没有
- * 额外的"页面名称"标题（页面标题就是下面的帖子标题本身），顶部栏只留一个
- * 返回箭头即可，不需要在 nav-only 上再补一份标题文字。对应地这个路径也
- * 挪进了 app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS。
+ * 23 号卡（帖子详情页顶部+分享/收藏/举报操作区改版），先读代码的结论（写
+ * 在这里，完工报告里也有一份）：
+ *
+ * 1. 顶部栏：21 号卡当初给这个页面加的是 TopBar 的 nav-only 变体（一条
+ *    常规返回箭头顶栏）。这次要求"悬浮在图片上的关闭(X)按钮"是完全不同
+ *    的视觉形态——nav-only 渲染的是一条正常文档流里的、有自己背景色的
+ *    横条，不是叠在图片上方的半透明浮层，套不上去。这里改成页面自己渲染
+ *    一个 `fixed` 定位的圆形按钮，不再用 TopBar 组件，也把这个路由从
+ *    app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS 挪进了 NO_CHROME_PATTERNS
+ *    （AppHeader/BottomNav 都不需要了，见该文件里 23 号卡的注释）。
+ * 2. "收藏"（FavoriteButton）"分享"（下面 handleShare，调用同一个
+ *    @capacitor/share）背后的逻辑完全没动，这次只是新增了一个 icon 展示
+ *    变体（FavoriteButton 新增 variant="icon" prop）+ 换了位置。
+ * 3. "举报"：这个仓库本来就有帖子举报功能——独立路由 /post/:id/report
+ *    （report-post-page.tsx），改版前就以文字链接的形式挂在这个页面上,
+ *    这次复用同一个路由，只是把文字链接换成图标样式、挪到新的位置，
+ *    没有新增任何数据库表/迁移。
+ * 4. "发帖者导航条（头像+昵称+活跃时间）"：初版发现这个东西不存在（只有
+ *    一行纯文字"发布者：{authorDisplayName}"），补完这一版之后已经建成
+ *    真正的可点卡片——见下面第 5 点。
+ *
+ * 补完（复用活动详情页的"发起人卡片"）：
+ * 5. 发帖者卡片：`getPostDetail()` 的 select 扩展成跟
+ *    activities-repository.ts 的 organizer 查询同一个模式——加一列裸的
+ *    `author_id`（不再只查 usePostAuthorQuery 那个单独的轻量查询）+ 把
+ *    嵌套的 `author:profiles(display_name)` 加上 `avatar_url`，一次查询
+ *    顺带带出来，不新开请求。`PersonCard` 是从
+ *    activity-detail-page.tsx 那张"发起人卡片"抽出来的共享组件（原来是
+ *    内联 JSX，不是组件，这次先抽取再复用，不是照着视觉效果另外重写一遍
+ *    ——见 person-card.tsx），两个页面现在共用同一份实现。
+ *
+ *    副标题文案本来想做"活跃于 X 前"（最后活跃时间），调查后发现
+ *    `profiles.last_active_at` 这一列虽然在表定义里，但全仓库没有任何
+ *    触发器/RPC/前端代码会写入它——不是"数据还没采集"，是"这一列的值对
+ *    所有用户永远是 null，因为压根没有代码路径更新它"，等同于没有这个
+ *    数据。按指示没有为了这一个字段新增触发器/迁移去维护它，退回展示帖子
+ *    自己的发布时间："发布于 {formatRelativeTimeAgo(data.createdAt)}"
+ *    （新增的相对时间格式化函数，见 utils/format.ts 顶部对这个决定的
+ *    完整说明）。
+ *
+ * 布局改动本身：
+ * - 价格改成 isPriceUnset 命中时整行不渲染（不是显示"价格未填写"），
+ *   跟 19 号卡帖子卡片的规则一致；顺序也从"价格在标题上方"改成"标题在
+ *   价格上方"。
+ * - 原来的"分类标签 + 地区 + 发布时间"这个次要信息区块拆开了：分类标签
+ *   和发布时间这次的新顺序里没有位置（跟 19 号卡去掉卡片上的分类标签是
+ *   同一个"信息精简"方向，这次连带一起从详情页拿掉了，不是遗漏——如果
+ *   还想保留这两项，需要你确认放在哪）；地区单独留了一行，就在价格下面。
+ * - "联系方式"（contactMethod/contactValue，卖家自己填的电话/微信号
+ *   之类）这个区块，任务卡给的新顺序里没有列出来，但这是卖家主动填写的
+ *   可操作信息，直接删掉丢失信息的代价比"分类标签/发布时间"这两项纯
+ *   装饰性元数据大得多——这次选择保留，放在分享/收藏/举报那一行下面、
+ *   房屋描述上面，不是任务卡列出的顺序原文，是这次改动里唯一一个"没有
+ *   被要求但我选择保留"的判断，同样写进了完工报告。
+ * - 底部标准 BottomNav 换成常驻的"咨询"大按钮：复用 ContactSellerButton
+ *   （新增 label/className prop 支持自定义文案/样式，逻辑一行没动），
+ *   自己 fixed 定位在屏幕底部，不需要额外包一层容器——这个按钮在"作者
+ *   查看自己发的帖子"时会返回 null（组件原有行为，不能联系自己），这种
+ *   情况下屏幕底部就是空的，不会有一条空的边框/背景条悬在那，因为这里
+ *   压根没有额外包一层始终渲染的容器。
+ * - 留言区：CommentSection 的可见标题从"评论"改成"留言"（连同它的
+ *   aria-label），见该组件文件顶部注释；标题以外的文案（输入框
+ *   placeholder、按钮文案、空态文案）不在"标题"这个措辞的范围内，没有
+ *   动，这也写进了完工报告方便你确认要不要一并改。
  */
 export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
+  const navigate = useNavigate();
   const state = location.state as PostDetailLocationState | null;
   const publishSuccessMessage = state?.publishSuccessMessage;
 
@@ -116,130 +169,161 @@ export function PostDetailPage() {
     }
   }
 
+  const priceUnset = data ? isPriceUnset(data.priceAmount, data.priceLabel) : true;
+
   return (
     <main>
-      <TopBar variant="nav-only" />
-      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <WechatBrowserBanner />
+      {/* 23 号卡：悬浮在图片上的关闭按钮，取代 21 号卡的 TopBar nav-only
+          返回箭头——半透明黑底圆形，固定在视口左上角（不是只叠在图片
+          容器内——没有图片的帖子也需要这个按钮，固定在视口上比"挂在图片
+          容器里、没图片时无处可挂"更稳妥），点击返回上一页，跟 TopBar
+          自己的 BackButton 默认行为（navigate(-1)）一致。 */}
+      <button
+        type="button"
+        aria-label="关闭"
+        onClick={() => navigate(-1)}
+        style={{ top: "calc(1rem + env(safe-area-inset-top))" }}
+        className="fixed left-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
+      >
+        <X size={20} aria-hidden="true" />
+      </button>
 
-      {publishSuccessMessage ? (
-        <p role="status" className="mb-4 text-sm text-text-muted">
-          {publishSuccessMessage}
-        </p>
-      ) : null}
+      {/* 底部留出空间给下面 fixed 的"咨询"大按钮（那个按钮自己是否渲染由
+          ContactSellerButton 内部决定——作者查看自己的帖子时不渲染，这里
+          统一留白，own-post 场景下会多一点空白，比为了这一种情况再判断
+          一次"我是不是作者"更简单）。 */}
+      <div className="pb-24">
+        {data && data.images.length > 0 ? (
+          <div>
+            <div
+              data-testid="post-image-carousel"
+              onScroll={handleCarouselScroll}
+              className="flex snap-x snap-mandatory overflow-x-auto"
+            >
+              {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
+                <button
+                  key={imageId}
+                  type="button"
+                  aria-label="查看大图"
+                  disabled={indexInLightbox === null}
+                  onClick={() => {
+                    if (indexInLightbox !== null) {
+                      setLightboxIndex(indexInLightbox);
+                    }
+                  }}
+                  className="block w-full flex-none snap-center disabled:cursor-default"
+                >
+                  <img
+                    src={publicUrl ?? undefined}
+                    alt={data.title}
+                    className="aspect-[4/3] w-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+            {data.images.length > 1 ? (
+              <p className="mt-2 text-center text-xs text-text-muted">
+                {currentImageIndex + 1} / {data.images.length}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
-      {isPending ? <p role="status">加载中…</p> : null}
+        <div className="mx-auto max-w-2xl px-4 py-6">
+          <WechatBrowserBanner />
 
-      {isError ? <p role="alert">帖子加载失败，请稍后重试。</p> : null}
+          {publishSuccessMessage ? (
+            <p role="status" className="mb-4 text-sm text-text-muted">
+              {publishSuccessMessage}
+            </p>
+          ) : null}
 
-      {!isPending && !isError && data === null ? (
-        <>
-          <h1>帖子未找到</h1>
-          <p role="alert">帖子不存在或未通过审核。</p>
-        </>
-      ) : null}
+          {isPending ? <p role="status">加载中…</p> : null}
 
-      {!isPending && !isError && data ? (
-        <div className="space-y-4">
-          {data.images.length > 0 ? (
-            <div>
-              <div
-                data-testid="post-image-carousel"
-                onScroll={handleCarouselScroll}
-                className="flex snap-x snap-mandatory overflow-x-auto rounded-lg"
-              >
-                {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
-                  <button
-                    key={imageId}
-                    type="button"
-                    aria-label="查看大图"
-                    disabled={indexInLightbox === null}
-                    onClick={() => {
-                      if (indexInLightbox !== null) {
-                        setLightboxIndex(indexInLightbox);
-                      }
-                    }}
-                    className="block w-full flex-none snap-center disabled:cursor-default"
-                  >
-                    <img
-                      src={publicUrl ?? undefined}
-                      alt={data.title}
-                      className="aspect-[4/3] w-full object-cover"
-                    />
-                  </button>
-                ))}
+          {isError ? <p role="alert">帖子加载失败，请稍后重试。</p> : null}
+
+          {!isPending && !isError && data === null ? (
+            <>
+              <h1>帖子未找到</h1>
+              <p role="alert">帖子不存在或未通过审核。</p>
+            </>
+          ) : null}
+
+          {!isPending && !isError && data ? (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-lg font-semibold text-text">{data.title}</h1>
+                {priceUnset ? null : (
+                  <p className="mt-1 text-2xl font-bold text-text">
+                    {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
+                  </p>
+                )}
               </div>
-              {data.images.length > 1 ? (
-                <p className="mt-2 text-center text-xs text-text-muted">
-                  {currentImageIndex + 1} / {data.images.length}
-                </p>
+
+              <p className="text-sm text-text-muted">
+                {data.locationName ? formatLocationDisplayName(data.locationName) : "地区未填写"}
+              </p>
+
+              <div className="flex items-center gap-6">
+                <button
+                  type="button"
+                  onClick={() => void handleShare(data)}
+                  className="flex flex-col items-center gap-1 text-text-muted hover:text-primary"
+                >
+                  <Share2 size={22} aria-hidden="true" />
+                  <span className="text-xs">分享</span>
+                </button>
+                {id ? <FavoriteButton postId={id} variant="icon" /> : null}
+                {id ? (
+                  <Link
+                    to={`/post/${id}/report`}
+                    className="flex flex-col items-center gap-1 text-text-muted hover:text-danger"
+                  >
+                    <Flag size={22} aria-hidden="true" />
+                    <span className="text-xs">举报</span>
+                  </Link>
+                ) : null}
+              </div>
+
+              {data.contactMethod && data.contactValue ? (
+                <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
+                  <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
+                  <p className="break-words font-medium">{data.contactValue}</p>
+                </div>
               ) : null}
+
+              <p className="whitespace-pre-wrap break-words text-sm text-text">
+                {data.description}
+              </p>
+
+              <PersonCard
+                userId={data.authorId}
+                displayName={data.authorDisplayName}
+                avatarUrl={data.authorAvatarUrl}
+                subtitle={`发布于 ${formatRelativeTimeAgo(data.createdAt)}`}
+              />
             </div>
           ) : null}
 
-          <div>
-            <p className="text-2xl font-bold text-text">
-              {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
-            </p>
-            <h1 className="mt-1 text-lg font-semibold text-text">{data.title}</h1>
-          </div>
+          {id ? <CommentSection postId={id} /> : null}
 
-          <p className="whitespace-pre-wrap break-words text-sm text-text">
-            {data.description}
-          </p>
-
-          <div className="space-y-3 border-t border-border pt-4 text-xs text-text-muted">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full border border-border bg-bg px-2 py-0.5 text-xs text-text-muted">
-                {data.categoryName}
-              </span>
-              <span>{data.locationName ? formatLocationDisplayName(data.locationName) : "地区未填写"}</span>
-            </div>
-            <p>{formatListingDate(data.createdAt)}</p>
-            <p>发布者：{data.authorDisplayName}</p>
-          </div>
-
-          {data.contactMethod && data.contactValue ? (
-            <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
-              <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
-              <p className="break-words font-medium">{data.contactValue}</p>
-            </div>
+          {lightboxIndex !== null ? (
+            <ImageLightbox
+              images={lightboxImages}
+              initialIndex={lightboxIndex}
+              onClose={() => setLightboxIndex(null)}
+            />
           ) : null}
         </div>
-      ) : null}
-
-      <div className="flex items-center gap-4">
-        {id ? <FavoriteButton postId={id} /> : null}
-        {id ? <ContactSellerButton postId={id} /> : null}
-        {id ? (
-          <Link
-            to={`/post/${id}/report`}
-            className="text-sm text-text-muted hover:text-danger hover:underline"
-          >
-            举报
-          </Link>
-        ) : null}
-        {id && data ? (
-          <button
-            type="button"
-            onClick={() => void handleShare(data)}
-            className="text-sm text-text-muted hover:text-primary hover:underline"
-          >
-            分享
-          </button>
-        ) : null}
       </div>
 
-      {id ? <CommentSection postId={id} /> : null}
-
-      {lightboxIndex !== null ? (
-        <ImageLightbox
-          images={lightboxImages}
-          initialIndex={lightboxIndex}
-          onClose={() => setLightboxIndex(null)}
+      {id ? (
+        <ContactSellerButton
+          postId={id}
+          label="咨询"
+          className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-center bg-primary px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 text-base font-semibold text-white shadow-fab hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
         />
       ) : null}
-      </div>
     </main>
   );
 }

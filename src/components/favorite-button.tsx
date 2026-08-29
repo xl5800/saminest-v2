@@ -1,3 +1,4 @@
+import { Star } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -8,6 +9,13 @@ import { AppError } from "../utils/app-error";
 
 export interface FavoriteButtonProps {
   postId: string;
+  /** default（现状："★ 已收藏"/"☆ 收藏" 纯文字，我的收藏列表页
+   *  favorites-page.tsx 在用）｜ icon（23 号卡新增：Star 图标 + 小字号
+   *  文字标签竖排，帖子详情页的分享/收藏/举报三图标一行在用）。只改展示
+   *  形式，下面的登录跳转/收藏切换/错误提示这套逻辑两个变体完全共用，
+   *  不重复实现。不传就是 default，favorites-page.tsx 的调用点不用跟着
+   *  改。 */
+  variant?: "default" | "icon";
 }
 
 /**
@@ -25,7 +33,7 @@ export interface FavoriteButtonProps {
  * 时才展示错误，其它未知失败原因维持这个按钮原来"静默无反应"的行为，不在
  * 这次任务里顺带给它加一个通用错误兜底（那是超出这次任务范围的改动）。
  */
-export function FavoriteButton({ postId }: FavoriteButtonProps) {
+export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonProps) {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
@@ -61,6 +69,30 @@ export function FavoriteButton({ postId }: FavoriteButtonProps) {
           }
         }
       }
+    );
+  }
+
+  if (variant === "icon") {
+    return (
+      <span>
+        <button
+          type="button"
+          aria-pressed={isFavorited}
+          aria-label={isFavorited ? "取消收藏" : "收藏"}
+          disabled={toggleFavorite.isPending}
+          onClick={handleClick}
+          className="flex flex-col items-center gap-1 text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Star
+            size={22}
+            aria-hidden="true"
+            fill={isFavorited ? "currentColor" : "none"}
+            className={isFavorited ? "text-primary" : undefined}
+          />
+          <span className="text-xs">收藏</span>
+        </button>
+        {restrictedError ? <p role="alert">{restrictedError}</p> : null}
+      </span>
     );
   }
 

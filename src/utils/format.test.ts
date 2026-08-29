@@ -5,6 +5,7 @@ import {
   formatMessageTimeDivider,
   formatPrice,
   formatPublishedAt,
+  formatRelativeTimeAgo,
   isPriceUnset,
   shouldShowMessageTimeDivider
 } from "./format";
@@ -81,6 +82,41 @@ describe("formatListingDate", () => {
 
   it("keeps the database UTC date near UTC midnight", () => {
     expect(formatListingDate("2026-07-01T00:30:00.000Z")).toBe("07-01");
+  });
+});
+
+describe("formatRelativeTimeAgo", () => {
+  const now = new Date("2026-07-20T12:00:00.000Z");
+
+  it("returns 刚刚 for a moment less than a minute ago", () => {
+    expect(formatRelativeTimeAgo("2026-07-20T11:59:30.000Z", now)).toBe("刚刚");
+  });
+
+  it("formats minutes for a gap under an hour", () => {
+    expect(formatRelativeTimeAgo("2026-07-20T11:45:00.000Z", now)).toBe("15 分钟前");
+  });
+
+  it("formats hours for a gap under a day", () => {
+    expect(formatRelativeTimeAgo("2026-07-20T09:00:00.000Z", now)).toBe("3 小时前");
+  });
+
+  it("formats days for a gap under 30 days", () => {
+    expect(formatRelativeTimeAgo("2026-07-15T12:00:00.000Z", now)).toBe("5 天前");
+  });
+
+  // 超过 30 天退化成 formatListingDate 的绝对日期格式，不展示"128 天前"
+  // 这种对用户没有实际意义的大数字。
+  it("falls back to formatListingDate's absolute date once the gap reaches 30 days", () => {
+    const thirtyDaysAgo = "2026-06-20T12:00:00.000Z";
+    expect(formatRelativeTimeAgo(thirtyDaysAgo, now)).toBe(formatListingDate(thirtyDaysAgo));
+  });
+
+  it("returns the fallback for null", () => {
+    expect(formatRelativeTimeAgo(null, now)).toBe("时间未知");
+  });
+
+  it("returns the fallback for an invalid timestamp", () => {
+    expect(formatRelativeTimeAgo("not-a-date", now)).toBe("时间未知");
   });
 });
 

@@ -133,3 +133,42 @@ export function formatListingDate(createdAt: string | null): string {
 
   return year === currentYear ? `${month}-${day}` : `${year}-${month}-${day}`;
 }
+
+const MINUTE_MS = 60 * 1000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const RELATIVE_TIME_MAX_DAYS = 30;
+
+/**
+ * "X 前"这类相对时间文案——23 号卡新增，帖子详情页的发帖者卡片用（见
+ * post-detail-page.tsx，文案是"发布于 {formatRelativeTimeAgo(createdAt)}"）。
+ *
+ * 23 号卡本来想展示"活跃于 X 前"（用户最后活跃时间），调查后发现
+ * profiles.last_active_at 这一列虽然在表定义里（见
+ * 20260715220000_create_profiles_table.sql），但全仓库没有任何触发器/RPC/
+ * 前端代码会写入它——不是"没有这个数据"那么简单，是"这一列的值对所有用户
+ * 永远是 null，因为压根没有代码路径会更新它"，等同于没有这个数据。按 23
+ * 号卡的指示，没有为了展示这一个字段新增触发器/迁移去维护它，退回展示
+ * 帖子自己的发布时间（posts.created_at，详情页原本就在查的字段）。
+ *
+ * 超过 30 天之后退化成 formatListingDate 那种绝对日期——"发布于 128 天前"
+ * 这种大数字对用户没有实际意义，绝对日期反而更好读，跟 formatListingDate
+ * 已有的"当年只显示月-日，跨年显示完整年份"规则保持一致，不重新发明一套
+ * 日期格式。
+ */
+export function formatRelativeTimeAgo(dateString: string | null, now: Date = new Date()): string {
+  if (!dateString?.trim()) return "时间未知";
+
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+
+  const diffMs = now.getTime() - date.getTime();
+  if (diffMs < MINUTE_MS) return "刚刚";
+  if (diffMs < HOUR_MS) return `${Math.floor(diffMs / MINUTE_MS)} 分钟前`;
+  if (diffMs < DAY_MS) return `${Math.floor(diffMs / HOUR_MS)} 小时前`;
+
+  const days = Math.floor(diffMs / DAY_MS);
+  if (days < RELATIVE_TIME_MAX_DAYS) return `${days} 天前`;
+
+  return formatListingDate(dateString);
+}
