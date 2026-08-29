@@ -133,6 +133,34 @@ describe("FavoriteButton", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
+  // 23 号卡：帖子详情页的分享/收藏/举报图标行用这个新变体。
+  describe("variant='icon'", () => {
+    it("renders a '收藏'/'取消收藏' aria-label reflecting favorited state, with a visible '收藏' text label either way", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useFavoritePostIdsQuery.mockReturnValue({ data: ["post-1"] });
+
+      renderWithProviders(<FavoriteButton postId="post-1" variant="icon" />);
+
+      const button = screen.getByRole("button", { name: "取消收藏" });
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      expect(button).toHaveTextContent("收藏");
+    });
+
+    it("shares the exact same toggle-favorite logic as the default variant", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useFavoritePostIdsQuery.mockReturnValue({ data: [] });
+
+      renderWithProviders(<FavoriteButton postId="post-1" variant="icon" />);
+
+      fireEvent.click(screen.getByRole("button", { name: "收藏" }));
+
+      expect(mutateMock).toHaveBeenCalledWith(
+        { userId: "user-1", postId: "post-1", isCurrentlyFavorited: false },
+        expect.objectContaining({ onError: expect.any(Function) })
+      );
+    });
+  });
+
   it("disables the button while the mutation is pending, preventing a double submit", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });

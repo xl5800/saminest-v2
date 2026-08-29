@@ -84,7 +84,8 @@ describe("CommentSection", () => {
 
     renderSection();
 
-    expect(screen.getByRole("heading", { name: "评论 (12)" })).toBeInTheDocument();
+    // 23 号卡：标题从"评论"改成"留言"。
+    expect(screen.getByRole("heading", { name: "留言 (12)" })).toBeInTheDocument();
   });
 
   it("does not show the composer textarea when there is no session, and shows a 登录 link instead", () => {

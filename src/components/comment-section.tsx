@@ -109,8 +109,11 @@ export function CommentSection({ postId }: CommentSectionProps) {
   const tree = comments ? buildCommentTree(comments) : [];
 
   return (
-    <section aria-label="评论区" className="mt-4">
-      <h2 className="mb-3 text-base font-semibold text-text">评论 ({commentCount})</h2>
+    <section aria-label="留言区" className="mt-4">
+      {/* 23 号卡：标题从"评论"改成"留言"——只改这个可见标题（连同它的
+          aria-label），下面输入框 placeholder/按钮文案/空态文案里的
+          "评论"字样不在这次改动范围内，见完工报告。 */}
+      <h2 className="mb-3 text-base font-semibold text-text">留言 ({commentCount})</h2>
 
       {userId ? (
         <form onSubmit={handleSubmit} className="mb-4">

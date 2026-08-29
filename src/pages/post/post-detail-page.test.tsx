@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Location } from "react-router-dom";
@@ -12,7 +12,8 @@ const {
   usePostCommentsQuery,
   useCreateCommentMutation,
   useDeleteCommentMutation,
-  shareMock
+  shareMock,
+  navigateMock
 } = vi.hoisted(() => ({
   useFavoritePostIdsQuery: vi.fn(),
   useToggleFavoriteMutation: vi.fn(),
@@ -22,8 +23,18 @@ const {
   usePostCommentsQuery: vi.fn(),
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
-  shareMock: vi.fn()
+  shareMock: vi.fn(),
+  navigateMock: vi.fn()
 }));
+
+// 23 号卡：悬浮"关闭"按钮点击后调用 navigate(-1)——跟其它页面（比如
+// profile-page.test.tsx）验证 useNavigate 调用参数是同一个 mock 模式，
+// 用 importOriginal 保留 MemoryRouter/Routes/Route/Link 等真实实现，只替换
+// useNavigate。
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 // PostDetailPage renders FavoriteButton and ContactSellerButton, which pull in
 // useQuery/useMutation hooks of their own — mock those the same way
@@ -86,6 +97,8 @@ const samplePostDetail = {
   locationName: "Rockville",
   createdAt: "2000-07-01T00:00:00.000Z",
   authorDisplayName: "Alice",
+  authorId: "user-2",
+  authorAvatarUrl: "https://img.example.com/alice-avatar.jpg",
   contactMethod: "email",
   contactValue: "alice@example.com",
   images: [
@@ -111,6 +124,7 @@ describe("PostDetailPage", () => {
     useDeleteCommentMutation.mockReset();
     shareMock.mockReset();
     shareMock.mockResolvedValue(undefined);
+    navigateMock.mockReset();
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });
     useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
     // 默认查询已解析完成、且作者不是当前登录用户，让 ContactSellerButton
@@ -143,13 +157,10 @@ describe("PostDetailPage", () => {
     expect(screen.getAllByRole("status")[0]).toHaveTextContent("加载中…");
   });
 
-  // 21 号卡（二级页面顶部栏简化）：顶部栏换成 TopBar 的 nav-only 变体，
-  // 不再是全局 AppHeader 的"← Saminest 发布"——跟
-  // region-select-page.test.tsx "renders the nav-only TopBar..." 是同一个
-  // 断言模式。这个页面本来就没有额外的"页面名称"标题（标题就是帖子标题
-  // 本身），所以这里不需要像"我的活动"/"我的收藏"那样再断言一个页面内
-  // <h1>。
-  it("renders the nav-only TopBar (back arrow only, no title/brand/publish text), even while the post detail query is pending", () => {
+  // 23 号卡：顶部栏整个换掉了——21 号卡的 TopBar nav-only（一条常规返回
+  // 箭头顶栏）不再使用，改成页面自己渲染的悬浮"关闭"圆形按钮，不再有
+  // TopBar 组件、不再有"返回"这个可访问名称的按钮。
+  it("renders a floating 关闭 button (no TopBar, no brand/publish text), even while the post detail query is pending", () => {
     usePostDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
     renderWithProviders(<PostDetailPage />, {
@@ -157,9 +168,27 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "关闭" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();
     expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+  });
+
+  it("navigates back (navigate(-1)) when the floating 关闭 button is clicked", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+
+    expect(navigateMock).toHaveBeenCalledWith(-1);
   });
 
   it("shows a friendly not-found message, without leaking whether the post exists but is unapproved, when the query resolves to null", () => {
@@ -185,7 +214,7 @@ describe("PostDetailPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("帖子加载失败，请稍后重试。");
   });
 
-  it("renders the full post content — title, description, price, category, location, date, author, contact info and all images", () => {
+  it("renders the full post content — title, description, price, location, author, contact info and all images", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -206,10 +235,8 @@ describe("PostDetailPage", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("USD 1,200")).toBeInTheDocument();
-    expect(screen.getByText("租房")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
-    expect(screen.getByText("2000-07-01")).toBeInTheDocument();
-    expect(screen.getByText("发布者：Alice")).toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 
     const images = screen.getAllByRole("img");
@@ -218,10 +245,9 @@ describe("PostDetailPage", () => {
     expect(images[1]).toHaveAttribute("src", "https://img.example.com/2.jpg");
   });
 
-  // 改版之后价格在标题上方（放大突出），不再是"标题在最上面"——用
-  // compareDocumentPosition 断言价格文本节点在标题 <h1> 之前，而不是只
-  // 断言两者都存在（存在性已经被上面那条测试覆盖了）。
-  it("renders the price above the title (P0 layout reorder: image → price → title → description → secondary info)", () => {
+  // 23 号卡：分类标签 pill 和发布时间这两项，新的信息顺序里没有列出来，
+  // 这次一并从详情页拿掉了（见完工报告里对这条决定的说明）。
+  it("does not render the category tag pill or the listing date — dropped in the 23 号卡 layout, unlike location/author which are kept", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -233,11 +259,51 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    const price = screen.getByText("USD 1,200");
-    const title = screen.getByRole("heading", { name: "Sunny room near metro" });
+    expect(screen.queryByText("租房")).not.toBeInTheDocument();
+    expect(screen.queryByText("2000-07-01")).not.toBeInTheDocument();
+  });
 
-    // Node.DOCUMENT_POSITION_FOLLOWING (4): title 在 price 之后。
-    expect(price.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  // 23 号卡：顺序从"价格在标题上方（放大突出）"改成"标题在价格上方"——用
+  // compareDocumentPosition 断言标题文本节点在价格之前，而不是只断言两者
+  // 都存在（存在性已经被上面那条测试覆盖了）。
+  it("renders the title above the price (23 号卡 layout reorder: image → title → price → location → icons → ...)", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    const title = screen.getByRole("heading", { name: "Sunny room near metro" });
+    const price = screen.getByText("USD 1,200");
+
+    // Node.DOCUMENT_POSITION_FOLLOWING (4): price 在 title 之后。
+    expect(title.compareDocumentPosition(price) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  // 23 号卡：价格为空时那一整行完全不渲染——不是留空、不是显示"价格未
+  // 填写"，跟 19 号卡帖子卡片的规则一致。
+  it("renders no price line at all (not a '价格未填写' placeholder) when the post has no price", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: { ...samplePostDetail, priceAmount: null, priceLabel: null },
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(
+      screen.getByRole("heading", { name: "Sunny room near metro" })
+    ).toBeInTheDocument();
+    expect(screen.queryByText("价格未填写")).not.toBeInTheDocument();
+    expect(screen.queryByText(/USD/)).not.toBeInTheDocument();
   });
 
   it("renders a horizontally scrollable image carousel (not a two-column grid) with a '1 / 2' counter that updates on scroll", () => {
@@ -293,9 +359,13 @@ describe("PostDetailPage", () => {
 
     fireEvent.click(screen.getAllByRole("button", { name: "查看大图" })[0]);
 
-    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    // 页面自己现在也有一个"关闭"按钮（23 号卡的悬浮返回按钮），跟
+    // ImageLightbox 自己的"关闭"按钮重名——限定在 dialog 范围内查找，
+    // 确保点的是查看器自己的关闭按钮，不是页面级的那个。
+    fireEvent.click(within(dialog).getByRole("button", { name: "关闭" }));
 
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
@@ -334,7 +404,11 @@ describe("PostDetailPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("still renders FavoriteButton, ContactSellerButton and the 举报 link alongside the real content", () => {
+  // 23 号卡：分享/收藏/举报三个图标一行，收藏用 FavoriteButton 新增的
+  // icon 变体（可访问名从"☆ 收藏"变成"收藏"，见 favorite-button.tsx）；
+  // 底部常驻"咨询"大按钮复用 ContactSellerButton（文案从"联系发布者"
+  // 换成"咨询"，背后逻辑没变）。
+  it("still renders FavoriteButton (icon variant), the 咨询 button (ContactSellerButton relabeled) and the 举报 link alongside the real content", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -346,8 +420,8 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    expect(screen.getByRole("button", { name: "☆ 收藏" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "联系发布者" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收藏" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "咨询" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
       "href",
       "/post/post-1/report"
@@ -405,6 +479,57 @@ describe("PostDetailPage", () => {
     consoleErrorSpy.mockRestore();
   });
 
+  // 23 号卡补完：发帖者从纯文字换成 PersonCard（头像+昵称+副标题+chevron，
+  // 整行可点，见 person-card.tsx）——跟活动详情页的"发起人卡片"复用同一个
+  // 组件，这里只验证 PostDetailPage 把正确的 props 传给了它，PersonCard
+  // 自己的渲染细节由 person-card.test.tsx 覆盖，不在这里重复断言。
+  describe("author card (PersonCard, 23 号卡补完)", () => {
+    it("links to /users/:authorId and shows the author's avatar", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      const authorLink = screen.getByRole("link", { name: /Alice/ });
+      expect(authorLink).toHaveAttribute("href", "/users/user-2");
+
+      // PersonCard 的头像 <img alt=""> 是装饰性图片，不带 role="img"（跟
+      // 帖子封面图那两张不同，那两张有真实 alt 文字），用 querySelectorAll
+      // 按 src 精确匹配，不用 getAllByRole。
+      const avatarImages = Array.from(container.querySelectorAll("img")).filter(
+        (img) => img.getAttribute("src") === "https://img.example.com/alice-avatar.jpg"
+      );
+      expect(avatarImages).toHaveLength(1);
+    });
+
+    // 调查结论：profiles.last_active_at 这一列虽然存在，但仓库里没有任何
+    // 代码会写入它，等同于没有这个数据——退回展示帖子自己的发布时间。
+    it("shows '发布于 <相对时间>' as the subtitle (not '活跃于 X 前' — profiles.last_active_at is never populated by any code path)", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      // samplePostDetail.createdAt 是 2000 年，早就超过相对时间的 30 天
+      // 上限，会退化成 formatListingDate 的绝对日期格式，断言结果是
+      // 确定性的，不用 mock Date.now()。
+      expect(screen.getByText("发布于 2000-07-01")).toBeInTheDocument();
+      expect(screen.queryByText(/活跃于/)).not.toBeInTheDocument();
+    });
+  });
+
   it("renders the comment section with the comment count from PostDetail.commentCount", () => {
     usePostDetailQuery.mockReturnValue({
       data: { ...samplePostDetail, commentCount: 12 },
@@ -417,8 +542,9 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
+    // 23 号卡：留言区标题从"评论"改成"留言"。
     expect(
-      screen.getByRole("heading", { name: "评论 (12)" })
+      screen.getByRole("heading", { name: "留言 (12)" })
     ).toBeInTheDocument();
   });
 

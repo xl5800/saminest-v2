@@ -78,6 +78,32 @@ describe("ContactSellerButton", () => {
     ).toBeInTheDocument();
   });
 
+  // 23 号卡：帖子详情页底部常驻"咨询"大按钮复用这同一个组件，只换文案/
+  // 样式，登录跳转/建会话逻辑不变（跟"联系发布者"共用同一批测试，这里只
+  // 单独确认 label/className 这两个新 prop 生效）。
+  it("renders the custom label and className when provided (23 号卡 '咨询' button), still hidden for the post's own author", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    usePostAuthorQuery.mockReturnValue({ data: "author-1", isSuccess: true });
+
+    renderWithProviders(
+      <ContactSellerButton postId="post-1" label="咨询" className="fixed inset-x-0 bottom-0" />
+    );
+
+    const button = screen.getByRole("button", { name: "咨询" });
+    expect(button).toHaveClass("fixed", "inset-x-0", "bottom-0");
+  });
+
+  it("renders nothing (label/className included) when the viewer is the post's own author", () => {
+    useAuthStore.getState().setSession({ user: { id: "author-1" } } as never);
+    usePostAuthorQuery.mockReturnValue({ data: "author-1", isSuccess: true });
+
+    renderWithProviders(
+      <ContactSellerButton postId="post-1" label="咨询" className="fixed inset-x-0 bottom-0" />
+    );
+
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("navigates to /login and does not call the mutation when logged out", () => {
     renderWithProviders(<ContactSellerButton postId="post-1" />);
 

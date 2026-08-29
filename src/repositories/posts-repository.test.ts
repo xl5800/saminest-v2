@@ -715,12 +715,13 @@ describe("getPostDetail", () => {
         location_id: "loc-1",
         location_text: null,
         created_at: "2026-07-01T00:00:00.000Z",
+        author_id: "user-1",
         contact_method: "email",
         contact_value: "a@b.com",
         comment_count: 4,
         location: { name: "Rockville" },
         category: { name_zh: "租房" },
-        author: { display_name: "Alice" },
+        author: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" },
         post_images: [
           { id: "img-1", public_url: "https://img.example.com/1.jpg", sort_order: 0, deleted_at: null },
           {
@@ -739,7 +740,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -762,6 +763,8 @@ describe("getPostDetail", () => {
       locationName: "Rockville",
       createdAt: "2026-07-01T00:00:00.000Z",
       authorDisplayName: "Alice",
+      authorId: "user-1",
+      authorAvatarUrl: "https://img.example.com/alice.jpg",
       contactMethod: "email",
       contactValue: "a@b.com",
       images: [
@@ -770,6 +773,43 @@ describe("getPostDetail", () => {
       ],
       commentCount: 4
     });
+  });
+
+  // 23 号卡：authorId/authorAvatarUrl 新增字段——authorId 直接来自裸的
+  // author_id 列（NOT NULL，不依赖嵌套 join），authorAvatarUrl 依赖嵌套
+  // 的 author:profiles(...)，author 整体为 null 时要跟 authorDisplayName
+  // 一样有安全的 null 兜底，不是抛错。
+  it("falls back to authorAvatarUrl: null when the nested author profile is null (e.g. RLS-blocked), while authorId still comes from the flat author_id column", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        id: "post-1",
+        status: "pending",
+        title: "Sunny room",
+        description: "A lovely room near the metro.",
+        price_amount: 1200,
+        price_label: null,
+        currency_code: "USD",
+        category_id: "cat-1",
+        location_id: "loc-1",
+        location_text: null,
+        created_at: "2026-07-01T00:00:00.000Z",
+        author_id: "user-1",
+        contact_method: null,
+        contact_value: null,
+        comment_count: 0,
+        location: null,
+        category: null,
+        author: null,
+        post_images: []
+      },
+      error: null
+    });
+
+    const result = await getPostDetail("post-1");
+
+    expect(result?.authorId).toBe("user-1");
+    expect(result?.authorDisplayName).toBe("未知用户");
+    expect(result?.authorAvatarUrl).toBeNull();
   });
 
   it("does not filter by status — visibility is left entirely to RLS", async () => {

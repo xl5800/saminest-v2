@@ -1,10 +1,11 @@
 import { Share } from "@capacitor/share";
-import { ChevronRight, Flag, Share2 } from "lucide-react";
+import { Flag, Share2 } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { ActivityFavoriteButton } from "../../components/activity-favorite-button";
 import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
 import { ActivityParticipationButtonView } from "../../components/activity-participation-button";
+import { PersonCard } from "../../components/person-card";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
@@ -39,6 +40,15 @@ import { formatActivityStartAt } from "../../utils/format";
  * 发起人卡片这次加了一个右侧 chevron（纯装饰，不改变可点击范围——整张
  * 卡片本来就是一个 <Link>）：明确提示"这一整行可点，会跳发起者主页"，
  * 跟详情页/发起者主页之间的导航关系在视觉上对应起来。
+ *
+ * 23 号卡（帖子详情页顶部+操作区改版）：这张"发起人卡片"抽成了共享组件
+ * `PersonCard`（见 person-card.tsx），帖子详情页新增的"发帖者卡片"复用
+ * 同一个组件（传不同的 subtitle 文案），这里改成调用 `<PersonCard
+ * userId={...} displayName={...} avatarUrl={...} subtitle="发起人" />`，
+ * 不再是这个页面自己内联的一段 JSX——渲染结果跟改动前逐字节一致，唯一的
+ * 例外是顺手修正了一个既有小 bug：原来 chevron 用的 `text-chev` 类名从来
+ * 没有对应的 token（真正的 token 是 `text-chevron`），抽取时一并改成了
+ * 正确的类名，chevron 颜色从"默认黑"变成设计要求的浅灰。
  *
  * 一致性的关键点：这个页面只调用一次 useActivityParticipationAction，把
  * 同一个 `participationAction` 对象分别交给 ActivityParticipationButtonView
@@ -204,34 +214,12 @@ export function ActivityDetailPage() {
               </div>
             ) : null}
 
-            <Link
-              to={`/users/${data.organizerId}`}
-              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white p-3 hover:border-primary"
-            >
-              <span className="flex min-w-0 items-center gap-3">
-                {data.organizerAvatarUrl ? (
-                  <img
-                    src={data.organizerAvatarUrl}
-                    alt=""
-                    className="h-10 w-10 shrink-0 rounded-full object-cover"
-                  />
-                ) : (
-                  <span
-                    aria-hidden="true"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                  >
-                    {data.organizerDisplayName.trim().charAt(0).toUpperCase() || "?"}
-                  </span>
-                )}
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-text">
-                    {data.organizerDisplayName}
-                  </span>
-                  <span className="block text-xs text-text-muted">发起人</span>
-                </span>
-              </span>
-              <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-chev" />
-            </Link>
+            <PersonCard
+              userId={data.organizerId}
+              displayName={data.organizerDisplayName}
+              avatarUrl={data.organizerAvatarUrl}
+              subtitle="发起人"
+            />
 
             <ActivityParticipationButtonView action={participationAction} />
           </div>

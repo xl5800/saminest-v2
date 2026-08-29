@@ -10,6 +10,13 @@ const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 
 export interface ContactSellerButtonProps {
   postId: string;
+  /** 按钮文字，默认"联系发布者"。23 号卡：帖子详情页底部常驻"咨询"大
+   *  按钮复用这同一个组件（同一套登录跳转/建会话/错误提示逻辑，只换了
+   *  文案和摆放位置——不是另起一个"咨询按钮"重新实现一遍这套逻辑）。 */
+  label?: string;
+  /** 按钮自身的 className，不传就是原来那个内联文字链接的朴素样式；23
+   *  号卡的"咨询"大按钮会传一个撑满宽度、更醒目的样式。 */
+  className?: string;
 }
 
 /**
@@ -26,7 +33,7 @@ export interface ContactSellerButtonProps {
  * 拿到结果（isSuccess）之后才决定渲染什么；查询还在 pending 或失败时，
  * 一律先不渲染任何东西。
  */
-export function ContactSellerButton({ postId }: ContactSellerButtonProps) {
+export function ContactSellerButton({ postId, label, className }: ContactSellerButtonProps) {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
@@ -76,8 +83,9 @@ export function ContactSellerButton({ postId }: ContactSellerButtonProps) {
         type="button"
         disabled={createConversation.isPending}
         onClick={handleClick}
+        className={className}
       >
-        {createConversation.isPending ? "创建会话中…" : "联系发布者"}
+        {createConversation.isPending ? "创建会话中…" : (label ?? "联系发布者")}
       </button>
       {error ? <p role="alert">{error}</p> : null}
     </span>

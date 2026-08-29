@@ -132,14 +132,12 @@ describe("AppShell", () => {
       }
     );
 
-    // 21 号卡（二级页面顶部栏简化）：我的活动/我的收藏/帖子详情页三个页面
-    // 换成了自己的 TopBar nav-only 变体，同样只关 AppHeader、留着
-    // BottomNav——帖子详情页用 "/post/123" 而不是裸的 "/post/:id" 验证
-    // matchPath 对动态路径参数也生效，不是只匹配了静态路径这一种情况。
+    // 21 号卡（二级页面顶部栏简化）：我的活动/我的收藏两个页面换成了自己的
+    // TopBar nav-only 变体，同样只关 AppHeader、留着 BottomNav。帖子详情页
+    // 当时也在这个名单里，23 号卡把它挪进了完全沉浸式，见下面单独的用例。
     it.each([
       ["/my-activities", "my-activities page"],
-      ["/favorites", "favorites page"],
-      ["/post/123", "post-detail page"]
+      ["/favorites", "favorites page"]
     ])(
       "renders BottomNav but NOT AppHeader on the migrated \"%s\" page",
       (path) => {
@@ -149,5 +147,16 @@ describe("AppShell", () => {
         expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
       }
     );
+
+    // 23 号卡（帖子详情页顶部+操作区改版）：不再是"顶部栏换了、底部 Tab
+    // 栏还在"，页面自己的悬浮关闭按钮 + 常驻"咨询"大按钮取代了 AppHeader/
+    // BottomNav 两者，归进完全沉浸式——用 "/post/123" 而不是裸的
+    // "/post/:id" 验证 matchPath 对动态路径参数也生效。
+    it("renders neither AppHeader nor BottomNav on the fully-immersive post detail page (\"/post/123\")", () => {
+      renderShell("/post/123");
+
+      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+    });
   });
 });
