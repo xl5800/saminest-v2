@@ -33,20 +33,29 @@ describe("ProfileSummary", () => {
     expect(screen.getByText("?")).toBeInTheDocument();
   });
 
-  it("renders the display name as the page heading", () => {
-    render(<ProfileSummary displayName="Bob" avatarUrl={null} />);
+  // 22 号卡（用户主页改版）：清理掉不再有调用方的 "default" 变体之后，这个
+  // 组件只剩"我的"页用的横排卡片这一种形态——那个页面的 <h1> 已经是 TopBar
+  // tab 变体渲染的标题"我的"，这里不应该再渲染出第二个 <h1>。
+  it("does not render an <h1> — the caller's TopBar already owns the page's single <h1>", () => {
+    render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
-    expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  it("shows the location only when locationName is non-empty", () => {
-    const { rerender } = render(
-      <ProfileSummary displayName="Bob" avatarUrl={null} locationName="Rockville" />
+  it("shows nickname/bio/tertiaryText, matching the old profile-redesign card's 3-line spec", () => {
+    render(
+      <ProfileSummary
+        displayName="Alice"
+        avatarUrl={null}
+        bio="喜欢 hiking"
+        tertiaryText="alice@example.com"
+      />
     );
-    expect(screen.getByText("Rockville")).toBeInTheDocument();
 
-    rerender(<ProfileSummary displayName="Bob" avatarUrl={null} locationName={null} />);
-    expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("喜欢 hiking")).toBeInTheDocument();
+    expect(screen.getByText("alice@example.com")).toBeInTheDocument();
   });
 
   it("shows the bio only when it is non-empty, without a '暂无简介' placeholder", () => {
@@ -60,7 +69,7 @@ describe("ProfileSummary", () => {
     expect(screen.queryByText(/暂无简介/)).not.toBeInTheDocument();
   });
 
-  it("renders children below the avatar/name/location/bio block, regardless of what the caller passes", () => {
+  it("renders children below the avatar/name/bio block, regardless of what the caller passes", () => {
     render(
       <ProfileSummary displayName="Bob" avatarUrl={null}>
         <button type="button">发消息</button>
@@ -70,61 +79,17 @@ describe("ProfileSummary", () => {
     expect(screen.getByRole("button", { name: "发消息" })).toBeInTheDocument();
   });
 
-  describe("size='compact' (56px 头像卡片，'我的'页用)", () => {
-    it("does not render an <h1> — the caller's TopBar already owns the page's single <h1>", () => {
-      render(<ProfileSummary size="compact" displayName="Alice" avatarUrl={null} />);
-
-      expect(screen.queryByRole("heading")).not.toBeInTheDocument();
-      expect(screen.getByText("Alice")).toBeInTheDocument();
-    });
-
-    it("shows nickname/signature(bio)/tertiaryText but not locationName, matching the old profile-redesign card's 3-line spec", () => {
-      render(
-        <ProfileSummary
-          size="compact"
-          displayName="Alice"
-          avatarUrl={null}
-          bio="喜欢 hiking"
-          locationName="Rockville"
-          tertiaryText="alice@example.com"
-        />
-      );
-
-      expect(screen.getByText("Alice")).toBeInTheDocument();
-      expect(screen.getByText("喜欢 hiking")).toBeInTheDocument();
-      expect(screen.getByText("alice@example.com")).toBeInTheDocument();
-      expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
-    });
-
-    it("still falls back to an uppercase initial placeholder when avatarUrl is null", () => {
-      render(<ProfileSummary size="compact" displayName="bob" avatarUrl={null} />);
-
-      expect(screen.getByText("B")).toBeInTheDocument();
-    });
-  });
-
-  it("size='default' (the implicit default) still renders the display name as the page's <h1>, unaffected by the compact variant", () => {
-    render(<ProfileSummary displayName="Bob" avatarUrl={null} />);
-
-    expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
-  });
-
   describe("avatarHref (11 号卡：头像跳转到自己的公开主页预览)", () => {
     it("does not wrap the avatar in a link when avatarHref is not provided", () => {
-      const { container } = render(<ProfileSummary size="compact" displayName="Bob" avatarUrl={null} />);
+      const { container } = render(<ProfileSummary displayName="Bob" avatarUrl={null} />);
 
       expect(container.querySelector("a")).not.toBeInTheDocument();
     });
 
-    it("wraps the avatar (only) in a link to avatarHref when provided, in the compact variant", () => {
+    it("wraps the avatar (only) in a link to avatarHref when provided", () => {
       render(
         <MemoryRouter>
-          <ProfileSummary
-            size="compact"
-            displayName="Bob"
-            avatarUrl={null}
-            avatarHref="/users/user-1"
-          />
+          <ProfileSummary displayName="Bob" avatarUrl={null} avatarHref="/users/user-1" />
         </MemoryRouter>
       );
 

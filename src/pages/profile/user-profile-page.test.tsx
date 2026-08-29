@@ -10,7 +10,8 @@ const {
   useBlockUserMutation,
   useUnblockUserMutation,
   blockMutateAsyncMock,
-  unblockMutateAsyncMock
+  unblockMutateAsyncMock,
+  listApprovedPosts
 } = vi.hoisted(() => ({
   usePublicProfileQuery: vi.fn(),
   useCreateProfileConversationMutation: vi.fn(),
@@ -20,7 +21,8 @@ const {
   useBlockUserMutation: vi.fn(),
   useUnblockUserMutation: vi.fn(),
   blockMutateAsyncMock: vi.fn(),
-  unblockMutateAsyncMock: vi.fn()
+  unblockMutateAsyncMock: vi.fn(),
+  listApprovedPosts: vi.fn()
 }));
 
 vi.mock("../../features/profile/use-public-profile-query", () => ({
@@ -39,6 +41,12 @@ vi.mock("../../features/blocks/use-block-user-mutation", () => ({
 }));
 vi.mock("../../features/blocks/use-unblock-user-mutation", () => ({
   useUnblockUserMutation
+}));
+// 22 号卡：页面底部新增的"发布的作品"网格用的是真实的 PostList 组件（不是
+// 单独 mock 掉整个组件），只 mock 它最终依赖的仓库函数——跟这个文件里其它
+// hook 同一个"mock 网络边界，不 mock 组件树"的原则，见 post-list.test.tsx。
+vi.mock("../../repositories/posts-repository", () => ({
+  listApprovedPosts
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -83,6 +91,7 @@ describe("UserProfilePage", () => {
     useUnblockUserMutation.mockReset();
     blockMutateAsyncMock.mockReset();
     unblockMutateAsyncMock.mockReset();
+    listApprovedPosts.mockReset();
 
     useCreateProfileConversationMutation.mockReturnValue({
       mutate: mutateMock,
@@ -91,6 +100,9 @@ describe("UserProfilePage", () => {
     useIsBlockingQuery.mockReturnValue({ data: false });
     useBlockUserMutation.mockReturnValue({ mutateAsync: blockMutateAsyncMock, isPending: false });
     useUnblockUserMutation.mockReturnValue({ mutateAsync: unblockMutateAsyncMock, isPending: false });
+    // 这个文件里绝大多数测试不关心"发布的作品"网格具体展示什么，默认给
+    // 一个已解决的空结果，避免每个测试都要重复 mock 这一个查询。
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
   });
 
   it("shows a loading message while the query is pending", () => {
@@ -118,7 +130,10 @@ describe("UserProfilePage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("用户不存在。");
   });
 
-  it("renders avatar-initial placeholder, nickname, location, and bio for a normal profile", () => {
+  // 22 号卡：昵称下面只展示简介，不再展示城市——任务卡给的顺序原话是
+  // "头像下面是昵称 + 个人简介"，没有提城市，这里按字面顺序去掉了这一行
+  // （PublicProfile.locationName 这个字段本身没删，只是页面不渲染）。
+  it("renders avatar-initial placeholder, nickname, and bio for a normal profile, without a location line", () => {
     usePublicProfileQuery.mockReturnValue({
       data: samplePublicProfile,
       isPending: false,
@@ -130,8 +145,8 @@ describe("UserProfilePage", () => {
     expect(container.querySelector("img")).not.toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
-    expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByText("Hi there, I like hiking.")).toBeInTheDocument();
+    expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
   });
 
   it("renders an <img> avatar when avatarUrl is present", () => {
@@ -288,8 +303,10 @@ describe("UserProfilePage", () => {
     );
   });
 
-  // 04 号卡改版：顶部换成 TopBar detail 变体，页面自己不再手写返回按钮。
-  it("renders the TopBar detail variant's back button", () => {
+  // 22 号卡：不再用 TopBar，返回箭头换成悬浮在头图上的圆形按钮——但不管
+  // 加载中/加载失败/正常显示，这个按钮都应该在，跟改版前 TopBar 一直渲染
+  // 返回按钮是同一个行为，只是不再依赖 TopBar 这个组件本身。
+  it("renders a floating '返回' button even while the profile query is pending", () => {
     usePublicProfileQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
     renderPage();
@@ -297,18 +314,24 @@ describe("UserProfilePage", () => {
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
   });
 
-  // UGC 安全功能补齐任务卡 2（举报用户）之前，这个仓库还没有"举报用户"
-  // 功能，这里曾经断言"…"更多菜单按钮不渲染；补上举报用户入口之后这条
-  // 测试改成验证菜单和里面的"举报用户"链接确实存在，见下面新增的
-  // describe("举报用户 more-menu entry") 区块。
+  it("navigates back one entry in history when the floating back button is clicked", () => {
+    usePublicProfileQuery.mockReturnValue({
+      data: samplePublicProfile,
+      isPending: false,
+      isError: false
+    });
 
-  // 04 号卡验收标准："发起者主页只有「发消息」一个主操作按钮且居中，没有
-  // 收藏/星标按钮"。UGC 安全功能补齐任务卡 1 之后新增的"屏蔽此人"按钮和
-  // 任务卡 2 新增的"更多操作"更多菜单触发按钮，都是这两次任务卡明确要求
-  // 加的入口，不属于这条验收标准想排除的"收藏/星标"类按钮，所以按钮总数
-  // 从 2 个变成 4 个（返回 + 发消息 + 屏蔽此人 + 更多操作），断言跟着更新，
-  // 而不是删掉这条测试。
-  it("renders '发消息'/'屏蔽此人'/'更多操作' as the only action buttons on someone else's profile — no favorite/follow button", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith(-1);
+  });
+
+  // 22 号卡验收标准："只有一个'发消息'按钮...没有'关注'按钮"。"屏蔽此人"
+  // 和"更多操作"（举报用户的入口）都是任务卡完全没提到、但真实存在的
+  // UGC 安全功能，跟用户确认过明确保留，不属于"关注"那种"暂时不放入口"
+  // 的按钮，所以按钮总数是 4 个：返回 + 发消息 + 屏蔽此人 + 更多操作。
+  it("renders '发消息'/'屏蔽此人'/'更多操作' as the only action buttons on someone else's profile — no follow button", () => {
     usePublicProfileQuery.mockReturnValue({
       data: samplePublicProfile,
       isPending: false,
@@ -317,7 +340,11 @@ describe("UserProfilePage", () => {
 
     renderPage();
 
-    expect(screen.getAllByRole("button")).toHaveLength(4); // 返回 + 发消息 + 屏蔽此人 + 更多操作
+    expect(screen.getByRole("button", { name: "发消息" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "屏蔽此人" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /关注/ })).not.toBeInTheDocument();
+    // 返回 + 发消息 + 屏蔽此人 + 更多操作，一共 4 个 <button>。
+    expect(screen.getAllByRole("button")).toHaveLength(4);
   });
 
   // 07 号卡（活动卡片头像区放大 + 发起者联系参与者）验收标准："发起者
@@ -447,9 +474,12 @@ describe("UserProfilePage", () => {
     });
   });
 
-  // UGC 安全功能补齐任务卡 2（举报用户）。
-  describe("举报用户 more-menu entry", () => {
-    it("renders a '更多操作' menu with a '举报用户' link to /users/:userId/report on someone else's profile", () => {
+  // UGC 安全功能补齐任务卡 2（举报用户）。22 号卡最初一版把"更多操作"
+  // 下拉菜单里的"举报用户"改成了直接可点的悬浮链接，用户反馈要改回原来
+  // 的下拉菜单形式（头图右上角悬浮圆形"更多操作"按钮，点开菜单里才是
+  // "举报用户"），这里改回来了——保持左上角悬浮返回箭头不变。
+  describe("举报用户 more-menu entry (悬浮圆形'更多操作'按钮，点开菜单里的一项)", () => {
+    it("renders a floating '更多操作' button with a '举报用户' link to /users/:userId/report on someone else's profile", () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -458,13 +488,30 @@ describe("UserProfilePage", () => {
 
       renderPage();
 
+      // 菜单没打开之前，"举报用户"链接不应该出现在文档里。
+      expect(screen.queryByRole("link", { name: "举报用户" })).not.toBeInTheDocument();
+
       fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
       const reportLink = screen.getByRole("link", { name: "举报用户" });
       expect(reportLink).toHaveAttribute("href", "/users/user-2/report");
     });
 
-    it("does not render the '更多操作' menu button on your own profile", () => {
+    it("closes the menu after clicking the '举报用户' link", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+      fireEvent.click(screen.getByRole("link", { name: "举报用户" }));
+
+      expect(screen.queryByRole("link", { name: "举报用户" })).not.toBeInTheDocument();
+    });
+
+    it("does not render the '更多操作' button on your own profile", () => {
       useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
@@ -477,12 +524,71 @@ describe("UserProfilePage", () => {
       expect(screen.queryByRole("button", { name: "更多操作" })).not.toBeInTheDocument();
     });
 
-    it("does not render the '更多操作' menu button while the profile is still loading", () => {
+    it("does not render the '更多操作' button while the profile is still loading", () => {
       usePublicProfileQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
       renderPage();
 
       expect(screen.queryByRole("button", { name: "更多操作" })).not.toBeInTheDocument();
+    });
+  });
+
+  // 22 号卡（用户主页改版）：新增的"发布的作品"网格，复用 PostList 组件，
+  // 只多传一个 authorId——只验证这条数据管线接对了（authorId 传的是当前
+  // 主页 userId、标题文案存在），不重复 PostList 自己那份详尽测试
+  // （加载中/空状态/分页/卡片渲染……见 post-list.test.tsx）。
+  describe("发布的作品 (22 号卡：复用 PostList，只按 authorId 筛选)", () => {
+    it("renders a '发布的作品' heading and requests posts filtered to this profile's userId", async () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("heading", { name: "发布的作品" })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith({
+          authorId: "user-2",
+          page: 0,
+          pageSize: 20
+        });
+      });
+    });
+
+    it("does not render the '发布/搭子/收藏' tab switcher — no tab buttons, just the one grid", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "搭子" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "收藏" })).not.toBeInTheDocument();
+    });
+
+    it("still renders the grid (and requests it) even when viewing your own profile", async () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("heading", { name: "发布的作品" })).toBeInTheDocument();
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith({
+          authorId: "user-2",
+          page: 0,
+          pageSize: 20
+        });
+      });
     });
   });
 });

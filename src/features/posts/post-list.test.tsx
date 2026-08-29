@@ -205,6 +205,22 @@ describe("PostList", () => {
     });
   });
 
+  // 22 号卡（发帖者主页改版）：发帖者主页给这个组件传 authorId，只请求/
+  // 展示某一个作者的帖子，不做标签切换、复用同一套数据请求和卡片组件。
+  it("passes authorId through to the query (22 号卡：发帖者主页“发布的作品”网格)", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+    renderWithProviders(<PostList authorId="user-1" />);
+
+    await waitFor(() => {
+      expect(listApprovedPosts).toHaveBeenCalledWith({
+        authorId: "user-1",
+        page: 0,
+        pageSize: 20
+      });
+    });
+  });
+
   it("only requests the first page on initial load", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: true });
 

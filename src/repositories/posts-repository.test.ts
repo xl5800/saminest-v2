@@ -91,6 +91,25 @@ describe("listApprovedPosts", () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith("category_id", "cat-1");
   });
 
+  // 22 号卡（发帖者主页改版）：发帖者主页"发布的作品"网格用这个筛选，只
+  // 展示某一个作者的（已经被 RLS 收窄到 approved+public 的）帖子。
+  it("also filters by author when authorId is provided (22 号卡：发帖者主页)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ authorId: "user-1", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("author_id", "user-1");
+  });
+
+  it("does not filter by author when authorId is not provided", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("author_id", expect.anything());
+  });
+
   it("filters by title/description ilike when searchQuery is provided", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
