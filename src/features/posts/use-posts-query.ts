@@ -9,6 +9,9 @@ export interface UsePostsInfiniteQueryInput {
   searchQuery?: string;
   /** 08 号卡新增，透传给 listApprovedPosts——见该函数 input 类型上的注释。 */
   stateCode?: string;
+  /** 22 号卡新增，透传给 listApprovedPosts——发帖者主页用来只请求某一个
+   *  作者的帖子，见该函数 input 类型上的注释。 */
+  authorId?: string;
   pageSize?: number;
 }
 
@@ -29,7 +32,7 @@ export interface UsePostsInfiniteQueryInput {
  */
 export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
   const pageSize = input.pageSize ?? DEFAULT_POSTS_PAGE_SIZE;
-  const { categoryId, searchQuery, stateCode } = input;
+  const { categoryId, searchQuery, stateCode, authorId } = input;
 
   return useInfiniteQuery({
     queryKey: [
@@ -38,11 +41,12 @@ export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
         categoryId: categoryId ?? null,
         searchQuery: searchQuery ?? null,
         stateCode: stateCode ?? null,
+        authorId: authorId ?? null,
         pageSize
       }
     ],
     queryFn: ({ pageParam }) =>
-      listApprovedPosts({ categoryId, searchQuery, stateCode, page: pageParam, pageSize }),
+      listApprovedPosts({ categoryId, searchQuery, stateCode, authorId, page: pageParam, pageSize }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, _allPages, lastPageParam) =>
       lastPage.hasNextPage ? lastPageParam + 1 : undefined

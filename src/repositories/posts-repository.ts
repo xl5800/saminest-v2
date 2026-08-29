@@ -34,6 +34,14 @@ export interface ListApprovedPostsInput {
    *  "VA"）。不传/传空值时不过滤，展示全部地区——跟 categoryId/searchQuery
    *  是同一个"可选、不传就不加这个条件"的约定。 */
   stateCode?: string;
+  /** 22 号卡新增：按发布者筛选（发帖者主页 user-profile-page.tsx 的
+   *  "发布的作品"网格用）。同样是可选、不传就不加这个条件——首页/分类页
+   *  继续展示全部作者的帖子，不受影响。这里没有额外过滤 visibility，
+   *  跟其它筛选条件一样完全信任 posts_select_public_or_own_or_admin 这条
+   *  RLS 策略本身已经把"只能看到 approved + public"这件事管住了，见
+   *  20260715220300_create_posts_table.sql；这次传 authorId 只是在这个
+   *  RLS 允许的集合基础上再收窄到某一个人，不是绕开或者重复实现 RLS。 */
+  authorId?: string;
   page: number;
   pageSize: number;
 }
@@ -166,7 +174,7 @@ function sanitizeSearchTerm(raw: string): string {
 export async function listApprovedPosts(
   input: ListApprovedPostsInput
 ): Promise<ListApprovedPostsResult> {
-  const { categoryId, searchQuery, stateCode, page, pageSize } = input;
+  const { categoryId, searchQuery, stateCode, authorId, page, pageSize } = input;
   const from = page * pageSize;
   const to = from + pageSize;
 
@@ -196,6 +204,10 @@ export async function listApprovedPosts(
 
   if (stateCode) {
     query = query.eq("location.state_code", stateCode);
+  }
+
+  if (authorId) {
+    query = query.eq("author_id", authorId);
   }
 
   if (searchQuery) {

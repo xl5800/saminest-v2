@@ -19,6 +19,13 @@ export interface PostListProps {
    *  值就应该配一个 onPublishClick，但不强制，保持这个组件在没有发布入口
    *  的场景下也能单独使用）。 */
   onPublishClick?: () => void;
+  /** 22 号卡新增：发帖者主页"发布的作品"网格用——只请求/展示某一个作者的
+   *  帖子，透传给 usePostsInfiniteQuery。不传时行为完全不变（首页/分类页
+   *  两个既有调用点都不传这个 prop）。跟 categoryId/stateCode 一样，只是
+   *  多一个可选筛选维度，不是另建一份组件——见 use-posts-query.ts 顶部
+   *  注释"以后'我的帖子'、'收藏列表'等页面需要类似的列表时，优先扩展这里
+   *  而不是照抄一份"。 */
+  authorId?: string;
 }
 
 /**
@@ -63,9 +70,15 @@ export interface PostListProps {
  * hasNextPage 为真时渲染——没有下一页时彻底不挂这个元素，而不是渲染出来
  * 但不响应，避免它一直空占着 DOM/被观察却永远不会有意义地触发。
  */
-export function PostList({ categoryId, searchQuery, stateCode, onPublishClick }: PostListProps) {
+export function PostList({
+  categoryId,
+  searchQuery,
+  stateCode,
+  onPublishClick,
+  authorId
+}: PostListProps) {
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode });
+    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode, authorId });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
