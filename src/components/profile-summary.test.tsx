@@ -78,7 +78,17 @@ describe("ProfileSummary", () => {
       expect(screen.getByText("Alice")).toBeInTheDocument();
     });
 
-    it("shows nickname/signature(bio)/tertiaryText but not locationName, matching the old profile-redesign card's 3-line spec", () => {
+    it("still falls back to an uppercase initial placeholder when avatarUrl is null", () => {
+      render(<ProfileSummary size="compact" displayName="bob" avatarUrl={null} />);
+
+      expect(screen.getByText("B")).toBeInTheDocument();
+    });
+
+    // 24 号卡（"我的"页面改版）：compact 卡片不再展示简介/邮箱这两行文字
+    // （codex_task_profile_redesign.md 那版"昵称/简介/邮箱三行"的验收标准
+    // 已经被 24 号卡取代，见 profile-summary.tsx 顶部 size 的注释），也不
+    // 展示 locationName（这条本来就没变过）。
+    it("no longer shows bio or locationName in the compact card", () => {
       render(
         <ProfileSummary
           size="compact"
@@ -86,20 +96,51 @@ describe("ProfileSummary", () => {
           avatarUrl={null}
           bio="喜欢 hiking"
           locationName="Rockville"
-          tertiaryText="alice@example.com"
         />
       );
 
       expect(screen.getByText("Alice")).toBeInTheDocument();
-      expect(screen.getByText("喜欢 hiking")).toBeInTheDocument();
-      expect(screen.getByText("alice@example.com")).toBeInTheDocument();
+      expect(screen.queryByText("喜欢 hiking")).not.toBeInTheDocument();
       expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
     });
 
-    it("still falls back to an uppercase initial placeholder when avatarUrl is null", () => {
-      render(<ProfileSummary size="compact" displayName="bob" avatarUrl={null} />);
+    describe("editHref (24 号卡：右上角编辑资料铅笔图标)", () => {
+      it("does not render an edit icon-button when editHref is not provided", () => {
+        render(<ProfileSummary size="compact" displayName="Alice" avatarUrl={null} />);
 
-      expect(screen.getByText("B")).toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "编辑资料" })).not.toBeInTheDocument();
+      });
+
+      it("renders a small circular '编辑资料' icon-button link when editHref is provided, in the compact variant", () => {
+        render(
+          <MemoryRouter>
+            <ProfileSummary size="compact" displayName="Alice" avatarUrl={null} editHref="/profile/edit" />
+          </MemoryRouter>
+        );
+
+        expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
+          "href",
+          "/profile/edit"
+        );
+      });
+    });
+
+    describe("children (24 号卡：数据条紧跟在头像/昵称行下面，不加分割线)", () => {
+      it("renders children directly below the avatar/name/edit-icon row, with no border/divider element between them", () => {
+        const { container } = render(
+          <ProfileSummary size="compact" displayName="Alice" avatarUrl={null}>
+            <div data-testid="stats-row">我的发布 我的收藏</div>
+          </ProfileSummary>
+        );
+
+        const statsRow = screen.getByTestId("stats-row");
+        expect(statsRow).toBeInTheDocument();
+        // 卡片最外层容器（statsRow 的爷爷节点）不应该带任何 border-*/
+        // divide-* 类名——24.2.2 明确要求"头像和数据条之间不要加分割线"。
+        const card = container.firstElementChild;
+        expect(card?.className).not.toMatch(/\bborder\b/);
+        expect(card?.className).not.toMatch(/\bdivide-/);
+      });
     });
   });
 
