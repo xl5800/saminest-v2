@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 
 import { PasswordInput } from "../../components/password-input";
+import { TopBar } from "../../components/top-bar";
 import { useAccountDeletionStatusQuery } from "../../features/profile/use-account-deletion-status-query";
 import { useCancelAccountDeletionMutation } from "../../features/profile/use-cancel-account-deletion-mutation";
 import { useRequestAccountDeletionMutation } from "../../features/profile/use-request-account-deletion-mutation";
@@ -105,105 +106,115 @@ export function DeleteAccountPage() {
 
   if (isPending) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <p role="status" className="text-sm text-text-muted">
-          加载中…
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="注销账号" />
+        <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+          <p role="status" className="text-sm text-text-muted">
+            加载中…
+          </p>
+        </div>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          {LOAD_ERROR_MESSAGE}
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="注销账号" />
+        <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {LOAD_ERROR_MESSAGE}
+          </p>
+        </div>
       </main>
     );
   }
 
   if (status) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">注销账号</h1>
-          <p className="mb-2 text-sm text-text">
-            你的账号将在 <strong>{formatDate(status.scheduledPurgeAt)}</strong> 注销
-            （还剩 {daysRemaining(status.scheduledPurgeAt)} 天）。
-          </p>
-          <p className="mb-6 text-sm text-text-muted">
-            在此之前账号可以正常使用，随时可以撤销这次注销申请。
-          </p>
-          {cancelError ? (
-            <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-              {cancelError}
+      <main>
+        <TopBar variant="nav-only" title="注销账号" />
+        <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+            <p className="mb-2 text-sm text-text">
+              你的账号将在 <strong>{formatDate(status.scheduledPurgeAt)}</strong> 注销
+              （还剩 {daysRemaining(status.scheduledPurgeAt)} 天）。
             </p>
-          ) : null}
-          <button
-            type="button"
-            onClick={() => void handleCancel()}
-            disabled={cancelMutation.isPending}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {cancelMutation.isPending ? "撤销中…" : "撤销注销"}
-          </button>
+            <p className="mb-6 text-sm text-text-muted">
+              在此之前账号可以正常使用，随时可以撤销这次注销申请。
+            </p>
+            {cancelError ? (
+              <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {cancelError}
+              </p>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void handleCancel()}
+              disabled={cancelMutation.isPending}
+              className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {cancelMutation.isPending ? "撤销中…" : "撤销注销"}
+            </button>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-4 text-xl font-bold text-text">注销账号</h1>
-        <p className="mb-2 text-sm text-text">
-          注销后你的账号将在 {GRACE_PERIOD_DAYS} 天后正式清除：昵称、头像、简介、地区等个人资料会被清空，且无法再用当前邮箱登录。
-        </p>
-        <p className="mb-6 text-sm text-text">
-          {GRACE_PERIOD_DAYS} 天缓冲期内账号可以正常使用，你可以随时回到这个页面撤销。已发布的帖子和已发送的消息不会被删除，但会显示为"已注销用户"发布/发送。
-        </p>
+    <main>
+      <TopBar variant="nav-only" title="注销账号" />
+      <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          <p className="mb-2 text-sm text-text">
+            注销后你的账号将在 {GRACE_PERIOD_DAYS} 天后正式清除：昵称、头像、简介、地区等个人资料会被清空，且无法再用当前邮箱登录。
+          </p>
+          <p className="mb-6 text-sm text-text">
+            {GRACE_PERIOD_DAYS} 天缓冲期内账号可以正常使用，你可以随时回到这个页面撤销。已发布的帖子和已发送的消息不会被删除，但会显示为"已注销用户"发布/发送。
+          </p>
 
-        <form onSubmit={handleSubmit} noValidate>
-          {validationError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {validationError}
-            </p>
-          ) : null}
-          {submitError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {submitError}
-            </p>
-          ) : null}
+          <form onSubmit={handleSubmit} noValidate>
+            {validationError ? (
+              <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {validationError}
+              </p>
+            ) : null}
+            {submitError ? (
+              <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {submitError}
+              </p>
+            ) : null}
 
-          <div className="mb-4">
-            <PasswordInput
-              id="delete-account-password"
-              label="输入当前密码确认身份"
-              value={password}
-              onChange={setPassword}
-              autoComplete="current-password"
-            />
-          </div>
+            <div className="mb-4">
+              <PasswordInput
+                id="delete-account-password"
+                label="输入当前密码确认身份"
+                value={password}
+                onChange={setPassword}
+                autoComplete="current-password"
+              />
+            </div>
 
-          <label className="mb-6 block text-sm font-medium text-text">
-            {`请输入"${CONFIRM_TEXT}"确认操作`}
-            <input
-              type="text"
-              value={confirmText}
-              onChange={(event) => setConfirmText(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-danger focus:outline-none focus:ring-1 focus:ring-danger"
-            />
-          </label>
+            <label className="mb-6 block text-sm font-medium text-text">
+              {`请输入"${CONFIRM_TEXT}"确认操作`}
+              <input
+                type="text"
+                value={confirmText}
+                onChange={(event) => setConfirmText(event.target.value)}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-danger focus:outline-none focus:ring-1 focus:ring-danger"
+              />
+            </label>
 
-          <button
-            type="submit"
-            disabled={verifyingPassword || requestMutation.isPending}
-            className="w-full rounded bg-danger px-4 py-2 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {verifyingPassword || requestMutation.isPending ? "处理中…" : "确认注销账号"}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={verifyingPassword || requestMutation.isPending}
+              className="w-full rounded bg-danger px-4 py-2 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {verifyingPassword || requestMutation.isPending ? "处理中…" : "确认注销账号"}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

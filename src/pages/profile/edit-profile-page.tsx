@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { AvatarPicker } from "../../components/avatar-picker";
+import { TopBar } from "../../components/top-bar";
 import { useLocationsQuery } from "../../features/locations/use-locations-query";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { useUpdateProfileMutation } from "../../features/profile/use-update-profile-mutation";
@@ -156,93 +157,95 @@ export function EditProfilePage() {
   const avatarInitial = displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">编辑资料</h1>
-        {isPending ? (
-          <p role="status" className="mb-4 text-sm text-text-muted">
-            加载中…
-          </p>
-        ) : null}
-        {isError ? (
-          <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            用户信息加载失败，请稍后重试。
-          </p>
-        ) : null}
-
-        <div className="mb-6">
-          <AvatarPicker
-            value={avatarFile}
-            onChange={(file) => void handleAvatarChange(file)}
-            currentAvatarUrl={profile?.avatarUrl ?? null}
-            displayNameInitial={avatarInitial}
-          />
-          {avatarUploading ? (
-            <p role="status" className="mt-2 text-sm text-text-muted">
-              头像上传中…
+    <main>
+      <TopBar variant="nav-only" title="编辑资料" />
+      <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          {isPending ? (
+            <p role="status" className="mb-4 text-sm text-text-muted">
+              加载中…
             </p>
           ) : null}
-          {avatarError ? (
-            <p role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-              {avatarError}
-            </p>
-          ) : null}
-        </div>
-
-        <form onSubmit={handleSubmit} noValidate>
-          {validationError ? (
+          {isError ? (
             <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-              {validationError}
+              用户信息加载失败，请稍后重试。
             </p>
           ) : null}
-          {submitError ? (
-            <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-              {submitError}
-            </p>
-          ) : null}
-          <label className="mb-4 block text-sm font-medium text-text">
-            昵称
-            <input
-              type="text"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              disabled={formDisabled}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+
+          <div className="mb-6">
+            <AvatarPicker
+              value={avatarFile}
+              onChange={(file) => void handleAvatarChange(file)}
+              currentAvatarUrl={profile?.avatarUrl ?? null}
+              displayNameInitial={avatarInitial}
             />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            简介（可选）
-            <textarea
-              value={bio}
-              onChange={(event) => setBio(event.target.value)}
+            {avatarUploading ? (
+              <p role="status" className="mt-2 text-sm text-text-muted">
+                头像上传中…
+              </p>
+            ) : null}
+            {avatarError ? (
+              <p role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {avatarError}
+              </p>
+            ) : null}
+          </div>
+
+          <form onSubmit={handleSubmit} noValidate>
+            {validationError ? (
+              <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {validationError}
+              </p>
+            ) : null}
+            {submitError ? (
+              <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {submitError}
+              </p>
+            ) : null}
+            <label className="mb-4 block text-sm font-medium text-text">
+              昵称
+              <input
+                type="text"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                disabled={formDisabled}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </label>
+            <label className="mb-4 block text-sm font-medium text-text">
+              简介（可选）
+              <textarea
+                value={bio}
+                onChange={(event) => setBio(event.target.value)}
+                disabled={formDisabled}
+                className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              />
+            </label>
+            <label className="mb-4 block text-sm font-medium text-text">
+              城市（可选）
+              <select
+                value={locationId}
+                onChange={(event) => setLocationId(event.target.value)}
+                disabled={formDisabled}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <option value="">不选择城市</option>
+                {(locations ?? []).map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="submit"
               disabled={formDisabled}
-              className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            城市（可选）
-            <select
-              value={locationId}
-              onChange={(event) => setLocationId(event.target.value)}
-              disabled={formDisabled}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <option value="">不选择城市</option>
-              {(locations ?? []).map((location) => (
-                <option key={location.id} value={location.id}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="submit"
-            disabled={formDisabled}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {updateProfileMutation.isPending ? "保存中…" : "保存"}
-          </button>
-        </form>
+              {updateProfileMutation.isPending ? "保存中…" : "保存"}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

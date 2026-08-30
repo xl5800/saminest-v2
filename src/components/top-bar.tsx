@@ -191,6 +191,18 @@ interface TopBarNavOnlyProps {
    *  需要顶部栏标题的场景继续传 title 就行，不用改调用点代码。 */
   title?: string;
   onBack?: () => void;
+  /** 26 号卡新增：右侧可选的单个图标按钮，形状照抄 TopBarTabProps.right——
+   *  只有 /my-posts 这一个调用点需要（返回箭头+标题之外，右上角还要放一个
+   *  "发布"入口）。不传就是 tab 变体同款的隐形占位块（EmptySlot），不是
+   *  detail 变体那种多项菜单（moreMenu 是弹出的菜单列表，形状跟"一个能
+   *  直接点击的图标按钮"不一样，这里不复用 moreMenu），也不新增一个专门
+   *  的 variant——这是本次任务卡权衡下来改动最小、其它 nav-only 调用点
+   *  行为完全不受影响的方案。 */
+  right?: {
+    icon: ReactNode;
+    label: string;
+    onClick: () => void;
+  };
 }
 
 export type TopBarProps =
@@ -323,7 +335,18 @@ export function TopBar(props: TopBarProps) {
       ) : (
         <span className="flex-1" />
       )}
-      <EmptySlot />
+      {props.right ? (
+        <button
+          type="button"
+          aria-label={props.right.label}
+          onClick={props.right.onClick}
+          className={ICON_BUTTON_CLASS_NAME}
+        >
+          {props.right.icon}
+        </button>
+      ) : (
+        <EmptySlot />
+      )}
     </header>
   );
 }

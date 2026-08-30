@@ -83,6 +83,24 @@ describe("MyPostsPage", () => {
     expect(listMyPosts).toHaveBeenCalledWith("user-1");
   });
 
+  // 26 号卡：TopBar nav-only 变体右上角新增的"发布"图标按钮，复用
+  // home-page.tsx 已有的 PublishActionSheet——跟 home-page.test.tsx 里
+  // "opens the '选择发布类型' action sheet when the 发布 icon is clicked"
+  // 是同一个断言方式（同一个 aria-label "发布"、同一个 dialog 名称
+  // "选择发布类型"），验证这个页面复用的是同一套弹层，不是另起一套。
+  it("opens the '选择发布类型' action sheet when the 发布 icon is clicked, on every loading state", async () => {
+    listMyPosts.mockResolvedValue([]);
+
+    renderWithProviders(<MyPostsPage />);
+
+    await screen.findByText("暂无发布，去发一条吧。");
+    expect(screen.queryByRole("dialog", { name: "选择发布类型" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    expect(await screen.findByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
+  });
+
   it("renders a post's title, category, location, created date, cover image, and status label", async () => {
     listMyPosts.mockResolvedValue([samplePost]);
 

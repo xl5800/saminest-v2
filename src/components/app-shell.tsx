@@ -87,12 +87,23 @@ const NO_CHROME_PATTERNS = [
  * 完全沉浸式了，见上面 NO_CHROME_PATTERNS 里 23 号卡那条注释，这里不再
  * 保留它。
  *
- * 举报页（activities/:id/report、post/:id/report、users/:userId/report）、
- * 编辑个人资料页（/profile/edit）、设置页（/settings、
- * /settings/delete-account）、已屏蔽用户列表（/blocked-users）、我的帖子
- * （/my-posts）、意见反馈（/feedback）、后台管理页（/admin/*）目前也还是
- * 同样的全局 AppHeader（品牌名+发布按钮），21 号卡任务卡明确只要求这三个
- * 页面，没有要求这几个一起改，这次没有顺带挪它们——见 21 号卡完工报告。
+ * 26 号卡（18 条旧 AppHeader 路由统一迁移到 TopBar）：25 号卡调研确认，
+ * 除了上面这些之外，还有 18 条路由一直沿用改版前的全局 AppHeader（品牌名
+ * +发布按钮），逐条判断下来品牌名和发布按钮在这些页面上都没有实际用处，
+ * 只有"返回"是真正需要的，这次统一挪进这个名单、各自渲染 TopBar 的
+ * nav-only 变体（带 title，不带品牌/发布按钮）：
+ * 三个举报页（/activities/:id/report、/post/:id/report、
+ * /users/:userId/report）、意见反馈（/feedback）、编辑个人资料
+ * （/profile/edit）、设置页（/settings、/settings/delete-account）、
+ * 已屏蔽用户列表（/blocked-users）、六个后台管理页（/admin/posts、
+ * /admin/posts/all、/admin/reports、/admin/feedback、/admin/users、
+ * /admin/categories）、用户协议（/terms）、隐私政策（/privacy）、404 兜底页
+ * （*）。其中 /my-posts（我的帖子）单独多传了一个 nav-only 新增的可选
+ * `right` 图标按钮（见 top-bar.tsx 里 TopBarNavOnlyProps 的注释），保留了
+ * 一个"发布"入口，但换成小图标样式，不再是旧 AppHeader 那种大按钮——这 18
+ * 条路由都本来就有底部 Tab 栏（举报页/编辑资料/设置这类二级页面也是从
+ * 有底部 Tab 栏的页面跳过来的），不属于完全沉浸式，因此也是挪进这个名单
+ * 而不是 NO_CHROME_PATTERNS。
  */
 const TOPBAR_MIGRATED_PATTERNS = [
   "/",
@@ -104,7 +115,26 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/messages",
   "/region-select",
   "/my-activities",
-  "/favorites"
+  "/favorites",
+  // 26 号卡新增：
+  "/activities/:id/report",
+  "/post/:id/report",
+  "/users/:userId/report",
+  "/feedback",
+  "/profile/edit",
+  "/settings",
+  "/settings/delete-account",
+  "/blocked-users",
+  "/my-posts",
+  "/admin/posts",
+  "/admin/posts/all",
+  "/admin/reports",
+  "/admin/feedback",
+  "/admin/users",
+  "/admin/categories",
+  "/terms",
+  "/privacy",
+  "*"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {

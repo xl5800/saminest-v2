@@ -1,6 +1,9 @@
+import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { PublishActionSheet } from "../../components/publish-action-sheet";
+import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useArchivePostMutation } from "../../features/my-posts/use-archive-post-mutation";
 import { useDeleteMyPostMutation } from "../../features/my-posts/use-delete-my-post-mutation";
@@ -77,6 +80,16 @@ const SECONDARY_ACTION_LABELS: Record<SecondaryAction, string> = {
  * "更多"菜单/删除弹窗只用本地 state（服务端数据只在第一次拿到时同步进
  * `posts` state），下架/重新提交/删除成功后直接在本地更新/移除对应行，
  * 不 invalidate 查询——跟 all-posts-page.tsx 的模式完全一致。
+ *
+ * 26 号卡（18 条旧 AppHeader 路由统一迁移到 TopBar）：改用 TopBar 的
+ * nav-only 变体（带 title="我的发布"），右上角额外传一个 right 图标按钮
+ * （"+"）——这是这个页面唯一保留的发布入口，换成小图标样式，不再是旧
+ * AppHeader 那种品牌名+大按钮。点击行为直接复用 home-page.tsx 已有的
+ * "publishSheetOpen state + PublishActionSheet"模式（点击打开同一个
+ * "选择发布类型"弹层，选完跳转到 /activities/new 或 /publish?category=…），
+ * 不新建一套发布流程——虽然这个页面本身管理的是帖子列表，但发布入口全站
+ * 只有一个（PublishActionSheet 注释里明确说了"这个弹层现在只有一个
+ * 入口"），这里应该复用而不是分叉出一个只能发帖子的独立入口。
  */
 export function MyPostsPage() {
   const { data, isPending, isError } = useMyPostsQuery();
@@ -89,6 +102,7 @@ export function MyPostsPage() {
   const [confirmDeletePostId, setConfirmDeletePostId] = useState<string | null>(null);
   const [actioningPostId, setActioningPostId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [publishSheetOpen, setPublishSheetOpen] = useState(false);
 
   useEffect(() => {
     if (data && posts === null) {
@@ -177,22 +191,43 @@ export function MyPostsPage() {
     setConfirmDeletePostId(postId);
   }
 
+  const topBar = (
+    <TopBar
+      variant="nav-only"
+      title="我的发布"
+      right={{
+        icon: <Plus size={18} aria-hidden="true" />,
+        label: "发布",
+        onClick: () => setPublishSheetOpen(true)
+      }}
+    />
+  );
+  const publishSheet = publishSheetOpen ? (
+    <PublishActionSheet onClose={() => setPublishSheetOpen(false)} />
+  ) : null;
+
   if (isPending) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-        <h1 className="mb-4 text-xl font-bold text-text">我的发布</h1>
-        <p role="status" className="text-sm text-text-muted">加载中…</p>
+      <main>
+        {topBar}
+        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+          <p role="status" className="text-sm text-text-muted">加载中…</p>
+        </div>
+        {publishSheet}
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-        <h1 className="mb-4 text-xl font-bold text-text">我的发布</h1>
-        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          发布列表加载失败，请稍后重试。
-        </p>
+      <main>
+        {topBar}
+        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            发布列表加载失败，请稍后重试。
+          </p>
+        </div>
+        {publishSheet}
       </main>
     );
   }
@@ -201,16 +236,20 @@ export function MyPostsPage() {
 
   if (visiblePosts.length === 0) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-        <h1 className="mb-4 text-xl font-bold text-text">我的发布</h1>
-        <p role="status" className="text-sm text-text-muted">暂无发布，去发一条吧。</p>
+      <main>
+        {topBar}
+        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+          <p role="status" className="text-sm text-text-muted">暂无发布，去发一条吧。</p>
+        </div>
+        {publishSheet}
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-4 text-xl font-bold text-text">我的发布</h1>
+    <main>
+      {topBar}
+      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
       <ul className="flex flex-col gap-3">
         {visiblePosts.map((post) => {
           const actions = STATUS_ACTIONS[post.status] ?? {
@@ -353,6 +392,8 @@ export function MyPostsPage() {
           </div>
         </div>
       ) : null}
+      </div>
+      {publishSheet}
     </main>
   );
 }

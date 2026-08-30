@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
+
 const headingClassName = "mb-2 mt-6 text-lg font-semibold text-text";
 const subheadingClassName = "mb-1 mt-4 text-base font-medium text-text";
 const paragraphClassName = "mb-4 text-base text-text";
@@ -14,11 +16,17 @@ const listClassName = "mb-4 list-disc space-y-1 pl-5 text-base text-text";
  * 路由，其余文字一字未改。链接文案本次任务从"意见反馈（Feedback）"改成
  * "联系客服（Feedback）"——跟这个入口在"我的"页/反馈页本身改的名字保持
  * 一致，不是照抄法务原文的措辞（法务原文本来就不是这个项目写的）。
+ *
+ * 26 号卡（18 条旧 AppHeader 路由统一迁移到 TopBar）：改用 TopBar 的
+ * nav-only 变体（带 title="隐私政策"），原来手写的 <h1> 删掉；"Last
+ * Updated"这行是正文内容不是标题，继续保留，跟 terms-page.tsx 是同一处
+ * 改动、同一个理由。
  */
 export function PrivacyPage() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-1 text-xl font-bold text-text">隐私政策</h1>
+    <main>
+      <TopBar variant="nav-only" title="隐私政策" />
+      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
       <p className="mb-6 text-sm text-text-muted">Last Updated / 最后更新：2026-07-09</p>
 
       <p className={paragraphClassName}>欢迎使用 Saminest（以下简称"本平台"、"我们"）。</p>
@@ -162,6 +170,7 @@ export function PrivacyPage() {
       <p className="mb-4 text-base text-text">
         感谢您对 Saminest 的信任。我们将持续努力保护您的个人信息安全，并为您提供安全、可靠的租房、求租和二手交易平台。
       </p>
+      </div>
     </main>
   );
 }

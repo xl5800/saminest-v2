@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 import { useParams } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
 import { useCreateReportMutation } from "../../features/reports/use-create-report-mutation";
 import { REPORT_REASON_OPTIONS } from "../../repositories/reports-repository";
 import { useAuthStore } from "../../store/auth-store";
@@ -108,12 +109,14 @@ export function ReportUserPage() {
 
   if (isSelfReport) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">举报用户</h1>
-          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            {SELF_REPORT_MESSAGE}
-          </p>
+      <main>
+        <TopBar variant="nav-only" title="举报用户" />
+        <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+            <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {SELF_REPORT_MESSAGE}
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -121,64 +124,68 @@ export function ReportUserPage() {
 
   if (submitted) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">举报用户</h1>
-          <p role="status" className="rounded border border-success bg-success/10 px-3 py-2 text-sm text-success">
-            {SUBMIT_SUCCESS_MESSAGE}
-          </p>
+      <main>
+        <TopBar variant="nav-only" title="举报用户" />
+        <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+            <p role="status" className="rounded border border-success bg-success/10 px-3 py-2 text-sm text-success">
+              {SUBMIT_SUCCESS_MESSAGE}
+            </p>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">举报用户</h1>
-        <form onSubmit={handleSubmit} noValidate>
-          {validationError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {validationError}
-            </p>
-          ) : null}
-          {submitError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {submitError}
-            </p>
-          ) : null}
-          <fieldset className="mb-4">
-            <legend className="mb-2 text-sm font-medium text-text">举报原因</legend>
-            {REPORT_REASON_OPTIONS.map((option) => (
-              <label key={option.value} className="mb-1 flex items-center gap-2 text-sm text-text">
-                <input
-                  type="radio"
-                  name="reasonCode"
-                  value={option.value}
-                  checked={reasonCode === option.value}
-                  onChange={() => setReasonCode(option.value)}
-                  className="accent-primary"
-                />
-                {option.label}
-              </label>
-            ))}
-          </fieldset>
-          <label className="mb-4 block text-sm font-medium text-text">
-            补充说明（可选）
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <button
-            type="submit"
-            disabled={createReportMutation.isPending}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {createReportMutation.isPending ? "提交中…" : "提交举报"}
-          </button>
-        </form>
+    <main>
+      <TopBar variant="nav-only" title="举报用户" />
+      <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          <form onSubmit={handleSubmit} noValidate>
+            {validationError ? (
+              <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {validationError}
+              </p>
+            ) : null}
+            {submitError ? (
+              <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {submitError}
+              </p>
+            ) : null}
+            <fieldset className="mb-4">
+              <legend className="mb-2 text-sm font-medium text-text">举报原因</legend>
+              {REPORT_REASON_OPTIONS.map((option) => (
+                <label key={option.value} className="mb-1 flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="radio"
+                    name="reasonCode"
+                    value={option.value}
+                    checked={reasonCode === option.value}
+                    onChange={() => setReasonCode(option.value)}
+                    className="accent-primary"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </fieldset>
+            <label className="mb-4 block text-sm font-medium text-text">
+              补充说明（可选）
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={createReportMutation.isPending}
+              className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {createReportMutation.isPending ? "提交中…" : "提交举报"}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

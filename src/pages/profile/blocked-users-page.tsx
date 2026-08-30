@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
 import { useMyBlockedUsersQuery } from "../../features/blocks/use-my-blocked-users-query";
 import { useUnblockUserMutation } from "../../features/blocks/use-unblock-user-mutation";
 import type { BlockedUserListItem } from "../../repositories/user-blocks-repository";
@@ -86,10 +87,11 @@ function BlockedUserRow({ blockerId, user }: BlockedUserRowProps) {
 /**
  * "已屏蔽"管理页（/blocked-users），13 号卡新增——"我的"页功能列表"设置"
  * 上面那一行的跳转目标。路由已在 routes.tsx 用 RequireAuth 包裹，页面
- * 内部不做登录检查/跳转，符合 CLAUDE.md 的统一规则。没有用 TopBar，沿用
- * 默认的全局 AppHeader（非首页路径自动带"←"返回按钮）——跟同样是从"我的"
- * 页跳过来的 favorites-page.tsx/settings-page.tsx 是同一个模式，不需要
- * 为这一个页面单独实现返回逻辑。
+ * 内部不做登录检查/跳转，符合 CLAUDE.md 的统一规则。26 号卡（18 条旧
+ * AppHeader 路由统一迁移到 TopBar）：改用 TopBar 的 nav-only 变体（带
+ * title="已屏蔽"，不带品牌名/发布按钮），返回按钮仍然是默认的
+ * navigate(-1)——跟迁移前全局 AppHeader 的返回行为完全一致，这个路由也
+ * 随之加进了 app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS。
  *
  * 数据来自新增的 useMyBlockedUsersQuery（见该 hook 和
  * user-blocks-repository.ts 的 listMyBlockedUsers 的注释）。"取消屏蔽"
@@ -106,45 +108,53 @@ export function BlockedUsersPage() {
 
   if (isPending) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-        <h1 className="mb-4 text-xl font-bold text-text">已屏蔽</h1>
-        <p role="status" className="text-sm text-text-muted">加载中…</p>
+      <main>
+        <TopBar variant="nav-only" title="已屏蔽" />
+        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+          <p role="status" className="text-sm text-text-muted">加载中…</p>
+        </div>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-        <h1 className="mb-4 text-xl font-bold text-text">已屏蔽</h1>
-        <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          {LOAD_ERROR_MESSAGE}
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="已屏蔽" />
+        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {LOAD_ERROR_MESSAGE}
+          </p>
+        </div>
       </main>
     );
   }
 
   if (blockedUsers.length === 0) {
     return (
-      <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-        <h1 className="mb-4 text-xl font-bold text-text">已屏蔽</h1>
-        <p role="status" className="text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
+      <main>
+        <TopBar variant="nav-only" title="已屏蔽" />
+        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+          <p role="status" className="text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-4 text-xl font-bold text-text">已屏蔽</h1>
-      <ul className="flex flex-col gap-2">
-        {blockedUsers.map((user) => (
-          <BlockedUserRow
-            key={user.blockedUserId}
-            blockerId={currentUserId as string}
-            user={user}
-          />
-        ))}
-      </ul>
+    <main>
+      <TopBar variant="nav-only" title="已屏蔽" />
+      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
+        <ul className="flex flex-col gap-2">
+          {blockedUsers.map((user) => (
+            <BlockedUserRow
+              key={user.blockedUserId}
+              blockerId={currentUserId as string}
+              user={user}
+            />
+          ))}
+        </ul>
+      </div>
     </main>
   );
 }
