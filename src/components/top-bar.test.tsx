@@ -361,5 +361,24 @@ describe("TopBar", () => {
       fireEvent.click(screen.getByRole("button", { name: "返回" }));
       expect(navigateMock).toHaveBeenCalledWith(-1);
     });
+
+    // 26 号卡：nav-only 新增的可选 right 图标按钮，形状和行为照抄 tab
+    // 变体的 right（见上面"renders the caller-supplied right icon button
+    // and calls its onClick"），唯一调用点是 /my-posts 的"发布"入口。
+    it("renders the caller-supplied right icon button and calls its onClick, alongside the back button", () => {
+      const onClick = vi.fn();
+      renderWithProviders(
+        <TopBar
+          variant="nav-only"
+          title="我的发布"
+          right={{ icon: <span>＋</span>, label: "发布", onClick }}
+        />
+      );
+
+      expect(screen.getAllByRole("button")).toHaveLength(2);
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
   });
 });

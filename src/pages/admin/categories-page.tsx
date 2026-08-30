@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { TopBar } from "../../components/top-bar";
 import { useAdminCategoriesQuery } from "../../features/admin/use-admin-categories-query";
 import { useCreateCategoryMutation } from "../../features/admin/use-create-category-mutation";
 import { useUpdateCategoryMutation } from "../../features/admin/use-update-category-mutation";
@@ -342,24 +343,28 @@ export function AdminCategoriesPage() {
 
   if (isPending) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">分类管理</h1>
-        {createForm}
-        <p role="status" className="text-sm text-text-muted">加载中…</p>
+      <main>
+        <TopBar variant="nav-only" title="分类管理" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {createForm}
+          <p role="status" className="text-sm text-text-muted">加载中…</p>
+        </div>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">分类管理</h1>
-        {createForm}
-        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          分类加载失败，请稍后重试。
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="分类管理" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {createForm}
+          <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            分类加载失败，请稍后重试。
+          </p>
+        </div>
       </main>
     );
   }
@@ -367,9 +372,10 @@ export function AdminCategoriesPage() {
   const visibleCategories = categories ?? [];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+    <main>
+      <TopBar variant="nav-only" title="分类管理" />
+      <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
       <AdminNav />
-      <h1 className="mb-4 text-xl font-bold text-text">分类管理</h1>
       {createForm}
       {visibleCategories.length === 0 ? (
         <p role="status" className="text-sm text-text-muted">暂无分类</p>
@@ -535,6 +541,7 @@ export function AdminCategoriesPage() {
           })}
         </ul>
       )}
+      </div>
     </main>
   );
 }

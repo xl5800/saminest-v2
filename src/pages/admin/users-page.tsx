@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { TopBar } from "../../components/top-bar";
 import { useAdminUsersQuery } from "../../features/admin/use-admin-users-query";
 import { useSetAccountStatusMutation } from "../../features/admin/use-set-account-status-mutation";
 import type { AdminProfileListItem } from "../../repositories/profiles-repository";
@@ -165,24 +166,28 @@ export function AdminUsersPage() {
 
   if (isPending) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">账号管理</h1>
-        {searchForm}
-        <p role="status" className="text-sm text-text-muted">加载中…</p>
+      <main>
+        <TopBar variant="nav-only" title="账号管理" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {searchForm}
+          <p role="status" className="text-sm text-text-muted">加载中…</p>
+        </div>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">账号管理</h1>
-        {searchForm}
-        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          用户加载失败，请稍后重试。
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="账号管理" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {searchForm}
+          <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            用户加载失败，请稍后重试。
+          </p>
+        </div>
       </main>
     );
   }
@@ -190,9 +195,10 @@ export function AdminUsersPage() {
   const visibleUsers = users ?? [];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+    <main>
+      <TopBar variant="nav-only" title="账号管理" />
+      <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
       <AdminNav />
-      <h1 className="mb-4 text-xl font-bold text-text">账号管理</h1>
       {searchForm}
       {visibleUsers.length === 0 ? (
         <p role="status" className="text-sm text-text-muted">暂无用户</p>
@@ -300,6 +306,7 @@ export function AdminUsersPage() {
           })}
         </ul>
       )}
+      </div>
     </main>
   );
 }

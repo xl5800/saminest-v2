@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+import { TopBar } from "../../components/top-bar";
+
 const headingClassName = "mb-2 mt-6 text-lg font-semibold text-text";
 const subheadingClassName = "mb-1 mt-4 text-base font-medium text-text";
 const paragraphClassName = "mb-4 text-base text-text";
@@ -17,11 +19,17 @@ const orderedListClassName = "mb-4 list-decimal space-y-1 pl-5 text-base text-te
  * /feedback 路由，用 <Link> 而不是裸 <a>，其余文字一字未改。链接文案本次
  * 任务从"意见反馈（Feedback）"改成"联系客服（Feedback）"，跟 privacy-page.tsx
  * 是同一处改动、同一个理由。
+ *
+ * 26 号卡（18 条旧 AppHeader 路由统一迁移到 TopBar）：改用 TopBar 的
+ * nav-only 变体（带 title="用户协议"），原来手写的 <h1> 删掉，避免页面里
+ * 同时出现两个 <h1>；"Last Updated"这行不是标题，是正文的一部分，继续
+ * 保留在内容区域，不受这次迁移影响。
  */
 export function TermsPage() {
   return (
-    <main className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <h1 className="mb-1 text-xl font-bold text-text">用户协议</h1>
+    <main>
+      <TopBar variant="nav-only" title="用户协议" />
+      <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
       <p className="mb-6 text-sm text-text-muted">Last Updated / 最后更新：2026-07-09</p>
 
       <p className={paragraphClassName}>
@@ -221,6 +229,7 @@ export function TermsPage() {
       <p className="mb-4 text-base text-text">
         感谢您使用 Saminest。我们致力于打造一个真实、安全、友好的租房、求租及二手交易社区。
       </p>
+      </div>
     </main>
   );
 }

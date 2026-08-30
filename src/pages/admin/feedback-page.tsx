@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { TopBar } from "../../components/top-bar";
 import { useAdminFeedbackQuery } from "../../features/admin/use-admin-feedback-query";
 import { useSetFeedbackStatusMutation } from "../../features/admin/use-set-feedback-status-mutation";
 import { type AdminFeedbackListItem, FEEDBACK_TYPE_OPTIONS } from "../../repositories/feedback-repository";
@@ -107,24 +108,28 @@ export function AdminFeedbackPage() {
 
   if (isPending) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">联系客服</h1>
-        {statusFilter}
-        <p role="status" className="text-sm text-text-muted">加载中…</p>
+      <main>
+        <TopBar variant="nav-only" title="联系客服" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {statusFilter}
+          <p role="status" className="text-sm text-text-muted">加载中…</p>
+        </div>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">联系客服</h1>
-        {statusFilter}
-        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          反馈加载失败，请稍后重试。
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="联系客服" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {statusFilter}
+          <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            反馈加载失败，请稍后重试。
+          </p>
+        </div>
       </main>
     );
   }
@@ -132,9 +137,10 @@ export function AdminFeedbackPage() {
   const visibleFeedback = feedbackList ?? [];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+    <main>
+      <TopBar variant="nav-only" title="联系客服" />
+      <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
       <AdminNav />
-      <h1 className="mb-4 text-xl font-bold text-text">联系客服</h1>
       {statusFilter}
       {visibleFeedback.length === 0 ? (
         <p role="status" className="text-sm text-text-muted">暂无反馈</p>
@@ -190,6 +196,7 @@ export function AdminFeedbackPage() {
           })}
         </ul>
       )}
+      </div>
     </main>
   );
 }

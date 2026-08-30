@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from "react";
 
 import { FeedbackImagePicker } from "../../components/feedback-image-picker";
+import { TopBar } from "../../components/top-bar";
 import { useSubmitFeedbackMutation } from "../../features/feedback/use-submit-feedback-mutation";
 import {
   type CreateFeedbackImageInput,
@@ -218,12 +219,14 @@ export function SubmitFeedbackPage() {
 
   if (submitted) {
     return (
-      <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-          <h1 className="mb-6 text-xl font-bold text-text">联系客服</h1>
-          <p role="status" className="rounded border border-success bg-success/10 px-3 py-2 text-sm text-success">
-            {successMessage}
-          </p>
+      <main>
+        <TopBar variant="nav-only" title="联系客服" />
+        <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+            <p role="status" className="rounded border border-success bg-success/10 px-3 py-2 text-sm text-success">
+              {successMessage}
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -232,68 +235,70 @@ export function SubmitFeedbackPage() {
   const isSubmitting = submitFeedbackMutation.isPending || uploadingImages;
 
   return (
-    <main className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-      <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
-        <h1 className="mb-6 text-xl font-bold text-text">联系客服</h1>
-        <form onSubmit={handleSubmit} noValidate>
-          {validationError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {validationError}
-            </p>
-          ) : null}
-          {submitError ? (
-            <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
-              {submitError}
-            </p>
-          ) : null}
-          <fieldset className="mb-4">
-            <legend className="mb-2 text-sm font-medium text-text">反馈类型</legend>
-            {FEEDBACK_TYPE_OPTIONS.map((option) => (
-              <label key={option.value} className="mb-1 flex items-center gap-2 text-sm text-text">
-                <input
-                  type="radio"
-                  name="feedbackType"
-                  value={option.value}
-                  checked={type === option.value}
-                  onChange={() => setType(option.value)}
-                  className="accent-primary"
-                />
-                {option.label}
-              </label>
-            ))}
-          </fieldset>
-          <label className="mb-4 block text-sm font-medium text-text">
-            标题
-            <input
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <label className="mb-4 block text-sm font-medium text-text">
-            内容
-            <textarea
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              className="mt-1 min-h-[120px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-          </label>
-          <div className="mb-4">
-            <FeedbackImagePicker value={images} onChange={setImages} />
-          </div>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {uploadingImages
-              ? "上传截图中…"
-              : submitFeedbackMutation.isPending
-                ? "提交中…"
-                : "提交反馈"}
-          </button>
-        </form>
+    <main>
+      <TopBar variant="nav-only" title="联系客服" />
+      <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
+        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          <form onSubmit={handleSubmit} noValidate>
+            {validationError ? (
+              <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {validationError}
+              </p>
+            ) : null}
+            {submitError ? (
+              <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
+                {submitError}
+              </p>
+            ) : null}
+            <fieldset className="mb-4">
+              <legend className="mb-2 text-sm font-medium text-text">反馈类型</legend>
+              {FEEDBACK_TYPE_OPTIONS.map((option) => (
+                <label key={option.value} className="mb-1 flex items-center gap-2 text-sm text-text">
+                  <input
+                    type="radio"
+                    name="feedbackType"
+                    value={option.value}
+                    checked={type === option.value}
+                    onChange={() => setType(option.value)}
+                    className="accent-primary"
+                  />
+                  {option.label}
+                </label>
+              ))}
+            </fieldset>
+            <label className="mb-4 block text-sm font-medium text-text">
+              标题
+              <input
+                type="text"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <label className="mb-4 block text-sm font-medium text-text">
+              内容
+              <textarea
+                value={content}
+                onChange={(event) => setContent(event.target.value)}
+                className="mt-1 min-h-[120px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <div className="mb-4">
+              <FeedbackImagePicker value={images} onChange={setImages} />
+            </div>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {uploadingImages
+                ? "上传截图中…"
+                : submitFeedbackMutation.isPending
+                  ? "提交中…"
+                  : "提交反馈"}
+            </button>
+          </form>
+        </div>
       </div>
     </main>
   );

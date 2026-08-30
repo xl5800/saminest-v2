@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AdminNav } from "../../components/admin-nav";
+import { TopBar } from "../../components/top-bar";
 import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
 import { useDeleteCommentMutation } from "../../features/admin/use-delete-comment-mutation";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
@@ -338,26 +339,30 @@ export function AdminReportsPage() {
 
   if (isPending) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
-        {statusFilter}
-        {partialFailureBanner}
-        <p role="status" className="text-sm text-text-muted">加载中…</p>
+      <main>
+        <TopBar variant="nav-only" title="举报处理" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {statusFilter}
+          {partialFailureBanner}
+          <p role="status" className="text-sm text-text-muted">加载中…</p>
+        </div>
       </main>
     );
   }
 
   if (isError) {
     return (
-      <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
-        <AdminNav />
-        <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
-        {statusFilter}
-        {partialFailureBanner}
-        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          举报加载失败，请稍后重试。
-        </p>
+      <main>
+        <TopBar variant="nav-only" title="举报处理" />
+        <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+          <AdminNav />
+          {statusFilter}
+          {partialFailureBanner}
+          <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            举报加载失败，请稍后重试。
+          </p>
+        </div>
       </main>
     );
   }
@@ -365,9 +370,10 @@ export function AdminReportsPage() {
   const visibleReports = reports ?? [];
 
   return (
-    <main className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
+    <main>
+      <TopBar variant="nav-only" title="举报处理" />
+      <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
       <AdminNav />
-      <h1 className="mb-4 text-xl font-bold text-text">举报处理</h1>
       {statusFilter}
       {partialFailureBanner}
       {visibleReports.length === 0 ? (
@@ -561,6 +567,7 @@ export function AdminReportsPage() {
           })}
         </ul>
       )}
+      </div>
     </main>
   );
 }
