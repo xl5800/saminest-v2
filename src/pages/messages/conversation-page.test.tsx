@@ -877,4 +877,100 @@ describe("MessageConversationPage", () => {
     invalidateQueriesSpy.mockRestore();
     consoleErrorSpy.mockRestore();
   });
+
+  // 30 号卡（打通"活动申请通知"到审核页面的跳转，方案 A）。
+  describe("活动申请通知的'查看申请 →'链接", () => {
+    it("renders a '查看申请 →' link under the message when refActivityId is present, pointing to /my-activities?pendingActivityId=<id>", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: "seller-1",
+            body: "Bob 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+            notificationPayload: null,
+            refActivityId: "act-1",
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const link = screen.getByRole("link", { name: "查看申请 →" });
+      expect(link).toHaveAttribute("href", "/my-activities?pendingActivityId=act-1");
+    });
+
+    it("does not render the link when refActivityId is null (e.g. a plain '报名了'/'退出了' notification)", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: "seller-1",
+            body: "Bob 报名了你的活动《周末吃火锅》",
+            notificationPayload: null,
+            refActivityId: null,
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.queryByRole("link", { name: "查看申请 →" })).not.toBeInTheDocument();
+    });
+
+    it("does not render the link on the sender's own copy of the message (isMine), even though it has refActivityId", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            // 当前登录用户（user-1）自己就是发这条消息的申请人。
+            senderId: "user-1",
+            body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+            notificationPayload: null,
+            refActivityId: "act-1",
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.queryByRole("link", { name: "查看申请 →" })).not.toBeInTheDocument();
+    });
+
+    it("keeps the plain chat-bubble style — does not turn the message into a SystemNotificationCard", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: "seller-1",
+            body: "Bob 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+            notificationPayload: null,
+            refActivityId: "act-1",
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      // 方案 A 明确要求：不是系统通知卡片（没有 aria-label="系统通知"的
+      // 容器），消息正文仍然在普通气泡里显示，输入框也还在（双方仍然能
+      // 继续在这条会话里聊天）。
+      expect(screen.queryByLabelText("系统通知")).not.toBeInTheDocument();
+      expect(
+        screen.getByText("Bob 申请加入你的活动《周末吃火锅》，去处理一下吧。")
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("conversation-composer")).toBeInTheDocument();
+    });
+  });
 });

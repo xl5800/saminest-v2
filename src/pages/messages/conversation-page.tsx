@@ -243,6 +243,23 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  * 头像在后；对方：头像在前、气泡在后），视觉上左右对称。每条消息各自
  * 渲染自己的头像（不分组、没有 spacer 占位，见上面第 3 点），两侧的
  * data-testid 分别是 message-avatar（对方）/message-avatar-self（我方）。
+ *
+ * 30 号卡（打通"活动申请通知"到审核页面的跳转，方案 A）：
+ * "XX 申请加入你的活动《XXX》，去处理一下吧"这条消息（notifyOrganizer()
+ * 在 requiresApproval 为 true 时发的那一条）现在带着 ref_activity_id，
+ * 会话页据此在气泡下面加一行"查看申请 →"链接，跳到
+ * `/my-activities?pendingActivityId=<活动id>`（见 my-activities-page.tsx
+ * 怎么用这个查询参数自动展开+滚动到对应审核面板）。方案 A 明确要求"不改
+ * 消息形式"——这条消息本身仍然是 sender_id 为真实用户的普通消息，不是
+ * senderId 为 null 的系统通知，气泡样式（bg-primary/bg-white 的聊天泡）
+ * 完全不变，双方仍然可以在这条会话里继续互相发消息；"查看申请 →"只是
+ * 气泡下面单独多一行，不是把整条消息换成 SystemNotificationCard 那种
+ * 卡片。链接只在 !isMine（收到这条消息的一方，也就是发起人自己）这一侧
+ * 渲染——发这条消息的申请人看到自己发出去的这条消息时不需要这个入口，
+ * 他不是这场活动的发起人。"报名了"/"退出了"这两种消息的 ref_activity_id
+ * 保持 null（不需要审核的报名、或者退出，没有"查看申请"这回事），不会
+ * 出现这行链接，判断依据就是 message.refActivityId 这一列本身有没有值，
+ * 不解析 body 文本内容找活动。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -566,6 +583,23 @@ export function MessageConversationPage() {
                         >
                           {message.body}
                         </div>
+                        {/* 30 号卡：只有"申请加入（需要审核）"这条通知消息带
+                            ref_activity_id（见 notifyOrganizer() 的注释），
+                            只在收到方（!isMine，也就是发起人自己）这一侧
+                            渲染这个跳转链接——发这条消息的申请人自己看到
+                            自己发的这条消息时不需要、也不该有这个入口，
+                            他不是这场活动的发起人，点了也找不到对应的
+                            审核面板。气泡样式完全不变（方案 A 明确要求
+                            不换成系统通知卡片，双方仍然是普通聊天气泡，
+                            这个链接只是气泡下面单独一行，不影响气泡本身）。 */}
+                        {!isMine && message.refActivityId ? (
+                          <Link
+                            to={`/my-activities?pendingActivityId=${message.refActivityId}`}
+                            className="mt-1 text-xs font-medium text-primary hover:underline"
+                          >
+                            查看申请 →
+                          </Link>
+                        ) : null}
                       </div>
                       {/* 28 号卡（改版后）：我方消息气泡右侧头像，跟左侧对方
                           头像对称——同一套 Avatar 组件、同一个尺寸，数据源

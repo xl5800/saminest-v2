@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
@@ -114,11 +115,18 @@ function ActivityCard({ activity, error, note, action, extra }: ActivityCardProp
 }
 
 interface PendingApplicantsPanelProps {
+  activityId: string;
   applicants: PendingActivityParticipant[];
   actioningParticipantId: string | null;
   participantErrors: Record<string, string>;
   onApprove: (applicant: PendingActivityParticipant) => void;
   onReject: (applicant: PendingActivityParticipant) => void;
+  /** 30 号卡新增：从"查看申请 →"链接跳过来时（/my-activities?
+   *  pendingActivityId=<活动id>），匹配上的那一张卡片默认展开，不需要
+   *  用户自己再点开——见组件外层 MyActivitiesPage 里读取
+   *  pendingActivityId 的 useEffect。这里只是把布尔值原样传给 <details>
+   *  的 open 属性，是不是要展开这个判断本身不在这个组件里做。 */
+  autoExpand: boolean;
 }
 
 /**
@@ -126,18 +134,28 @@ interface PendingApplicantsPanelProps {
  * 用原生 <details>/<summary> 做展开/收起——这个仓库目前没有需要"点击展开
  * 一段内容"的先例（"更多"菜单是常驻展开，没有折叠状态），<details> 是
  * 浏览器原生支持的最简单实现，不需要额外的 open/close state。
+ *
+ * id={pending-applicants-panel-<活动id>} 是 30 号卡加的锚点——外层
+ * MyActivitiesPage 从"查看申请 →"链接带来的 pendingActivityId 找到对应
+ * 这一张 <details>，一次性 scrollIntoView，不需要用户自己在列表里找。
  */
 function PendingApplicantsPanel({
+  activityId,
   applicants,
   actioningParticipantId,
   participantErrors,
   onApprove,
-  onReject
+  onReject,
+  autoExpand
 }: PendingApplicantsPanelProps) {
   if (applicants.length === 0) return null;
 
   return (
-    <details className="mt-3 border-t border-border pt-3">
+    <details
+      id={`pending-applicants-panel-${activityId}`}
+      open={autoExpand}
+      className="mt-3 border-t border-border pt-3"
+    >
       <summary className="cursor-pointer text-sm font-medium text-primary">
         待审核申请（{applicants.length}）
       </summary>
@@ -222,10 +240,35 @@ function PendingApplicantsPanel({
  * "我的活动"这行 <h1> 大标题当页面名称用，顶部栏没必要重复展示一遍标题，
  * 只留一个返回箭头。对应地，这个路径也要挪进 app-shell.tsx 的
  * TOPBAR_MIGRATED_PATTERNS，才能关掉全局 AppHeader（BottomNav 继续保留）。
+ *
+ * 30 号卡（打通"活动申请通知"到审核页面的跳转）：
+ * 1. 私信里"XX 申请加入你的活动《XXX》，去处理一下吧"这条消息现在带了一个
+ *    "查看申请 →"链接（见 conversation-page.tsx），跳到
+ *    `/my-activities?pendingActivityId=<活动id>`。这个页面读这个查询参数，
+ *    找到对应活动那张卡片的"待审核申请"面板，自动展开（PendingApplicantsPanel
+ *    的 autoExpand）并滚动到可见区域——不需要用户自己切到"我发起的" tab
+ *    （本来就是默认 tab）再翻列表找那张卡片。只在数据第一次加载完成后尝试
+ *    一次（hasAutoScrolledToPendingActivityRef 挡住之后 approve/reject
+ *    导致的重新渲染又滚一次）；活动 id 对应的卡片如果因为已经不需要审核/
+ *    找不到而没有渲染面板，滚动就静默地什么都不做，不报错。
+ * 2. "我发起的" tab 文字旁边、以及底部导航"我的"图标（见 bottom-nav.tsx）
+ *    都在有未处理申请时显示一个小红点。这个页面自己反正已经为"待审核申请"
+ *    面板整批查出了 pendingParticipants（见下面 usePendingActivityParticipantsQuery
+ *    的用法），tab 文字旁边的红点直接判断这份数据是不是非空数组，不需要
+ *    再单独发一次请求；底部导航是全局组件、拿不到这个页面已经查好的数据，
+ *    用另一个单独的轻量查询（useHasPendingActivityParticipantsQuery，只
+ *    要一个布尔值，不拉完整列表）。同意/拒绝任意一条申请之后，除了本地
+ *    更新 pendingParticipants（红点自然会跟着重新计算），还要顺手
+ *    invalidate 底部导航那个查询的 queryKey——两个红点背后是两条独立的
+ *    查询，不 invalidate 的话底部导航的红点要等下一次 refetchOnWindowFocus
+ *    才会消失，处理完之后红点还留着会让人以为操作没生效。
  */
 export function MyActivitiesPage() {
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
+  const queryClient = useQueryClient();
+  const [searchParams] = useSearchParams();
+  const pendingActivityId = searchParams.get("pendingActivityId");
 
   const [tab, setTab] = useState<Tab>("organized");
 
@@ -271,6 +314,32 @@ export function MyActivitiesPage() {
       setPendingParticipants(pendingParticipantsQuery.data);
     }
   }, [pendingParticipantsQuery.data, pendingParticipants]);
+
+  // 30 号卡：从"查看申请 →"链接跳过来时，把对应活动的"待审核申请"面板
+  // 滚动到可见区域——只在数据第一次加载完成之后尝试一次
+  // （hasAutoScrolledRef 挡住后续 approve/reject 触发的重新渲染又滚一次）。
+  // 面板本身（PendingApplicantsPanel）要等 applicantsForThisActivity 非空
+  // 才会渲染出来，光等 organizedActivities 不够——如果这个用户名下确实有
+  // 需要审核的活动（pendingApprovalActivityIds 非空），还要等
+  // pendingParticipants 也加载完成，DOM 里那个 <details> 节点才真的存在，
+  // 太早查 document.getElementById 只会查到 null；如果压根没有任何活动
+  // 需要审核（pendingApprovalActivityIds 是空数组），
+  // usePendingActivityParticipantsQuery 会因为 enabled:false 永远不发出
+  // 请求、pendingParticipants 永远停在 null，这种情况不能傻等一个不会
+  // 到来的加载结果，直接跳过这个条件。找不到对应的 DOM 节点（比如活动
+  // 已经不再需要审核、或者链接里的活动 id 已经不存在）就静默地什么都不做，
+  // 不报错——这是一个体验优化，不是必须成功的关键路径。
+  const hasAutoScrolledRef = useRef(false);
+  useEffect(() => {
+    if (!pendingActivityId || hasAutoScrolledRef.current) return;
+    if (organizedActivities === null) return;
+    if (pendingApprovalActivityIds.length > 0 && pendingParticipants === null) return;
+
+    hasAutoScrolledRef.current = true;
+    document
+      .getElementById(`pending-applicants-panel-${pendingActivityId}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [pendingActivityId, organizedActivities, pendingApprovalActivityIds, pendingParticipants]);
 
   function clearRowError(activityId: string): void {
     setRowErrors((prev) => {
@@ -373,6 +442,13 @@ export function MyActivitiesPage() {
       setPendingParticipants((prev) =>
         (prev ?? []).filter((item) => item.participantId !== applicant.participantId)
       );
+      // 30 号卡：底部导航"我的"图标的待审核红点是另一条独立查询
+      // （useHasPendingActivityParticipantsQuery），不 invalidate 的话要
+      // 等下一次 refetchOnWindowFocus 才会消失，处理完这一条申请之后
+      // 应该立刻反映出来。
+      void queryClient.invalidateQueries({
+        queryKey: ["has-pending-activity-participants", userId]
+      });
     } catch {
       setParticipantErrors((prev) => ({
         ...prev,
@@ -382,6 +458,10 @@ export function MyActivitiesPage() {
       setActioningParticipantId(null);
     }
   }
+
+  // 30 号卡：直接用已经批量查出来的 pendingParticipants 判断，不为这一个
+  // 红点再单独发一次请求——见组件顶部注释。
+  const hasPendingApplicants = (pendingParticipants ?? []).length > 0;
 
   const tabNav = (
     <nav aria-label="我的活动分类" className="mb-4 flex gap-2">
@@ -393,11 +473,18 @@ export function MyActivitiesPage() {
           onClick={() => setTab(option.value)}
           className={
             tab === option.value
-              ? "flex h-10 flex-1 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white"
-              : "flex h-10 flex-1 items-center justify-center rounded-full border border-border bg-bg text-sm text-text-muted"
+              ? "flex h-10 flex-1 items-center justify-center gap-1 rounded-full bg-accent text-sm font-semibold text-white"
+              : "flex h-10 flex-1 items-center justify-center gap-1 rounded-full border border-border bg-bg text-sm text-text-muted"
           }
         >
           {option.label}
+          {option.value === "organized" && hasPendingApplicants ? (
+            <span
+              aria-hidden="true"
+              data-testid="pending-applicants-tab-dot"
+              className="h-1.5 w-1.5 rounded-full bg-danger"
+            />
+          ) : null}
         </button>
       ))}
     </nav>
@@ -471,11 +558,13 @@ export function MyActivitiesPage() {
                   extra={
                     activity.requiresApproval ? (
                       <PendingApplicantsPanel
+                        activityId={activity.id}
                         applicants={applicantsForThisActivity}
                         actioningParticipantId={actioningParticipantId}
                         participantErrors={participantErrors}
                         onApprove={(applicant) => void handleModerate(applicant, "approve")}
                         onReject={(applicant) => void handleModerate(applicant, "reject")}
+                        autoExpand={activity.id === pendingActivityId}
                       />
                     ) : null
                   }
