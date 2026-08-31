@@ -6,6 +6,7 @@ const {
   useMessagesQuery,
   useSendMessageMutation,
   useMyConversationsQuery,
+  useMyProfileQuery,
   mutateAsyncMock,
   markConversationAsRead,
   useIsBlockingQuery,
@@ -18,6 +19,7 @@ const {
   useMessagesQuery: vi.fn(),
   useSendMessageMutation: vi.fn(),
   useMyConversationsQuery: vi.fn(),
+  useMyProfileQuery: vi.fn(),
   mutateAsyncMock: vi.fn(),
   markConversationAsRead: vi.fn(),
   useIsBlockingQuery: vi.fn(),
@@ -36,6 +38,11 @@ vi.mock("../../features/messages/use-send-message-mutation", () => ({
 }));
 vi.mock("../../features/conversations/use-my-conversations-query", () => ({
   useMyConversationsQuery
+}));
+// 28 号卡：我方消息气泡头像的数据源，跟"我的"页共用同一个 hook——mock 掉
+// 避免测试真的打到 Supabase，跟上面几个既有 hook 是同一个理由。
+vi.mock("../../features/profile/use-my-profile-query", () => ({
+  useMyProfileQuery
 }));
 // markConversationAsRead 是页面直接调用仓库函数（不经过 mutation hook），
 // 见 conversation-page.tsx 挂载时的 useEffect，这里单独 mock 掉，避免
@@ -86,6 +93,7 @@ describe("MessageConversationPage", () => {
     useMessagesQuery.mockReset();
     useSendMessageMutation.mockReset();
     useMyConversationsQuery.mockReset();
+    useMyProfileQuery.mockReset();
     markConversationAsRead.mockReset();
     markConversationAsRead.mockResolvedValue(undefined);
     useIsBlockingQuery.mockReset();
@@ -124,6 +132,7 @@ describe("MessageConversationPage", () => {
       isPending: false,
       isError: false
     });
+    useMyProfileQuery.mockReturnValue({ data: { displayName: "Alice", avatarUrl: null } });
   });
 
   it("renders the other party's nickname and conversation context in the chat header", () => {
@@ -278,10 +287,14 @@ describe("MessageConversationPage", () => {
     expect(listItems.slice(1).every((item) => item.hasAttribute("data-message-owner"))).toBe(true);
   });
 
-  it("shows the avatar only on the first message of a consecutive run from the same sender, uses a spacer on later ones, and never renders an avatar for the current user's own messages", () => {
+  // 28 号卡（私信消息气泡头像显示，改版后）：不做"连续同一发送者只在第
+  // 一条显示"的分组——双方每一条消息都各自带一个头像，没有 spacer 占位，
+  // 不管上一条是谁发的、隔了多久。
+  it("shows an avatar on every message, on both sides (mine and the other party's), with no grouping/spacer even for consecutive messages from the same sender", () => {
     useMessagesQuery.mockReturnValue({
       data: [
         { id: "message-1", senderId: "user-1", body: "我的第一条", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-1b", senderId: "user-1", body: "我的第一条续", notificationPayload: null, createdAt: "2026-07-20T12:00:30.000Z" },
         { id: "message-2", senderId: "seller-1", body: "对方第一条", notificationPayload: null, createdAt: "2026-07-20T12:01:00.000Z" },
         { id: "message-3", senderId: "seller-1", body: "对方第二条", notificationPayload: null, createdAt: "2026-07-20T12:02:00.000Z" },
         { id: "message-4", senderId: "user-1", body: "我的第二条", notificationPayload: null, createdAt: "2026-07-20T12:03:00.000Z" }
@@ -292,11 +305,48 @@ describe("MessageConversationPage", () => {
 
     renderPage();
 
-    // 只有对方那一组连续消息里的第一条（message-2）显示头像，第二条
-    // （message-3）不重复显示、只用一个等宽 spacer 占位；我发的两条
-    // （message-1/message-4）完全不渲染头像也不渲染 spacer。
-    expect(screen.getAllByTestId("message-avatar")).toHaveLength(1);
-    expect(screen.getAllByTestId("message-avatar-spacer")).toHaveLength(1);
+    // 对方两条连续消息（message-2/message-3）各自都有头像；我方三条
+    // （message-1/message-1b/message-4）也各自都有头像——完全不看上一条
+    // 消息是谁发的。没有任何 spacer 占位元素。
+    expect(screen.getAllByTestId("message-avatar")).toHaveLength(2);
+    expect(screen.getAllByTestId("message-avatar-self")).toHaveLength(3);
+    expect(screen.queryByTestId("message-avatar-spacer")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("message-avatar-spacer-self")).not.toBeInTheDocument();
+  });
+
+  it("renders my own avatar image when myProfile.avatarUrl is present, and a nickname-initial placeholder otherwise", () => {
+    useMyProfileQuery.mockReturnValue({
+      data: { displayName: "Alice", avatarUrl: "https://img.example.com/alice.jpg" }
+    });
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "你好", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.getByTestId("message-avatar-self")).toHaveAttribute(
+      "src",
+      "https://img.example.com/alice.jpg"
+    );
+  });
+
+  it("falls back to '我' as my own avatar's placeholder initial when myProfile has no display name yet", () => {
+    useMyProfileQuery.mockReturnValue({ data: null });
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "你好", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.getByTestId("message-avatar-self")).toHaveTextContent("我");
   });
 
   it("inserts a new time divider after a gap of more than 5 minutes", () => {

@@ -10,6 +10,7 @@ import { useUnblockUserMutation } from "../../features/blocks/use-unblock-user-m
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
 import { useMessagesQuery } from "../../features/messages/use-messages-query";
 import { useSendMessageMutation } from "../../features/messages/use-send-message-mutation";
+import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { markConversationAsRead } from "../../repositories/conversations-repository";
 import type { NotificationPayload } from "../../repositories/messages-repository";
 import { useAuthStore } from "../../store/auth-store";
@@ -121,13 +122,11 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  * null——这次改完之后头像上传功能上线前，用户看到的大概率还是昵称首字母
  * 占位，不是真实图片，这是当前产品阶段的已知限制。
  *
- * 消息列表里的头像只在"对方发的消息"（isMine === false）左边显示，且
- * 同一人连续发的几条消息只在第一条旁边显示——复用已有的 previousMessage
- * 变量判断"是不是连续消息的非第一条"（同一发送者 + 中间没有插入时间
- * 分隔线），是的话不渲染头像，只用一个等宽的空 div 占位对齐，不是每条都
- * 重复显示一个头像，效果上接近小红书聊天页那种排布。头像来源是
- * conversation?.otherAvatarUrl（会话级别取一次，不是每条消息单独查），
- * 因为一个会话里"对方"只有一个人。
+ * 消息列表里的头像左右两侧都会显示，每一条消息各自带一个头像，不做
+ * "连续同一发送者只在第一条显示"那种分组（28 号卡起，见下面单独一段
+ * 说明这条规则的调整过程）。对方头像来源是 conversation?.otherAvatarUrl
+ * （会话级别取一次，不是每条消息单独查），因为一个会话里"对方"只有一个
+ * 人。
  *
  * 社交资料页第一批：header 里的头像和 <h1> 昵称各自包一层指向公开个人
  * 主页的 <Link to={`/users/${otherUserId}`}>——昵称仍然保持 <h1> 标签
@@ -142,10 +141,10 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  *   "官方通知"（不是 conversation.postTitle 拼出来的 conversationContext，
  *   系统通知会话本来就不挂在任何帖子下）。
  * - 消息列表里 message.senderId === null（等价于
- *   message.notificationPayload !== null）的消息不走气泡+头像分组那套
- *   逻辑，单独渲染成 SystemNotificationCard；isConsecutiveFromSameSender
- *   的判断显式排除这类消息（加了 !isSystemMessage 条件），否则它们会被
- *   误判成"对方发的普通消息"进而套用头像/spacer 逻辑。
+ *   message.notificationPayload !== null）的消息不走气泡+头像那套逻辑，
+ *   单独渲染成 SystemNotificationCard——isSystemMessage 这个判断把它们
+ *   显式挡在气泡渲染分支之外，不会被误判成"对方发的普通消息"进而套用
+ *   头像逻辑。
  * - 输入框（整个 <form data-testid="conversation-composer">）不渲染——
  *   没有人会收到回复，不应该让用户以为可以对系统说话。
  *
@@ -187,6 +186,63 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  * 重复；不区分方向也避免了意外暴露"对方屏蔽了我"这种可能更敏感的单向
  * 信息。系统通知会话继续保持原来"不渲染输入框"的分支不变，加了一层
  * "先判断是不是系统会话，再判断是不是屏蔽关系"。
+ *
+ * 28 号卡（私信消息气泡头像显示）：
+ *
+ * 28.1 调查结论（先读代码，不要假设）：
+ * 1. "XX申请加入你的活动《XXX》"/"XX报名了你的活动《XXX》"这类消息，读
+ *    use-toggle-activity-participation-mutation.ts 的 notifyOrganizer()
+ *    确认：发送方式是普通的 sendMessage({ senderId: 真实用户 id, body })，
+ *    跟手打一条文字消息完全一样——sendMessage() 本身从来不写
+ *    notification_payload 列（只有 conversation_id/sender_id/body 三个
+ *    字段），所以这类消息的 notificationPayload 恒为 null、senderId 是
+ *    真实用户，不满足 isSystemMessage 的判断条件。也就是说它们**不是**
+ *    真正的系统通知消息（那种 senderId 为 null、渲染成 SystemNotificationCard
+ *    的），只是文案读起来像通知——本来就该走跟普通文字消息完全一样的气泡+
+ *    头像逻辑，代码里没有任何条件判断会专门排除或隐藏它们的头像。这一点
+ *    我在本地起了真实环境（本地 Supabase）复现过一遍：建一个活动、另一个
+ *    账号报名，回到发起人这边打开会话，"XX 报名了你的活动《XXX》"这条
+ *    消息旁边确实正常显示了对方头像（首字母占位，因为项目还没有头像上传
+ *    功能）。综合代码 + 实测结论：**这不是一个能复现的 bug**，反馈里描述
+ *    的现象在当前 main 上找不到对应的缺陷——最可能的解释是反馈来自还没
+ *    同步到这几次头像/会话相关改动的旧版本（跟 15 号卡"快乐小狗"那次的
+ *    结论是同一类情况）。既然找不到真实的头像缺失，这次就没有针对"系统
+ *    通知样式消息缺头像"这条单独加代码修复——28.2 之所以仍然改了这个
+ *    文件，是因为下面第 2 点"我方消息完全没有头像"确实是真的。
+ * 2. 我方发送的消息（isMine === true）：改版前 JSX 里 `{!isMine ? (...)
+ *    : null}` 这一整段头像/占位判断只在 !isMine 分支里，isMine 为 true
+ *    时这段代码完全不会执行——不是数据没传到位，也不是被样式隐藏，是
+ *    压根没写这段渲染逻辑。确认是"当初的设计里自己发的消息本来就不带
+ *    头像"，不是遗漏的 bug，这次是新增这个之前没有的展示。
+ * 3. 连续同一发送者分组：改版前的 isConsecutiveFromSameSender 判断已经
+ *    存在，但只用在对方消息这一侧（`!isMine && ...`）——同一人连续发的
+ *    消息只在第一条旁边显示头像，中间用等宽空 div 占位。28.2 最初一版
+ *    给我方消息加头像时，直接把这套现成规则去掉 `!isMine` 限制、对双方
+ *    对称复用；用户反馈明确要求改成"不分组，双方每条消息都各自带一个
+ *    头像"，于是这版把 isConsecutiveFromSameSender 这整个判断连同两侧的
+ *    spacer 占位 div 都删掉了——头像变成只看 isMine 一个条件就无条件渲染，
+ *    不再看上一条消息是谁发的。
+ * 4. 深色模式：搜了整个仓库（index.css + src 下所有文件），这个项目目前
+ *    **没有任何深色模式/主题切换的实现**——没有 prefers-color-scheme、
+ *    没有 data-theme、没有 Tailwind dark: 前缀类，也没有任何主题相关的
+ *    store/hook。反馈里"第二张截图是深色主题"大概率是手机系统级的强制
+ *    深色（比如 Android WebView 的"强制深色"辅助功能，会自动反色网页），
+ *    不是这个应用自己实现、能控制的主题。这次头像沿用现有 Avatar 组件
+ *    原有的 token 类名（bg-primary/10 text-primary，跟这个页面所有其它
+ *    头像完全一致），没有另外加深色样式——这个应用现在没有"深色模式"这个
+ *    概念可以挂靠，加 dark: 类不会有任何实际效果。如果之后要做真正的
+ *    深色模式，是一张独立的、范围大得多的任务卡，不是这次头像展示能顺带
+ *    解决的。
+ *
+ * 28.2 实现：我方消息气泡加了右侧头像（数据源 useMyProfileQuery()，跟
+ * "我的"页读的是同一个 hook/同一个 queryKey，没有新写一个查询），跟对方
+ * 头像共用同一个 Avatar 组件、同一个 h-7 w-7 尺寸；气泡所在 <li> 的
+ * flex 布局从"仅对方侧 items-start justify-start gap-2 / 我方侧单纯
+ * justify-end"统一成两侧都是 items-start + gap-2，只是 justify-end/
+ * justify-start 决定头像在右边还是左边、DOM 顺序也对调（我方：气泡在前、
+ * 头像在后；对方：头像在前、气泡在后），视觉上左右对称。每条消息各自
+ * 渲染自己的头像（不分组、没有 spacer 占位，见上面第 3 点），两侧的
+ * data-testid 分别是 message-avatar（对方）/message-avatar-self（我方）。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -203,6 +259,7 @@ export function MessageConversationPage() {
   } = useMessagesQuery(conversationId ?? "");
   const sendMessageMutation = useSendMessageMutation(conversationId ?? "");
   const { data: conversations } = useMyConversationsQuery();
+  const { data: myProfile } = useMyProfileQuery();
 
   const [body, setBody] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -333,6 +390,11 @@ export function MessageConversationPage() {
 
   const messageList = messages ?? [];
   const sendDisabled = sendMessageMutation.isPending || body.trim().length === 0;
+  // 28 号卡：我方消息气泡右侧头像的昵称首字母兜底——跟 otherPartyLabel
+  // 用同一个"取首字母"规则（见 profile-summary.tsx 的 avatarInitial），
+  // 没有昵称时兜底"我"而不是"?"，因为这里确定就是当前登录用户自己，不是
+  // 一个身份不明的占位对象。
+  const myInitial = myProfile?.displayName?.trim().charAt(0).toUpperCase() || "我";
   const headerAvatarElement = isSystemConversation ? (
     <div
       aria-hidden="true"
@@ -457,17 +519,6 @@ export function MessageConversationPage() {
               );
               const isMine = message.senderId === currentUserId;
               const isSystemMessage = message.notificationPayload !== null;
-              // 同一人连续发的消息只在第一条旁边显示头像：上一条存在、
-              // 发送者跟这一条相同、且中间没有插入时间分隔线，就算作
-              // "连续消息的非第一条"，不重复显示头像。系统通知消息
-              // （senderId 为 null）显式排除在外——它们不走这套气泡+
-              // 头像分组逻辑，不能被误判成"对方发的普通消息"。
-              const isConsecutiveFromSameSender =
-                !isMine &&
-                !isSystemMessage &&
-                previousMessage !== undefined &&
-                previousMessage.senderId === message.senderId &&
-                !showTimeDivider;
               return (
                 <Fragment key={message.id}>
                   {showTimeDivider ? (
@@ -495,19 +546,15 @@ export function MessageConversationPage() {
                     <li
                       data-message-owner={isMine ? "self" : "other"}
                       aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
-                      className={isMine ? "flex justify-end" : "flex items-start justify-start gap-2"}
+                      className={`flex items-start gap-2 ${isMine ? "justify-end" : "justify-start"}`}
                     >
                       {!isMine ? (
-                        isConsecutiveFromSameSender ? (
-                          <div aria-hidden="true" data-testid="message-avatar-spacer" className="h-7 w-7 shrink-0" />
-                        ) : (
-                          <Avatar
-                            avatarUrl={conversation?.otherAvatarUrl ?? null}
-                            initial={otherPartyLabel.charAt(0)}
-                            sizeClassName="h-7 w-7"
-                            testId="message-avatar"
-                          />
-                        )
+                        <Avatar
+                          avatarUrl={conversation?.otherAvatarUrl ?? null}
+                          initial={otherPartyLabel.charAt(0)}
+                          sizeClassName="h-7 w-7"
+                          testId="message-avatar"
+                        />
                       ) : null}
                       <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
                         <div
@@ -520,6 +567,17 @@ export function MessageConversationPage() {
                           {message.body}
                         </div>
                       </div>
+                      {/* 28 号卡（改版后）：我方消息气泡右侧头像，跟左侧对方
+                          头像对称——同一套 Avatar 组件、同一个尺寸，数据源
+                          换成 myProfile/myInitial（当前登录用户自己）。 */}
+                      {isMine ? (
+                        <Avatar
+                          avatarUrl={myProfile?.avatarUrl ?? null}
+                          initial={myInitial}
+                          sizeClassName="h-7 w-7"
+                          testId="message-avatar-self"
+                        />
+                      ) : null}
                     </li>
                   )}
                 </Fragment>
