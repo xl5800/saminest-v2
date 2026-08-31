@@ -19,6 +19,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+import { usePendingActivityFormDraftStore } from "../../store/pending-activity-form-draft-store";
 import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -27,6 +28,7 @@ import { CreateActivityPage } from "./create-activity-page";
 
 const initialAuthState = useAuthStore.getState();
 const initialPendingRegionState = usePendingFormRegionStore.getState();
+const initialPendingActivityDraftState = usePendingActivityFormDraftStore.getState();
 
 // 12 号卡：地区选择从原生 <select> 换成跳转 /region-select?mode=form + 回填
 // usePendingFormRegionStore（不用真的渲染 RegionSelectPage，直接往 store
@@ -68,6 +70,10 @@ describe("CreateActivityPage", () => {
   beforeEach(() => {
     useAuthStore.setState(initialAuthState, true);
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
+    // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
+    // 点击了"选择州"（会往这个 store 里存一份草稿），下一个测试挂载
+    // CreateActivityPage 时会读到上一个测试留下的草稿。
+    usePendingActivityFormDraftStore.setState(initialPendingActivityDraftState, true);
     listActiveActivityRegions.mockReset();
     createActivity.mockReset();
     navigateMock.mockReset();

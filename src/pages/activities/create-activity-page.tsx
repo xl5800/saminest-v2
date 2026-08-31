@@ -9,6 +9,7 @@ import {
   ACTIVITY_CHANNEL_OPTIONS,
   createActivity
 } from "../../repositories/activities-repository";
+import { usePendingActivityFormDraftStore } from "../../store/pending-activity-form-draft-store";
 import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
@@ -73,6 +74,17 @@ const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
  * 支持全美选择。反查用的 stateCode → id 映射来自
  * useActivityRegionsQuery()（已经在查这张表，只是不再渲染成 <select>
  * 选项，见 regionsByStateCode）。
+ *
+ * 27 号卡（发布表单——选择"州"清空已输入内容的 bug）：跳转
+ * /region-select 是一次真正的路由导航，会让这个页面整个卸载——回来时是
+ * 全新的组件实例，所有 useState 都会回到初始值。地区字段本身不受影响，
+ * 是因为它靠 usePendingFormRegionStore（页面外部的 store）接住选择结果，
+ * 跟组件生命周期无关；但细分标签/标题/说明/地标/开始时间/人数上限/联系
+ * 方式/报名审核这些字段之前完全没有任何东西在页面外面接住，卸载重挂载
+ * 就会清空，这正是 bug 的根因（详见 pending-activity-form-draft-store.ts
+ * 顶部注释）。修复方式：点击"选择州"跳转之前，把这些字段的当前值整个
+ * 存进 usePendingActivityFormDraftStore；组件重新挂载时读一次这个 store
+ * 的快照当作各个 useState 的初始值，然后清空 store。
  */
 export function CreateActivityPage() {
   const navigate = useNavigate();
@@ -81,26 +93,44 @@ export function CreateActivityPage() {
 
   const { data: regions, isError: regionsError } = useActivityRegionsQuery();
 
-  const [channel, setChannel] = useState("");
-  const [tagText, setTagText] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [isOnline, setIsOnline] = useState(false);
+  // 27 号卡：只在组件首次挂载时读一次这个 store 的快照（useRef 的构造
+  // 参数只在第一次渲染生效，后续渲染即使这个表达式重新求值，也不会覆盖
+  // 已经存进 ref 里的值）——不用 useEffect 读，因为下面每个字段的
+  // useState 都需要在“第一次渲染”这同一刻就拿到初始值，等 effect 跑起来
+  // 已经晚了一拍。真正的清空（避免下次全新进入这个页面时读到旧草稿）放在
+  // 下面单独一个 effect 里，读（这里）和清（那个 effect）分开，不在渲染
+  // 过程中做“读了就顺手清掉”这种副作用。
+  const initialDraft = useRef(usePendingActivityFormDraftStore.getState().getFreshDraft()).current;
+
+  const [channel, setChannel] = useState(initialDraft?.channel ?? "");
+  const [tagText, setTagText] = useState(initialDraft?.tagText ?? "");
+  const [title, setTitle] = useState(initialDraft?.title ?? "");
+  const [description, setDescription] = useState(initialDraft?.description ?? "");
+  const [isOnline, setIsOnline] = useState(initialDraft?.isOnline ?? false);
   const [locationId, setLocationId] = useState("");
   // 12 号卡：地区字段的展示文案，跟 publish-page.tsx 同一个道理，不直接
   // 复用 locationId（那是要提交的 locations.id，这个只管这一行按钮显示
   // 什么字）。
   const [regionLabel, setRegionLabel] = useState("");
-  const [landmarkText, setLandmarkText] = useState("");
-  const [startAt, setStartAt] = useState("");
-  const [capacity, setCapacity] = useState("");
-  const [contactMethod, setContactMethod] = useState("");
-  const [contactValue, setContactValue] = useState("");
+  const [landmarkText, setLandmarkText] = useState(initialDraft?.landmarkText ?? "");
+  const [startAt, setStartAt] = useState(initialDraft?.startAt ?? "");
+  const [capacity, setCapacity] = useState(initialDraft?.capacity ?? "");
+  const [contactMethod, setContactMethod] = useState(initialDraft?.contactMethod ?? "");
+  const [contactValue, setContactValue] = useState(initialDraft?.contactValue ?? "");
   // P2 报名审核制：默认关闭，保持现在"秒进"的报名体验，发起人要主动打开
   // 才会多出审核这一步。
-  const [requiresApproval, setRequiresApproval] = useState(false);
+  const [requiresApproval, setRequiresApproval] = useState(initialDraft?.requiresApproval ?? false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // 27 号卡：草稿只应该在“从 /region-select 跳回来的这一次挂载”生效一次，
+  // 挂载后立刻清空——不然下次用户发完这一条、再打开这个页面发布下一条时，
+  // 会莫名其妙看到上一条的旧内容。清空动作放在 effect 里（不是跟上面读
+  // 草稿那一行写在一起），这样即使 React 严格模式下这个副作用被多调用
+  // 一次也无所谓——重复清空一个已经是 null 的值不会有任何区别。
+  useEffect(() => {
+    usePendingActivityFormDraftStore.getState().clearDraft();
+  }, []);
 
   // stateCode → locations.id 的反查表，见组件顶部注释。补全 51 州之后，
   // 全美任意一个州都能在这里找到对应的行——理论上不会查不到，但"查不到"
@@ -148,6 +178,21 @@ export function CreateActivityPage() {
   }, [pendingRegion, regionsByStateCode, clearPendingRegion]);
 
   function handleOpenRegionSelect(): void {
+    // 27 号卡：跳转前先把地区以外的字段整个存进这个页面外部的 store——
+    // 见组件顶部注释和 pending-activity-form-draft-store.ts 顶部注释。
+    usePendingActivityFormDraftStore.getState().saveDraft({
+      channel,
+      tagText,
+      title,
+      description,
+      isOnline,
+      landmarkText,
+      startAt,
+      capacity,
+      contactMethod,
+      contactValue,
+      requiresApproval
+    });
     navigate("/region-select?mode=form");
   }
 

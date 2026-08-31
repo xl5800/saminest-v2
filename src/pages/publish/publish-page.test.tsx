@@ -52,6 +52,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 });
 
 import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
+import { usePendingPostFormDraftStore } from "../../store/pending-post-form-draft-store";
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { AppError } from "../../utils/app-error";
@@ -59,6 +60,7 @@ import { PublishPage } from "./publish-page";
 
 const initialAuthState = useAuthStore.getState();
 const initialPendingRegionState = usePendingFormRegionStore.getState();
+const initialPendingPostDraftState = usePendingPostFormDraftStore.getState();
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText("分类"), {
@@ -127,6 +129,10 @@ describe("PublishPage", () => {
     removeOwnPostImage.mockReset();
     navigateMock.mockReset();
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
+    // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
+    // 点击了"选择地区"（会往这个 store 里存一份草稿），下一个测试挂载
+    // PublishPage 时会读到上一个测试留下的草稿，误判成"已经 seed 过"。
+    usePendingPostFormDraftStore.setState(initialPendingPostDraftState, true);
 
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
@@ -713,6 +719,10 @@ describe("PublishPage in edit mode", () => {
     removeOwnPostImage.mockReset();
     navigateMock.mockReset();
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
+    // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
+    // 点击了"选择地区"（会往这个 store 里存一份草稿），下一个测试挂载
+    // PublishPage 时会读到上一个测试留下的草稿，误判成"已经 seed 过"。
+    usePendingPostFormDraftStore.setState(initialPendingPostDraftState, true);
 
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" }
