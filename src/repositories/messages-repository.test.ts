@@ -38,7 +38,7 @@ describe("listMessages", () => {
 
     expect(fromMock).toHaveBeenCalledWith("messages");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, sender_id, body, notification_payload, created_at"
+      "id, sender_id, body, notification_payload, ref_activity_id, created_at"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith(
       "conversation_id",
@@ -50,7 +50,7 @@ describe("listMessages", () => {
     });
   });
 
-  it("maps a regular (user-sent) row to MessageListItem with notificationPayload: null", async () => {
+  it("maps a regular (user-sent) row to MessageListItem with notificationPayload: null and refActivityId: null", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -58,6 +58,7 @@ describe("listMessages", () => {
           sender_id: "user-1",
           body: "你好",
           notification_payload: null,
+          ref_activity_id: null,
           created_at: "2026-07-17T00:00:00.000Z"
         }
       ],
@@ -72,9 +73,32 @@ describe("listMessages", () => {
         senderId: "user-1",
         body: "你好",
         notificationPayload: null,
+        refActivityId: null,
         createdAt: "2026-07-17T00:00:00.000Z"
       }
     ]);
+  });
+
+  // 30 号卡：只有"申请加入（需要审核）"这条活动通知消息会带这一列，见
+  // use-toggle-activity-participation-mutation.ts 的 notifyOrganizer()。
+  it("maps ref_activity_id through to refActivityId when the row has one (30 号卡：活动申请通知)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "message-3",
+          sender_id: "user-2",
+          body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+          notification_payload: null,
+          ref_activity_id: "act-1",
+          created_at: "2026-07-17T00:00:00.000Z"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMessages("conversation-1");
+
+    expect(result[0]).toMatchObject({ refActivityId: "act-1" });
   });
 
   it("maps a system notification row (sender_id: null) to MessageListItem with its notificationPayload", async () => {
@@ -140,7 +164,7 @@ describe("sendMessage", () => {
     singleMock.mockReset();
   });
 
-  it("inserts a message row and returns the new id", async () => {
+  it("inserts a message row (with ref_activity_id: null by default) and returns the new id", async () => {
     singleMock.mockResolvedValue({ data: { id: "message-1" }, error: null });
 
     const result = await sendMessage({
@@ -153,10 +177,31 @@ describe("sendMessage", () => {
     expect(queryBuilder.insert).toHaveBeenCalledWith({
       conversation_id: "conversation-1",
       sender_id: "user-1",
-      body: "你好"
+      body: "你好",
+      ref_activity_id: null
     });
     expect(queryBuilder.select).toHaveBeenCalledWith("id");
     expect(result).toEqual({ id: "message-1" });
+  });
+
+  // 30 号卡：notifyOrganizer() 发"申请加入（需要审核）"这条消息时会传
+  // refActivityId，这里确认它原样写进 ref_activity_id 这一列。
+  it("inserts ref_activity_id when refActivityId is provided (30 号卡：活动申请通知)", async () => {
+    singleMock.mockResolvedValue({ data: { id: "message-1" }, error: null });
+
+    await sendMessage({
+      conversationId: "conversation-1",
+      senderId: "user-1",
+      body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+      refActivityId: "act-1"
+    });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith({
+      conversation_id: "conversation-1",
+      sender_id: "user-1",
+      body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+      ref_activity_id: "act-1"
+    });
   });
 
   it("throws an AppError when the insert fails", async () => {

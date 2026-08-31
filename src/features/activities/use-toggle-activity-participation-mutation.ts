@@ -41,6 +41,14 @@ const DEFAULT_ACTOR_LABEL = "有人";
  * 在这里按需查一次，比要求所有调用方都提前拉好当前用户 profile、再往
  * mutate() 里多塞一个参数更简单，也更不容易在某个调用点漏传导致消息里
  * 显示不出名字。
+ *
+ * 30 号卡（打通"活动申请通知"到审核页面的跳转）：只有"申请加入（需要
+ * 审核）"这一条消息才带上 ref_activity_id——这是发起人真正需要点进去处理
+ * 的那一种，"报名了"（不需要审核，已经是既成事实）和"退出了"都不需要一个
+ * "查看申请"的跳转入口，所以这两条消息的 ref_activity_id 保持不填（继续
+ * 传 undefined，sendMessage 会写 null）。conversation-page.tsx 就是靠这一
+ * 列有没有值，判断要不要在这条消息气泡下面渲染"查看申请 →"链接，不需要
+ * 解析 body 文本内容找活动。
  */
 async function notifyOrganizer(input: ToggleActivityParticipationInput): Promise<void> {
   if (input.organizerId === input.userId) return;
@@ -48,6 +56,7 @@ async function notifyOrganizer(input: ToggleActivityParticipationInput): Promise
   const actorProfile = await getMyProfile(input.userId);
   const actorDisplayName = actorProfile?.displayName ?? DEFAULT_ACTOR_LABEL;
 
+  const isApprovalRequest = !input.isCurrentlyJoined && input.requiresApproval;
   const body = input.isCurrentlyJoined
     ? `${actorDisplayName} 退出了你的活动《${input.activityTitle}》`
     : input.requiresApproval
@@ -58,7 +67,8 @@ async function notifyOrganizer(input: ToggleActivityParticipationInput): Promise
   await sendMessage({
     conversationId,
     senderId: input.userId,
-    body
+    body,
+    refActivityId: isApprovalRequest ? input.activityId : undefined
   });
 }
 

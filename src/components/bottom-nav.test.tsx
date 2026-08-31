@@ -1,12 +1,17 @@
 import { cleanup, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useHasUnreadSystemNotificationQuery } = vi.hoisted(() => ({
-  useHasUnreadSystemNotificationQuery: vi.fn()
-}));
+const { useHasUnreadSystemNotificationQuery, useHasPendingActivityParticipantsQuery } =
+  vi.hoisted(() => ({
+    useHasUnreadSystemNotificationQuery: vi.fn(),
+    useHasPendingActivityParticipantsQuery: vi.fn()
+  }));
 
 vi.mock("../features/conversations/use-has-unread-system-notification-query", () => ({
   useHasUnreadSystemNotificationQuery
+}));
+vi.mock("../features/activities/use-has-pending-activity-participants-query", () => ({
+  useHasPendingActivityParticipantsQuery
 }));
 
 import { renderWithProviders } from "../test/render-with-providers";
@@ -20,6 +25,8 @@ describe("BottomNav", () => {
   beforeEach(() => {
     useHasUnreadSystemNotificationQuery.mockReset();
     useHasUnreadSystemNotificationQuery.mockReturnValue({ data: false });
+    useHasPendingActivityParticipantsQuery.mockReset();
+    useHasPendingActivityParticipantsQuery.mockReturnValue({ data: false });
   });
 
   it("renders exactly 5 flat destination links, with no separate publish button", () => {
@@ -135,5 +142,33 @@ describe("BottomNav", () => {
     renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
 
     expect(screen.queryByTestId("unread-dot")).not.toBeInTheDocument();
+  });
+
+  // 30 号卡：底部导航"我的"图标的待审核申请红点，跟"消息"图标的未读红点
+  // 是完全独立的两个判断（各自的 hook、各自的 data-testid）。
+  it("shows a pending-approval dot on '我的' when there is a pending activity participant to review", () => {
+    useHasPendingActivityParticipantsQuery.mockReturnValue({ data: true });
+
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    expect(screen.getByTestId("pending-approval-dot")).toBeInTheDocument();
+  });
+
+  it("does not show a pending-approval dot on '我的' when there is nothing to review", () => {
+    useHasPendingActivityParticipantsQuery.mockReturnValue({ data: false });
+
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    expect(screen.queryByTestId("pending-approval-dot")).not.toBeInTheDocument();
+  });
+
+  it("shows both dots independently when both conditions are true", () => {
+    useHasUnreadSystemNotificationQuery.mockReturnValue({ data: true });
+    useHasPendingActivityParticipantsQuery.mockReturnValue({ data: true });
+
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    expect(screen.getByTestId("unread-dot")).toBeInTheDocument();
+    expect(screen.getByTestId("pending-approval-dot")).toBeInTheDocument();
   });
 });

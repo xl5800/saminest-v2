@@ -1,5 +1,13 @@
+import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// 30 号卡：jsdom 没有实现 scrollIntoView，"从查看申请链接跳过来自动
+// 滚动到对应审核面板"这个行为需要一个桩实现才能在测试里跑，跟这个仓库
+// 别处给 IntersectionObserver 打桩（src/test/setup.ts）是同一个道理，只是
+// 这个只有这一个页面用得到，就近声明在这个文件里，不搬进全局 setup。
+const scrollIntoViewMock = vi.fn();
+Element.prototype.scrollIntoView = scrollIntoViewMock;
 
 const {
   listMyOrganizedActivities,
@@ -122,6 +130,7 @@ describe("MyActivitiesPage", () => {
     createActivityConversation.mockResolvedValue({ conversationId: "conv-1" });
     findExistingActivityConversation.mockResolvedValue({ conversationId: "conv-1" });
     sendMessage.mockResolvedValue({ id: "msg-1" });
+    scrollIntoViewMock.mockReset();
   });
 
   it("defaults to the '我发起的' tab", async () => {
@@ -531,5 +540,158 @@ describe("MyActivitiesPage", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
     expect(screen.getByText("Bob")).toBeInTheDocument();
+  });
+
+  // 30 号卡（打通"活动申请通知"到审核页面的跳转）。
+  describe("'我发起的' tab 待审核红点", () => {
+    it("shows a dot next to '我发起的' when there is at least one pending applicant", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+
+      renderWithProviders(<MyActivitiesPage />);
+
+      expect(await screen.findByTestId("pending-applicants-tab-dot")).toBeInTheDocument();
+    });
+
+    it("does not show the dot when there are no pending applicants", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([]);
+
+      renderWithProviders(<MyActivitiesPage />);
+      await screen.findByText(/周末吃火锅/);
+
+      expect(screen.queryByTestId("pending-applicants-tab-dot")).not.toBeInTheDocument();
+    });
+
+    it("removes the dot after approving the only pending applicant", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+      approveActivityParticipant.mockResolvedValue(undefined);
+
+      renderWithProviders(<MyActivitiesPage />);
+      await screen.findByTestId("pending-applicants-tab-dot");
+
+      fireEvent.click(screen.getByRole("button", { name: "同意" }));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("pending-applicants-tab-dot")).not.toBeInTheDocument();
+      });
+    });
+
+    it("invalidates the bottom-nav pending-approval query (['has-pending-activity-participants', userId]) after approving, so its dot disappears without waiting for a refocus", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+      approveActivityParticipant.mockResolvedValue(undefined);
+      const invalidateQueriesSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+
+      renderWithProviders(<MyActivitiesPage />);
+      await screen.findByText("待审核申请（1）");
+
+      fireEvent.click(screen.getByRole("button", { name: "同意" }));
+
+      await waitFor(() => {
+        expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+          queryKey: ["has-pending-activity-participants", "user-1"]
+        });
+      });
+
+      invalidateQueriesSpy.mockRestore();
+    });
+
+    it("also invalidates the bottom-nav pending-approval query after rejecting", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+      rejectActivityParticipant.mockResolvedValue(undefined);
+      const invalidateQueriesSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+
+      renderWithProviders(<MyActivitiesPage />);
+      await screen.findByText("待审核申请（1）");
+
+      fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
+
+      await waitFor(() => {
+        expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+          queryKey: ["has-pending-activity-participants", "user-1"]
+        });
+      });
+
+      invalidateQueriesSpy.mockRestore();
+    });
+  });
+
+  // 30 号卡：从"查看申请 →"链接跳过来（?pendingActivityId=<活动id>）自动
+  // 展开+滚动到对应活动的审核面板。
+  describe("从'查看申请 →'链接跳转过来的自动展开+滚动 (?pendingActivityId=)", () => {
+    it("auto-expands and scrolls to the matching activity's pending-applicants panel", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, id: "act-1", requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+
+      renderWithProviders(<MyActivitiesPage />, {
+        initialEntries: ["/my-activities?pendingActivityId=act-1"]
+      });
+
+      await screen.findByText("待审核申请（1）");
+
+      const panel = document.getElementById("pending-applicants-panel-act-1");
+      expect(panel).toHaveAttribute("open");
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: "smooth", block: "center" });
+    });
+
+    it("does not auto-expand a different activity's panel that doesn't match pendingActivityId", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, id: "act-1", requiresApproval: true },
+        { ...sampleOrganizedActivity, id: "act-2", title: "另一场活动", requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([
+        samplePendingApplicant,
+        { ...samplePendingApplicant, participantId: "participant-2", activityId: "act-2" }
+      ]);
+
+      renderWithProviders(<MyActivitiesPage />, {
+        initialEntries: ["/my-activities?pendingActivityId=act-1"]
+      });
+
+      await screen.findAllByText(/待审核申请（1）/);
+
+      expect(document.getElementById("pending-applicants-panel-act-1")).toHaveAttribute("open");
+      expect(document.getElementById("pending-applicants-panel-act-2")).not.toHaveAttribute("open");
+    });
+
+    it("does nothing (no throw) when pendingActivityId does not match any organized activity", async () => {
+      listMyOrganizedActivities.mockResolvedValue([sampleOrganizedActivity]);
+
+      renderWithProviders(<MyActivitiesPage />, {
+        initialEntries: ["/my-activities?pendingActivityId=does-not-exist"]
+      });
+
+      await screen.findByText(/周末吃火锅/);
+
+      expect(scrollIntoViewMock).not.toHaveBeenCalled();
+    });
+
+    it("does not auto-expand anything when the URL has no pendingActivityId query param", async () => {
+      listMyOrganizedActivities.mockResolvedValue([
+        { ...sampleOrganizedActivity, requiresApproval: true }
+      ]);
+      listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
+
+      renderWithProviders(<MyActivitiesPage />);
+      await screen.findByText("待审核申请（1）");
+
+      expect(document.getElementById("pending-applicants-panel-act-1")).not.toHaveAttribute("open");
+      expect(scrollIntoViewMock).not.toHaveBeenCalled();
+    });
   });
 });

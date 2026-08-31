@@ -1,6 +1,7 @@
 import { Handshake, Home, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
+import { useHasPendingActivityParticipantsQuery } from "../features/activities/use-has-pending-activity-participants-query";
 import { useHasUnreadSystemNotificationQuery } from "../features/conversations/use-has-unread-system-notification-query";
 
 interface NavItem {
@@ -60,10 +61,17 @@ function isActivePath(pathname: string, to: string): boolean {
  * 系统通知这一种未读概念，没有理由为其它 4 项也预留同一套逻辑。红点是
  * aria-hidden，"消息"这个文字标签本身已经是可访问名称，红点只是纯视觉
  * 强调，不需要额外的无障碍文案（比如"有未读消息"）。
+ *
+ * 30 号卡（打通"活动申请通知"到审核页面的跳转）：同样的红点模式又加了
+ * 一个——"我的"图标（to === "/profile"）用
+ * useHasPendingActivityParticipantsQuery 判断当前用户名下有没有任意未
+ * 处理的活动报名申请，跟"消息"图标的未读红点是完全独立的两个判断，互不
+ * 影响，只是恰好用的是同一套 UI 呈现（同一个 absolute 定位的小红点）。
  */
 export function BottomNav() {
   const location = useLocation();
   const { data: hasUnread } = useHasUnreadSystemNotificationQuery();
+  const { data: hasPendingApproval } = useHasPendingActivityParticipantsQuery();
 
   return (
     <nav
@@ -73,6 +81,7 @@ export function BottomNav() {
       {NAV_ITEMS.map(({ to, label, Icon }) => {
         const active = isActivePath(location.pathname, to);
         const showUnreadDot = to === "/messages" && hasUnread === true;
+        const showPendingApprovalDot = to === "/profile" && hasPendingApproval === true;
         return (
           <Link
             key={to}
@@ -84,10 +93,10 @@ export function BottomNav() {
           >
             <span className="relative">
               <Icon aria-hidden="true" size={22} strokeWidth={active ? 2.5 : 2} />
-              {showUnreadDot ? (
+              {showUnreadDot || showPendingApprovalDot ? (
                 <span
                   aria-hidden="true"
-                  data-testid="unread-dot"
+                  data-testid={showUnreadDot ? "unread-dot" : "pending-approval-dot"}
                   className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger"
                 />
               ) : null}

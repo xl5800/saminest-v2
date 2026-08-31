@@ -131,14 +131,21 @@ describe("useToggleActivityParticipationMutation", () => {
 
     await waitFor(() => expect(sendMessage).toHaveBeenCalled());
     expect(createActivityConversation).toHaveBeenCalledWith("act-1");
+    // 30 号卡：不需要审核的"报名了"消息不带 ref_activity_id——没有"查看
+    // 申请"这回事，refActivityId 应该是 undefined（sendMessage 会把它写成
+    // null），不是这次任务要加跳转链接的那一种消息。
     expect(sendMessage).toHaveBeenCalledWith({
       conversationId: "conv-1",
       senderId: "user-1",
-      body: "Alice 报名了你的活动《周末吃火锅》"
+      body: "Alice 报名了你的活动《周末吃火锅》",
+      refActivityId: undefined
     });
   });
 
-  it("notifies the organizer with a '申请加入…去处理一下吧' message when requiresApproval is true (not '报名了')", async () => {
+  // 30 号卡（打通"活动申请通知"到审核页面的跳转）：只有这一条"需要审核"的
+  // 消息才带 refActivityId，会话页据此渲染"查看申请 →"链接，不解析 body
+  // 文本内容找活动。
+  it("notifies the organizer with a '申请加入…去处理一下吧' message and refActivityId when requiresApproval is true (not '报名了')", async () => {
     joinActivity.mockResolvedValue(undefined);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useToggleActivityParticipationMutation(), {
@@ -153,11 +160,12 @@ describe("useToggleActivityParticipationMutation", () => {
     expect(sendMessage).toHaveBeenCalledWith({
       conversationId: "conv-1",
       senderId: "user-1",
-      body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。"
+      body: "Alice 申请加入你的活动《周末吃火锅》，去处理一下吧。",
+      refActivityId: "act-1"
     });
   });
 
-  it("notifies the organizer with a '退出了' message after a successful leave", async () => {
+  it("notifies the organizer with a '退出了' message (no refActivityId) after a successful leave", async () => {
     leaveActivity.mockResolvedValue(undefined);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderHook(() => useToggleActivityParticipationMutation(), {
@@ -172,8 +180,30 @@ describe("useToggleActivityParticipationMutation", () => {
     expect(sendMessage).toHaveBeenCalledWith({
       conversationId: "conv-1",
       senderId: "user-1",
-      body: "Alice 退出了你的活动《周末吃火锅》"
+      body: "Alice 退出了你的活动《周末吃火锅》",
+      refActivityId: undefined
     });
+  });
+
+  // 30 号卡：退出方向（isCurrentlyJoined=true）即使 requiresApproval 恰好
+  // 是 true（比如退出一场本来需要审核的活动），也不应该带 refActivityId——
+  // isApprovalRequest 的判断是 "!isCurrentlyJoined && requiresApproval"，
+  // 两个条件都要满足，不是只看 requiresApproval 这一个字段。
+  it("does not attach refActivityId on leave even when requiresApproval is true", async () => {
+    leaveActivity.mockResolvedValue(undefined);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(() => useToggleActivityParticipationMutation(), {
+      wrapper: createWrapper(queryClient)
+    });
+
+    act(() => {
+      result.current.mutate({ ...baseInput, isCurrentlyJoined: true, requiresApproval: true });
+    });
+
+    await waitFor(() => expect(sendMessage).toHaveBeenCalled());
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ refActivityId: undefined })
+    );
   });
 
   it("falls back to a generic actor label when the actor's own profile has no display name available", async () => {

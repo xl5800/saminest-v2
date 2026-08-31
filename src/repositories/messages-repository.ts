@@ -26,6 +26,15 @@ export interface MessageListItem {
    *  messages_sender_or_notification_check 约束一一对应），页面据此判断
    *  要不要渲染成通知卡片而不是聊天气泡。 */
   notificationPayload: NotificationPayload | null;
+  /** 30 号卡新增：这条消息关联的活动 id——目前只有
+   *  use-toggle-activity-participation-mutation.ts 的 notifyOrganizer()
+   *  在"申请加入（需要审核）"这一种情况下会填这一列，会话页据此判断"要不要
+   *  在这条消息下面加一个'查看申请 →'链接"，不需要解析 body 文本内容找
+   *  活动。ref_activity_id 这一列（连同 ref_post_id）是 16 号卡加的，那次
+   *  的"联系上下文引用消息"功能后来被撤回、没有实际调用方在写这两列，这次
+   *  是第一次真正用起来，见 messages 表建表迁移和
+   *  20260826162616_remove_conversation_reference_messages.sql 的历史。 */
+  refActivityId: string | null;
   createdAt: string;
 }
 
@@ -34,6 +43,7 @@ interface MessageRow {
   sender_id: string | null;
   body: string | null;
   notification_payload: NotificationPayload | null;
+  ref_activity_id: string | null;
   created_at: string;
 }
 
@@ -46,7 +56,7 @@ interface MessageRow {
 export async function listMessages(conversationId: string): Promise<MessageListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("messages")
-    .select("id, sender_id, body, notification_payload, created_at")
+    .select("id, sender_id, body, notification_payload, ref_activity_id, created_at")
     .eq("conversation_id", conversationId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -61,6 +71,7 @@ export async function listMessages(conversationId: string): Promise<MessageListI
     senderId: row.sender_id,
     body: row.body,
     notificationPayload: row.notification_payload ?? null,
+    refActivityId: row.ref_activity_id,
     createdAt: row.created_at
   }));
 }
@@ -69,6 +80,10 @@ export interface SendMessageInput {
   conversationId: string;
   senderId: string;
   body: string;
+  /** 30 号卡新增：可选，只有 notifyOrganizer() 发"申请加入（需要审核）"
+   *  这条通知时会传，见 MessageListItem.refActivityId 的注释。不传时列
+   *  为 null，跟改版前完全一样。 */
+  refActivityId?: string;
 }
 
 export interface SendMessageResult {
@@ -85,7 +100,8 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   const payload: TablesInsert<"messages"> = {
     conversation_id: input.conversationId,
     sender_id: input.senderId,
-    body: input.body
+    body: input.body,
+    ref_activity_id: input.refActivityId ?? null
   };
 
   const { data, error } = await getSupabaseClient()

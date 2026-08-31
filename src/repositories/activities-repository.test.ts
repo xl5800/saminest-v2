@@ -1,9 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hoisted(() => {
+const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock } = vi.hoisted(() => {
   const overrideTypesMock = vi.fn();
   const singleMock = vi.fn();
   const maybeSingleMock = vi.fn();
+  // 30 号卡新增：真实的 supabase-js query builder本身就是一个 thenable——
+  // 不是每次查询都要落到 .single()/.maybeSingle()/.overrideTypes() 这类
+  // 显式终结方法才能拿到结果，count-only 的 head:true 查询
+  // （hasPendingActivityParticipantsForOrganizer）就是直接 await 整条
+  // 链式调用本身，没有再多调用任何终结方法。这里补一个 .then 让这个
+  // mock builder 也能被直接 await——包成 vi.fn() 是为了跟其它链式方法
+  // 一样能被下面 resetAllMocks() 的 Object.keys 循环统一 mockClear()，
+  // 不需要特殊处理。只有真的直接 await 裸 builder（不经过其它三个终结
+  // 方法）的调用路径才会用到它，其它既有函数已经都是先落到
+  // overrideTypes/single/maybeSingle 三者之一、再 await 它们各自的返回值，
+  // 不会受这次新增影响。
+  const thenMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   const chain = [
     "select",
@@ -22,7 +34,10 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
   builder.overrideTypes = overrideTypesMock;
   builder.single = singleMock;
   builder.maybeSingle = maybeSingleMock;
-  return { queryBuilder: builder, overrideTypesMock, singleMock, maybeSingleMock };
+  builder.then = vi.fn((resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+    Promise.resolve(thenMock()).then(resolve, reject)
+  );
+  return { queryBuilder: builder, overrideTypesMock, singleMock, maybeSingleMock, thenMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -38,6 +53,7 @@ import {
   createActivity,
   getActivityDetail,
   getActivityParticipationStatus,
+  hasPendingActivityParticipantsForOrganizer,
   joinActivity,
   leaveActivity,
   listActivities,
@@ -58,6 +74,7 @@ function resetAllMocks(): void {
   overrideTypesMock.mockReset();
   singleMock.mockReset();
   maybeSingleMock.mockReset();
+  thenMock.mockReset();
 }
 
 describe("listActivities", () => {
@@ -1123,6 +1140,56 @@ describe("listPendingActivityParticipants", () => {
 
     await expect(listPendingActivityParticipants(["act-1"])).rejects.toMatchObject({
       code: "ACTIVITY_PENDING_PARTICIPANTS_LIST_FAILED"
+    });
+  });
+});
+
+// 30 号卡（待审核红点）：底部导航"我的"图标用这个函数判断要不要显示红点，
+// 见 use-has-pending-activity-participants-query.ts。
+describe("hasPendingActivityParticipantsForOrganizer", () => {
+  beforeEach(resetAllMocks);
+
+  it("queries activity_participants filtered to pending status and the given organizer, with count:'exact', head:true", async () => {
+    thenMock.mockResolvedValue({ count: 0, data: null, error: null });
+
+    await hasPendingActivityParticipantsForOrganizer("organizer-1");
+
+    expect(fromMock).toHaveBeenCalledWith("activity_participants");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, activities!inner(organizer_id)", {
+      count: "exact",
+      head: true
+    });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("activities.organizer_id", "organizer-1");
+  });
+
+  it("returns true when count is greater than 0", async () => {
+    thenMock.mockResolvedValue({ count: 3, data: null, error: null });
+
+    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(true);
+  });
+
+  it("returns false when count is 0", async () => {
+    thenMock.mockResolvedValue({ count: 0, data: null, error: null });
+
+    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(false);
+  });
+
+  it("returns false (not throw) when count comes back null", async () => {
+    thenMock.mockResolvedValue({ count: null, data: null, error: null });
+
+    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(false);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    thenMock.mockResolvedValue({
+      count: null,
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).rejects.toMatchObject({
+      code: "ACTIVITY_PENDING_PARTICIPANTS_COUNT_FAILED"
     });
   });
 });

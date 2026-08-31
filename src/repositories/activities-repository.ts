@@ -892,6 +892,41 @@ export async function listPendingActivityParticipants(
 }
 
 /**
+ * 30 号卡（待审核红点）：只要当前用户名下任意一场活动存在至少一条待处理
+ * 申请，就返回 true——底部导航"我的"图标用这个判断要不要显示红点。故意
+ * 不复用"先查 listMyOrganizedActivities 拿到全部活动 id，再传给
+ * listPendingActivityParticipants"这条 my-activities-page.tsx 已有的两步
+ * 查询链路：底部导航是每个页面都会渲染的全局组件，为了一个布尔值现查一遍
+ * 当前用户的全部活动列表、再查一遍待处理申请，多打两次不必要的请求，对
+ * 首屏加载没有好处。这里用 activity_participants 表自己的
+ * activity_participants_select_organizer 这条 RLS 已经保证"只能查到自己
+ * 发起的活动下的参与者"，配合 PostgREST 内嵌资源过滤（`activities!inner`）
+ * 直接一条查询、`head: true` 只要行数不要数据本身，是这个场景下最便宜的
+ * 写法。
+ *
+ * my-activities-page.tsx 的"我发起的" tab 文字旁边那个红点不复用这个
+ * 函数——那个页面反正已经要为"待审核申请"面板整批查出
+ * pendingParticipants（见 usePendingActivityParticipantsQuery），直接用
+ * 那份已经在内存里的数据判断"是不是空数组"就够了，没必要为同一件事再多发
+ * 一次网络请求。
+ */
+export async function hasPendingActivityParticipantsForOrganizer(
+  organizerId: string
+): Promise<boolean> {
+  const { count, error } = await getSupabaseClient()
+    .from("activity_participants")
+    .select("id, activities!inner(organizer_id)", { count: "exact", head: true })
+    .eq("status", "pending")
+    .eq("activities.organizer_id", organizerId);
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_PENDING_PARTICIPANTS_COUNT_FAILED", error);
+  }
+
+  return (count ?? 0) > 0;
+}
+
+/**
  * 发起人同意一条报名申请：把 activity_participants.status 从 'pending'
  * 改成 'approved'。这一列客户端不能直接 UPDATE（`revoke update (status)`，
  * 见迁移文件 20260816175611_activity_join_approval.sql），只能走这个
