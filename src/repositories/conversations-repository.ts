@@ -49,7 +49,8 @@ export interface ConversationListItem {
    *  sync_conversation_last_message_at() 触发器的维护逻辑。 */
   lastMessagePreview: string | null;
   /** 当前用户有没有读过这条会话的最新消息，见下面 computeIsUnread 的
-   *  判断逻辑。 */
+   *  判断逻辑——20 号卡之后，"最后一条消息是不是自己发的"也是这个判断的
+   *  一部分，不只是单纯比较时间戳。 */
   isUnread: boolean;
 }
 
@@ -59,6 +60,10 @@ interface ConversationListRow {
   origin_type: string;
   last_message_at: string | null;
   last_message_preview: string | null;
+  /** 20 号卡新增列——最后一条消息的发送者，系统通知消息（没有真实发送者）
+   *  这一列是 null，见 conversations-repository.ts 顶部 computeIsUnread
+   *  的注释、以及对应的迁移文件。 */
+  last_message_sender_id: string | null;
   created_at: string;
   // 未加别名，字段名跟着嵌套查询里的表名 posts 走（跟
   // posts-repository.ts 里 location:locations(name) 那种带别名的写法
@@ -187,14 +192,33 @@ async function fetchConversationMemberInfo(
 
 /**
  * 会话"未读"判断，跟 hasUnreadSystemNotification() 尾部的判断逐字一致
- * （抽成共享函数，避免同一段"没有消息就不算未读，没读过就算未读，比
- * 上次读的时间晚才算未读"的三段判断在文件里写两遍）：
+ * （抽成共享函数，避免同一段判断在文件里写两遍）：
  * - 没有最后一条消息（会话从来没人发过消息）→ 不算未读。
- * - 有消息但从来没读过（last_read_at 为空）→ 算未读。
+ * - 最后一条消息是当前用户自己发的 → 不算未读——20 号卡修复：改版前这里
+ *   只比较时间戳，完全不知道最后一条消息是谁发的，导致用户主动给别人
+ *   发消息时，conversations.last_message_at 一更新，自己的
+ *   conversation_members.last_read_at 却只在"打开会话页那一刻"更新过
+ *   （不会随着"我刚发的这条消息"同步推进），于是自己也被判定成"未读"，
+ *   在会话列表里看到自己刚发出去的消息带着红点。这个分支必须排在"从来
+ *   没读过"分支之前——一条全新会话里我发的第一条消息，我可能压根没有
+ *   `last_read_at`（还没被 markConversationAsRead 标记过），如果先判断
+ *   "没读过就算未读"会错误地漏判这种情况。
+ * - 有消息、不是自己发的，但从来没读过（last_read_at 为空）→ 算未读。
  * - 否则按时间比较：最后一条消息晚于上次读取时间才算未读。
+ *
+ * lastMessageSenderId 为 null 代表系统通知消息（messages.sender_id 本来
+ * 就允许为空，见 20260818162648 迁移）——null 不会等于任何真实用户的
+ * currentUserId，"是不是自己发的"这条判断对系统通知天然是 false，不会
+ * 意外抑制掉系统通知本该有的未读红点。
  */
-function computeIsUnread(lastMessageAt: string | null, lastReadAt: string | null): boolean {
+function computeIsUnread(
+  lastMessageAt: string | null,
+  lastReadAt: string | null,
+  lastMessageSenderId: string | null,
+  currentUserId: string
+): boolean {
   if (!lastMessageAt) return false;
+  if (lastMessageSenderId === currentUserId) return false;
   if (!lastReadAt) return true;
   return new Date(lastMessageAt).getTime() > new Date(lastReadAt).getTime();
 }
@@ -230,7 +254,7 @@ export async function listMyConversations(
   const { data, error } = await getSupabaseClient()
     .from("conversations")
     .select(
-      "id, post_id, origin_type, last_message_at, last_message_preview, created_at, posts(title)"
+      "id, post_id, origin_type, last_message_at, last_message_preview, last_message_sender_id, created_at, posts(title)"
     )
     .order("created_at", { ascending: false })
     .overrideTypes<ConversationListRow[]>();
@@ -256,7 +280,12 @@ export async function listMyConversations(
       otherAvatarUrl: otherParty?.avatarUrl ?? null,
       lastActivityAt: row.last_message_at ?? row.created_at,
       lastMessagePreview: row.last_message_preview,
-      isUnread: computeIsUnread(row.last_message_at, ownLastReadAt)
+      isUnread: computeIsUnread(
+        row.last_message_at,
+        ownLastReadAt,
+        row.last_message_sender_id,
+        currentUserId
+      )
     };
   });
 
@@ -575,6 +604,7 @@ export async function markConversationAsRead(
 interface SystemConversationRow {
   id: string;
   last_message_at: string | null;
+  last_message_sender_id: string | null;
 }
 
 /**
@@ -600,7 +630,7 @@ export async function hasUnreadSystemNotification(userId: string): Promise<boole
 
   const { data: conversation, error: conversationError } = await client
     .from("conversations")
-    .select("id, last_message_at")
+    .select("id, last_message_at, last_message_sender_id")
     .eq("origin_type", "system")
     .eq("created_by", userId)
     .is("deleted_at", null)
@@ -633,5 +663,10 @@ export async function hasUnreadSystemNotification(userId: string): Promise<boole
     );
   }
 
-  return computeIsUnread(conversation.last_message_at, member?.last_read_at ?? null);
+  return computeIsUnread(
+    conversation.last_message_at,
+    member?.last_read_at ?? null,
+    conversation.last_message_sender_id,
+    userId
+  );
 }

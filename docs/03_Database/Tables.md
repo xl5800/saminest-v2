@@ -799,6 +799,7 @@ reporter_id + target_type + target_id + active status
 | `post_id` | `uuid` | 是 | `null` | 关联帖子 |
 | `created_by` | `uuid` | 否 | 无 | 创建者 |
 | `last_message_at` | `timestamptz` | 是 | `null` | 最后消息时间 |
+| `last_message_sender_id` | `uuid` | 是 | `null` | 最后一条消息的发送者（外键 `profiles.id`），系统通知消息为 `null`；20 号卡新增，供会话列表"未读"判断区分"是不是自己发的" |
 | `created_at` | `timestamptz` | 否 | `now()` | 创建时间 |
 | `updated_at` | `timestamptz` | 否 | `now()` | 更新时间 |
 | `deleted_at` | `timestamptz` | 是 | `null` | 软删除时间 |
