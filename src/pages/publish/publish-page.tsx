@@ -17,6 +17,7 @@ import {
 import { createPost, type PostDetailImage } from "../../repositories/posts-repository";
 import { postImageStorageService } from "../../services/storage/post-image-storage-service";
 import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
+import { usePendingPostFormDraftStore } from "../../store/pending-post-form-draft-store";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { getNextPostImageSortOrder } from "../../utils/post-image-sort-order";
@@ -194,6 +195,24 @@ async function uploadAndInsertPostImages(input: {
  * 屏 ⑩ 的视觉一致；这个页面现在是创建流程页，AppShell 不再渲染 AppHeader/
  * BottomNav（见 app-shell.tsx 的 NO_CHROME_PATTERNS），所以也不需要再像
  * 改版前那样在小屏/大屏之间用 pb-20/md:pb-10 让出底部 Tab 栏空间。
+ *
+ * 27 号卡（发布表单——选择"州"清空已输入内容的 bug）：这个页面的"地区"
+ * 字段跟 create-activity-page.tsx 一样，点击后 navigate() 跳转到
+ * /region-select 整页选择——同一次真正的路由导航，会让这个页面整个
+ * 卸载，选完地区回来时是全新的组件实例，所有 useState 都会回到初始值
+ * （新建模式回到空白，编辑模式则会被下面 seededRef 那个"从 existingPost
+ * 回填"的 effect 重新拉回服务端原始值，等于把导航前刚做的修改冲掉，是
+ * 同一类问题的另一种表现）。地区字段本身之所以没事，是因为它靠
+ * usePendingFormRegionStore（页面外部的 store）接住选择结果，跟组件
+ * 生命周期无关；其它字段（分类/标题/描述/价格/联系方式/已选图片）之前
+ * 完全没有类似的外部接住机制。修复方式：点击"选择地区"跳转之前，把这些
+ * 字段（连同已经从服务端查到的 existingImages，见下面 seededRef 相关
+ * 注释）整个存进 usePendingPostFormDraftStore；组件重新挂载时读一次这个
+ * store 的快照当作各个 useState 的初始值，并且让"从 existingPost 回填"
+ * 那个 effect 直接跳过（seededRef 初始值改成"草稿存在就当已经 seed 过"），
+ * 不让服务端数据覆盖刚恢复回来的草稿；读到草稿后立刻清空 store，避免
+ * 下次全新进入这个页面时读到旧草稿。详见
+ * pending-post-form-draft-store.ts 顶部注释。
  */
 export function PublishPage() {
   const navigate = useNavigate();
@@ -217,26 +236,54 @@ export function PublishPage() {
   const removePostImageMutation = useRemovePostImageMutation();
   const queryClient = useQueryClient();
 
-  const [categoryId, setCategoryId] = useState("");
+  // 27 号卡：只在组件首次挂载时读一次这个 store 的快照（useRef 的构造
+  // 参数只在第一次渲染生效）——不用 useEffect 读，因为下面每个字段的
+  // useState 都需要在“第一次渲染”这同一刻就拿到初始值。真正的清空放在
+  // 下面单独一个 effect 里，读（这里）和清（那个 effect）分开，不在渲染
+  // 过程中做“读了就顺手清掉”这种副作用。
+  const initialDraft = useRef(usePendingPostFormDraftStore.getState().getFreshDraft()).current;
+
+  const [categoryId, setCategoryId] = useState(initialDraft?.categoryId ?? "");
   const [locationId, setLocationId] = useState("");
   const [locationText, setLocationText] = useState("");
   // 12 号卡：地区字段的展示文案，跟 locationId/locationText 这两个提交用的
   // 值分开存——两者语义不一样（这个只管这一行按钮显示什么字，不参与校验/
   // 提交），见下面消费 pendingRegion 的 effect 和"地区"字段的渲染。
   const [regionLabel, setRegionLabel] = useState("");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [price, setPrice] = useState("");
-  const [contactMethod, setContactMethod] = useState("");
-  const [contactValue, setContactValue] = useState("");
-  const [images, setImages] = useState<File[]>([]);
-  const [existingImages, setExistingImages] = useState<PostDetailImage[]>([]);
+  const [title, setTitle] = useState(initialDraft?.title ?? "");
+  const [description, setDescription] = useState(initialDraft?.description ?? "");
+  const [price, setPrice] = useState(initialDraft?.price ?? "");
+  const [contactMethod, setContactMethod] = useState(initialDraft?.contactMethod ?? "");
+  const [contactValue, setContactValue] = useState(initialDraft?.contactValue ?? "");
+  const [images, setImages] = useState<File[]>(initialDraft?.images ?? []);
+  const [existingImages, setExistingImages] = useState<PostDetailImage[]>(
+    initialDraft?.existingImages ?? []
+  );
   const [removingImageId, setRemovingImageId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingImages, setUploadingImages] = useState(false);
 
-  const seededRef = useRef(false);
+  // 27 号卡：草稿存在就代表这份表单的字段已经是"我们想要的值"（要么是
+  // 用户刚从 /region-select 跳回来之前自己填的，要么是编辑模式下用户在
+  // 服务端数据回填之后又改过的）——跟下面这个 effect 正常"从服务端回填"
+  // 得到的效果是同一件事，所以初始值直接当成"已经 seed 过"，让那个
+  // effect 什么都不做，不会用服务端原始值把刚恢复回来的草稿覆盖掉。
+  const seededRef = useRef(initialDraft !== null);
+  // 27 号卡：新建模式下 URL 上的 ?category= 预设分类同理——如果草稿存在，
+  // 说明 categoryId 已经是用户最近一次的真实选择（可能就是预设值，也
+  // 可能是用户自己改过的），不应该再被下面这个 effect 拿 URL 上的预设值
+  // 重新覆盖一遍。
+  const presetSeededRef = useRef(initialDraft !== null);
+
+  // 27 号卡：草稿只应该在"从 /region-select 跳回来的这一次挂载"生效一次，
+  // 挂载后立刻清空——不然下次用户发完这一条、再打开这个页面发布下一条
+  // （或者编辑另一篇帖子）时，会莫名其妙看到上一次的旧内容。清空动作放在
+  // effect 里，即使 React 严格模式下这个副作用被多调用一次也无所谓——
+  // 重复清空一个已经是 null 的值不会有任何区别。
+  useEffect(() => {
+    usePendingPostFormDraftStore.getState().clearDraft();
+  }, []);
 
   useEffect(() => {
     if (!isEditMode || seededRef.current || existingPost == null) {
@@ -278,11 +325,10 @@ export function PublishPage() {
   // category_id 区分类型，没有三个独立页面），靠 URL 上的 ?category=<slug>
   // 告诉这个页面要预选哪个分类。只在新建模式（!isEditMode）下生效——编辑
   // 模式的分类由上面那个 effect 从 existingPost 回填，两者不会同时命中。
-  // 只做一次（presetSeededRef 挡住之后的重复赋值），效果跟 seededRef 是
-  // 同一个模式：用户手动改了下拉之后，categories 如果因为窗口重新聚焦等
-  // 原因在后台重新拉取，不应该把用户已经改动的选择覆盖回预设值。
-  const presetSeededRef = useRef(false);
-
+  // 只做一次（presetSeededRef 挡住之后的重复赋值，声明见上面 27 号卡的
+  // 注释），效果跟 seededRef 是同一个模式：用户手动改了下拉之后，
+  // categories 如果因为窗口重新聚焦等原因在后台重新拉取，不应该把用户
+  // 已经改动的选择覆盖回预设值。
   useEffect(() => {
     if (isEditMode || presetSeededRef.current || !presetCategorySlug || !categories) {
       return;
@@ -337,6 +383,19 @@ export function PublishPage() {
   }, [pendingRegion, clearPendingRegion]);
 
   function handleOpenRegionSelect(): void {
+    // 27 号卡：跳转前先把地区以外的字段（含已选/已上传图片）整个存进这个
+    // 页面外部的 store——见组件顶部注释和 pending-post-form-draft-store.ts
+    // 顶部注释。
+    usePendingPostFormDraftStore.getState().saveDraft({
+      categoryId,
+      title,
+      description,
+      price,
+      contactMethod,
+      contactValue,
+      images,
+      existingImages
+    });
     navigate("/region-select?mode=form");
   }
 
