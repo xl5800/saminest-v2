@@ -1,20 +1,29 @@
 import { Share } from "@capacitor/share";
 import { Flag, Share2 } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { ActivityFavoriteButton } from "../../components/activity-favorite-button";
 import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
-import { ActivityParticipationButtonView } from "../../components/activity-participation-button";
+import {
+  ActivityParticipationButtonView,
+  SECONDARY_BUTTON_CLASS_NAME
+} from "../../components/activity-participation-button";
 import { PersonCard } from "../../components/person-card";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
+import { useCreateActivityConversationMutation } from "../../features/activities/use-create-activity-conversation-mutation";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
 import type { ActivityDetail } from "../../repositories/activities-repository";
 import { getActivityChannelMeta } from "../../repositories/activities-repository";
+import { useAuthStore } from "../../store/auth-store";
+import { AppError } from "../../utils/app-error";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatActivityStartAt } from "../../utils/format";
+
+const CONTACT_ORGANIZER_DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 
 /**
  * 活动详情页（/activities/:id，公开，不需要登录，游客也能看，跟
@@ -65,9 +74,31 @@ import { formatActivityStartAt } from "../../utils/format";
  * 仍然需要它的返回值渲染头像堆叠，只是不再额外渲染一份文字名单。社交资料页
  * 第一批留下的"发起人：{名字}"文字链接继续保留在原来的位置，跟发起人卡片
  * 指向同一个 /users/:id，允许重复，不需要去重（任务卡明确说明）。
+ *
+ * 任务卡 3（"联系发起人"按钮）：跟"参加活动"按钮并排放在同一行，样式复用
+ * activity-participation-button.tsx 已导出的 SECONDARY_BUTTON_CLASS_NAME
+ * （两个按钮各占半行——两者都套了一层 flex-1，PRIMARY/SECONDARY 各自的
+ * `w-full` 类名负责撑满各自的半行，不需要改 ActivityParticipationButtonView
+ * 本身）。点击行为整套照抄 contact-seller-button.tsx（未登录跳 /login、
+ * 建会话中禁用按钮、ACCOUNT_RESTRICTED 单独文案、其它失败统一文案），但
+ * 没有抽成一个新的共享组件——这次任务允许修改的文件列表明确只到
+ * activity-detail-page.tsx 本身，所以逻辑直接写在这个页面组件里，不是
+ * 遗漏了做成组件。调用的 useCreateActivityConversationMutation 内部包的
+ * createActivityConversation() 是 conversations-repository.ts 里早就存在
+ * 的函数（"一起去"报名/退出通知发起人那一步已经在用，见该函数顶部注释），
+ * 这次没有改动那个仓库函数本身。
+ *
+ * 发起人自己看自己发起的活动时不展示这个按钮——判断用 data.organizerId
+ * 是否等于当前登录用户 id，跟 ContactSellerButton 隐藏"联系发布者"给作者
+ * 本人看的判断是同一个写法；未登录用户仍然能看到按钮（点击后跳
+ * /login，不是隐藏，因为这时候还判断不出"是不是自己"）。
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const session = useAuthStore((s) => s.session);
+  const currentUserId = session?.user.id;
+
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
 
@@ -80,6 +111,34 @@ export function ActivityDetailPage() {
   });
 
   const canTapEmptySlot = !participationAction.disabled && !participationAction.isApproved;
+
+  const createActivityConversation = useCreateActivityConversationMutation();
+  const [contactError, setContactError] = useState<string | null>(null);
+
+  function handleContactOrganizerClick(activityId: string): void {
+    if (!currentUserId) {
+      navigate("/login");
+      return;
+    }
+    if (createActivityConversation.isPending) return;
+
+    setContactError(null);
+    createActivityConversation.mutate(activityId, {
+      onSuccess: ({ conversationId }) => {
+        navigate(`/messages/${conversationId}`);
+      },
+      onError: (mutationError) => {
+        // 跟 contact-seller-button.tsx 的 handleClick 同一个判断：账号受限
+        // 是一个明确、可操作的失败原因，跟其它未知失败原因共用一条"请稍后
+        // 重试"文案会误导用户。
+        if (mutationError instanceof AppError && mutationError.code === "ACCOUNT_RESTRICTED") {
+          setContactError(mutationError.message);
+        } else {
+          setContactError(CONTACT_ORGANIZER_DEFAULT_ERROR_MESSAGE);
+        }
+      }
+    });
+  }
 
   async function handleShare(activity: ActivityDetail): Promise<void> {
     if (!id) return;
@@ -221,7 +280,31 @@ export function ActivityDetailPage() {
               subtitle="发起人"
             />
 
-            <ActivityParticipationButtonView action={participationAction} />
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <ActivityParticipationButtonView action={participationAction} />
+              </div>
+              {currentUserId && data.organizerId === currentUserId ? null : (
+                <div className="flex-1">
+                  <button
+                    type="button"
+                    disabled={createActivityConversation.isPending}
+                    onClick={() => handleContactOrganizerClick(data.id)}
+                    className={SECONDARY_BUTTON_CLASS_NAME}
+                  >
+                    {createActivityConversation.isPending ? "创建会话中…" : "联系发起人"}
+                  </button>
+                  {contactError ? (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
+                    >
+                      {contactError}
+                    </p>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         ) : null}
       </div>
