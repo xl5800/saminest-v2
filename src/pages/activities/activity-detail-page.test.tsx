@@ -757,4 +757,56 @@ describe("ActivityDetailPage", () => {
       expect(mutateContactMock).not.toHaveBeenCalled();
     });
   });
+
+  // 任务卡 4：只有当前登录用户是这个活动的发起人时才展示"📢通知参与者"
+  // 入口，放在参与者头像区块下方，跳转独立路由 /activities/:id/notify。
+  describe("📢 通知参与者 entry (task card 4)", () => {
+    it("does not render the entry when there is no session (logged out)", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.queryByRole("link", { name: /通知参与者/ })).not.toBeInTheDocument();
+    });
+
+    it("does not render the entry for a logged-in user who is not the organizer", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.queryByRole("link", { name: /通知参与者/ })).not.toBeInTheDocument();
+    });
+
+    it("renders the entry, linking to /activities/:id/notify, when the logged-in user is the organizer", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const link = screen.getByRole("link", { name: /通知参与者/ });
+      expect(link).toHaveAttribute("href", "/activities/act-1/notify");
+    });
+  });
 });

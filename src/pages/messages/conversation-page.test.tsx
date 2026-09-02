@@ -837,6 +837,101 @@ describe("MessageConversationPage", () => {
     });
   });
 
+  // 任务卡 4（发起人群发通知参与者）：notification_payload.kind ===
+  // 'activity_broadcast' 这类消息，跟"Saminest 官方系统通知"共用同一个
+  // notificationPayload !== null 判断（走卡片而不是气泡），但不是
+  // origin_type = 'system' 那种专属会话——这里故意不调用
+  // mockSystemConversation()，用默认（普通 post/activity 场景）的会话
+  // mock，验证卡片渲染只看这一条消息自己的 notificationPayload.kind，
+  // 跟它所在的会话是不是系统会话无关。
+  describe("activity broadcast notification message (task card 4)", () => {
+    it("renders it as a '📢 活动通知' card (Megaphone icon, not Bell), not a chat bubble, inside a regular (non-system) conversation", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "下周六改到下午两点",
+            notificationPayload: {
+              title: "📢 活动通知",
+              summary: "《周末吃火锅》：下周六改到下午两点",
+              link: "/activities/act-1",
+              kind: "activity_broadcast"
+            },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      expect(screen.getByText("📢 活动通知")).toBeInTheDocument();
+      expect(screen.getByText("《周末吃火锅》：下周六改到下午两点")).toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-megaphone")).toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-bell")).not.toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="system"]')).toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="other"]')).not.toBeInTheDocument();
+      // 会话本身仍然是普通会话，不是系统通知会话——header 用 Bob 的昵称，
+      // 不是"Saminest 通知"，这条消息只是这个普通会话里的一条特殊消息。
+      expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
+    });
+
+    it("wraps the card in a link to notificationPayload.link (the activity)", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "下周六改到下午两点",
+            notificationPayload: {
+              title: "📢 活动通知",
+              summary: "《周末吃火锅》：下周六改到下午两点",
+              link: "/activities/act-1",
+              kind: "activity_broadcast"
+            },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("link", { name: /📢 活动通知/ })).toHaveAttribute(
+        "href",
+        "/activities/act-1"
+      );
+    });
+
+    it("still renders a genuine system notification (no 'kind' field) as the original Bell-icon card, unaffected by the new branch", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "你的帖子审核通过。",
+            notificationPayload: {
+              title: "帖子审核通过",
+              summary: null,
+              link: "/post/post-1"
+            },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      expect(container.querySelector("svg.lucide-bell")).toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-megaphone")).not.toBeInTheDocument();
+    });
+  });
+
   // 未读标记不再只服务系统通知会话——markConversationAsRead 本身早就是
   // 通用实现，之前只在 system 分支调用是范围限制，不是这个函数的能力
   // 限制，这次把这个限制去掉。

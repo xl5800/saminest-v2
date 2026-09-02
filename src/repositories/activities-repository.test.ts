@@ -62,6 +62,7 @@ import {
   listMyJoinedActivities,
   listMyOrganizedActivities,
   listPendingActivityParticipants,
+  notifyActivityParticipants,
   rejectActivityParticipant
 } from "./activities-repository";
 
@@ -1238,6 +1239,31 @@ describe("rejectActivityParticipant", () => {
 
     await expect(rejectActivityParticipant("participant-1")).rejects.toMatchObject({
       code: "ACTIVITY_PARTICIPANT_REJECT_FAILED"
+    });
+  });
+});
+
+describe("notifyActivityParticipants", () => {
+  beforeEach(resetAllMocks);
+
+  it("calls the notify_activity_participants RPC with the activity id and body", async () => {
+    rpcMock.mockResolvedValue({ error: null });
+
+    await notifyActivityParticipants("act-1", "下周六改到下午两点");
+
+    expect(rpcMock).toHaveBeenCalledWith("notify_activity_participants", {
+      target_activity_id: "act-1",
+      body: "下周六改到下午两点"
+    });
+  });
+
+  it("throws an AppError when the RPC fails (e.g. not the organizer, or empty body)", async () => {
+    rpcMock.mockResolvedValue({
+      error: { message: "only the activity organizer can notify participants" }
+    });
+
+    await expect(notifyActivityParticipants("act-1", "内容")).rejects.toMatchObject({
+      code: "ACTIVITY_NOTIFY_PARTICIPANTS_FAILED"
     });
   });
 });

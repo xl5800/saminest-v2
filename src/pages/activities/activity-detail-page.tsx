@@ -59,6 +59,14 @@ const CONTACT_ORGANIZER_DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后�
  * 没有对应的 token（真正的 token 是 `text-chevron`），抽取时一并改成了
  * 正确的类名，chevron 颜色从"默认黑"变成设计要求的浅灰。
  *
+ * 任务卡 4（发起人群发通知参与者）：新增 isOrganizer 判断（session.user.id
+ * 是不是等于 data.organizerId，这个页面之前完全没有这层判断，之前只区分
+ * "登录/未登录"决定报名按钮能不能点，不区分"是不是发起人"），只在为真时
+ * 在参与者头像区块下方展示"📢通知参与者"链接，跳转独立路由
+ * /activities/:id/notify（见 activity-notify-page.tsx）——这里只是入口，
+ * 真正的权限强制在那个页面 + notify_activity_participants() 数据库函数
+ * 那两层，不是靠这里隐藏链接就足够安全。
+ *
  * 一致性的关键点：这个页面只调用一次 useActivityParticipationAction，把
  * 同一个 `participationAction` 对象分别交给 ActivityParticipationButtonView
  * （渲染"参加活动"按钮）和 ActivityParticipantAvatars 的
@@ -101,6 +109,8 @@ export function ActivityDetailPage() {
 
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
+
+  const isOrganizer = !!session && !!data && session.user.id === data.organizerId;
 
   const participationAction = useActivityParticipationAction({
     activityId: id ?? "",
@@ -247,6 +257,15 @@ export function ActivityDetailPage() {
               shape="square"
               showAllParticipants
             />
+
+            {isOrganizer ? (
+              <Link
+                to={`/activities/${data.id}/notify`}
+                className="block w-full rounded-lg border border-primary px-4 py-2 text-center text-sm font-semibold text-primary hover:bg-primary/5"
+              >
+                📢 通知参与者
+              </Link>
+            ) : null}
 
             <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>
 

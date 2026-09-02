@@ -13,6 +13,14 @@ export interface NotificationPayload {
   title: string;
   summary: string | null;
   link: string | null;
+  /** 任务卡 4（发起人群发通知参与者）新增，可选——notify_user() 写的
+   *  "Saminest 官方系统通知"这一版没有这个字段（值是 undefined），只有
+   *  notify_activity_participants() 写的"发起人群发的活动通知"才会带上
+   *  'activity_broadcast'，见该迁移文件顶部说明。conversation-page.tsx
+   *  据此把两种都满足 notificationPayload !== null 的消息渲染成不同的
+   *  卡片样式（📢活动通知 vs 🔔Saminest 通知），不新增列，复用同一个
+   *  jsonb 字段。 */
+  kind?: "activity_broadcast";
 }
 
 export interface MessageListItem {
