@@ -1199,6 +1199,10 @@ export type Database = {
           role: string
         }[]
       }
+      notify_activity_participants: {
+        Args: { body: string; target_activity_id: string }
+        Returns: undefined
+      }
       notify_user: {
         Args: {
           link?: string

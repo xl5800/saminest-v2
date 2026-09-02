@@ -961,3 +961,37 @@ export async function rejectActivityParticipant(participantId: string): Promise<
     throw new AppError(error.message, "ACTIVITY_PARTICIPANT_REJECT_FAILED", error);
   }
 }
+
+/**
+ * 任务卡 4：发起人给这场活动当前所有已加入（approved 且未取消）的参与者
+ * 群发一条通知。只能走这个 security definer 函数——发起人身份校验、
+ * "已加入"名单的圈定、跟每个参与者之间会话的获取/创建、把某个跟发起人
+ * 存在拉黑关系的参与者悄悄跳过，这几件事都在函数体内完成（见迁移文件
+ * 20260902050000_notify_activity_participants_function.sql 顶部的详细
+ * 说明），前端这里只负责发起调用、把数据库的失败原因包装成 AppError，
+ * 不重复任何一层判断。
+ *
+ * 不区分"活动不存在"/"不是发起人"/"内容为空"这几种失败原因，统一用一条
+ * 通用错误码——跟 approveActivityParticipant/rejectActivityParticipant
+ * 是同一个力度：这是这批任务新增的、还没有别的地方需要更细的错误分支，
+ * 调用方（activity-notify-page.tsx）本来就已经在提交前做过"是不是发起人"
+ * 这一步的前端判断，正常操作路径走不到这几种失败。
+ *
+ * 拉黑跳过是静默的（数据库函数内部直接 continue，不抛出、也不返回"跳过了
+ * 几个人"这类信息），所以这个函数没有返回值，调用方只需要知道"提交成功"，
+ * 不应该也没有办法展示"有 N 个人被跳过"这种细节——任务卡明确要求这次不
+ * 需要让调用者看到失败提示。
+ */
+export async function notifyActivityParticipants(
+  activityId: string,
+  body: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("notify_activity_participants", {
+    target_activity_id: activityId,
+    body
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ACTIVITY_NOTIFY_PARTICIPANTS_FAILED", error);
+  }
+}

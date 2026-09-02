@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router-dom";
 import { AppShell } from "../components/app-shell";
 import { ActivityDetailPage } from "../pages/activities/activity-detail-page";
 import { ActivityListPage } from "../pages/activities/activity-list-page";
+import { ActivityNotifyPage } from "../pages/activities/activity-notify-page";
 import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
@@ -70,6 +71,19 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <ReportActivityPage />
+          </RequireAuth>
+        )
+      },
+      {
+        // 任务卡 4：发起人群发通知参与者，独立路由（不是弹窗），跟
+        // activities/:id/report 同一类"活动详情页跳出来的表单页"，同样
+        // 用 RequireAuth 包裹——是不是这场活动的发起人由页面自己再判断一层
+        // （RequireAuth 只保证登录，管不到"是不是这个活动的发起人"），见
+        // activity-notify-page.tsx 顶部注释。
+        path: "activities/:id/notify",
+        element: (
+          <RequireAuth>
+            <ActivityNotifyPage />
           </RequireAuth>
         )
       },

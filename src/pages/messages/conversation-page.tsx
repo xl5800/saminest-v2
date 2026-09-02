@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
+import { Bell, Megaphone } from "lucide-react";
 import { Fragment, type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
@@ -81,6 +81,47 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
       >
         <Bell size={16} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-text">{payload.title}</p>
+        {payload.summary ? (
+          <p className="mt-0.5 text-xs text-text-muted">{payload.summary}</p>
+        ) : null}
+        <p className="mt-1 text-xs text-text-muted">{formatMessageTimeDivider(createdAt)}</p>
+      </div>
+    </div>
+  );
+
+  return payload.link != null ? (
+    <Link to={payload.link} className="block w-full">
+      {content}
+    </Link>
+  ) : (
+    content
+  );
+}
+
+/**
+ * 任务卡 4（发起人群发通知参与者）新增——activity_notify_participants()
+ * 写的这类消息虽然也满足 notificationPayload !== null（复用
+ * SystemNotificationCard 判断"要不要走卡片而不是气泡"的同一个条件，见
+ * isSystemMessage 的用法），但语义上不是"Saminest 官方系统通知"（不是
+ * origin_type = 'system' 那种只有接收者一个成员的专属会话，这条消息就在
+ * 发起人和这个参与者原本的 1:1 会话里），所以不复用 SystemNotificationCard
+ * 那个组件（不改它，见文件顶部函数级注释），单独加一个视觉上能区分开的
+ * 卡片：图标换成 Megaphone（📢），不是 Bell（🔔）。结构（图标+标题+摘要+
+ * 时间、有 link 整张卡可点）跟 SystemNotificationCard 完全一致，是刻意
+ * 保持的一致性，不是重复造轮子——两种通知卡片在这个会话页里应该有同一套
+ * "占满宽度、不是聊天气泡"的基础排版，只是图标不一样。
+ */
+function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCardProps) {
+  const content = (
+    <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-white p-3">
+      <div
+        aria-hidden="true"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+      >
+        <Megaphone size={16} />
       </div>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-text">{payload.title}</p>
@@ -551,13 +592,26 @@ export function MessageConversationPage() {
                   {isSystemMessage ? (
                     <li
                       data-message-owner="system"
-                      aria-label="系统通知"
+                      aria-label={
+                        message.notificationPayload?.kind === "activity_broadcast"
+                          ? "活动通知"
+                          : "系统通知"
+                      }
                       className="flex justify-center"
                     >
-                      <SystemNotificationCard
-                        payload={message.notificationPayload as NotificationPayload}
-                        createdAt={message.createdAt}
-                      />
+                      {/* 任务卡 4：只新增这一层判断，isSystemMessage 本身
+                          和下面的普通气泡分支（else 那一侧）都没有改动。 */}
+                      {message.notificationPayload?.kind === "activity_broadcast" ? (
+                        <ActivityNotificationCard
+                          payload={message.notificationPayload as NotificationPayload}
+                          createdAt={message.createdAt}
+                        />
+                      ) : (
+                        <SystemNotificationCard
+                          payload={message.notificationPayload as NotificationPayload}
+                          createdAt={message.createdAt}
+                        />
+                      )}
                     </li>
                   ) : (
                     <li
