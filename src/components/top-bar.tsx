@@ -1,4 +1,4 @@
-import { ArrowLeft, MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -129,18 +129,20 @@ function MoreMenuButton({ label, content }: MoreMenuButtonProps) {
 
 interface TopBarHomeProps {
   variant: "home";
-  /** 胶囊按钮第二行展示的地区文案（08 号卡改版，取代原来单行的
-   *  "{州名} · Saminest"）——没有选中地区时传 null，这一行显示占位文案
-   *  「选择地区」，不是留空/不渲染这一行：08 号卡明确要求"未选择地区时
-   *  这一行显示占位文案"，胶囊本身的两行结构、可点击范围都不因为有没有
-   *  选中地区而变化，只有第二行的文字内容不同。具体传什么字符串由调用方
-   *  决定（首页目前是"有城市数据就显示 {城市名}, {州代码}，否则显示
-   *  {州全名}"，见 home-page.tsx），这个组件不关心地区数据从哪来。 */
+  /** 地区按钮展示的文案（08 号卡改版，取代原来单行的"{州名} · Saminest"；
+   *  顶部栏拆分任务卡起，这一列文字展示在独立的地区按钮上，不再是品牌名
+   *  胶囊的第二行）——没有选中地区时传 null，按钮显示占位文案「选择地区」，
+   *  不是留空/不渲染：08 号卡明确要求"未选择地区时显示占位文案"，这条
+   *  行为拆分之后没有变化，只是承载它的元素从"胶囊第二行"变成了"独立
+   *  按钮的文字"。具体传什么字符串由调用方决定（首页目前是"有城市数据就
+   *  显示 {城市名}, {州代码}，否则显示 {州全名}"，见 home-page.tsx），
+   *  这个组件不关心地区数据从哪来。 */
   regionLabel: string | null;
-  /** 点击整个胶囊按钮跳转"地区选择"页——08 号卡改版前只有州名那一小段文字
-   *  可点，现在整个胶囊（含"Saminest"那一行）都是同一个点击目标，理由是
-   *  两行文字本来就是一个不可拆分的视觉整体（同一个按钮），没必要让用户
-   *  必须精确点中第二行才能触发跳转。 */
+  /** 点击地区按钮跳转"地区选择"页——顶部栏拆分任务卡之前，这个点击事件挂
+   *  在"Saminest + 地区"合并成的整个胶囊按钮上（含品牌名那一行）；拆分之后
+   *  品牌名"Saminest"变成纯文字、不可点击，只有这个独立的地区按钮才响应
+   *  点击，行为（跳转地区选择页）本身没有变化，变的只是"点哪里能触发"这个
+   *  可点击范围。 */
   onRegionClick: () => void;
   /** 右侧"＋"图标点击——首页点它弹出"选择发布类型"弹层（⑨），具体弹层
    *  由调用方决定，这个组件只负责暴露点击事件。（这条注释原来误写成"左边"，
@@ -218,21 +220,29 @@ export function TopBar(props: TopBarProps) {
   if (props.variant === "home") {
     return (
       <header className="flex h-14 items-center justify-between px-4">
-        {/* 08 号卡改版：从"州名 · Saminest 单行文字"换成 Meet5 风格的独立
-            圆角胶囊按钮，内部纵向堆叠两行——第一行品牌名（加粗蓝字），第二行
-            当前选中的地区（小字、次要文字色，未选择时是占位文案）。整个胶囊
-            都是一个可点击的 <button>，不是只有地区那一小行可点——见上面
-            onRegionClick 的注释。 */}
-        <button
-          type="button"
-          onClick={props.onRegionClick}
-          className="flex shrink-0 flex-col items-start rounded-full border border-border bg-card px-3 py-1.5 text-left"
-        >
-          <span className="text-base font-bold leading-tight text-primary">Saminest</span>
-          <span className="text-xs font-medium leading-tight text-text-muted">
-            {props.regionLabel ?? "选择地区"}
+        {/* 顶部栏拆分任务卡：08 号卡把"州名 · Saminest 单行文字"合并成一个
+            两行堆叠的圆角胶囊按钮（品牌名+地区都在同一个 <button> 里）；这次
+            按产品确认过的找搭子列表页 mockup 拆回三个独立元素——品牌名是
+            纯文字 <span>，不再可点击；地区是它自己独立的圆角按钮（保留
+            onRegionClick 行为和"选择地区"占位文案不变，新增一个下拉箭头
+            图标暗示"这是可点选项"）；最右侧的"＋"发布/搜索图标完全不变，
+            只是不再跟品牌名共享同一个 flex 容器，各自在自己的分组里，见下面
+            两个 <div>。 */}
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <span className="shrink-0 text-base font-bold leading-tight text-primary">
+            Saminest
           </span>
-        </button>
+          <button
+            type="button"
+            onClick={props.onRegionClick}
+            className="flex min-w-0 shrink-0 items-center gap-0.5 rounded-full border border-border bg-card px-3 py-1.5 text-left"
+          >
+            <span className="truncate text-xs font-medium leading-tight text-text-muted">
+              {props.regionLabel ?? "选择地区"}
+            </span>
+            <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-text-muted" />
+          </button>
+        </div>
         <div className="flex shrink-0 items-center gap-2">
           {props.onCreateClick ? (
             <button

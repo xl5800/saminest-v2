@@ -22,7 +22,10 @@ describe("TopBar", () => {
 
   // 08 号卡：从"州名 · Saminest 单行文字（只有州名那一小段可点）"改成
   // Meet5 风格的独立圆角胶囊按钮（纵向堆叠"Saminest" + 地区两行，整个胶囊
-  // 都可点击）。
+  // 都可点击）。顶部栏拆分任务卡又把这个胶囊拆回三个独立元素——见下面
+  // 单独一组"拆分后的独立元素"测试；这里保留的几个测试断言的是拆分前后
+  // 都不变的部分（品牌名文字存在、regionLabel/占位文案展示、发布/搜索
+  // 图标行为），只是不再假设它们共享同一个 <button>。
   describe("home variant", () => {
     it("always renders the 'Saminest' brand name", () => {
       renderWithProviders(
@@ -66,7 +69,7 @@ describe("TopBar", () => {
       expect(screen.getByText("选择地区")).toBeInTheDocument();
     });
 
-    it("renders the whole pill (both lines) as a single clickable button, alongside the create/search icon buttons — 3 buttons total", () => {
+    it("renders the region button (regionLabel as its accessible name), alongside the create/search icon buttons — 3 buttons total", () => {
       renderWithProviders(
         <TopBar
           variant="home"
@@ -77,12 +80,14 @@ describe("TopBar", () => {
         />
       );
 
-      // 胶囊本身是一个 <button>，可访问名称同时包含品牌名和地区文案两行。
-      expect(screen.getByRole("button", { name: "Saminest 选择地区" })).toBeInTheDocument();
+      // 拆分之后地区按钮是独立的 <button>，可访问名称只有地区文案本身
+      // （占位文案"选择地区"），不再包含品牌名——品牌名现在是按钮外面的
+      // 纯文字，不贡献可访问名称。
+      expect(screen.getByRole("button", { name: "选择地区" })).toBeInTheDocument();
       expect(screen.getAllByRole("button")).toHaveLength(3);
     });
 
-    it("calls onRegionClick when the pill button is clicked, regardless of which line is clicked", () => {
+    it("calls onRegionClick when the region button is clicked", () => {
       const onRegionClick = vi.fn();
       renderWithProviders(
         <TopBar
@@ -94,16 +99,16 @@ describe("TopBar", () => {
         />
       );
 
-      fireEvent.click(screen.getByRole("button", { name: "Saminest Virginia" }));
+      fireEvent.click(screen.getByRole("button", { name: "Virginia" }));
 
       expect(onRegionClick).toHaveBeenCalledTimes(1);
     });
 
     // 14 号卡（找搭子页改版）：home 变体这次开始被找搭子列表页复用（同一个
-    // "Saminest + 地区"胶囊），但那个页面不需要"＋发布"入口——onCreateClick
-    // 因此改成可选，不传时只渲染搜索图标一个按钮（胶囊 + 搜索 = 2 个），
-    // 不是首页那种胶囊 + 发布 + 搜索 = 3 个。
-    it("does not render the '＋' create button when onCreateClick is omitted, only the pill and the search icon", () => {
+    // 品牌名+地区+图标组合），但那个页面不需要"＋发布"入口——onCreateClick
+    // 因此改成可选，不传时按钮只剩地区按钮 + 搜索图标 = 2 个（品牌名文字
+    // 不是按钮，不计入），不是首页那种地区+发布+搜索 = 3 个。
+    it("does not render the '＋' create button when onCreateClick is omitted, only the region button and the search icon", () => {
       renderWithProviders(
         <TopBar variant="home" regionLabel={null} onRegionClick={vi.fn()} onSearchClick={vi.fn()} />
       );
@@ -131,6 +136,96 @@ describe("TopBar", () => {
 
       expect(onCreateClick).toHaveBeenCalledTimes(1);
       expect(onSearchClick).toHaveBeenCalledTimes(1);
+    });
+
+    // 顶部栏拆分任务卡：把"Saminest + 地区"合并胶囊拆成三个独立元素
+    // （品牌名文字、地区按钮、发布/搜索图标），这组测试专门覆盖拆分本身，
+    // 跟上面几个测试覆盖的"拆分前后都不变的行为"分开。
+    describe("拆分后的独立元素（品牌名 / 地区按钮 / 图标）", () => {
+      it("renders the brand name as plain text, not inside any button (not clickable)", () => {
+        renderWithProviders(
+          <TopBar
+            variant="home"
+            regionLabel={null}
+            onRegionClick={vi.fn()}
+            onCreateClick={vi.fn()}
+            onSearchClick={vi.fn()}
+          />
+        );
+
+        const brand = screen.getByText("Saminest");
+        expect(brand.tagName).not.toBe("BUTTON");
+        expect(brand.closest("button")).toBeNull();
+      });
+
+      it("does not include the brand name in the region button's accessible name", () => {
+        renderWithProviders(
+          <TopBar
+            variant="home"
+            regionLabel="Arlington, VA"
+            onRegionClick={vi.fn()}
+            onCreateClick={vi.fn()}
+            onSearchClick={vi.fn()}
+          />
+        );
+
+        expect(
+          screen.queryByRole("button", { name: /Saminest/ })
+        ).not.toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Arlington, VA" })).toBeInTheDocument();
+      });
+
+      it("renders a dropdown chevron icon inside the region button, hinting it's selectable", () => {
+        const { container } = renderWithProviders(
+          <TopBar
+            variant="home"
+            regionLabel={null}
+            onRegionClick={vi.fn()}
+            onCreateClick={vi.fn()}
+            onSearchClick={vi.fn()}
+          />
+        );
+
+        const regionButton = screen.getByRole("button", { name: "选择地区" });
+        expect(regionButton.querySelector("svg.lucide-chevron-down")).toBeInTheDocument();
+        // 图标本身是装饰性的，不应该因为它出现在 <button> 里就意外贡献
+        // 可访问名称——上面按钮名称仍然精确等于"选择地区"这一条已经隐含
+        // 验证过了，这里再确认一次图标节点本身是 aria-hidden。
+        expect(container.querySelector("svg.lucide-chevron-down")).toHaveAttribute(
+          "aria-hidden",
+          "true"
+        );
+      });
+
+      it("keeps the left-to-right order: brand name, then region button, then create/search icons", () => {
+        renderWithProviders(
+          <TopBar
+            variant="home"
+            regionLabel={null}
+            onRegionClick={vi.fn()}
+            onCreateClick={vi.fn()}
+            onSearchClick={vi.fn()}
+          />
+        );
+
+        const brand = screen.getByText("Saminest");
+        const regionButton = screen.getByRole("button", { name: "选择地区" });
+        const createButton = screen.getByRole("button", { name: "发布" });
+        const searchButton = screen.getByRole("button", { name: "搜索" });
+
+        // compareDocumentPosition 的 DOCUMENT_POSITION_FOLLOWING（4）表示
+        // 参数节点在调用节点之后，两两比较确认渲染顺序是"品牌名 → 地区
+        // 按钮 → 发布 → 搜索"，从左到右、顺序不变。
+        expect(
+          brand.compareDocumentPosition(regionButton) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+        expect(
+          regionButton.compareDocumentPosition(createButton) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+        expect(
+          createButton.compareDocumentPosition(searchButton) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      });
     });
   });
 

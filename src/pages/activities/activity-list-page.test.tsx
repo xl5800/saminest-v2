@@ -100,12 +100,12 @@ describe("ActivityListPage", () => {
       expect(screen.getByText("VA 弗吉尼亚州")).toBeInTheDocument();
     });
 
-    it("navigates to /region-select when the pill is clicked, same route as the home page's entry point", () => {
+    it("navigates to /region-select when the region button is clicked, same route as the home page's entry point", () => {
       listActivities.mockReturnValue(new Promise(() => {}));
 
       renderWithProviders(<ActivityListPage />);
 
-      fireEvent.click(screen.getByRole("button", { name: "Saminest 选择地区" }));
+      fireEvent.click(screen.getByRole("button", { name: "选择地区" }));
 
       expect(navigateMock).toHaveBeenCalledWith("/region-select");
     });
