@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -8,8 +8,11 @@ const {
   useToggleActivityParticipationMutation,
   useActivityFavoriteIdsQuery,
   useToggleActivityFavoriteMutation,
+  useCreateActivityConversationMutation,
   shareMock,
-  mutateParticipationMock
+  mutateParticipationMock,
+  mutateContactMock,
+  navigateMock
 } = vi.hoisted(() => ({
   useActivityDetailQuery: vi.fn(),
   useActivityParticipantsQuery: vi.fn(),
@@ -17,8 +20,11 @@ const {
   useToggleActivityParticipationMutation: vi.fn(),
   useActivityFavoriteIdsQuery: vi.fn(),
   useToggleActivityFavoriteMutation: vi.fn(),
+  useCreateActivityConversationMutation: vi.fn(),
   shareMock: vi.fn(),
-  mutateParticipationMock: vi.fn()
+  mutateParticipationMock: vi.fn(),
+  mutateContactMock: vi.fn(),
+  navigateMock: vi.fn()
 }));
 
 vi.mock("../../features/activities/use-activity-detail-query", () => ({
@@ -44,12 +50,26 @@ vi.mock("../../features/activities/use-activity-favorite-ids-query", () => ({
 vi.mock("../../features/activities/use-toggle-activity-favorite-mutation", () => ({
   useToggleActivityFavoriteMutation
 }));
+// 任务卡 3（"联系发起人"按钮）：跟 contact-seller-button.test.tsx 是同一个
+// mock 模式，只 mock 到 use-create-activity-conversation-mutation 这一层
+// hook，不 mock 更底层的 conversations-repository。
+vi.mock("../../features/activities/use-create-activity-conversation-mutation", () => ({
+  useCreateActivityConversationMutation
+}));
 vi.mock("@capacitor/share", () => ({
   Share: { share: shareMock }
 }));
+// 跟 contact-seller-button.test.tsx 同一个模式：只覆盖 useNavigate，其它
+// react-router-dom 的导出（Link、useParams、MemoryRouter…）保持真实实现，
+// 不影响页面里其它已有的导航链接断言。
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
+import { AppError } from "../../utils/app-error";
 import { ActivityDetailPage } from "./activity-detail-page";
 
 const initialAuthState = useAuthStore.getState();
@@ -89,8 +109,11 @@ describe("ActivityDetailPage", () => {
     useToggleActivityParticipationMutation.mockReset();
     useActivityFavoriteIdsQuery.mockReset();
     useToggleActivityFavoriteMutation.mockReset();
+    useCreateActivityConversationMutation.mockReset();
     shareMock.mockReset();
     mutateParticipationMock.mockReset();
+    mutateContactMock.mockReset();
+    navigateMock.mockReset();
 
     useActivityParticipantsQuery.mockReturnValue({ data: [] });
     useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
@@ -100,6 +123,10 @@ describe("ActivityDetailPage", () => {
     });
     useActivityFavoriteIdsQuery.mockReturnValue({ data: [] });
     useToggleActivityFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
+    useCreateActivityConversationMutation.mockReturnValue({
+      mutate: mutateContactMock,
+      isPending: false
+    });
   });
 
   it("renders the TopBar detail variant's back button (page no longer relies on the global AppHeader for it)", () => {
@@ -547,5 +574,187 @@ describe("ActivityDetailPage", () => {
     for (const button of screen.getAllByRole("button", { name: "报名加入活动" })) {
       expect(button).toBeDisabled();
     }
+  });
+
+  // 任务卡 3："联系发起人"按钮，跟"我要报名"并排展示。
+  describe("联系发起人按钮", () => {
+    it("renders '联系发起人' alongside '我要报名' when the viewer is not the organizer", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByRole("button", { name: "我要报名" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "联系发起人" })).toBeInTheDocument();
+    });
+
+    it("renders '联系发起人' for a logged-out visitor too (click-time login redirect, not a hidden button)", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByRole("button", { name: "联系发起人" })).toBeInTheDocument();
+    });
+
+    it("does not render '联系发起人' when the viewer is the activity's own organizer", () => {
+      useAuthStore.getState().setSession({ user: { id: sampleActivityDetail.organizerId } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.queryByRole("button", { name: "联系发起人" })).not.toBeInTheDocument();
+    });
+
+    it("navigates to /login and does not call the mutation when logged out", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
+
+      expect(navigateMock).toHaveBeenCalledWith("/login");
+      expect(mutateContactMock).not.toHaveBeenCalled();
+    });
+
+    it("calls the mutation with the activity id and navigates to the conversation on success", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
+
+      expect(mutateContactMock).toHaveBeenCalledWith(
+        "act-1",
+        expect.objectContaining({
+          onSuccess: expect.any(Function),
+          onError: expect.any(Function)
+        })
+      );
+
+      const { onSuccess } = mutateContactMock.mock.calls[0][1];
+      onSuccess({ conversationId: "conversation-1" });
+
+      expect(navigateMock).toHaveBeenCalledWith("/messages/conversation-1");
+    });
+
+    it("shows the account-restricted message and does not navigate when the mutation rejects with ACCOUNT_RESTRICTED", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
+
+      const { onError } = mutateContactMock.mock.calls[0][1];
+      act(() => {
+        onError(
+          new AppError(
+            "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
+            "ACCOUNT_RESTRICTED"
+          )
+        );
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+      );
+      expect(navigateMock).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/messages\//)
+      );
+    });
+
+    it("shows a generic error message for any other failure", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
+
+      const { onError } = mutateContactMock.mock.calls[0][1];
+      act(() => {
+        onError(new Error("cannot start a direct conversation with yourself"));
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent("会话创建失败，请稍后重试。");
+      expect(navigateMock).not.toHaveBeenCalledWith(
+        expect.stringMatching(/^\/messages\//)
+      );
+    });
+
+    it("disables the button while the mutation is pending, preventing a double submit", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+      useCreateActivityConversationMutation.mockReturnValue({
+        mutate: mutateContactMock,
+        isPending: true
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const button = screen.getByRole("button", { name: "创建会话中…" });
+      expect(button).toBeDisabled();
+
+      fireEvent.click(button);
+
+      expect(mutateContactMock).not.toHaveBeenCalled();
+    });
   });
 });
