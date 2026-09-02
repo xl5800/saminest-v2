@@ -188,11 +188,16 @@ export function PostDetailPage() {
         <X size={20} aria-hidden="true" />
       </button>
 
-      {/* 底部留出空间给下面 fixed 的"咨询"大按钮（那个按钮自己是否渲染由
+      {/* 底部留出空间给下面 fixed 的"咨询"按钮容器（那个按钮自己是否渲染由
           ContactSellerButton 内部决定——作者查看自己的帖子时不渲染，这里
           统一留白，own-post 场景下会多一点空白，比为了这一种情况再判断
-          一次"我是不是作者"更简单）。 */}
-      <div className="pb-24">
+          一次"我是不是作者"更简单）。任务卡2 把按钮从"贴边大色块"改成
+          "容器 pt-3 + 48px 按钮高 + pb-[0.75rem+安全区]"这个更矮的浮动
+          按钮之后，pb-24（96px）在有底部安全区的机型上不够留（新容器
+          总高约 72px + 安全区，安全区较大时会逼近/超过 96px），这里跟着
+          改成 pb-28（112px），留出稳妥的余量——这一处调整是"咨询"按钮
+          高度变化的直接连带结果，不是碰其它区域的布局。 */}
+      <div className="pb-28">
         {data && data.images.length > 0 ? (
           <div>
             <div
@@ -317,12 +322,48 @@ export function PostDetailPage() {
         </div>
       </div>
 
+      {/* 任务卡2："咨询"按钮从撑满宽度的大色块横条改成更克制的浮动按钮——
+          外层这个 div 是新增的容器：白底、左右各 16px 留白（px-4）、顶部
+          一条细边框跟正文区分开（border-t border-border，取代原来那圈
+          偏醒目的 shadow-fab 蓝色投影），安全区适配原样保留在这一层
+          （pb-[calc(0.75rem+env(safe-area-inset-bottom))]，只是从按钮自己
+          身上挪到了容器上）。ContactSellerButton 组件本身（含它内部的
+          <span> 包裹结构）完全没有改，只是传给它的 className 变了：
+          h-12（48px）+ rounded-xl（12px，这个设计系统目前没有单独命名的
+          "control"圆角 token，Tailwind 内置的 rounded-xl 正好是 12px，
+          跟任务卡给的具体数值一致）+ text-[15px]（原来是 text-base/16px）+
+          w-full 撑满容器内的可用宽度（容器已经用 px-4 留出左右各 16px，
+          按钮不需要自己再额外收窄）。没有加图标——ContactSellerButton
+          目前只把 label 当纯文字渲染，没有留图标插槽，要加图标就得改这个
+          组件自己的 JSX，而这次任务卡明确禁止改 contact-seller-button.tsx
+          的任何逻辑，图标本身在任务卡里也是"可以加"而不是必须——所以这次
+          没有加，写在完工报告里。
+
+          这层新包的容器带了 empty:hidden：ContactSellerButton 在"作者查看
+          自己发布的帖子"时内部直接 return null（组件原有行为，任务卡明确
+          不让动），改版前这个按钮自己就是 fixed 元素、没有外层容器，
+          "不渲染"意味着屏幕底部真的什么都没有；现在多包了一层容器，如果
+          容器本身不管里面渲不渲染都无条件显示，author 查看自己帖子时就会
+          多出一条空的白色横条+顶部细边框悬在屏幕底部——这是改版前特意
+          避免、这次不应该引入的新问题。加 empty:hidden（Tailwind 内置的
+          :empty 伪类变体）之后，只要 ContactSellerButton 真的渲染了 null
+          （容器唯一的子节点变成"什么都没有"，容器本身在 DOM 里就是空
+          元素），容器自动整个隐藏——不需要在这个页面里另外重复一遍"我是
+          不是作者"的判断（那正是任务卡不让碰的按钮可见性逻辑），纯靠
+          CSS 跟 DOM 是否为空联动，没有碰 contact-seller-button.tsx 一行
+          代码。 */}
       {id ? (
-        <ContactSellerButton
-          postId={id}
-          label="咨询"
-          className="fixed inset-x-0 bottom-0 z-20 flex items-center justify-center bg-primary px-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] pt-3 text-base font-semibold text-white shadow-fab hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-        />
+        <div
+          data-testid="post-detail-contact-bar"
+          className="empty:hidden fixed inset-x-0 bottom-0 z-20 border-t border-border bg-white px-4 pt-3"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <ContactSellerButton
+            postId={id}
+            label="咨询"
+            className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+          />
+        </div>
       ) : null}
     </main>
   );

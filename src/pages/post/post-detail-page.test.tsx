@@ -72,8 +72,11 @@ vi.mock("@capacitor/share", () => ({
   Share: { share: shareMock }
 }));
 
+import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { PostDetailPage } from "./post-detail-page";
+
+const initialAuthState = useAuthStore.getState();
 
 function renderAtWithState(path: string, state: unknown) {
   const entry: Partial<Location> = { pathname: path, state };
@@ -114,6 +117,7 @@ describe("PostDetailPage", () => {
   });
 
   beforeEach(() => {
+    useAuthStore.setState(initialAuthState, true);
     useFavoritePostIdsQuery.mockReset();
     useToggleFavoriteMutation.mockReset();
     usePostAuthorQuery.mockReset();
@@ -427,6 +431,81 @@ describe("PostDetailPage", () => {
       "/post/post-1/report"
     );
     expect(screen.getByRole("button", { name: "分享" })).toBeInTheDocument();
+  });
+
+  // 任务卡2：底部"咨询"按钮从撑满宽度的大色块横条改成白底容器（左右各
+  // 16px 留白）里的一个 48px 高、12px 圆角、15px 字号的按钮，跟对方消息
+  // 气泡那类"纯 className/布局调整"任务一样，只断言外层容器和按钮自己的
+  // 关键样式类，不重新验证 ContactSellerButton 内部的点击/建会话逻辑
+  // （那部分有它自己的 contact-seller-button.test.tsx）。
+  describe("底部'咨询'按钮容器（任务卡2：改小、改克制）", () => {
+    it("wraps the button in a white, bottom-padded, 16px-inset container with a top border, and keeps the safe-area padding on the container", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      const bar = screen.getByTestId("post-detail-contact-bar");
+      expect(bar).toHaveClass("bg-white", "border-t", "border-border", "px-4", "fixed", "inset-x-0", "bottom-0");
+      expect(bar.style.paddingBottom).toBe("calc(0.75rem + env(safe-area-inset-bottom))");
+    });
+
+    it("renders the 咨询 button itself at 48px tall, 12px rounded corners, and the smaller 15px font size — not the old full-width 16px-text color bar", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      const button = screen.getByRole("button", { name: "咨询" });
+      expect(button).toHaveClass("h-12", "rounded-xl", "text-[15px]", "w-full", "bg-primary", "text-white");
+      expect(button.className).not.toContain("text-base");
+      expect(button.className).not.toContain("shadow-fab");
+    });
+
+    // 任务卡2 保留的原有行为：作者查看自己发布的帖子时 ContactSellerButton
+    // 内部直接 return null（这条判断在组件内部，任务卡明确不让动）。改版前
+    // 这个按钮自己就是唯一的 fixed 元素，不渲染就是真的什么都没有；这次
+    // 新包了一层容器之后，如果容器不管里面渲不渲染都无条件显示，会在这个
+    // 场景下多出一条空的白色横条——这是这次任务卡范围内需要连带避免的
+    // 视觉回归，容器加了 empty:hidden（Tailwind 内置 :empty 伪类变体）。
+    // jsdom 不会真的执行 CSS（没有加载/应用生成的样式表），没法在这里断言
+    // "肉眼看不见"，但可以断言 DOM 结构层面的前提成立——容器确实渲染成了
+    // 一个没有任何子节点的空元素，:empty 选择器要匹配的正是这个状态；
+    // 真正"肉眼确认不可见"是在真实浏览器里做的，见完工报告。
+    it("renders the contact bar container as a truly empty DOM node (no children) when the current user is viewing their own post, matching the :empty CSS precondition on the empty:hidden class", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      // samplePostDetail.authorId 是 "user-2"——跟上面登录的用户同一个 id，
+      // 触发 ContactSellerButton 内部"作者不能联系自己"的隐藏判断。
+      usePostAuthorQuery.mockReturnValue({ data: "user-2", isSuccess: true });
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      expect(screen.queryByRole("button", { name: "咨询" })).not.toBeInTheDocument();
+      const bar = screen.getByTestId("post-detail-contact-bar");
+      expect(bar).toHaveClass("empty:hidden");
+      expect(bar.children).toHaveLength(0);
+      expect(bar.textContent).toBe("");
+    });
   });
 
   it("calls Share.share with the post title, formatted price, and the hardcoded production domain (not window.location.origin) when 分享 is clicked", async () => {
