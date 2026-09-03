@@ -3,7 +3,6 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it } from "vitest";
 
 import type { ActivityListItem, ActivityParticipant } from "../repositories/activities-repository";
-import { formatActivityStartAt } from "../utils/format";
 import { ActivityCard } from "./activity-card";
 
 const sampleActivity: ActivityListItem = {
@@ -52,79 +51,60 @@ describe("ActivityCard", () => {
     expect(link).toHaveAttribute("href", "/activities/act-1");
   });
 
-  // 找搭子列表卡片改版：头像行不再铺满卡片宽度贴边（14 号卡那套"外层
-  // <Link> 不带内边距、头像区单独顶到边缘"的两段式结构废弃了），整张卡片
-  // 改回统一用一层 p-5 内边距——外层 <Link> 直接带 p-5，不再需要 14 号卡
-  // 为了不让方形头像格盖住卡片圆角而加的 overflow-hidden（头像格已经不会
-  // 顶到卡片边缘，不存在盖住圆角的问题）。
-  it("uses a single p-5 padding on the outer <Link> for the whole card (title/summary/avatar row all share it), not the old two-tier 'unpadded link + padded text div' structure", () => {
+  // 07 号卡：文字区内边距从 12px（p-3）放大到 20px（p-5）。14 号卡把这个
+  // p-5 从最外层 <Link> 挪到了头像区旁边单独的文字区 <div> 上（外层
+  // <Link> 本身不再带内边距，才能让头像拼图贴到卡片边缘），见
+  // activity-card.tsx 顶部注释。任务卡 7c 把文字区和头像区的上下顺序换了
+  // （文字区现在排在头像区前面，而不是"下面"），但这条内边距结构本身没
+  // 变——用 class 选择器直接定位，不依赖顺序，断言不用跟着改。
+  it("uses the new 20px padding (p-5) on the text section, separate from the avatar grid, not the old 12px (p-3)", () => {
     const { container } = renderCard();
 
     const link = container.querySelector("a");
-    expect(link).toHaveClass("p-5");
+    expect(link?.className).not.toContain("p-5");
     expect(link?.className).not.toContain("p-3");
-    expect(link?.className).not.toContain("overflow-hidden");
 
-    // 不应该再有 14 号卡那种"头像格是 <Link> 第一个直接子元素、文字区是
-    // 单独一个带 p-5 的 <div>"的两段式结构——头像行现在跟标题/摘要文字
-    // 一样，都是同一层内边距下的普通子元素。
-    expect(container.querySelector("a > div.p-5")).not.toBeInTheDocument();
+    // container.querySelector("a > div") 在任务卡 7c 之前会先匹配到
+    // ActivityParticipantAvatars 自己的头像+文案外层 <div>（那时它是
+    // <a> 的第一个子元素）；任务卡 7c 顺序对调之后，文字区反而变成了第
+    // 一个 <div> 子元素，但这里仍然用 class 选择器直接定位，不依赖顺序。
+    const textSection = container.querySelector("a > div.p-5");
+    expect(textSection).toHaveClass("p-5");
+    expect(textSection?.className).not.toContain("p-3");
   });
 
-  // 找搭子列表卡片改版：视觉顺序从"头像 → 还差 N 人 → 标题 → 地点 → 时间"
-  // 改成"标题 → 地点+时间合并成一行摘要 → 头像行 → 还差 N 人"——用各段
-  // 文案在 link.textContent 里出现的先后顺序断言，不依赖具体 DOM 结构。
-  it("renders content in the new order: title first, then the merged location+time summary, then the avatar row, then the '还差 N 人' caption", () => {
+  // 14 号卡：头像拼图铺满卡片整宽、贴着卡片边缘，不能再有卡片自己的左右
+  // 内边距——外层 <Link> 因此不带 p-5，只带 overflow-hidden（配合卡片圆角，
+  // 见组件顶部注释）。任务卡 7c 把头像区从 <Link> 的第一个直接子元素挪到
+  // 了最后一个（顺序对调，文字区排到了前面）——overflow-hidden/rounded-2xl
+  // 这两个类名断言跟顺序无关，不用改；"头像格贴边"这条断言原来查的是
+  // firstElementChild，现在头像区排最后，改成查 lastElementChild。
+  it("renders the avatar grid flush against the card's edges (no outer padding on the <Link>), clipped to the card's rounded corners", () => {
     const { container } = renderCard();
 
-    const link = screen.getByRole("link", { name: /周末吃火锅/ });
-    const text = link.textContent ?? "";
-    const titleIndex = text.indexOf("周末吃火锅");
-    const summaryIndex = text.indexOf("海底捞");
-    const captionIndex = text.indexOf("还差");
-    // 头像行本身没有专属文字，用它在 DOM 里的位置（第一个 <ul>）跟标题
-    // 文字节点、caption 文字节点比较顺序，间接确认它排在摘要之后、
-    // caption 之前。
-    const avatarGrid = container.querySelector("ul");
-    expect(avatarGrid).toBeInTheDocument();
-
-    expect(titleIndex).toBeGreaterThanOrEqual(0);
-    expect(summaryIndex).toBeGreaterThan(titleIndex);
-    expect(captionIndex).toBeGreaterThan(summaryIndex);
+    const link = container.querySelector("a");
+    expect(link).toHaveClass("overflow-hidden");
+    expect(link).toHaveClass("rounded-2xl");
+    expect(link?.lastElementChild?.querySelector("ul")).toBeInTheDocument();
   });
 
-  // 找搭子列表卡片改版：地点和时间现在合并成同一行摘要文字（用 " · "
-  // 拼接），不再是两个分开的 <p>。
-  it("merges location and time into a single summary line joined by ' · '", () => {
+  // 任务卡 7c（活动卡片视觉还原，只保留顺序对调）：产品验收反馈"找搭子
+  // 卡片重排版"那次改版做过头了，只要求把文字块和头像拼图块的上下顺序
+  // 对调，其它一切（合并地点+时间、缩小头像、统一 p-5 内边距）都撤销回
+  // 14 号卡定的样子——见 activity-card.tsx 顶部注释。这里单独断言"顺序
+  // 对调"这一件事本身：文字区（p-5 的 <div>）在 DOM 里排在头像拼图块
+  // （<ul> 所在的那个直接子元素）前面。
+  it("renders the text block (title/location/time) before the avatar grid block, per 任务卡 7c's order swap", () => {
     const { container } = renderCard();
 
-    // 用 formatActivityStartAt 自己算出预期文案，不硬编码具体的时:分——
-    // new Date(startAt) 用的是本地时区，硬编码的小时数在不同时区跑测试
-    // 会不一致，跟 activity-detail-page.test.tsx 只断言日期部分（不断言
-    // 小时）是同一个顾虑，这里换成动态算出完整预期字符串来精确匹配，而
-    // 不是放宽成只匹配日期。
-    const expectedSummary = `海底捞 · ${formatActivityStartAt(sampleActivity.startAt)}`;
-    const paragraphs = Array.from(container.querySelectorAll("p"));
-    const summaryParagraph = paragraphs.find((p) => p.textContent?.includes("海底捞"));
-    expect(summaryParagraph).toBeDefined();
-    expect(summaryParagraph?.textContent).toBe(expectedSummary);
-    // 不应该再有单独一个只包含时间、不包含地点的 <p>（旧的两行结构）。
-    expect(paragraphs.some((p) => /^\d{2}-\d{2} \d{2}:\d{2}$/.test(p.textContent ?? ""))).toBe(
-      false
-    );
-  });
+    const link = container.querySelector("a");
+    const children = link ? Array.from(link.children) : [];
+    const textBlockIndex = children.findIndex((child) => child.classList.contains("p-5"));
+    const avatarBlockIndex = children.findIndex((child) => child.querySelector("ul") !== null);
 
-  // 找搭子列表卡片改版：头像行改用 size="compact"（固定小号方块，见
-  // activity-participant-avatars.tsx），不再是铺满卡片整宽的大号拼图——
-  // 用实际渲染出的头像格尺寸类名断言，不只是信任 prop 传对了。
-  it("renders the avatar row at the compact (64px) size, not the old full-width square tiles", () => {
-    renderCard();
-
-    // 发起人是昵称首字母占位（没有头像图），文字 "A"。
-    const organizerAvatar = screen.getByText("A");
-    expect(organizerAvatar).toHaveClass("h-16", "w-16", "rounded-md");
-    expect(organizerAvatar.className).not.toContain("aspect-square");
-    expect(organizerAvatar.className).not.toContain("w-full");
+    expect(textBlockIndex).toBeGreaterThanOrEqual(0);
+    expect(avatarBlockIndex).toBeGreaterThanOrEqual(0);
+    expect(textBlockIndex).toBeLessThan(avatarBlockIndex);
   });
 
   it("passes participants/capacity through to the avatar stack in non-interactive mode (no <button> empty slots, since the whole card is already a <Link>)", () => {
