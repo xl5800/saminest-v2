@@ -567,24 +567,60 @@ export interface ActivityParticipant {
   userId: string;
   displayName: string;
   avatarUrl: string | null;
+  /** 任务卡 9：参与者年龄，来自 profiles.age，跟 PublicProfile.age 同一个字段、
+   *  同一套"可选、用户自己填"的语义，没有就是 null。可选属性（不是必填的
+   *  `age: number | null`）——ActivityParticipant/mapActivityParticipantRow
+   *  是 listActivityParticipants（详情页"已加入"名单要用这两个新字段）和
+   *  listActivityParticipantPreviews（活动卡片头像堆叠用，不读这两个新
+   *  字段）共用的类型，而 activity-card.test.tsx/
+   *  activity-participant-avatars.test.tsx 这两个文件（这次任务明确禁止
+   *  修改）里手写的 ActivityParticipant 测试夹具本来就没有这两个字段——
+   *  改成可选属性，这些既有夹具才能继续满足类型、不需要改这两个文件。
+   *  真实数据永远是 mapActivityParticipantRow 产出的，一定会显式赋值成
+   *  number | null，不会真的是 undefined；这里"可选"只是类型层面为了兼容
+   *  历史测试夹具，不代表运行时会漏这个字段。 */
+  age?: number | null;
+  /** 任务卡 9：参与者所在地区显示名，来自 profiles.location_id 关联的
+   *  locations 表，跟 PublicProfile.locationName 同一套取法，没有就是
+   *  null。可选属性的理由跟上面 age 完全一样。 */
+  locationName?: string | null;
 }
 
 interface ActivityParticipantRow {
   user_id: string;
-  user: { display_name: string; avatar_url: string | null } | null;
+  user: {
+    display_name: string;
+    avatar_url: string | null;
+    age: number | null;
+    location: { name: string } | null;
+  } | null;
 }
 
 /**
  * listActivityParticipants 和 listActivityParticipantPreviews 共用的行
  * 映射——两处联表结构完全一样（`user_id` + `user:profiles(display_name,
- * avatar_url)`），只是后者多一列 `activity_id` 用来分组，映射成
- * ActivityParticipant 的逻辑没有理由抄两遍。
+ * avatar_url, age, location:locations(name))`），只是后者多一列
+ * `activity_id` 用来分组，映射成 ActivityParticipant 的逻辑没有理由抄
+ * 两遍。
+ *
+ * 任务卡 9：ActivityParticipant 新增 age/locationName 两个字段（活动详情
+ * 页"已加入"名单要用），取法照抄 profiles-repository.ts 的
+ * getPublicProfile()——同一张 profiles 表、同一个 location:locations(name)
+ * 嵌套 select，不另起一套 join 方式。因为这两个函数共用同一个类型/同一个
+ * 映射函数，listActivityParticipantPreviews（活动列表卡片用）的 select
+ * 语句也会跟着多出这两列——这是共用类型的必然结果，不是没控制住范围：
+ * 活动卡片/ActivityParticipantAvatars 不读这两个新字段，多查出来的
+ * age/locationName 对它们完全不可见、也不影响 TypeScript 类型检查（多出
+ * 的字段不会破坏结构类型的兼容性），只是每次查询多带两列数据，这个体量
+ * 下（个位数到几十个参与者）可以忽略不计。
  */
 function mapActivityParticipantRow(row: ActivityParticipantRow): ActivityParticipant {
   return {
     userId: row.user_id,
     displayName: row.user?.display_name ?? "未知用户",
-    avatarUrl: row.user?.avatar_url ?? null
+    avatarUrl: row.user?.avatar_url ?? null,
+    age: row.user?.age ?? null,
+    locationName: row.user?.location?.name ?? null
   };
 }
 
@@ -624,7 +660,7 @@ export async function listActivityParticipants(
 ): Promise<ActivityParticipant[]> {
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select("user_id, user:profiles(display_name, avatar_url)")
+    .select("user_id, user:profiles(display_name, avatar_url, age, location:locations(name))")
     .eq("activity_id", activityId)
     .eq("status", "approved")
     .is("cancelled_at", null)
@@ -670,7 +706,7 @@ export async function listActivityParticipantPreviews(
 
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select("activity_id, user_id, user:profiles(display_name, avatar_url)")
+    .select("activity_id, user_id, user:profiles(display_name, avatar_url, age, location:locations(name))")
     .in("activity_id", activityIds)
     .eq("status", "approved")
     .is("cancelled_at", null)
