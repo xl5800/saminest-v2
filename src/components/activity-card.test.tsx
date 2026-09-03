@@ -117,12 +117,12 @@ describe("ActivityCard", () => {
   // 找搭子列表卡片改版：头像行改用 size="compact"（固定小号方块，见
   // activity-participant-avatars.tsx），不再是铺满卡片整宽的大号拼图——
   // 用实际渲染出的头像格尺寸类名断言，不只是信任 prop 传对了。
-  it("renders the avatar row at the new compact (44px) size, not the old full-width square tiles", () => {
+  it("renders the avatar row at the compact (64px) size, not the old full-width square tiles", () => {
     renderCard();
 
     // 发起人是昵称首字母占位（没有头像图），文字 "A"。
     const organizerAvatar = screen.getByText("A");
-    expect(organizerAvatar).toHaveClass("h-11", "w-11", "rounded-md");
+    expect(organizerAvatar).toHaveClass("h-16", "w-16", "rounded-md");
     expect(organizerAvatar.className).not.toContain("aspect-square");
     expect(organizerAvatar.className).not.toContain("w-full");
   });

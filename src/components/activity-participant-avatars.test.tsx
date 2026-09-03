@@ -540,7 +540,7 @@ describe("ActivityParticipantAvatars", () => {
   // 不重复 computeSlots 的 slot 计算规则本身（跟"shape='square'"那组测试
   // 是同一个不重复覆盖的原则）。
   describe("size='compact' (找搭子列表卡片改版：活动卡片小号头像行)", () => {
-    it("renders fixed 44px tiles with a small rounded corner, not the full-width aspect-square tiles", () => {
+    it("renders fixed 64px tiles with a small rounded corner, not the full-width aspect-square tiles", () => {
       renderAvatars({
         organizerId: "org-1",
         organizerDisplayName: "Alice",
@@ -552,7 +552,7 @@ describe("ActivityParticipantAvatars", () => {
       });
 
       const organizerAvatar = screen.getByText("A");
-      expect(organizerAvatar).toHaveClass("h-11", "w-11", "rounded-md");
+      expect(organizerAvatar).toHaveClass("h-16", "w-16", "rounded-md");
       expect(organizerAvatar.className).not.toContain("aspect-square");
       expect(organizerAvatar.className).not.toContain("w-full");
       expect(organizerAvatar.className).not.toContain("rounded-full");
@@ -588,7 +588,7 @@ describe("ActivityParticipantAvatars", () => {
 
       const emptySlots = document.querySelectorAll("li span[aria-hidden='true']");
       const emptySlot = Array.from(emptySlots).find((el) => el.querySelector("svg.lucide-plus"));
-      expect(emptySlot).toHaveClass("h-11", "w-11", "rounded-md", "bg-bg");
+      expect(emptySlot).toHaveClass("h-16", "w-16", "rounded-md", "bg-bg");
       expect(emptySlot?.className).not.toContain("aspect-square");
     });
 
