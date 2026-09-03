@@ -42,7 +42,7 @@ export interface ActivityCardProps {
  *    <p> 里用" · "拼起来，不引入新的格式化逻辑）。
  * 3. 头像行改用 ActivityParticipantAvatars 新增的 size="compact"（详见
  *    activity-participant-avatars.tsx 顶部注释和 COMPACT_AVATAR_SIZE_CLASS_NAME
- *    的说明）——固定 44px 小方块，不铺满卡片宽度，自然换行不横向滚动。
+ *    的说明）——固定 64px 小方块，不铺满卡片宽度，自然换行不横向滚动。
  *    这个 prop 只在这一个调用点传，详情页（activity-detail-page.tsx，
  *    这次任务禁止改动）用的是同一个 shape="square" 但不传 size，继续拿到
  *    跟改版前逐像素一致的大号铺满效果，两处调用点互不影响。
