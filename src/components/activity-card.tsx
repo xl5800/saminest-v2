@@ -51,7 +51,15 @@ export interface ActivityCardProps {
  * 时间）和"头像拼图块"这两个直接子元素的上下顺序对调：文字块现在排在
  * <Link> 里的第一位、头像拼图块排在第二位（14 号卡定的顺序反过来，之前
  * 是头像在上、文字在下）。除了这一处顺序，两段 JSX 各自内部的每一个
- * className/prop/子元素结构都跟 14 号卡定的版本逐字一致。
+ * className/prop/子元素结构都跟 14 号卡定的版本逐字一致——**除了一处例外**，
+ * 见下面文字区 pb-2 的注释。
+ *
+ * 顺序对调之后，文字区排在头像区上面，产品反馈两者之间的间距（文字区的
+ * 底部内边距）明显偏大，视觉上不够紧凑。文字区原来是 p-5（顶部已经被
+ * pt-3 覆盖成 12px，底部还是完整的 20px）——把底部也单独覆盖成 pb-2（8px），
+ * 让头像区往上贴近文字区，同时保留 p-5 提供的左右内边距（20px）不变——
+ * 这条 pb-2 只影响文字区跟头像区之间的垂直间距，不影响文字区内部标题/
+ * 地点/时间三行之间的间距（那是靠各自的 mt-1 控制的，没有改）。
  */
 export function ActivityCard({ activity, participants }: ActivityCardProps) {
   const { emoji } = getActivityChannelMeta(activity.channel);
@@ -61,7 +69,7 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
       to={`/activities/${activity.id}`}
       className="block overflow-hidden rounded-2xl border border-border bg-white shadow-card"
     >
-      <div className="p-5 pt-3">
+      <div className="p-5 pt-3 pb-2">
         <p className="line-clamp-2 break-words text-base text-text">
           {emoji} {activity.title}
         </p>
