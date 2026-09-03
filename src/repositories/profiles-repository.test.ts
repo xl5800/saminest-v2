@@ -111,14 +111,15 @@ describe("getMyProfile", () => {
     maybeSingleMock.mockReturnValue(queryBuilder);
   });
 
-  it("returns display name/avatar/bio/locationId/locationName when the profile row exists", async () => {
+  it("returns display name/avatar/bio/locationId/locationName/age when the profile row exists", async () => {
     overrideTypesMock.mockResolvedValue({
       data: {
         display_name: "Alice",
         avatar_url: "https://example.com/avatar.png",
         bio: "Hi there",
         location_id: "loc-1",
-        location: { name: "Rockville" }
+        location: { name: "Rockville" },
+        age: 25
       },
       error: null
     });
@@ -127,7 +128,7 @@ describe("getMyProfile", () => {
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "display_name, avatar_url, bio, location_id, location:locations(name)"
+      "display_name, avatar_url, bio, location_id, location:locations(name), age"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-1");
     expect(result).toEqual({
@@ -135,18 +136,20 @@ describe("getMyProfile", () => {
       avatarUrl: "https://example.com/avatar.png",
       bio: "Hi there",
       locationId: "loc-1",
-      locationName: "Rockville"
+      locationName: "Rockville",
+      age: 25
     });
   });
 
-  it("returns null avatar/bio/locationId/locationName when those fields are unset", async () => {
+  it("returns null avatar/bio/locationId/locationName/age when those fields are unset", async () => {
     overrideTypesMock.mockResolvedValue({
       data: {
         display_name: "Alice",
         avatar_url: null,
         bio: null,
         location_id: null,
-        location: null
+        location: null,
+        age: null
       },
       error: null
     });
@@ -158,7 +161,8 @@ describe("getMyProfile", () => {
       avatarUrl: null,
       bio: null,
       locationId: null,
-      locationName: null
+      locationName: null,
+      age: null
     });
   });
 
@@ -191,14 +195,15 @@ describe("getPublicProfile", () => {
     maybeSingleMock.mockReturnValue(queryBuilder);
   });
 
-  it("returns id/displayName/bio/avatarUrl/locationName when the profile row exists", async () => {
+  it("returns id/displayName/bio/avatarUrl/locationName/age when the profile row exists", async () => {
     overrideTypesMock.mockResolvedValue({
       data: {
         id: "user-2",
         display_name: "Bob",
         bio: "Hi there",
         avatar_url: "https://example.com/bob.jpg",
-        location: { name: "Rockville" }
+        location: { name: "Rockville" },
+        age: 30
       },
       error: null
     });
@@ -207,7 +212,7 @@ describe("getPublicProfile", () => {
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, display_name, bio, avatar_url, location:locations(name)"
+      "id, display_name, bio, avatar_url, location:locations(name), age"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "user-2");
     expect(result).toEqual({
@@ -215,18 +220,41 @@ describe("getPublicProfile", () => {
       displayName: "Bob",
       bio: "Hi there",
       avatarUrl: "https://example.com/bob.jpg",
-      locationName: "Rockville"
+      locationName: "Rockville",
+      age: 30
     });
   });
 
-  it("returns null bio/avatarUrl/locationName when those fields are unset", async () => {
+  // age 是公开信息（跟 locationName 同等公开程度，见迁移文件
+  // 20260903050000_add_profile_age.sql），这里单独断言一下——不是只在
+  // getMyProfile 那边测过就够，公开主页这条路径也要确认真的把它带出来了。
+  it("exposes age as public information, same as locationName", async () => {
     overrideTypesMock.mockResolvedValue({
       data: {
         id: "user-2",
         display_name: "Bob",
         bio: null,
         avatar_url: null,
-        location: null
+        location: null,
+        age: 42
+      },
+      error: null
+    });
+
+    const result = await getPublicProfile("user-2");
+
+    expect(result?.age).toBe(42);
+  });
+
+  it("returns null bio/avatarUrl/locationName/age when those fields are unset", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: {
+        id: "user-2",
+        display_name: "Bob",
+        bio: null,
+        avatar_url: null,
+        location: null,
+        age: null
       },
       error: null
     });
@@ -238,7 +266,8 @@ describe("getPublicProfile", () => {
       displayName: "Bob",
       bio: null,
       avatarUrl: null,
-      locationName: null
+      locationName: null,
+      age: null
     });
   });
 
@@ -388,28 +417,36 @@ describe("updateMyProfile", () => {
     await updateMyProfile("user-1", {
       displayName: "小明",
       bio: "你好",
-      locationId: "loc-1"
+      locationId: "loc-1",
+      age: 25
     });
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
     expect(updateMock).toHaveBeenCalledWith({
       display_name: "小明",
       bio: "你好",
-      location_id: "loc-1"
+      location_id: "loc-1",
+      age: 25
     });
     expect(eqAfterUpdateMock).toHaveBeenCalledWith("id", "user-1");
   });
 
-  it("passes bio: null and locationId: null through unchanged (caller is responsible for the empty-string-to-null coercion)", async () => {
+  it("passes bio: null, locationId: null, and age: null through unchanged (caller is responsible for the empty-string-to-null coercion)", async () => {
     eqAfterUpdateMock.mockResolvedValue({ error: null });
     fromMock.mockReturnValueOnce(updateQueryBuilder);
 
-    await updateMyProfile("user-1", { displayName: "小明", bio: null, locationId: null });
+    await updateMyProfile("user-1", {
+      displayName: "小明",
+      bio: null,
+      locationId: null,
+      age: null
+    });
 
     expect(updateMock).toHaveBeenCalledWith({
       display_name: "小明",
       bio: null,
-      location_id: null
+      location_id: null,
+      age: null
     });
   });
 
@@ -420,7 +457,7 @@ describe("updateMyProfile", () => {
     fromMock.mockReturnValueOnce(updateQueryBuilder);
 
     await expect(
-      updateMyProfile("user-1", { displayName: "小明", bio: null, locationId: null })
+      updateMyProfile("user-1", { displayName: "小明", bio: null, locationId: null, age: null })
     ).rejects.toMatchObject({ code: "PROFILE_UPDATE_FAILED" });
   });
 
@@ -428,10 +465,15 @@ describe("updateMyProfile", () => {
     eqAfterUpdateMock.mockResolvedValue({ error: null });
     fromMock.mockReturnValueOnce(updateQueryBuilder);
 
-    await updateMyProfile("user-1", { displayName: "小红", bio: null, locationId: null });
+    await updateMyProfile("user-1", {
+      displayName: "小红",
+      bio: null,
+      locationId: null,
+      age: null
+    });
 
     expect(Object.keys(updateMock.mock.calls[0][0]).sort()).toEqual(
-      ["bio", "display_name", "location_id"].sort()
+      ["age", "bio", "display_name", "location_id"].sort()
     );
   });
 });

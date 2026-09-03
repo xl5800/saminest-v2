@@ -93,6 +93,11 @@ export interface UpdateMyProfileInput {
   displayName: string;
   bio: string | null;
   locationId: string | null;
+  /** "找搭子详情页改版对齐方案图"任务卡 1：用户自己填写的年龄，可选——
+   *  跟 bio/locationId 是同一个"可选字段，不填就是 null"的模式，不是
+   *  系统根据出生日期算出来的，见 supabase/migrations/
+   *  20260903050000_add_profile_age.sql 顶部说明。 */
+  age: number | null;
 }
 
 /**
@@ -114,6 +119,11 @@ export interface UpdateMyProfileInput {
  * null 的 bio/locationId（见 pages/profile/edit-profile-validation.ts）——
  * 这里不做这层归一化，职责跟 createProfile 的默认值兜底不是同一个场景：
  * 这是用户主动编辑，不应该在仓库层悄悄改写调用方传来的值。
+ *
+ * "找搭子详情页改版对齐方案图"任务卡 1：age 照抄 bio/locationId 的模式
+ * 加进同一次 update，不单独再开一个 mutation——跟这三个字段一样，
+ * profiles_update_self 这条 RLS 是按整行授权（只锁死 role/account_status
+ * 两列），age 天然落在它的覆盖范围内，不需要新 RLS。
  */
 export async function updateMyProfile(
   userId: string,
@@ -122,7 +132,8 @@ export async function updateMyProfile(
   const payload: TablesUpdate<"profiles"> = {
     display_name: input.displayName,
     bio: input.bio,
-    location_id: input.locationId
+    location_id: input.locationId,
+    age: input.age
   };
   const { error } = await getSupabaseClient()
     .from("profiles")
@@ -192,6 +203,9 @@ export interface MyProfile {
   /** 嵌套 select 顺带查出来的地区名字，只用来回填编辑资料页下拉框当前
    *  选中项的展示文字，不是权威数据源（权威数据源是 locationId）。 */
   locationName: string | null;
+  /** "找搭子详情页改版对齐方案图"任务卡 1：用户自己填写的年龄，可选，见
+   *  UpdateMyProfileInput.age 的注释。 */
+  age: number | null;
 }
 
 interface MyProfileRow {
@@ -200,6 +214,7 @@ interface MyProfileRow {
   bio: string | null;
   location_id: string | null;
   location: { name: string } | null;
+  age: number | null;
 }
 
 /**
@@ -224,7 +239,7 @@ interface MyProfileRow {
 export async function getMyProfile(userId: string): Promise<MyProfile | null> {
   const { data, error } = await getSupabaseClient()
     .from("profiles")
-    .select("display_name, avatar_url, bio, location_id, location:locations(name)")
+    .select("display_name, avatar_url, bio, location_id, location:locations(name), age")
     .eq("id", userId)
     .maybeSingle()
     .overrideTypes<MyProfileRow>();
@@ -239,7 +254,8 @@ export async function getMyProfile(userId: string): Promise<MyProfile | null> {
         avatarUrl: data.avatar_url,
         bio: data.bio,
         locationId: data.location_id,
-        locationName: data.location?.name ?? null
+        locationName: data.location?.name ?? null,
+        age: data.age
       }
     : null;
 }
@@ -250,6 +266,10 @@ export interface PublicProfile {
   bio: string | null;
   avatarUrl: string | null;
   locationName: string | null;
+  /** "找搭子详情页改版对齐方案图"任务卡 1：用户自己填写的年龄，可选——
+   *  跟 locationName 同等公开程度（游客也能看到），见迁移文件
+   *  20260903050000_add_profile_age.sql 顶部说明。 */
+  age: number | null;
 }
 
 interface PublicProfileRow {
@@ -258,6 +278,7 @@ interface PublicProfileRow {
   bio: string | null;
   avatar_url: string | null;
   location: { name: string } | null;
+  age: number | null;
 }
 
 /**
@@ -275,7 +296,7 @@ interface PublicProfileRow {
 export async function getPublicProfile(userId: string): Promise<PublicProfile | null> {
   const { data, error } = await getSupabaseClient()
     .from("profiles")
-    .select("id, display_name, bio, avatar_url, location:locations(name)")
+    .select("id, display_name, bio, avatar_url, location:locations(name), age")
     .eq("id", userId)
     .maybeSingle()
     .overrideTypes<PublicProfileRow>();
@@ -290,7 +311,8 @@ export async function getPublicProfile(userId: string): Promise<PublicProfile | 
         displayName: data.display_name,
         bio: data.bio,
         avatarUrl: data.avatar_url,
-        locationName: data.location?.name ?? null
+        locationName: data.location?.name ?? null,
+        age: data.age
       }
     : null;
 }

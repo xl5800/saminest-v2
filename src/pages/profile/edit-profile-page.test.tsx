@@ -63,7 +63,8 @@ const sampleProfile = {
   avatarUrl: null,
   bio: "热爱生活",
   locationId: "loc-1",
-  locationName: "Rockville"
+  locationName: "Rockville",
+  age: 25
 };
 
 const sampleLocations = [
@@ -111,12 +112,28 @@ describe("EditProfilePage", () => {
     removeAvatarFileMock.mockResolvedValue(undefined);
   });
 
-  it("renders the current display name/bio/city as initial values", () => {
+  it("renders the current display name/bio/city/age as initial values", () => {
     renderPage();
 
     expect(screen.getByLabelText("昵称")).toHaveValue("小明");
     expect(screen.getByLabelText(/简介/)).toHaveValue("热爱生活");
     expect(screen.getByLabelText(/城市/)).toHaveValue("loc-1");
+    expect(screen.getByLabelText(/年龄/)).toHaveValue(25);
+  });
+
+  // "找搭子详情页改版对齐方案图"任务卡 1：age 为 null（用户从没填过）时，
+  // 数字输入框应该回填成空字符串，不是字面量 "null"/"undefined" 这种
+  // 明显的 bug 表现。
+  it("seeds the age input as empty when the profile's age is null", () => {
+    useMyProfileQuery.mockReturnValue({
+      data: { ...sampleProfile, age: null },
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.getByLabelText(/年龄/)).toHaveValue(null);
   });
 
   it("renders the city dropdown options from useLocationsQuery, plus an unselect option", () => {
@@ -161,13 +178,14 @@ describe("EditProfilePage", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
-  it("calls the mutation with the trimmed displayName/bio and selected locationId, then navigates to /profile on success", async () => {
+  it("calls the mutation with the trimmed displayName/bio, selected locationId, and parsed age, then navigates to /profile on success", async () => {
     mutateAsyncMock.mockResolvedValue(undefined);
     renderPage();
 
     fireEvent.change(screen.getByLabelText("昵称"), { target: { value: "  小红  " } });
     fireEvent.change(screen.getByLabelText(/简介/), { target: { value: "  你好呀  " } });
     fireEvent.change(screen.getByLabelText(/城市/), { target: { value: "loc-2" } });
+    fireEvent.change(screen.getByLabelText(/年龄/), { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
@@ -175,7 +193,8 @@ describe("EditProfilePage", () => {
         userId: "user-1",
         displayName: "小红",
         bio: "你好呀",
-        locationId: "loc-2"
+        locationId: "loc-2",
+        age: 30
       });
     });
     await waitFor(() => {
@@ -183,12 +202,13 @@ describe("EditProfilePage", () => {
     });
   });
 
-  it("submits bio: null and locationId: null when both are cleared", async () => {
+  it("submits bio: null, locationId: null, and age: null when all three are cleared", async () => {
     mutateAsyncMock.mockResolvedValue(undefined);
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/简介/), { target: { value: "" } });
     fireEvent.change(screen.getByLabelText(/城市/), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/年龄/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
     await waitFor(() => {
@@ -196,9 +216,20 @@ describe("EditProfilePage", () => {
         userId: "user-1",
         displayName: "小明",
         bio: null,
-        locationId: null
+        locationId: null,
+        age: null
       });
     });
+  });
+
+  it("shows a validation error and does not call the mutation when age is out of the allowed range", () => {
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText(/年龄/), { target: { value: "200" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("年龄必须在 13 到 120 岁之间。");
+    expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
   it("shows a generic error message and does not navigate when the mutation rejects", async () => {
