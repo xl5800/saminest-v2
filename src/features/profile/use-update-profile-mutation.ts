@@ -7,6 +7,9 @@ export interface UpdateProfileMutationInput {
   displayName: string;
   bio: string | null;
   locationId: string | null;
+  /** "找搭子详情页改版对齐方案图"任务卡 1：可选，见
+   *  UpdateMyProfileInput.age（profiles-repository.ts）的注释。 */
+  age: number | null;
 }
 
 /**
@@ -31,7 +34,8 @@ export function useUpdateProfileMutation() {
       updateMyProfile(input.userId, {
         displayName: input.displayName,
         bio: input.bio,
-        locationId: input.locationId
+        locationId: input.locationId,
+        age: input.age
       }),
     onSuccess: (_data, variables) => {
       void queryClient.invalidateQueries({

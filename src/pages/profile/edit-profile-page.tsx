@@ -39,12 +39,19 @@ const AVATAR_UPLOAD_ERROR_MESSAGE = "头像上传失败，请稍后重试。";
  * （跟 post-image-storage-service.ts"清理失败不能盖过主流程失败"是同一个
  * 原则）。
  *
- * 昵称/简介/城市初始值等 useMyProfileQuery 拉到数据后再回填一次
+ * 昵称/简介/城市/年龄初始值等 useMyProfileQuery 拉到数据后再回填一次
  * （seededRef 保证只回填一次，不会在用户已经开始编辑后，因为后台重新
  * 拉取又把输入框内容覆盖掉——包括头像上传成功后的 invalidateQueries 也会
  * 触发一次重新拉取，seededRef 保证这次重新拉取不会把用户正在编辑的昵称/
- * 简介/城市冲掉）——照抄 publish-page.tsx 编辑模式回填表单字段的同一个
- * 模式。
+ * 简介/城市/年龄冲掉）——照抄 publish-page.tsx 编辑模式回填表单字段的
+ * 同一个模式。
+ *
+ * "找搭子详情页改版对齐方案图"任务卡 1：年龄字段照抄城市字段的实现方式——
+ * 城市下拉框旁边加一个数字输入框，回填/校验/提交跟 bio/locationId 走
+ * 同一套流程（seededRef 回填一次、validateEditProfileInput 校验、一次
+ * updateProfileMutation 提交），不单独开一个 mutation。年龄是用户自己
+ * 填写的整数，不是出生日期，没有任何自动计算逻辑——见
+ * supabase/migrations/20260903050000_add_profile_age.sql 顶部说明。
  */
 export function EditProfilePage() {
   const navigate = useNavigate();
@@ -57,6 +64,7 @@ export function EditProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [bio, setBio] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [age, setAge] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -74,6 +82,7 @@ export function EditProfilePage() {
     setDisplayName(profile.displayName);
     setBio(profile.bio ?? "");
     setLocationId(profile.locationId ?? "");
+    setAge(profile.age !== null ? String(profile.age) : "");
   }, [profile]);
 
   async function handleAvatarChange(file: File | null): Promise<void> {
@@ -134,7 +143,7 @@ export function EditProfilePage() {
       return;
     }
 
-    const validation = validateEditProfileInput({ displayName, bio, locationId });
+    const validation = validateEditProfileInput({ displayName, bio, locationId, age });
     if (!validation.success) {
       setValidationError(validation.error.message);
       return;
@@ -145,7 +154,8 @@ export function EditProfilePage() {
         userId,
         displayName: validation.data.displayName,
         bio: validation.data.bio,
-        locationId: validation.data.locationId
+        locationId: validation.data.locationId,
+        age: validation.data.age
       });
       navigate("/profile");
     } catch {
@@ -236,6 +246,17 @@ export function EditProfilePage() {
                   </option>
                 ))}
               </select>
+            </label>
+            <label className="mb-4 block text-sm font-medium text-text">
+              年龄（可选）
+              <input
+                type="number"
+                inputMode="numeric"
+                value={age}
+                onChange={(event) => setAge(event.target.value)}
+                disabled={formDisabled}
+                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+              />
             </label>
             <button
               type="submit"

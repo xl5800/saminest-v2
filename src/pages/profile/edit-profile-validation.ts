@@ -2,12 +2,17 @@ export interface EditProfileFormInput {
   displayName: string;
   bio: string;
   locationId: string;
+  /** "找搭子详情页改版对齐方案图"任务卡 1：表单原始字符串（数字输入框
+   *  的 value 本来就是字符串），空字符串表示用户没填，跟 bio/locationId
+   *  是同一个约定。 */
+  age: string;
 }
 
 export interface EditProfileFormData {
   displayName: string;
   bio: string | null;
   locationId: string | null;
+  age: number | null;
 }
 
 export interface EditProfileValidationError {
@@ -40,14 +45,31 @@ export const MAX_DISPLAY_NAME_LENGTH = 20;
  */
 export const MAX_BIO_LENGTH = 200;
 
+/**
+ * "找搭子详情页改版对齐方案图"任务卡 1：年龄取值范围，必须跟数据库那条
+ * profiles_age_check 约束（supabase/migrations/20260903050000_add_profile_age.sql）
+ * 保持同一个区间，不能各定一套——不然前端放行的值会在数据库这一层被拒绝，
+ * 用户看到的会是一条原始的数据库错误，而不是这里给出的友好提示。这两个
+ * 数字本身没有跟产品逐字确认过，是"明显不离谱"的合理区间，不是在编码
+ * 具体的产品/法律政策。
+ */
+export const MIN_AGE = 13;
+export const MAX_AGE = 120;
+
 function fail(code: string, message: string): EditProfileValidationResult {
   return { success: false, data: null, error: { code, message } };
 }
 
 /**
- * bio/locationId 允许为空（不是必填项）——trim 之后是空字符串就统一转成
- * null 再返回，调用方（updateMyProfile）直接把这里返回的值原样写库，不
- * 在仓库层再做一次"空字符串转 null"的归一化，两边只应该有一处做这件事。
+ * bio/locationId/age 允许为空（不是必填项）——trim 之后是空字符串就统一
+ * 转成 null 再返回，调用方（updateMyProfile）直接把这里返回的值原样写库，
+ * 不在仓库层再做一次"空字符串转 null"的归一化，两边只应该有一处做这件事。
+ *
+ * age 校验顺序：先判断是不是留空（留空直接通过，不做任何格式/范围检查，
+ * 跟 bio/locationId 是同一个"可选字段"待遇）；填了的话先判断是不是整数
+ * （用户在数字输入框里打了 "25.5" 这种非整数、或者根本不是数字的字符串
+ * 都应该在这里被挡住，不能带着一个小数/NaN 传到数据库层才被
+ * profiles_age_check 拒绝），再判断是否落在 [MIN_AGE, MAX_AGE] 区间内。
  */
 export function validateEditProfileInput(
   input: EditProfileFormInput
@@ -71,12 +93,29 @@ export function validateEditProfileInput(
 
   const locationId = input.locationId.trim();
 
+  const ageRaw = input.age.trim();
+  let age: number | null = null;
+  if (ageRaw) {
+    const parsedAge = Number(ageRaw);
+    if (!Number.isInteger(parsedAge)) {
+      return fail("EDIT_PROFILE_AGE_INVALID", "年龄必须是整数。");
+    }
+    if (parsedAge < MIN_AGE || parsedAge > MAX_AGE) {
+      return fail(
+        "EDIT_PROFILE_AGE_OUT_OF_RANGE",
+        `年龄必须在 ${MIN_AGE} 到 ${MAX_AGE} 岁之间。`
+      );
+    }
+    age = parsedAge;
+  }
+
   return {
     success: true,
     data: {
       displayName,
       bio: bio ? bio : null,
-      locationId: locationId ? locationId : null
+      locationId: locationId ? locationId : null,
+      age
     },
     error: null
   };
