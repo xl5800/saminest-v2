@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -174,7 +174,11 @@ describe("ActivityDetailPage", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("活动不存在或已被取消。");
   });
 
-  it("renders the full activity content in the new order: title, channel/tag, avatar stack, time, location, description, contact info", () => {
+  // 任务卡 9（找搭子详情页改版对齐方案图）：新的页面顺序是标题 → 地点 →
+  // 时间 → "活动描述"小标题+正文 → 联系方式 → 头像拼图 → （仅发起人可见的
+  // "📢通知参与者"）→ 发起人 PersonCard → "已加入"名单 → 底部按钮行；频道/
+  // 标签徽章 chip 和"发起人：{昵称}"文字链接这两处冗余信息删掉了。
+  it("renders the full activity content in the new order (title, location, time, description, contact info, avatar stack), without the removed channel/tag chip and organizer text link", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -187,38 +191,43 @@ describe("ActivityDetailPage", () => {
     });
 
     expect(screen.getByRole("heading", { name: "🍜 周末吃火锅" })).toBeInTheDocument();
-    expect(screen.getByText("吃饭搭子")).toBeInTheDocument();
-    expect(screen.getByText("火锅")).toBeInTheDocument();
-    expect(screen.getByText(/发起人：/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Alice" })).toHaveAttribute("href", "/users/user-1");
+    // 频道标签"吃饭搭子"（chip 上的文字）和"发起人："这两处文字不应该再
+    // 出现在页面上——频道已经通过标题里的 emoji 表达，发起人身份已经通过
+    // 下面的 PersonCard（"Alice 发起人"）展示。
+    expect(screen.queryByText("吃饭搭子")).not.toBeInTheDocument();
+    expect(screen.queryByText(/发起人：/)).not.toBeInTheDocument();
     expect(screen.getByText("海底捞")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "活动描述" })).toBeInTheDocument();
     expect(screen.getByText("一起吃火锅，AA制")).toBeInTheDocument();
     expect(screen.getByText("abc123")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Alice 发起人" })).toHaveAttribute(
+      "href",
+      "/users/user-1"
+    );
 
-    // 页面顺序断言：标题 → 频道/标签(+发起人) → 头像堆叠 → 时间 → 地点 →
-    // 描述 → 联系方式 → 发起人卡片，用各个文案在 document.body.textContent
-    // 里出现的先后顺序来断言，不依赖具体 DOM 结构。收藏/分享/举报这次挪进
-    // 了顶部"…"更多菜单（默认收起，不在正文流里），不再是这条顺序链的
-    // 一部分，见下面单独的 more-menu 测试。
+    // 页面顺序断言：标题 → 地点 → 时间 → 活动描述 → 联系方式 → 头像拼图 →
+    // 发起人卡片，用各个文案在 document.body.textContent 里出现的先后
+    // 顺序来断言，不依赖具体 DOM 结构。收藏/分享/举报这次挪进了顶部"…"
+    // 更多菜单（默认收起，不在正文流里），不在这条顺序链里。
     const text = container.textContent ?? "";
     const titleIndex = text.indexOf("周末吃火锅");
-    // 用频道标签"吃饭搭子"而不是活动标签"火锅"作为这一步的锚点文字——
-    // "火锅"本身是标题"周末吃火锅"的子串，用它定位会误命中标题内部，不是
-    // 真正的频道/标签徽标那一行。
-    const tagIndex = text.indexOf("吃饭搭子");
-    const organizerLinkIndex = text.indexOf("发起人：");
-    const startAtIndex = text.indexOf("08-20");
     const locationIndex = text.indexOf("海底捞");
+    const startAtIndex = text.indexOf("08-20");
+    const descriptionHeadingIndex = text.indexOf("活动描述");
     const descriptionIndex = text.indexOf("一起吃火锅，AA制");
     const contactIndex = text.indexOf("联系方式");
+    // 头像拼图本身没有专属文字，用组织者昵称首字母占位"A"（Alice）在头像
+    // 格里的位置间接定位；发起人卡片用它的可访问文字"发起人"（PersonCard
+    // 的 subtitle）定位，这两处都不是唯一文字，但相对顺序足够断言。
+    const organizerCardIndex = text.lastIndexOf("发起人"); // PersonCard 的 subtitle，页面上此时唯一出现这个词的地方。
 
-    expect(titleIndex).toBeLessThan(tagIndex);
-    expect(tagIndex).toBeLessThan(organizerLinkIndex);
-    expect(organizerLinkIndex).toBeLessThan(startAtIndex);
-    expect(startAtIndex).toBeLessThan(locationIndex);
-    expect(locationIndex).toBeLessThan(descriptionIndex);
+    expect(titleIndex).toBeLessThan(locationIndex);
+    expect(locationIndex).toBeLessThan(startAtIndex);
+    expect(startAtIndex).toBeLessThan(descriptionHeadingIndex);
+    expect(descriptionHeadingIndex).toBeLessThan(descriptionIndex);
     expect(descriptionIndex).toBeLessThan(contactIndex);
+    expect(contactIndex).toBeLessThan(organizerCardIndex);
   });
 
   it("renders the ActivityParticipantAvatars stack with the organizer's crown badge", () => {
@@ -376,9 +385,9 @@ describe("ActivityDetailPage", () => {
     });
 
     // 发起人卡片的可访问名称包含"Alice"和"发起人"两段文字（头像+昵称+标签
-    // 都在同一个 <Link> 里），跟页面上方"发起人：Alice"那个只有"Alice"
-    // 作为可访问名称的文字链接是两个不同的元素——用这个更完整的名称匹配，
-        // 避免跟上面那个断言重复命中同一个元素。
+    // 都在同一个 <Link> 里）。任务卡 9 删掉了页面上方那个只有"Alice"作为
+    // 可访问名称的"发起人：{昵称}"文字链接，现在整个页面唯一指向
+    // /users/user-1 的入口就是这张 PersonCard。
     const organizerCardLink = screen.getByRole("link", { name: "Alice 发起人" });
     expect(organizerCardLink).toHaveAttribute("href", "/users/user-1");
   });
@@ -807,6 +816,137 @@ describe("ActivityDetailPage", () => {
 
       const link = screen.getByRole("link", { name: /通知参与者/ });
       expect(link).toHaveAttribute("href", "/activities/act-1/notify");
+    });
+  });
+
+  // 任务卡 9：新增的"已加入"参与者名单——内容用"{昵称}{age != null ? '
+  // {age}岁' : ''}{locationName != null ? ' · 住{地区}' : ''}"这条规则拼，
+  // 年龄/地区任一缺失时优雅省略；participants 为空时整个区块不渲染，不
+  // 显示"暂无人加入"这类占位文案。这份名单用的是
+  // useActivityParticipantsQuery 返回的同一份数据，跟头像拼图共享，不是
+  // 另外查一次。
+  describe("已加入 participant list (task card 9)", () => {
+    it("shows both age and location, joined as '{昵称} {age}岁 · 住{地区}'", () => {
+      useActivityParticipantsQuery.mockReturnValue({
+        data: [
+          { userId: "user-2", displayName: "Kevin", avatarUrl: null, age: 25, locationName: "Arlington" }
+        ]
+      });
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByRole("heading", { name: "已加入" })).toBeInTheDocument();
+      expect(screen.getByText("Kevin 25岁 · 住Arlington")).toBeInTheDocument();
+    });
+
+    it("shows only the age when locationName is null: '{昵称} {age}岁'", () => {
+      useActivityParticipantsQuery.mockReturnValue({
+        data: [{ userId: "user-2", displayName: "Kevin", avatarUrl: null, age: 25, locationName: null }]
+      });
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByText("Kevin 25岁")).toBeInTheDocument();
+    });
+
+    it("shows only the location when age is null: '{昵称} · 住{地区}'", () => {
+      useActivityParticipantsQuery.mockReturnValue({
+        data: [
+          { userId: "user-2", displayName: "Kevin", avatarUrl: null, age: null, locationName: "Arlington" }
+        ]
+      });
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByText("Kevin · 住Arlington")).toBeInTheDocument();
+    });
+
+    it("shows only the nickname when both age and locationName are null — no stray separator", () => {
+      useActivityParticipantsQuery.mockReturnValue({
+        data: [{ userId: "user-2", displayName: "Kevin", avatarUrl: null, age: null, locationName: null }]
+      });
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByText("Kevin")).toBeInTheDocument();
+      expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/undefined/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/null/)).not.toBeInTheDocument();
+    });
+
+    it("renders one row per participant, in the same order returned by the query", () => {
+      useActivityParticipantsQuery.mockReturnValue({
+        data: [
+          { userId: "user-2", displayName: "Kevin", avatarUrl: null, age: 25, locationName: "Arlington" },
+          { userId: "user-3", displayName: "Bob", avatarUrl: null, age: null, locationName: null }
+        ]
+      });
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      // 用 aria-label 限定到"已加入"这个 <ul>——页面上头像拼图自己也是一个
+      // <ul>/<li> 结构，不加限定的话 getAllByRole("listitem") 会把两处的
+      // <li> 混在一起。
+      const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
+      const items = within(joinedList).getAllByRole("listitem");
+      expect(items.map((item) => item.textContent)).toEqual(["Kevin 25岁 · 住Arlington", "Bob"]);
+    });
+
+    it("does not render the section at all (no heading, no empty-state placeholder) when participants is an empty array", () => {
+      useActivityParticipantsQuery.mockReturnValue({ data: [] });
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.queryByRole("heading", { name: "已加入" })).not.toBeInTheDocument();
+      expect(screen.queryByText(/暂无/)).not.toBeInTheDocument();
     });
   });
 });
