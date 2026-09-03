@@ -26,61 +26,62 @@ export interface ActivityCardProps {
  * <button>，避免"<a> 嵌套可交互 <button>"这种非法 HTML 结构，见
  * activity-participant-avatars.tsx 里 interactive prop 的注释。
  *
- * 找搭子列表卡片改版任务卡：把卡片视觉顺序从"头像拼图 → 还差 N 人 → 标题
- * → 地点 → 时间（两行）"改成"标题 → 地点+时间合并成一行摘要 → 小号头像行
- * → 还差 N 人"，对照产品给的方案图：
- * 1. 标题挪到最上面——原来头像拼图（14 号卡定的，铺满卡片整宽、贴着卡片
- *    顶部和左右边缘、没有卡片自己的内边距）是 <Link> 的第一个直接子元素，
- *    文字内容单独在下面一个 p-5 的 <div> 里；这次头像行缩小、不再铺满整卡
- *    宽度（见下面第 3 点），不需要再"贴边"，整张卡片改回跟 07 号卡之前
- *    一样、一路到底统一用同一层 p-5 内边距，不再需要把内边距拆成"外层
- *    <Link> 不带、下面单独一个 <div> 补上"这种两段式结构，外层 <Link>
- *    也不再需要 14 号卡为了让方形头像格不盖住卡片圆角而加的
- *    overflow-hidden——头像格已经不会跟卡片边缘/圆角冲突了。
- * 2. 地点和时间合并成同一行摘要文字（原来的 landmarkText/locationName 判断
- *    逻辑、formatActivityStartAt 调用完全不变，只是从两个 <p> 改成一个
- *    <p> 里用" · "拼起来，不引入新的格式化逻辑）。
- * 3. 头像行改用 ActivityParticipantAvatars 新增的 size="compact"（详见
- *    activity-participant-avatars.tsx 顶部注释和 COMPACT_AVATAR_SIZE_CLASS_NAME
- *    的说明）——固定 64px 小方块，不铺满卡片宽度，自然换行不横向滚动。
- *    这个 prop 只在这一个调用点传，详情页（activity-detail-page.tsx，
- *    这次任务禁止改动）用的是同一个 shape="square" 但不传 size，继续拿到
- *    跟改版前逐像素一致的大号铺满效果，两处调用点互不影响。
- * 4. "还差 N 人（X/Y）"这行文案（ActivityParticipantAvatars 自己渲染，复用
- *    现成的 formatActivityParticipantSummary，这次没有改这个函数）现在
- *    排在头像行下面——顺序天然由 ActivityParticipantAvatars 内部固定
- *    （头像网格在上、caption 在下），不需要卡片这边额外调整。
+ * 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：头像区改成
+ * shape="square" 的正方形拼图，且要求"紧贴卡片左右边缘、贴着卡片顶部、
+ * 铺满整个卡片宽度，不要有卡片自己的左右内边距"——这跟 07 号卡定下的
+ * "整张卡片统一 p-5 内边距"直接冲突，所以把 p-5 从最外层 <Link> 挪到
+ * 头像区下面单独一个 <div> 上，只包标题/地点/时间这几行文字。外层 <Link>
+ * 加 overflow-hidden——头像格铺满卡片整宽后四个角会紧贴卡片的 rounded-2xl
+ * 圆角，不加这个的话方形头像格的直角会盖住卡片本来的圆角，视觉上变成方
+ * 卡片；这条理由跟头像格在 <Link> 里排第几个子元素无关，头像格贴的是哪条
+ * 边就盖住哪条边的圆角，所以不管头像格是第一个还是最后一个子元素都需要
+ * 这个 overflow-hidden。
+ *
+ * 任务卡 7c（活动卡片视觉还原，只保留顺序对调）：产品验收后反馈"找搭子
+ * 卡片重排版"那次改版做过头了——产品原话"我只是想再预览卡片把头像和文字
+ * 互换位置，但是你把头像和文字都改的很小""整体都偏小，想干脆只做位置
+ * 互换"。这次把"合并地点+时间成一行""头像格子缩小成带内边距的小方块"
+ * "内边距改成统一 p-5"这几处非顺序改动全部撤销、还原回 14 号卡定的样子
+ * （标题/地点/时间跟改版前一样是各自独立的 <p>，头像格还是贴边铺满整卡
+ * 宽度的大方块，内边距还是"头像区不带内边距、文字区单独一层 p-5"的两段式
+ * 结构，ActivityParticipantAvatars 这次调用点也不再传 size 这个 prop——
+ * 这个 prop 连同它撑起来的 compact 展示逻辑已经在
+ * activity-participant-avatars.tsx 里整个删掉，不是只在这里不传了事）；
+ * **唯一保留的改动**是产品明确要的那一件事——卡片顶层"文字块"（标题+地点+
+ * 时间）和"头像拼图块"这两个直接子元素的上下顺序对调：文字块现在排在
+ * <Link> 里的第一位、头像拼图块排在第二位（14 号卡定的顺序反过来，之前
+ * 是头像在上、文字在下）。除了这一处顺序，两段 JSX 各自内部的每一个
+ * className/prop/子元素结构都跟 14 号卡定的版本逐字一致。
  */
 export function ActivityCard({ activity, participants }: ActivityCardProps) {
   const { emoji } = getActivityChannelMeta(activity.channel);
-  const locationLabel = activity.isOnline
-    ? "线上"
-    : activity.landmarkText ??
-      (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定");
 
   return (
     <Link
       to={`/activities/${activity.id}`}
-      className="block rounded-2xl border border-border bg-white p-5 shadow-card"
+      className="block overflow-hidden rounded-2xl border border-border bg-white shadow-card"
     >
-      <p className="line-clamp-2 break-words text-base text-text">
-        {emoji} {activity.title}
-      </p>
-      <p className="mt-1 text-xs text-text-muted">
-        {locationLabel} · {formatActivityStartAt(activity.startAt)}
-      </p>
-      <div className="mt-3">
-        <ActivityParticipantAvatars
-          organizerId={activity.organizerId}
-          organizerDisplayName={activity.organizerDisplayName}
-          organizerAvatarUrl={activity.organizerAvatarUrl}
-          participants={participants}
-          capacity={activity.capacity}
-          interactive={false}
-          shape="square"
-          size="compact"
-        />
+      <div className="p-5 pt-3">
+        <p className="line-clamp-2 break-words text-base text-text">
+          {emoji} {activity.title}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">
+          {activity.isOnline
+            ? "线上"
+            : activity.landmarkText ??
+              (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
+        </p>
+        <p className="mt-1 text-xs text-text-muted">{formatActivityStartAt(activity.startAt)}</p>
       </div>
+      <ActivityParticipantAvatars
+        organizerId={activity.organizerId}
+        organizerDisplayName={activity.organizerDisplayName}
+        organizerAvatarUrl={activity.organizerAvatarUrl}
+        participants={participants}
+        capacity={activity.capacity}
+        interactive={false}
+        shape="square"
+      />
     </Link>
   );
 }

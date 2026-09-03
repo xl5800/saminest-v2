@@ -31,29 +31,7 @@ import { formatActivityParticipantSummary } from "../utils/format";
  * 影响原来的规则 3（溢出）分支，规则 1/2（capacity 封顶 / 补空位到 8）逐字
  * 不变；组件新增 showAllParticipants prop 驱动这一支，默认 false，不影响
  * 活动卡片现有的 shape="square" + 封顶 8 个不做 "+N" 这条行为（卡片调用点
- * 没有传这个新 prop）。
- *
- * 找搭子列表卡片改版任务卡：产品要求活动卡片的头像行改成"不铺满卡片宽度、
- * 两侧留正常内边距、自然换行"，跟详情页/卡片改版之前那种"贴边铺满整卡"的大
- * 拼图是两种完全不同的排布，但 slot 计算规则（谁是发起人/参与者/空位、
- * 补几个空位、要不要封顶）不应该跟着重新发明一遍——新增 size prop
- * （"default" | "compact"），只影响格子怎么排（固定尺寸 + flex-wrap 自然
- * 换行，还是 aspect-square + w-full 铺满容器的 grid-cols-4），不影响
- * computeSlots 算出来"该画哪些格子"这件事本身。默认值 "default" 保证不传
- * 这个新 prop 时（详情页、以及卡片改版之前的 round 变体测试）渲染结果逐字
- * 不变；只有活动卡片改版这一个调用点会显式传 size="compact"，见
- * COMPACT_AVATAR_SIZE_CLASS_NAME 一带的详细说明。
- *
- * 首次上线后产品反馈：头像格子太小了——最初按"40-48px 量级"实现的固定 44px
- * 明显比改版前小了一截，用户原话"头像要和原来一样大"，但同时确认"页面
- * 布局没问题"（标题在上、地点+时间合并一行、头像行不贴边这几点都保留）。
- * 因此这次只调整尺寸这一个维度：compact 格子边长从 44px 改成 64px——直接
- * 复用 07 号卡定下的、全项目"大号头像"统一标准（跟 AVATAR_SIZE_CLASS_NAME
- * 圆形版本、以及详情页 square 变体撑满容器后实际观感相近的尺寸），角标/
- * "+"图标尺寸也相应改回跟 SQUARE_* 大号版本完全一致的数值（不再是按 44px
- * 缩小过的一档）。size="compact" 现在跟 size="default" 的唯一区别，纯粹是
- * "flex-wrap 自然换行、不铺满、有卡片内边距"跟"grid-cols-4 铺满贴边"这两种
- * 排布方式的差异，格子本身大小已经跟"大号"标准对齐。 */
+ * 没有传这个新 prop）。 */
 export const MAX_TOTAL_SLOTS = 8;
 /**
  * 真实头像（发起人+参与者）数量超过这个数字才会出现"+N"溢出徽标——比
@@ -116,40 +94,6 @@ const SQUARE_AVATAR_TILE_CLASS_NAME = "aspect-square w-full rounded-md object-co
 const SQUARE_EMPTY_SLOT_CLASS_NAME =
   "flex aspect-square w-full items-center justify-center rounded-md bg-bg text-text-muted";
 
-/**
- * 找搭子列表卡片改版任务卡：新增 size="compact"，只给活动卡片这一个调用点
- * 用——卡片改版要求头像行"不铺满卡片宽度、左右两侧留正常的卡片内边距（不再
- * 贴边）、多于一行时自然换行，不需要横向滚动"。产品上线后反馈初版尺寸
- * （44px）太小，头像格边长最终定为 64px——直接复用 07 号卡定下的全项目
- * "大号头像"标准，跟 AVATAR_SIZE_CLASS_NAME（圆形版本）用的是同一个数值。
- *
- * 两点决定了这里必须是一套独立的常量，不能复用 SQUARE_* 那一套：
- * 1. 尺寸从"跟随容器宽度的 aspect-square"改成固定像素（h-16 w-16，64px），
- *    不是 aspect-square w-full。
- * 2. 布局从"grid-cols-4 铺满整宽、贴边"改成"flex flex-wrap 自然换行、
- *    不铺满宽度"——这是这次改版的核心视觉差异，卡片改版之前头像区是
- *    <Link> 的第一个直接子元素、没有卡片内边距（见 activity-card.tsx
- *    14 号卡的说明）；这次头像区挪回了普通内边距容器里，不再需要"贴边铺
- *    满整宽"这套特殊处理。rounded-md 圆角跟 SQUARE_* 保持一致（同一种
- *    "方块带小圆角"观感），格子边长现在也跟 SQUARE_* 撑满容器后的常见
- *    观感相近，只是不贴边、不铺满，两者视觉大小基本一致。
- *
- * size 默认值是 "default"，维持 shape="square" 原有两种调用点（活动卡片
- * 改版之前 / 详情页 showAllParticipants）的渲染结果完全不变——只有活动
- * 卡片这一个调用点会显式传 size="compact"，round 变体（详情页从没用过，
- * 只有测试直接调用组件时用到）不使用这个 prop。
- */
-const COMPACT_AVATAR_SIZE_CLASS_NAME = "h-16 w-16";
-const COMPACT_AVATAR_TILE_CLASS_NAME = `${COMPACT_AVATAR_SIZE_CLASS_NAME} rounded-md object-cover`;
-const COMPACT_EMPTY_SLOT_CLASS_NAME = `flex ${COMPACT_AVATAR_SIZE_CLASS_NAME} items-center justify-center rounded-md bg-bg text-text-muted`;
-const COMPACT_AVATAR_GRID_CLASS_NAME = "flex flex-wrap gap-2";
-// compact 格子边长已经跟 SQUARE_* 大号方块一致（64px），发起人皇冠角标/
-// 空位"+"图标尺寸因此也改回跟 SQUARE_* 大号版本完全一致的数值（h-5 w-5、
-// Crown 12、"+" 18），不再是初版按 44px 缩小过的一档。
-const COMPACT_CROWN_BADGE_SIZE_CLASS_NAME = "h-5 w-5";
-const COMPACT_CROWN_ICON_SIZE = 12;
-const COMPACT_PLUS_ICON_SIZE = 18;
-
 export interface ActivityParticipantAvatarsProps {
   organizerId: string;
   organizerDisplayName: string;
@@ -184,13 +128,6 @@ export interface ActivityParticipantAvatarsProps {
    *  活动卡片调用点不传这个 prop，继续保留"封顶 8 个、不做 '+N'"的既有
    *  行为不变（见 computeSlots 的 overflowStrategy）。 */
   showAllParticipants?: boolean;
-  /** 找搭子列表卡片改版新增：头像格尺寸。"default"（不传，默认值）维持
-   *  shape="square" 原有的渲染结果——大号方块，铺满容器宽度。"compact"
-   *  是活动卡片改版专用的固定尺寸（64px，跟"default"撑满容器后的大小
-   *  基本一致），不铺满容器、自然换行，见 COMPACT_AVATAR_SIZE_CLASS_NAME
-   *  的详细说明。只有 shape="square" 时有意义；round 变体不使用这个
-   *  prop（round 目前也没有任何生产调用点，只有测试直接调用组件）。 */
-  size?: "default" | "compact";
 }
 
 type Slot =
@@ -203,10 +140,6 @@ interface SlotAvatarProps {
   initial: string;
   isOrganizer?: boolean;
   shape: "round" | "square";
-  /** 找搭子列表卡片改版新增，只在 shape="square" 时生效——见
-   *  COMPACT_AVATAR_SIZE_CLASS_NAME 的说明。默认 false，round 分支完全
-   *  不读这个 prop。 */
-  compact?: boolean;
 }
 
 /**
@@ -221,19 +154,16 @@ interface SlotAvatarProps {
  * 靠外层 grid 的 gap-0.5 露出背景色实现，见 SQUARE_AVATAR_GRID_CLASS_NAME
  * 的注释），角标本身的圆形徽章样式不受影响，两种形状共用同一个 Crown 角标。
  */
-function SlotAvatar({ avatarUrl, initial, isOrganizer, shape, compact = false }: SlotAvatarProps) {
+function SlotAvatar({ avatarUrl, initial, isOrganizer, shape }: SlotAvatarProps) {
   if (shape === "square") {
-    const tileClassName = compact ? COMPACT_AVATAR_TILE_CLASS_NAME : SQUARE_AVATAR_TILE_CLASS_NAME;
-    const badgeSizeClassName = compact ? COMPACT_CROWN_BADGE_SIZE_CLASS_NAME : "h-5 w-5";
-    const crownIconSize = compact ? COMPACT_CROWN_ICON_SIZE : 12;
     return (
       <div className="relative">
         {avatarUrl ? (
-          <img src={avatarUrl} alt="" className={tileClassName} />
+          <img src={avatarUrl} alt="" className={SQUARE_AVATAR_TILE_CLASS_NAME} />
         ) : (
           <span
             aria-hidden="true"
-            className={`flex ${tileClassName} items-center justify-center bg-primary/10 text-sm font-semibold text-primary`}
+            className={`flex ${SQUARE_AVATAR_TILE_CLASS_NAME} items-center justify-center bg-primary/10 text-sm font-semibold text-primary`}
           >
             {initial}
           </span>
@@ -241,9 +171,9 @@ function SlotAvatar({ avatarUrl, initial, isOrganizer, shape, compact = false }:
         {isOrganizer ? (
           <span
             aria-hidden="true"
-            className={`absolute bottom-0.5 right-0.5 flex ${badgeSizeClassName} items-center justify-center rounded-full bg-accent text-white ring-2 ring-white`}
+            className="absolute bottom-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white ring-2 ring-white"
           >
-            <Crown size={crownIconSize} />
+            <Crown size={12} />
           </span>
         ) : null}
       </div>
@@ -393,14 +323,9 @@ export function ActivityParticipantAvatars({
   canTapEmptySlot = false,
   onTapEmptySlot,
   shape = "round",
-  showAllParticipants = false,
-  size = "default"
+  showAllParticipants = false
 }: ActivityParticipantAvatarsProps) {
   const isSquare = shape === "square";
-  // size 只在 shape="square" 时有意义——round 变体没有 compact 这个概念，
-  // 就算调用方手滑传了 size="compact" 也不会有任何效果，不需要额外校验/
-  // 报错，静默按 isSquare 兜底就够。
-  const isCompact = isSquare && size === "compact";
   const joinedCount = 1 + participants.length;
   const overflowStrategy: "badge" | "cap" | "showAll" = showAllParticipants
     ? "showAll"
@@ -408,17 +333,8 @@ export function ActivityParticipantAvatars({
       ? "cap"
       : "badge";
   const { slots, overflowCount } = computeSlots(participants, capacity, { overflowStrategy });
-  const gridClassName = isCompact
-    ? COMPACT_AVATAR_GRID_CLASS_NAME
-    : isSquare
-      ? SQUARE_AVATAR_GRID_CLASS_NAME
-      : AVATAR_GRID_CLASS_NAME;
-  const emptySlotClassName = isCompact
-    ? COMPACT_EMPTY_SLOT_CLASS_NAME
-    : isSquare
-      ? SQUARE_EMPTY_SLOT_CLASS_NAME
-      : EMPTY_SLOT_CLASS_NAME;
-  const plusIconSize = isCompact ? COMPACT_PLUS_ICON_SIZE : 18;
+  const gridClassName = isSquare ? SQUARE_AVATAR_GRID_CLASS_NAME : AVATAR_GRID_CLASS_NAME;
+  const emptySlotClassName = isSquare ? SQUARE_EMPTY_SLOT_CLASS_NAME : EMPTY_SLOT_CLASS_NAME;
 
   return (
     <div>
@@ -439,7 +355,6 @@ export function ActivityParticipantAvatars({
                   initial={organizerDisplayName.trim().charAt(0).toUpperCase() || "?"}
                   isOrganizer
                   shape={shape}
-                  compact={isCompact}
                 />
               </li>
             );
@@ -452,7 +367,6 @@ export function ActivityParticipantAvatars({
                 avatarUrl={participant.avatarUrl}
                 initial={participant.displayName.trim().charAt(0).toUpperCase() || "?"}
                 shape={shape}
-                compact={isCompact}
               />
             );
 
@@ -476,7 +390,7 @@ export function ActivityParticipantAvatars({
             return (
               <li key={`empty-${index}`}>
                 <span aria-hidden="true" className={emptySlotClassName}>
-                  <Plus size={plusIconSize} />
+                  <Plus size={18} />
                 </span>
               </li>
             );
@@ -491,7 +405,7 @@ export function ActivityParticipantAvatars({
                 onClick={canTapEmptySlot ? onTapEmptySlot : undefined}
                 className={`${emptySlotClassName} disabled:cursor-not-allowed disabled:opacity-60 ${canTapEmptySlot ? "hover:border-primary hover:text-primary" : ""}`}
               >
-                <Plus size={plusIconSize} />
+                <Plus size={18} />
               </button>
             </li>
           );
@@ -522,19 +436,8 @@ export function ActivityParticipantAvatars({
           activity-detail-page.tsx），头像格本身跟其它段落一样贴着容器
           内边缘对齐，这里再叠一层 px-5 反而会让这行文字比页面上其它文字
           多缩进一截，所以只在"卡片场景"（isSquare 但不是 showAllParticipants）
-          才补这个内边距。
-          找搭子列表卡片改版：size="compact" 同样不需要这条 px-5 补偿——
-          跟详情页是同一个道理，compact 头像行不再是"贴边铺满整卡"的拼图，
-          而是内嵌在 activity-card.tsx 自己的 p-5 容器里，头像行和这行
-          caption 已经共享同一层外部内边距，不需要再单独补一次，多补一层
-          反而会让这行文字比头像行多缩进一截。加 !isCompact 是这次改动
-          唯一动这个条件表达式的地方——isCompact 只有 size="compact" 时才
-          为真，其余三个既有调用组合（round 默认 / square 不带
-          showAllParticipants / square 带 showAllParticipants）isCompact
-          恒为 false，这个条件的取值、进而这行文字的 className，逐字不变。 */}
-      <p
-        className={`mt-2 text-xs text-text-muted ${isSquare && !showAllParticipants && !isCompact ? "px-5" : ""}`}
-      >
+          才补这个内边距。 */}
+      <p className={`mt-2 text-xs text-text-muted ${isSquare && !showAllParticipants ? "px-5" : ""}`}>
         {formatActivityParticipantSummary(participants.length, capacity)}
       </p>
     </div>
