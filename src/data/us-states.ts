@@ -136,5 +136,17 @@ export function formatSelectedRegionLabel(region: {
   stateName: string;
   cityName: string | null;
 }): string {
-  return region.cityName ? `${region.cityName}, ${region.stateCode}` : formatStateLabelByCode(region.stateCode);
+  if (!region.cityName) {
+    return formatStateLabelByCode(region.stateCode);
+  }
+  // DC 重复显示 bug 修复：locations 表里 DC 这条城市记录的 name 列存的就是
+  // 完整字符串 "Washington, DC"（不是单纯的 "Washington"），跟其它城市
+  // （cityName 是单纯地名，如 "Woodbridge"）不是同一种存法。如果不做判断，
+  // 拼接规则会把它跟 stateCode 再拼一次，变成 "Washington, DC, DC"。这里
+  // 防御性地判断 cityName 是不是已经以 ", {stateCode}" 结尾，是的话直接用
+  // cityName 本身，不再重复拼一次；不改 locations 表里的数据本身——那条
+  // 记录的 name 有没有在别处（不经过这个函数）直接展示未逐一排查，贸然改
+  // 数据可能反而在其它地方丢了"DC"这两个字。
+  const alreadyHasStateCode = region.cityName.trim().endsWith(`, ${region.stateCode}`);
+  return alreadyHasStateCode ? region.cityName : `${region.cityName}, ${region.stateCode}`;
 }
