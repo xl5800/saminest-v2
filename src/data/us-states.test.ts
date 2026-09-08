@@ -101,4 +101,16 @@ describe("formatSelectedRegionLabel", () => {
       formatSelectedRegionLabel({ stateCode: "CA", stateName: "California", cityName: null })
     ).toBe("CA 加利福尼亚州");
   });
+
+  it("does not duplicate the state code when cityName already ends with it, e.g. DC's 'Washington, DC'", () => {
+    // locations 表里 DC 这条城市记录的 name 列存的就是完整的 "Washington, DC"
+    // （不是单纯的 "Washington"），如果无脑拼接会变成 "Washington, DC, DC"。
+    expect(
+      formatSelectedRegionLabel({
+        stateCode: "DC",
+        stateName: "District of Columbia",
+        cityName: "Washington, DC"
+      })
+    ).toBe("Washington, DC");
+  });
 });
