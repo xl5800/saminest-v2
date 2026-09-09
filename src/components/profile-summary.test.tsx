@@ -44,23 +44,23 @@ describe("ProfileSummary", () => {
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  describe("editHref (24 号卡：右上角编辑资料铅笔图标)", () => {
-    it("does not render an edit icon-button when editHref is not provided", () => {
+  describe("profileHref (公开主页 Facebook 风格头图改版：右上角'查看个人主页'图标，取代原来的 editHref)", () => {
+    it("does not render a profile icon-button when profileHref is not provided", () => {
       render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
-      expect(screen.queryByRole("link", { name: "编辑资料" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "查看个人主页" })).not.toBeInTheDocument();
     });
 
-    it("renders a small circular '编辑资料' icon-button link when editHref is provided", () => {
+    it("renders a small circular '查看个人主页' icon-button link when profileHref is provided", () => {
       render(
         <MemoryRouter>
-          <ProfileSummary displayName="Alice" avatarUrl={null} editHref="/profile/edit" />
+          <ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />
         </MemoryRouter>
       );
 
-      expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "查看个人主页" })).toHaveAttribute(
         "href",
-        "/profile/edit"
+        "/users/user-1"
       );
     });
   });

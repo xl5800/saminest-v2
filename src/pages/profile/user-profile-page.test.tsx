@@ -65,7 +65,8 @@ const samplePublicProfile = {
   displayName: "Bob",
   bio: "Hi there, I like hiking.",
   avatarUrl: null,
-  locationName: "Rockville"
+  locationName: "Rockville",
+  age: null
 };
 
 function renderPage() {
@@ -175,6 +176,96 @@ describe("UserProfilePage", () => {
 
     expect(screen.queryByText(/暂无简介/)).not.toBeInTheDocument();
     expect(screen.queryByText("Hi there, I like hiking.")).not.toBeInTheDocument();
+  });
+
+  // 公开主页 Facebook 风格头图改版：22 号卡"通栏正方形头像大图"换成了
+  // 深色渐变色块 + 压在交界线上的圆形头像，昵称跟头像并排展示，见
+  // user-profile-page.tsx 函数级注释。
+  describe("Facebook 风格头图 (公开主页改版)", () => {
+    it("renders a purely decorative gradient cover block with no <img> inside it (背后没有真实封面图)", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const cover = screen.getByTestId("profile-cover-gradient");
+      expect(cover).toBeInTheDocument();
+      expect(cover.querySelector("img")).not.toBeInTheDocument();
+    });
+
+    it("gives the no-avatar placeholder the overlap/ring classes so it sits on the dark/light boundary", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const placeholder = screen.getByText("B");
+      expect(placeholder.className).toMatch(/-mt-12/);
+      expect(placeholder.className).toMatch(/ring-4/);
+      expect(placeholder.className).toMatch(/ring-card/);
+      expect(placeholder.className).toMatch(/rounded-full/);
+    });
+
+    it("gives the <img> avatar the same overlap/ring classes when avatarUrl is present", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: { ...samplePublicProfile, avatarUrl: "https://example.com/bob.jpg" },
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      const img = container.querySelector("img");
+      expect(img?.className).toMatch(/-mt-12/);
+      expect(img?.className).toMatch(/ring-4/);
+      expect(img?.className).toMatch(/ring-card/);
+      expect(img?.className).toMatch(/rounded-full/);
+    });
+
+    it("renders the nickname next to the avatar in the same row, not on a separate full-width line below it", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const heading = screen.getByRole("heading", { name: "Bob" });
+      const placeholder = screen.getByText("B");
+      // 头像和昵称是同一个 flex 行的两个直接子元素。
+      expect(heading.parentElement).toContainElement(placeholder);
+    });
+
+    it("shows the age as '25 岁' when data.age is a number", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: { ...samplePublicProfile, age: 25 },
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByText("25 岁")).toBeInTheDocument();
+    });
+
+    it("does not render an age line when data.age is null", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.queryByText(/岁/)).not.toBeInTheDocument();
+    });
   });
 
   it("shows a '发消息' button for a visitor viewing someone else's profile", () => {
