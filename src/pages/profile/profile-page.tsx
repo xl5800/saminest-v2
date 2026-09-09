@@ -3,6 +3,7 @@ import {
   Calendar,
   FileText,
   MessageSquare,
+  Pencil,
   Settings,
   Shield,
   Star,
@@ -134,6 +135,14 @@ function GroupCard({ children }: { children: ReactNode }) {
  *
  * 24.5 退出登录：改成单独一张白色圆角卡片、红色文字、居中，不再是原来
  * 那个描边按钮。
+ *
+ * 公开主页 Facebook 风格头图改版（联动）：头像卡片右上角那个图标按钮的
+ * 语义变了——原来是 editHref（编辑资料铅笔），这次换成 profileHref
+ * （查看个人主页，指向跟 avatarHref 完全相同的 `/users/:currentUserId`，
+ * 头像本身继续保留可点跳转，这是有意保留的双重入口，不是冲突）。"编辑
+ * 资料"这个入口没有消失，只是从卡片右上角挪到了下面"账号与服务"分组
+ * 卡片的第一行（GroupRow to="/profile/edit"）——路由、点击行为、目标
+ * 页面都没变，纯粹是入口位置的调整。
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -176,7 +185,7 @@ export function ProfilePage() {
               displayName={profile?.displayName ?? null}
               avatarUrl={profile?.avatarUrl ?? null}
               avatarHref={currentUserId ? `/users/${currentUserId}` : undefined}
-              editHref="/profile/edit"
+              profileHref={currentUserId ? `/users/${currentUserId}` : undefined}
             >
               <div className="mt-3 grid grid-cols-2 divide-x divide-border">
                 <Link
@@ -207,6 +216,7 @@ export function ProfilePage() {
 
         <nav aria-label="账号与服务">
           <GroupCard>
+            <GroupRow to="/profile/edit" icon={Pencil} label="编辑个人信息" />
             <GroupRow to="/feedback" icon={MessageSquare} label="帮助与客服" />
             <GroupRow to={SETTINGS_PATH} icon={Settings} label="设置" />
             {isAdmin === true ? (

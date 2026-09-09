@@ -68,15 +68,26 @@ describe("ProfilePage", () => {
     expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
   });
 
-  describe("avatar card: edit-profile pencil icon (24.2)", () => {
-    it("shows a small circular '编辑资料' icon-button link to /profile/edit, not a full-width list row", async () => {
+  // 公开主页 Facebook 风格头图改版（联动）：头像卡片右上角的图标按钮从
+  // "编辑资料"换成了"查看个人主页"，跳到跟头像本身（avatarHref）完全
+  // 相同的 /users/:自己的id——"编辑资料"这个入口本身没有消失，见下面
+  // "'账号与服务' group card"里新增的断言。
+  describe("avatar card: '查看个人主页' icon button (公开主页 Facebook 风格头图改版)", () => {
+    it("shows a small circular '查看个人主页' icon-button link to /users/<self id>, not a full-width list row", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
+      expect(screen.getByRole("link", { name: "查看个人主页" })).toHaveAttribute(
         "href",
-        "/profile/edit"
+        "/users/user-1"
       );
+    });
+
+    it("no longer shows a '编辑资料' icon button on the avatar card itself", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      expect(screen.queryByRole("link", { name: "编辑资料" })).not.toBeInTheDocument();
     });
   });
 
@@ -191,9 +202,11 @@ describe("ProfilePage", () => {
   });
 
   // 24.4：合并成一张"账号与服务"卡片——帮助与客服（原"联系客服"文案）/
-  // 设置/后台管理（仅管理员）。
-  describe("'账号与服务' group card (24.4)", () => {
-    it("shows '帮助与客服' (renamed from '联系客服') linking to /feedback, and '设置' linking to /settings, for a non-admin user (no 后台管理 row)", async () => {
+  // 设置/后台管理（仅管理员）。公开主页 Facebook 风格头图改版（联动）
+  // 又在最前面加了一行"编辑个人信息"（原来在头像卡片右上角的入口挪到
+  // 这里，见上面 avatar card 那组测试）。
+  describe("'账号与服务' group card (24.4 + 公开主页 Facebook 风格头图改版联动)", () => {
+    it("shows '编辑个人信息' as the first row, linking to /profile/edit, then '帮助与客服' (renamed from '联系客服') linking to /feedback, and '设置' linking to /settings, for a non-admin user (no 后台管理 row)", async () => {
       getCurrentUserRole.mockResolvedValue("user");
 
       renderWithProviders(<ProfilePage />);
@@ -201,13 +214,18 @@ describe("ProfilePage", () => {
       await screen.findByText("Alice");
       const group = screen.getByRole("navigation", { name: "账号与服务" });
       const links = within(group).getAllByRole("link");
-      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual(["帮助与客服", "设置"]);
-      expect(links[0]).toHaveAttribute("href", "/feedback");
-      expect(links[1]).toHaveAttribute("href", "/settings");
+      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual([
+        "编辑个人信息",
+        "帮助与客服",
+        "设置"
+      ]);
+      expect(links[0]).toHaveAttribute("href", "/profile/edit");
+      expect(links[1]).toHaveAttribute("href", "/feedback");
+      expect(links[2]).toHaveAttribute("href", "/settings");
       expect(screen.queryByText("联系客服")).not.toBeInTheDocument();
     });
 
-    it("shows '后台管理' as the third row, linking to /admin/posts, only for an admin account", async () => {
+    it("shows '后台管理' as the fourth row, linking to /admin/posts, only for an admin account", async () => {
       getCurrentUserRole.mockResolvedValue("admin");
 
       renderWithProviders(<ProfilePage />);
@@ -219,11 +237,12 @@ describe("ProfilePage", () => {
       await within(group).findByRole("link", { name: /后台管理/ });
       const links = within(group).getAllByRole("link");
       expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual([
+        "编辑个人信息",
         "帮助与客服",
         "设置",
         "后台管理"
       ]);
-      expect(links[2]).toHaveAttribute("href", "/admin/posts");
+      expect(links[3]).toHaveAttribute("href", "/admin/posts");
     });
 
     // 24.1 调查结论：这个权限判断（useIsAdminQuery，跟 RequireAdmin 路由
