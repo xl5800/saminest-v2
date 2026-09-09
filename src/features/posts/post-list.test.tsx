@@ -191,6 +191,96 @@ describe("PostList", () => {
     expect(screen.queryByRole("img")).not.toBeInTheDocument();
   });
 
+  // 32 号卡（分类专属的帖子无图占位）：没有封面图时，占位样式按 categoryName
+  // 精确字符串匹配换成品牌浅蓝底 + 对应线性图标 + 分类名文字，替换掉旧的
+  // 灰底🖼占位——见 post-list.tsx 顶部 getCategoryPlaceholderIcon 的注释。
+  describe("分类专属无图占位（32 号卡）", () => {
+    it("shows a magnifying-glass icon and '求租' text for the 求租 category", async () => {
+      listApprovedPosts.mockResolvedValue({
+        posts: [{ ...samplePost, coverImageUrl: null, categoryName: "求租" }],
+        hasNextPage: false
+      });
+
+      const { container } = renderWithProviders(<PostList />);
+      const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
+
+      expect(placeholder.querySelector("svg.lucide-search")).toBeInTheDocument();
+      expect(placeholder).toHaveTextContent("求租");
+      expect(container.querySelector("svg.lucide-image-off")).not.toBeInTheDocument();
+    });
+
+    it("shows a house icon and '租房' text for the 租房 category", async () => {
+      listApprovedPosts.mockResolvedValue({
+        posts: [{ ...samplePost, coverImageUrl: null, categoryName: "租房" }],
+        hasNextPage: false
+      });
+
+      renderWithProviders(<PostList />);
+      const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
+
+      // lucide-react 的 Home 是 House 图标的别名（见 lucide-react/dist/esm/
+      // icons/home.mjs），渲染出来的 class 名跟着底层组件走，是
+      // "lucide-house" 不是 "lucide-home"。
+      expect(placeholder.querySelector("svg.lucide-house")).toBeInTheDocument();
+      expect(placeholder).toHaveTextContent("租房");
+    });
+
+    it("shows a tag icon and '二手' text for the 二手 category", async () => {
+      listApprovedPosts.mockResolvedValue({
+        posts: [{ ...samplePost, coverImageUrl: null, categoryName: "二手" }],
+        hasNextPage: false
+      });
+
+      renderWithProviders(<PostList />);
+      const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
+
+      expect(placeholder.querySelector("svg.lucide-tag")).toBeInTheDocument();
+      expect(placeholder).toHaveTextContent("二手");
+    });
+
+    it("falls back to a generic 'image off' icon and the raw categoryName text for an unrecognized category (defensive fallback, not expected to occur with today's fixed 3 categories)", async () => {
+      listApprovedPosts.mockResolvedValue({
+        posts: [{ ...samplePost, coverImageUrl: null, categoryName: "某个新分类" }],
+        hasNextPage: false
+      });
+
+      renderWithProviders(<PostList />);
+      const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
+
+      expect(placeholder.querySelector("svg.lucide-image-off")).toBeInTheDocument();
+      expect(placeholder).toHaveTextContent("某个新分类");
+    });
+
+    it("uses the brand-light background and primary-color icon/text tokens, not the old neutral-gray placeholder", async () => {
+      listApprovedPosts.mockResolvedValue({
+        posts: [{ ...samplePost, coverImageUrl: null, categoryName: "租房" }],
+        hasNextPage: false
+      });
+
+      renderWithProviders(<PostList />);
+      const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
+
+      expect(placeholder).toHaveClass("bg-primary-light");
+      expect(placeholder).not.toHaveClass("bg-border");
+      expect(placeholder.querySelector("svg")).toHaveClass("text-primary");
+      expect(placeholder.querySelector("span")).toHaveClass("text-primary");
+    });
+
+    // 19 号卡「参考 Craigslist 简化布局」要求两列网格保持等高对齐——占位
+    // 换样式不能破坏这条，比例仍然是 4:5。
+    it("keeps the 4:5 aspect ratio unchanged", async () => {
+      listApprovedPosts.mockResolvedValue({
+        posts: [{ ...samplePost, coverImageUrl: null }],
+        hasNextPage: false
+      });
+
+      renderWithProviders(<PostList />);
+      const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
+
+      expect(placeholder).toHaveClass("aspect-[4/5]");
+    });
+  });
+
   it("passes categoryId through to the query", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
