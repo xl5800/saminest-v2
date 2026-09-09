@@ -120,6 +120,28 @@ export function formatActivityParticipantSummary(
     : `已满员（${participantCount}/${capacity}）`;
 }
 
+/**
+ * 31 号卡（求租板块改版）：求租 Tab 文字卡片的发帖人信息行——"性别/年龄"
+ * 这两项都是可选字段（poster_gender/poster_age，见
+ * supabase/migrations/20260908190000_add_posts_wanted_poster_fields.sql），
+ * 能拼多少拼多少、缺的直接跳过，两者都缺失时返回空字符串（调用方据此决定
+ * 这一段要不要整个不渲染）——照抄 activity-detail-page.tsx 里
+ * formatJoinedParticipantLine 那个"缺失字段优雅省略"的模式，不产出
+ * "undefined"/"null"/孤零零的分隔符。跟那个函数不同的是这里两项之间用
+ * "、"顿号分隔（"男、25岁"），不是空格——性别和年龄都是简短的标签词，不是
+ * 昵称后面跟着的一句描述，用顿号更符合中文列举短词的习惯。
+ */
+export function formatWantedPosterMeta(gender: string | null, age: number | null): string {
+  const parts: string[] = [];
+  if (gender !== null) {
+    parts.push(gender);
+  }
+  if (age !== null) {
+    parts.push(`${age}岁`);
+  }
+  return parts.join("、");
+}
+
 export function formatListingDate(createdAt: string | null): string {
   if (!createdAt?.trim()) return "时间未知";
 

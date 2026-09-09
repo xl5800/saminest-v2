@@ -2,7 +2,8 @@ import { MapPin } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
-import { formatPrice, isPriceUnset } from "../../utils/format";
+import { formatLocationDisplayName } from "../../data/us-states";
+import { formatPrice, formatWantedPosterMeta, isPriceUnset } from "../../utils/format";
 import { usePostsInfiniteQuery } from "./use-posts-query";
 
 export interface PostListProps {
@@ -26,6 +27,18 @@ export interface PostListProps {
    *  注释"以后'我的帖子'、'收藏列表'等页面需要类似的列表时，优先扩展这里
    *  而不是照抄一份"。 */
   authorId?: string;
+  /** 31 号卡（求租板块改版）新增：首页"推荐"流（未选中任何具体分类）排除
+   *  求租分类帖子用，透传给 usePostsInfiniteQuery——见该 hook/
+   *  listApprovedPosts 里对应字段的注释。只有 home-page.tsx 在
+   *  activeCategorySlug 为空（"推荐"）时会传这个值，"求租" Tab 本身、以及
+   *  authorId 传值的发帖者主页场景都不传，求租帖子在那些地方不受影响。 */
+  excludeCategoryId?: string;
+  /** 31 号卡新增："求租" Tab 用单列纯文字卡片（variant="wanted"），其它
+   *  三个 Tab（推荐/租房/二手）继续用默认的两列图片网格
+   *  （variant="grid"，也是不传时的默认值）——两种布局的容器结构本来就
+   *  不一样，不是在现有 .map() 里加 if/else 判断每张卡片，而是整个渲染
+   *  路径分两套，见下面组件内部的实现。 */
+  variant?: "grid" | "wanted";
 }
 
 /**
@@ -69,16 +82,44 @@ export interface PostListProps {
  * 不可见的哨兵 div，它进入视口时触发 fetchNextPage()。哨兵只在
  * hasNextPage 为真时渲染——没有下一页时彻底不挂这个元素，而不是渲染出来
  * 但不响应，避免它一直空占着 DOM/被观察却永远不会有意义地触发。
+ *
+ * 31 号卡（求租板块改版）：variant="wanted" 时（只有"求租" Tab 会传）改成
+ * 单列纯文字卡片——不是在下面这个 grid grid-cols-2 的 .map() 里塞
+ * if/else 判断每张卡片长什么样，是外层直接分两套 JSX（见下面
+ * renderWantedList/常规网格两段），loading/error/空状态这几个跟布局无关
+ * 的分支保持共用，不重复。
+ *
+ * 求租卡片内容（按讨论确认的顺序，缺失字段优雅省略）：
+ * 1. 标题——line-clamp-2（两行截断，文字卡片横向空间更宽，不用像网格卡片
+ *    那样单行就截断）。
+ * 2. 价格——isPriceUnset 命中就整行不渲染，逻辑跟网格卡片/详情页共用同一套
+ *    isPriceUnset/formatPrice，价格用 text-text 黑色（不用强调蓝，DESIGN.md
+ *    "价格永远黑色"的约定）。
+ * 3. 州（post.locationName，格式化复用 formatLocationDisplayName，跟页面
+ *    顶部"地区"那一行、profiles-repository.ts 的现有用法一致）——为
+ *    null 就整行不渲染，不展示"地区未填写"占位文案；求租帖子的"地区"字段
+ *    要不要在校验层面强制必填是开放问题，这次没有在这里加特殊处理。
+ * 4. 发帖人信息行——24px 圆形头像（没有头像时的兜底样式照抄
+ *    person-card.tsx 的 bg-primary/10 text-primary 首字母圆圈，只是尺寸从
+ *    40px 缩小到 24px、字号缩小到 text-[10px]）+ 昵称 + 性别/年龄
+ *    （formatWantedPosterMeta，见 utils/format.ts，两者都缺失时这一段
+ *    整个不渲染）。
+ *
+ * 不展示分类标签 chip、发布时间——讨论时明确没有列进要展示的字段（这个
+ * Tab 下分类标签本来就是多余信息，列表已经按 created_at 降序排列，不需要
+ * 在卡片上重复标出发布时间）。
  */
 export function PostList({
   categoryId,
   searchQuery,
   stateCode,
   onPublishClick,
-  authorId
+  authorId,
+  excludeCategoryId,
+  variant = "grid"
 }: PostListProps) {
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode, authorId });
+    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode, authorId, excludeCategoryId });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -138,6 +179,63 @@ export function PostList({
       );
     }
     return <p role="status">{searchQuery ? "没有找到相关帖子。" : "暂无帖子。"}</p>;
+  }
+
+  if (variant === "wanted") {
+    return (
+      <div>
+        <div className="flex flex-col gap-3 px-4">
+          {posts.map((post) => {
+            const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
+            const posterMeta = formatWantedPosterMeta(post.posterGender, post.posterAge);
+            return (
+              <Link
+                key={post.id}
+                to={`/post/${post.id}`}
+                className="block rounded-2xl bg-card p-4 shadow-card"
+              >
+                <p className="line-clamp-2 break-words text-base font-medium text-text">
+                  {post.title}
+                </p>
+                {priceUnset ? null : (
+                  <p className="mt-1 text-lg font-semibold text-text">
+                    {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
+                  </p>
+                )}
+                {post.locationName ? (
+                  <p className="mt-1 flex items-center gap-1 text-sm text-text-muted">
+                    <MapPin aria-hidden="true" size={14} className="shrink-0" />
+                    {formatLocationDisplayName(post.locationName)}
+                  </p>
+                ) : null}
+                <div className="mt-2 flex items-center gap-2">
+                  {post.authorAvatarUrl ? (
+                    <img
+                      src={post.authorAvatarUrl}
+                      alt=""
+                      className="h-6 w-6 shrink-0 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
+                    >
+                      {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
+                    </span>
+                  )}
+                  <span className="text-sm text-text">{post.authorDisplayName}</span>
+                  {posterMeta ? (
+                    <span className="text-sm text-text-subtle">{posterMeta}</span>
+                  ) : null}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+        {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
+        {isFetchingNextPage ? <p role="status">加载更多…</p> : null}
+      </div>
+    );
   }
 
   return (

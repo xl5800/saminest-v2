@@ -10,7 +10,12 @@ const validInput = {
   description: "A description that is definitely long enough.",
   price: "1200",
   contactMethod: "email",
-  contactValue: "user@example.com"
+  contactValue: "user@example.com",
+  // 31 号卡新增字段：这份 baseline fixture 里留空，代表"非求租分类/没填"
+  // 这个最常见的场景——已有的一大批用例都是继承自这个 baseline，不需要
+  // 逐个改动就能覆盖"两者都不填时校验通过、返回 null/null"。
+  posterAge: "",
+  posterGender: ""
 };
 
 describe("validatePublishInput", () => {
@@ -28,7 +33,9 @@ describe("validatePublishInput", () => {
         description: "A description that is definitely long enough.",
         priceAmount: 1200,
         contactMethod: "email",
-        contactValue: "user@example.com"
+        contactValue: "user@example.com",
+        posterAge: null,
+        posterGender: null
       }
     });
   });
@@ -223,5 +230,51 @@ describe("validatePublishInput", () => {
     expect(result.success).toBe(true);
     expect(result.data?.contactMethod).toBeNull();
     expect(result.data?.contactValue).toBeNull();
+  });
+
+  // 31 号卡（求租板块改版）：posterAge/posterGender 是"可选、不强制"字段，
+  // 校验规则跟 edit-profile-validation.ts 的 age 完全一致（同一对
+  // MIN_AGE/MAX_AGE 常量），这里不重复测那份文件已经覆盖过的每一个边界，
+  // 只覆盖"留空通过"“非整数/超出范围拒绝”“性别枚举外的值拒绝”这几个
+  // 这个函数自己新增的分支。
+  it("allows omitting poster age and gender together, since they are optional", () => {
+    const result = validatePublishInput({ ...validInput, posterAge: "", posterGender: "" });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.posterAge).toBeNull();
+    expect(result.data?.posterGender).toBeNull();
+  });
+
+  it("accepts a valid poster age and gender", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      posterAge: "25",
+      posterGender: "女"
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.posterAge).toBe(25);
+    expect(result.data?.posterGender).toBe("女");
+  });
+
+  it("rejects a non-integer poster age", () => {
+    const result = validatePublishInput({ ...validInput, posterAge: "25.5" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_POSTER_AGE_INVALID");
+  });
+
+  it("rejects a poster age outside the 13-120 range", () => {
+    const result = validatePublishInput({ ...validInput, posterAge: "12" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_POSTER_AGE_OUT_OF_RANGE");
+  });
+
+  it("rejects a poster gender outside the enum", () => {
+    const result = validatePublishInput({ ...validInput, posterGender: "其他" });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_POSTER_GENDER_INVALID");
   });
 });

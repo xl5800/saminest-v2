@@ -14,6 +14,7 @@ const {
   removePostImageFiles,
   insertPostImages,
   removeOwnPostImage,
+  getMyProfile,
   navigateMock
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
@@ -25,6 +26,10 @@ const {
   removePostImageFiles: vi.fn(),
   insertPostImages: vi.fn(),
   removeOwnPostImage: vi.fn(),
+  // 31 号卡：年龄自动填充读的 useMyProfileQuery() 底层就是这个 repository
+  // 函数（见 use-my-profile-query.ts），照抄 profile-page.test.tsx 已有的
+  // mock 方式，不重新发明一套。
+  getMyProfile: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -38,6 +43,9 @@ vi.mock("../../repositories/posts-repository", () => ({
   createPost,
   getPostDetail,
   updatePost
+}));
+vi.mock("../../repositories/profiles-repository", () => ({
+  getMyProfile
 }));
 vi.mock("../../services/storage/post-image-storage-service", () => ({
   postImageStorageService: { uploadPostImage, removePostImageFiles }
@@ -127,6 +135,7 @@ describe("PublishPage", () => {
     removePostImageFiles.mockReset();
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
+    getMyProfile.mockReset();
     navigateMock.mockReset();
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
     // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
@@ -142,6 +151,9 @@ describe("PublishPage", () => {
     ]);
     insertPostImages.mockResolvedValue([]);
     removePostImageFiles.mockResolvedValue(undefined);
+    // 31 号卡：默认没有年龄——大部分用例根本不是求租分类，这个 query 压根
+    // 不会被消费；求租分类的年龄自动填充测试单独覆盖一遍非 null 的情况。
+    getMyProfile.mockResolvedValue({ age: null });
     useAuthStore.getState().setSession({
       user: { id: "user-1" }
     } as never);
@@ -251,7 +263,9 @@ describe("PublishPage", () => {
         description: "A description that is definitely long enough.",
         priceAmount: null,
         contactMethod: null,
-        contactValue: null
+        contactValue: null,
+        posterAge: null,
+        posterGender: null
       });
     });
 
@@ -679,6 +693,130 @@ describe("PublishPage", () => {
       );
     });
   });
+
+  // 31 号卡（求租板块改版）：性别/年龄这两个字段只在求租分类下渲染，见
+  // publish-page.tsx 顶部对应注释。
+  describe("求租分类专属的性别/年龄字段", () => {
+    beforeEach(() => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" },
+        { id: "cat-2", slug: "wanted", nameZh: "求租" }
+      ]);
+    });
+
+    it("does not render the gender/age fields when the selected category is not 求租", async () => {
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
+
+      expect(screen.queryByLabelText("性别（可选）")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("年龄（可选）")).not.toBeInTheDocument();
+    });
+
+    it("renders the gender/age fields once the 求租 category is selected", async () => {
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+
+      expect(screen.getByLabelText("性别（可选）")).toBeInTheDocument();
+      expect(screen.getByLabelText("年龄（可选）")).toBeInTheDocument();
+    });
+
+    it("auto-fills the age field once from the current user's profile.age when 求租 is selected", async () => {
+      getMyProfile.mockResolvedValue({ age: 28 });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText("年龄（可选）")).toHaveValue(28);
+      });
+    });
+
+    it("does not overwrite a manually edited age with profile.age after the first auto-fill", async () => {
+      getMyProfile.mockResolvedValue({ age: 28 });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      await waitFor(() => {
+        expect(screen.getByLabelText("年龄（可选）")).toHaveValue(28);
+      });
+
+      fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "35" } });
+      // 切走求租分类再切回来，不应该把用户刚改的 35 冲回 profile 的 28——
+      // ageAutoFilledRef 只允许自动填充生效一次。
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+
+      expect(screen.getByLabelText("年龄（可选）")).toHaveValue(35);
+    });
+
+    it("leaves the age field blank (does not auto-fill) when profile.age is null", async () => {
+      getMyProfile.mockResolvedValue({ age: null });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+
+      await screen.findByLabelText("年龄（可选）");
+      expect(screen.getByLabelText("年龄（可选）")).toHaveValue(null);
+    });
+
+    it("submits posterAge/posterGender when the 求租 category is selected and the fields are filled", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      fireEvent.change(screen.getByLabelText("标题"), {
+        target: { value: "Looking for a room" }
+      });
+      fireEvent.change(screen.getByLabelText("描述"), {
+        target: { value: "A description that is definitely long enough." }
+      });
+      fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
+      fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "30" } });
+
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(
+          expect.objectContaining({ posterAge: 30, posterGender: "男" })
+        );
+      });
+    });
+
+    it("submits posterAge/posterGender as null when the category is switched away from 求租 after the fields were filled", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("option", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
+      fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "30" } });
+      // 切回非求租分类——性别/年龄输入框随之不再渲染，但底层 state 值仍然
+      // 留着，提交时必须被当成没填。
+      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
+      fireEvent.change(screen.getByLabelText("标题"), {
+        target: { value: "Sunny room near metro" }
+      });
+      fireEvent.change(screen.getByLabelText("描述"), {
+        target: { value: "A description that is definitely long enough." }
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(
+          expect.objectContaining({ posterAge: null, posterGender: null })
+        );
+      });
+    });
+  });
 });
 
 describe("PublishPage in edit mode", () => {
@@ -703,6 +841,11 @@ describe("PublishPage in edit mode", () => {
     authorDisplayName: "Alice",
     contactMethod: "email",
     contactValue: "alice@example.com",
+    // 31 号卡：默认这份 fixture 走的是"租房"分类，两个字段留 null——跟真实
+    // 数据一致（非求租帖子这两列本来就是 null）。求租分类的编辑回填单独用
+    // 下面的 posterAge/posterGender 测试覆盖，不复用这份默认 fixture。
+    posterAge: null,
+    posterGender: null,
     images: [{ id: "img-1", publicUrl: "https://cdn.example.com/img-1.png", sortOrder: 0 }]
   };
 
@@ -717,6 +860,7 @@ describe("PublishPage in edit mode", () => {
     removePostImageFiles.mockReset();
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
+    getMyProfile.mockReset();
     navigateMock.mockReset();
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
     // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
@@ -732,6 +876,9 @@ describe("PublishPage in edit mode", () => {
     ]);
     insertPostImages.mockResolvedValue([]);
     removePostImageFiles.mockResolvedValue(undefined);
+    // 31 号卡：默认没有年龄——大部分用例根本不是求租分类，这个 query 压根
+    // 不会被消费；求租分类的年龄自动填充测试单独覆盖一遍非 null 的情况。
+    getMyProfile.mockResolvedValue({ age: null });
     useAuthStore.getState().setSession({
       user: { id: "user-1" }
     } as never);
@@ -923,5 +1070,55 @@ describe("PublishPage in edit mode", () => {
     // 这里显式断言调用参数只有这一个元素，把这个保证钉死。
     expect(removePostImageFiles).toHaveBeenCalledTimes(1);
     expect(removePostImageFiles.mock.calls[0][0]).toHaveLength(1);
+  });
+
+  // 31 号卡：编辑模式回填 posterAge/posterGender 用帖子自己保存的值，
+  // 不是当前 profiles.age——即使 getMyProfile 返回一个不同的年龄，也不能
+  // 覆盖帖子已经保存好的值，见 publish-page.tsx 顶部注释。
+  it("seeds posterAge/posterGender from the existing post's own saved values, not from the current profile.age (31 号卡)", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-2", slug: "wanted", nameZh: "求租" }
+    ]);
+    getMyProfile.mockResolvedValue({ age: 99 });
+    getPostDetail.mockResolvedValue({
+      ...existingPostDetail,
+      categoryId: "cat-2",
+      categoryName: "求租",
+      posterAge: 27,
+      posterGender: "不透露"
+    });
+    renderEditPage();
+
+    await screen.findByDisplayValue("Original title");
+
+    expect(screen.getByLabelText("年龄（可选）")).toHaveValue(27);
+    expect(screen.getByLabelText("性别（可选）")).toHaveValue("不透露");
+  });
+
+  it("submits the post's own edited posterAge/posterGender via updatePost", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-2", slug: "wanted", nameZh: "求租" }
+    ]);
+    getPostDetail.mockResolvedValue({
+      ...existingPostDetail,
+      categoryId: "cat-2",
+      categoryName: "求租",
+      posterAge: 27,
+      posterGender: "不透露"
+    });
+    updatePost.mockResolvedValue(undefined);
+    renderEditPage();
+
+    await screen.findByDisplayValue("Original title");
+    fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "31" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    await waitFor(() => {
+      expect(updatePost).toHaveBeenCalledWith(
+        expect.objectContaining({ posterAge: 31, posterGender: "不透露" })
+      );
+    });
   });
 });

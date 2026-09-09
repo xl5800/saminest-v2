@@ -9,6 +9,15 @@ export interface PendingPostFormDraft {
   price: string;
   contactMethod: string;
   contactValue: string;
+  /** 31 号卡（求租板块改版）新增：跟 price/contactMethod 等其它字段一样是
+   *  表单原始字符串，只在求租分类下会真正渲染这两个输入框，但草稿类型上
+   *  不区分分类——非求租分类下这两个字段就是空字符串，随其它字段一起
+   *  存/取，不需要条件类型。存进这个 store 的理由跟其它字段完全一样：
+   *  "地区"字段的 navigate() 跳转会卸载重挂载整个 publish-page.tsx，不
+   *  单独处理这两个新字段的话会重现"27 号卡"那个 bug，只是换成这两个
+   *  字段被清空。 */
+  posterAge: string;
+  posterGender: string;
   images: File[];
   /** 编辑模式下已经上传的图片——一并存进草稿，是为了在恢复草稿时能整个
    *  跳过 publish-page.tsx 那个"从 existingPost 回填表单"的 effect（见该

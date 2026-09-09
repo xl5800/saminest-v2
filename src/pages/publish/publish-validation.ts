@@ -10,6 +10,26 @@
  * 这里的前端校验必须和这些约束保持一致，不额外发明更严格或更宽松的规则。
  */
 
+import { MAX_AGE, MIN_AGE } from "../profile/edit-profile-validation";
+
+/**
+ * 31 号卡（求租板块改版）：求租分类专属的"性别"单选项，UI 上照抄
+ * CONTACT_METHOD_OPTIONS 这种"{value, label}[] as const + 派生出纯字符串
+ * 数组做成员校验"的写法，不新起一套选项类型模式。三个取值和顺序跟数据库
+ * posts_poster_gender_check 约束（见
+ * supabase/migrations/20260908190000_add_posts_wanted_poster_fields.sql）
+ * 完全一致。
+ */
+export const GENDER_OPTIONS = [
+  { value: "男", label: "男" },
+  { value: "女", label: "女" },
+  { value: "不透露", label: "不透露" }
+] as const;
+
+export type PosterGender = (typeof GENDER_OPTIONS)[number]["value"];
+
+const GENDER_VALUES: readonly string[] = GENDER_OPTIONS.map((option) => option.value);
+
 export const CONTACT_METHOD_OPTIONS = [
   { value: "message", label: "站内消息" },
   { value: "email", label: "邮箱" },
@@ -48,6 +68,12 @@ export interface PublishFormInput {
   price: string;
   contactMethod: string;
   contactValue: string;
+  /** 31 号卡新增：跟 price 一样是表单原始字符串，"可选、不强制"——非求租
+   *  分类下 publish-page.tsx 不会渲染这两个输入框，调用这里时统一传空
+   *  字符串，走跟"用户没填"完全相同的校验路径（见下方 validatePublishInput
+   *  的处理），不需要一个额外的"是不是求租分类"参数来切换校验逻辑。 */
+  posterAge: string;
+  posterGender: string;
 }
 
 export interface PublishFormData {
@@ -59,6 +85,8 @@ export interface PublishFormData {
   priceAmount: number | null;
   contactMethod: string | null;
   contactValue: string | null;
+  posterAge: number | null;
+  posterGender: string | null;
 }
 
 export interface PublishValidationError {
@@ -85,6 +113,8 @@ export function validatePublishInput(
   const priceRaw = input.price.trim();
   const contactMethod = input.contactMethod.trim();
   const contactValue = input.contactValue.trim();
+  const posterAgeRaw = input.posterAge.trim();
+  const posterGenderRaw = input.posterGender.trim();
 
   if (!categoryId) {
     return fail("PUBLISH_CATEGORY_REQUIRED", "请选择分类。");
@@ -149,6 +179,29 @@ export function validatePublishInput(
     return fail("PUBLISH_CONTACT_METHOD_INVALID", "联系方式类型不正确。");
   }
 
+  // 31 号卡：性别/年龄"可选、不强制"——留空直接通过，不因为是求租分类就
+  // 反过来要求必填（任务卡原话按这个默认写，见完工报告里的说明）。校验
+  // 顺序/写法照抄 edit-profile-validation.ts 的 age 处理，区间复用同一对
+  // MIN_AGE/MAX_AGE 常量，不在这里各定一套数字。
+  let posterAge: number | null = null;
+  if (posterAgeRaw) {
+    const parsedPosterAge = Number(posterAgeRaw);
+    if (!Number.isInteger(parsedPosterAge)) {
+      return fail("PUBLISH_POSTER_AGE_INVALID", "年龄必须是整数。");
+    }
+    if (parsedPosterAge < MIN_AGE || parsedPosterAge > MAX_AGE) {
+      return fail(
+        "PUBLISH_POSTER_AGE_OUT_OF_RANGE",
+        `年龄必须在 ${MIN_AGE} 到 ${MAX_AGE} 岁之间。`
+      );
+    }
+    posterAge = parsedPosterAge;
+  }
+
+  if (posterGenderRaw && !GENDER_VALUES.includes(posterGenderRaw)) {
+    return fail("PUBLISH_POSTER_GENDER_INVALID", "性别选项不正确。");
+  }
+
   return {
     success: true,
     data: {
@@ -159,7 +212,9 @@ export function validatePublishInput(
       description,
       priceAmount,
       contactMethod: contactMethod || null,
-      contactValue: contactValue || null
+      contactValue: contactValue || null,
+      posterAge,
+      posterGender: posterGenderRaw || null
     },
     error: null
   };

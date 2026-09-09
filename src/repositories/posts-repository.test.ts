@@ -63,7 +63,7 @@ describe("listApprovedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -196,9 +196,11 @@ describe("listApprovedPosts", () => {
           created_at: "2026-07-01T00:00:00.000Z",
           favorite_count: 3,
           comment_count: 7,
+          poster_age: 25,
+          poster_gender: "女",
           location: { name: "Rockville" },
           category: { name_zh: "租房" },
-          author: { display_name: "Alice" },
+          author: { display_name: "Alice", avatar_url: "https://img.example.com/avatar.jpg" },
           post_images: [
             { public_url: "https://img.example.com/cover.jpg", sort_order: 0, deleted_at: null }
           ]
@@ -221,9 +223,12 @@ describe("listApprovedPosts", () => {
           locationName: "Rockville",
           categoryName: "租房",
           authorDisplayName: "Alice",
+          authorAvatarUrl: "https://img.example.com/avatar.jpg",
           coverImageUrl: "https://img.example.com/cover.jpg",
           favoriteCount: 3,
-          commentCount: 7
+          commentCount: 7,
+          posterAge: 25,
+          posterGender: "女"
         }
       ],
       hasNextPage: false
@@ -444,7 +449,9 @@ describe("createPost", () => {
       description: "A description long enough.",
       priceAmount: 1200,
       contactMethod: "email",
-      contactValue: "a@b.com"
+      contactValue: "a@b.com",
+      posterAge: 25,
+      posterGender: "女"
     });
 
     expect(fromMock).toHaveBeenCalledWith("posts");
@@ -458,6 +465,8 @@ describe("createPost", () => {
       price_amount: 1200,
       contact_method: "email",
       contact_value: "a@b.com",
+      poster_age: 25,
+      poster_gender: "女",
       status: "pending"
     });
     expect(queryBuilder.select).toHaveBeenCalledWith("id");
@@ -476,7 +485,9 @@ describe("createPost", () => {
       description: "Description long enough.",
       priceAmount: null,
       contactMethod: null,
-      contactValue: null
+      contactValue: null,
+      posterAge: null,
+      posterGender: null
     });
 
     const insertedPayload = queryBuilder.insert.mock.calls[0][0];
@@ -499,7 +510,9 @@ describe("createPost", () => {
         description: "Description long enough.",
         priceAmount: null,
         contactMethod: null,
-        contactValue: null
+        contactValue: null,
+        posterAge: null,
+        posterGender: null
       })
     ).rejects.toMatchObject({ code: "POST_CREATE_FAILED" });
   });
@@ -523,7 +536,9 @@ describe("createPost", () => {
         description: "Description long enough.",
         priceAmount: null,
         contactMethod: null,
-        contactValue: null
+        contactValue: null,
+        posterAge: null,
+        posterGender: null
       })
     ).rejects.toMatchObject({
       code: "ACCOUNT_RESTRICTED",
@@ -544,7 +559,9 @@ describe("createPost", () => {
         description: "Description long enough.",
         priceAmount: null,
         contactMethod: null,
-        contactValue: null
+        contactValue: null,
+        posterAge: null,
+        posterGender: null
       })
     ).rejects.toMatchObject({ code: "POST_CREATE_ID_MISSING" });
   });
@@ -740,7 +757,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -1082,7 +1099,9 @@ const validUpdateInput = {
   description: "Updated description",
   priceAmount: 500,
   contactMethod: "email",
-  contactValue: "a@b.com"
+  contactValue: "a@b.com",
+  posterAge: 30,
+  posterGender: "男"
 };
 
 describe("updatePost", () => {
@@ -1110,7 +1129,9 @@ describe("updatePost", () => {
       description: "Updated description",
       price_amount: 500,
       contact_method: "email",
-      contact_value: "a@b.com"
+      contact_value: "a@b.com",
+      poster_age: 30,
+      poster_gender: "男"
     });
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
   });
