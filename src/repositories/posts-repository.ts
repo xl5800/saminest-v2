@@ -22,9 +22,21 @@ export interface PostListItem {
 export interface PostFeedItem extends PostListItem {
   categoryName: string;
   authorDisplayName: string;
+  /** 31 号卡（求租板块改版）新增：求租 Tab 的文字卡片要展示发帖人小头像，
+   *  加在 PostFeedItem 上而不是 PostListItem——理由跟上面这段注释一致，
+   *  收藏列表页（复用 PostListItem 的更窄类型）用不上这个字段，不应该被
+   *  这次改动牵连。 */
+  authorAvatarUrl: string | null;
   coverImageUrl: string | null;
   favoriteCount: number;
   commentCount: number;
+  /** 31 号卡新增：发帖人自己填写的年龄，来自 posts.poster_age，只有求租
+   *  分类的帖子会有值，其它分类恒为 null（列本身对所有分类通用，见
+   *  supabase/migrations/20260908190000_add_posts_wanted_poster_fields.sql
+   *  顶部说明）。加在 PostFeedItem 上，理由同 authorAvatarUrl。 */
+  posterAge: number | null;
+  /** 31 号卡新增：发帖人自己选择的性别，来自 posts.poster_gender，同上。 */
+  posterGender: string | null;
 }
 
 export interface ListApprovedPostsInput {
@@ -42,6 +54,15 @@ export interface ListApprovedPostsInput {
    *  20260715220300_create_posts_table.sql；这次传 authorId 只是在这个
    *  RLS 允许的集合基础上再收窄到某一个人，不是绕开或者重复实现 RLS。 */
   authorId?: string;
+  /** 31 号卡（求租板块改版）新增：首页"推荐"流（未选中任何具体分类）要
+   *  排除求租分类的帖子，但用户主动点进"求租"这个 Tab（categoryId 就是
+   *  求租分类自己的 id）时要正常展示——两者不能共用同一个开关误伤，所以
+   *  这条排除只在 categoryId 没传时生效，categoryId 有值时完全忽略这个
+   *  参数（见下面 listApprovedPosts 里的判断）。调用方（home-page.tsx）
+   *  只在"推荐"这个未筛选场景传这个值，"我的收藏""我的发布"、发帖者主页
+   *  这几个不属于"推荐混合发现流"的列表场景不传，求租帖子在那些地方正常
+   *  展示，不受影响。 */
+  excludeCategoryId?: string;
   page: number;
   pageSize: number;
 }
@@ -66,10 +87,15 @@ interface PostFeedRow {
   created_at: string;
   favorite_count: number;
   comment_count: number;
+  // 31 号卡新增，见 PostFeedItem.posterAge/posterGender 的注释。
+  poster_age: number | null;
+  poster_gender: string | null;
   location: { name: string } | null;
   location_text: string | null;
   category: { name_zh: string } | null;
-  author: { display_name: string } | null;
+  // 31 号卡新增 avatar_url——求租 Tab 的文字卡片要展示发帖人小头像，取法
+  // 照抄 getPostDetail() 的 author:profiles(display_name, avatar_url)。
+  author: { display_name: string; avatar_url: string | null } | null;
   post_images: PostFeedImageRow[] | null;
 }
 
@@ -174,7 +200,7 @@ function sanitizeSearchTerm(raw: string): string {
 export async function listApprovedPosts(
   input: ListApprovedPostsInput
 ): Promise<ListApprovedPostsResult> {
-  const { categoryId, searchQuery, stateCode, authorId, page, pageSize } = input;
+  const { categoryId, searchQuery, stateCode, authorId, excludeCategoryId, page, pageSize } = input;
   const from = page * pageSize;
   const to = from + pageSize;
 
@@ -190,7 +216,7 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      `id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, ${locationSelect}, location_text, category:categories(name_zh), author:profiles(display_name), post_images(public_url, sort_order, deleted_at)`
+      `id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, ${locationSelect}, location_text, category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)`
     )
     .eq("status", "approved")
     .is("deleted_at", null)
@@ -200,6 +226,14 @@ export async function listApprovedPosts(
 
   if (categoryId) {
     query = query.eq("category_id", categoryId);
+  }
+
+  // 31 号卡：只有在没有指定 categoryId 的"推荐"这种未筛选场景，才把求租
+  // 分类排除掉——categoryId 有值时（不管是不是求租分类自己）完全忽略
+  // excludeCategoryId，两个条件天然不会同时需要，见 ListApprovedPostsInput
+  // 上面这个字段的注释。
+  if (!categoryId && excludeCategoryId) {
+    query = query.neq("category_id", excludeCategoryId);
   }
 
   if (stateCode) {
@@ -238,9 +272,12 @@ export async function listApprovedPosts(
       createdAt: row.created_at,
       categoryName: row.category?.name_zh ?? "未知分类",
       authorDisplayName: row.author?.display_name ?? "未知用户",
+      authorAvatarUrl: row.author?.avatar_url ?? null,
       coverImageUrl: resolveCoverImageUrl(row.post_images),
       favoriteCount: row.favorite_count,
-      commentCount: row.comment_count
+      commentCount: row.comment_count,
+      posterAge: row.poster_age,
+      posterGender: row.poster_gender
     })),
     hasNextPage
   };
@@ -300,6 +337,14 @@ export interface PostDetail {
   contactValue: string | null;
   images: PostDetailImage[];
   commentCount: number;
+  /** 31 号卡（求租板块改版）新增——只有编辑一条已有求租帖子时，
+   *  publish-page.tsx 用这两个字段回填"性别/年龄"输入框（从帖子自己保存
+   *  过的值回填，不从 profiles.age 重新带，见 publish-page.tsx 顶部
+   *  注释）。详情页（post-detail-page.tsx）不展示这两个字段——已经在
+   *  求租 Tab 的预览卡片上展示过了，详情页的发帖者卡片保持"头像+昵称+
+   *  发布时间"不变，不重复。 */
+  posterAge: number | null;
+  posterGender: string | null;
 }
 
 interface PostDetailImageRow {
@@ -325,6 +370,8 @@ interface PostDetailRow {
   contact_method: string | null;
   contact_value: string | null;
   comment_count: number;
+  poster_age: number | null;
+  poster_gender: string | null;
   location: { name: string } | null;
   category: { name_zh: string } | null;
   author: { display_name: string; avatar_url: string | null } | null;
@@ -365,7 +412,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -409,7 +456,9 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     contactMethod: data.contact_method,
     contactValue: data.contact_value,
     images,
-    commentCount: data.comment_count
+    commentCount: data.comment_count,
+    posterAge: data.poster_age,
+    posterGender: data.poster_gender
   };
 }
 
@@ -482,6 +531,11 @@ export interface CreatePostInput {
   priceAmount: number | null;
   contactMethod: string | null;
   contactValue: string | null;
+  /** 31 号卡（求租板块改版）新增：只有求租分类的发布表单会渲染对应的
+   *  输入框，其它分类提交时这两个字段传 null——见 publish-page.tsx 顶部
+   *  注释。 */
+  posterAge: number | null;
+  posterGender: string | null;
 }
 
 export interface CreatePostResult {
@@ -511,6 +565,8 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     price_amount: input.priceAmount,
     contact_method: input.contactMethod,
     contact_value: input.contactValue,
+    poster_age: input.posterAge,
+    poster_gender: input.posterGender,
     status: "pending"
   };
 
@@ -699,6 +755,9 @@ export interface UpdatePostInput {
   priceAmount: number | null;
   contactMethod: string | null;
   contactValue: string | null;
+  /** 31 号卡新增，见 CreatePostInput.posterAge/posterGender 的注释。 */
+  posterAge: number | null;
+  posterGender: string | null;
 }
 
 /**
@@ -724,7 +783,9 @@ export async function updatePost(input: UpdatePostInput): Promise<void> {
     description: input.description,
     price_amount: input.priceAmount,
     contact_method: input.contactMethod,
-    contact_value: input.contactValue
+    contact_value: input.contactValue,
+    poster_age: input.posterAge,
+    poster_gender: input.posterGender
   };
 
   if (input.currentStatus === "approved") {

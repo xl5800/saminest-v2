@@ -315,4 +315,155 @@ describe("PostList", () => {
       expect(screen.queryByText("加载更多…")).not.toBeInTheDocument();
     });
   });
+
+  // 31 号卡（求租板块改版）：excludeCategoryId 只是透传给 usePostsInfiniteQuery
+  // /listApprovedPosts，具体"什么时候该传"是调用方（home-page.tsx）的
+  // 职责，这里只测这个组件本身老老实实转发了这个值。
+  it("passes excludeCategoryId through to the query (31 号卡)", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+    renderWithProviders(<PostList excludeCategoryId="cat-wanted" />);
+
+    await waitFor(() => {
+      expect(listApprovedPosts).toHaveBeenCalledWith({
+        excludeCategoryId: "cat-wanted",
+        page: 0,
+        pageSize: 20
+      });
+    });
+  });
+});
+
+// 31 号卡（求租板块改版）：variant="wanted" 单列纯文字卡片——见 post-list.tsx
+// 顶部对求租卡片内容顺序/省略规则的详细说明。
+describe("PostList variant='wanted'", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    listApprovedPosts.mockReset();
+    resetIntersectionObserverMock();
+  });
+
+  const sampleWantedPost = {
+    id: "post-1",
+    title: "Looking for a quiet room near metro",
+    priceAmount: 1200,
+    priceLabel: null,
+    currencyCode: "USD",
+    locationName: "Rockville",
+    createdAt: "2000-07-01T00:00:00.000Z",
+    categoryName: "求租",
+    authorDisplayName: "Alice",
+    authorAvatarUrl: "https://img.example.com/avatar.jpg",
+    coverImageUrl: null,
+    favoriteCount: 0,
+    commentCount: 0,
+    posterAge: 25,
+    posterGender: "女"
+  };
+
+  it("renders a single-column text card (not the two-column image grid) with title, price, location and poster info", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [sampleWantedPost], hasNextPage: false });
+
+    const { container } = renderWithProviders(<PostList variant="wanted" />);
+    const link = await screen.findByRole("link");
+
+    expect(container.querySelector(".grid.grid-cols-2")).not.toBeInTheDocument();
+    expect(container.querySelector(".flex.flex-col.gap-3.px-4")).toBeInTheDocument();
+    expect(link).toHaveClass("rounded-2xl", "bg-card", "shadow-card");
+    expect(link).toHaveTextContent("Looking for a quiet room near metro");
+    expect(link).toHaveTextContent("USD 1,200");
+    expect(link).toHaveTextContent("Rockville");
+    expect(link).toHaveTextContent("Alice");
+    expect(link).toHaveTextContent("女、25岁");
+  });
+
+  it("does not render a cover image, a category chip, or a publish timestamp", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [sampleWantedPost], hasNextPage: false });
+
+    const { container } = renderWithProviders(<PostList variant="wanted" />);
+    const link = await screen.findByRole("link");
+
+    // 卡片上唯一一张 <img> 是 24px 的头像（sampleWantedPost.authorAvatarUrl，
+    // alt="" 是装饰性图片，不带 img role，用 querySelector 而不是
+    // getByRole("img") 找）——没有单独的封面图，求租卡片本来就是"图片
+    // 无关"的纯文字卡片，见 post-list.tsx 顶部注释。
+    expect(container.querySelectorAll("img")).toHaveLength(1);
+    expect(link).not.toHaveTextContent("求租");
+    expect(link).not.toHaveTextContent("2000-07-01");
+  });
+
+  it("omits the price row entirely when the price is unset (not a placeholder)", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...sampleWantedPost, priceAmount: null, priceLabel: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList variant="wanted" />);
+
+    await screen.findByText(sampleWantedPost.title);
+    expect(screen.queryByText("价格未填写")).not.toBeInTheDocument();
+    expect(screen.queryByText(/USD/)).not.toBeInTheDocument();
+  });
+
+  it("omits the location row (no '地区未填写' placeholder) when locationName is null", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...sampleWantedPost, locationName: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList variant="wanted" />);
+
+    const link = await screen.findByRole("link");
+    expect(link).not.toHaveTextContent("Rockville");
+    expect(link).not.toHaveTextContent("地区未填写");
+  });
+
+  it("omits the gender/age segment entirely when both are missing", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...sampleWantedPost, posterAge: null, posterGender: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList variant="wanted" />);
+
+    const link = await screen.findByRole("link");
+    expect(link).toHaveTextContent("Alice");
+    expect(link).not.toHaveTextContent("岁");
+  });
+
+  it("shows only the age when gender is missing, with no placeholder for the missing gender", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...sampleWantedPost, posterGender: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList variant="wanted" />);
+
+    expect(await screen.findByText("25岁")).toBeInTheDocument();
+  });
+
+  it("renders an <img> avatar when authorAvatarUrl is present, and an initial-letter fallback circle when it is null", async () => {
+    listApprovedPosts.mockResolvedValueOnce({ posts: [sampleWantedPost], hasNextPage: false });
+    const { container, unmount } = renderWithProviders(<PostList variant="wanted" />);
+    await screen.findByRole("link");
+
+    // 头像 alt="" 是装饰性图片，不带 img role，用 querySelector 找。
+    const avatar = container.querySelector("img");
+    expect(avatar).toHaveAttribute("src", "https://img.example.com/avatar.jpg");
+    unmount();
+
+    listApprovedPosts.mockReset();
+    listApprovedPosts.mockResolvedValueOnce({
+      posts: [{ ...sampleWantedPost, authorAvatarUrl: null }],
+      hasNextPage: false
+    });
+    const { container: fallbackContainer } = renderWithProviders(<PostList variant="wanted" />);
+
+    await screen.findByText("Alice");
+    expect(fallbackContainer.querySelector("img")).not.toBeInTheDocument();
+    expect(screen.getByText("A")).toBeInTheDocument();
+  });
 });

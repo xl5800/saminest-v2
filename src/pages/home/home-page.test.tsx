@@ -390,4 +390,114 @@ describe("HomePage", () => {
       ).not.toBeInTheDocument();
     });
   });
+
+  // 31 号卡（求租板块改版）：求租分类的帖子不再出现在"推荐"未筛选混合流
+  // 里，只在求租自己的分类 Tab 下展示——见 home-page.tsx 顶部对应注释。
+  describe("求租分类排除（excludeCategoryId）与卡片 variant", () => {
+    const categoriesWithWanted = [
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-2", slug: "wanted", nameZh: "求租" }
+    ];
+
+    it("excludes the wanted category on the unfiltered '推荐' feed", async () => {
+      listActiveCategories.mockResolvedValue(categoriesWithWanted);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />);
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ excludeCategoryId: "cat-2" })
+        );
+      });
+    });
+
+    it("does not exclude anything when the user is on the 求租 category tab itself", async () => {
+      listActiveCategories.mockResolvedValue(categoriesWithWanted);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />, { initialEntries: ["/?category=wanted"] });
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ categoryId: "cat-2", excludeCategoryId: undefined })
+        );
+      });
+    });
+
+    it("does not exclude anything on other category tabs (e.g. 租房) either", async () => {
+      listActiveCategories.mockResolvedValue(categoriesWithWanted);
+      listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+      renderWithProviders(<HomePage />, { initialEntries: ["/?category=rent"] });
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ categoryId: "cat-1", excludeCategoryId: undefined })
+        );
+      });
+    });
+
+    it("renders the wanted-tab post list with the single-column text card layout (variant='wanted')", async () => {
+      listActiveCategories.mockResolvedValue(categoriesWithWanted);
+      listApprovedPosts.mockResolvedValue({
+        posts: [
+          {
+            id: "post-1",
+            title: "Looking for a room",
+            priceAmount: null,
+            priceLabel: null,
+            currencyCode: "USD",
+            locationName: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            categoryName: "求租",
+            authorDisplayName: "Alice",
+            authorAvatarUrl: null,
+            coverImageUrl: null,
+            favoriteCount: 0,
+            commentCount: 0,
+            posterAge: null,
+            posterGender: null
+          }
+        ],
+        hasNextPage: false
+      });
+
+      const { container } = renderWithProviders(<HomePage />, {
+        initialEntries: ["/?category=wanted"]
+      });
+
+      await screen.findByText("Looking for a room");
+      expect(container.querySelector(".grid.grid-cols-2")).not.toBeInTheDocument();
+      expect(container.querySelector(".flex.flex-col.gap-3.px-4")).toBeInTheDocument();
+    });
+
+    it("keeps the two-column image grid (variant='grid') on the 推荐/租房 tabs", async () => {
+      listActiveCategories.mockResolvedValue(categoriesWithWanted);
+      listApprovedPosts.mockResolvedValue({
+        posts: [
+          {
+            id: "post-1",
+            title: "Sunny room",
+            priceAmount: 1200,
+            priceLabel: null,
+            currencyCode: "USD",
+            locationName: "Rockville",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            categoryName: "租房",
+            authorDisplayName: "Alice",
+            coverImageUrl: null,
+            favoriteCount: 0,
+            commentCount: 0
+          }
+        ],
+        hasNextPage: false
+      });
+
+      const { container } = renderWithProviders(<HomePage />);
+
+      await screen.findByText("Sunny room");
+      expect(container.querySelector(".grid.grid-cols-2")).toBeInTheDocument();
+    });
+  });
 });

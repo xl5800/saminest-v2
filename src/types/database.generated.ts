@@ -782,6 +782,8 @@ export type Database = {
           id: string
           location_id: string | null
           location_text: string | null
+          poster_age: number | null
+          poster_gender: string | null
           price_amount: number | null
           price_label: string | null
           published_at: string | null
@@ -808,6 +810,8 @@ export type Database = {
           id?: string
           location_id?: string | null
           location_text?: string | null
+          poster_age?: number | null
+          poster_gender?: string | null
           price_amount?: number | null
           price_label?: string | null
           published_at?: string | null
@@ -834,6 +838,8 @@ export type Database = {
           id?: string
           location_id?: string | null
           location_text?: string | null
+          poster_age?: number | null
+          poster_gender?: string | null
           price_amount?: number | null
           price_label?: string | null
           published_at?: string | null

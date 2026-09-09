@@ -65,6 +65,19 @@ const REGION_SELECT_PATH = "/region-select";
  * - PostList 的"这个地区还没有内容"空状态需要一个"去发布"入口，直接复用
  *   这个页面已有的 publishSheetOpen/PublishActionSheet（顶部"＋"图标同一套
  *   开关），不是另起一个入口。
+ *
+ * 31 号卡（求租板块改版）：
+ * - 求租分类的帖子不再出现在"推荐"这个未筛选混合流里，只在求租自己的
+ *   分类 Tab 下展示——用跟 activeCategoryId 完全同一个模式（categories?.
+ *   find(slug === ...)）从已经查出来的 categories 里找到求租分类的 id，
+ *   只在 activeCategorySlug 为空（"推荐" Tab）时把这个 id 传给 PostList 的
+ *   excludeCategoryId；activeCategorySlug 有值时（不管是不是求租分类
+ *   自己）都不传——用户主动点进"求租" Tab 要正常看到全部求租帖子，这两个
+ *   场景不能共用同一个开关误伤，见 posts-repository.ts 里 excludeCategoryId
+ *   的注释。
+ * - 求租 Tab 下 PostList 换成单列纯文字卡片（variant="wanted"），其它
+ *   三个 Tab（推荐/租房/二手）继续用默认的两列图片网格，见 post-list.tsx
+ *   顶部注释。
  */
 export function HomePage() {
   const navigate = useNavigate();
@@ -80,6 +93,9 @@ export function HomePage() {
   const activeCategoryId = categories?.find(
     (category) => category.slug === activeCategorySlug
   )?.id;
+  // 31 号卡：求租分类的 id，只在"推荐"（未选中任何分类）时用来排除求租
+  // 帖子——见组件顶部注释。
+  const wantedCategoryId = categories?.find((category) => category.slug === "wanted")?.id;
 
   function handleToggleSearch(): void {
     setIsSearchOpen((current) => {
@@ -121,6 +137,8 @@ export function HomePage() {
         searchQuery={debouncedSearchQuery}
         stateCode={selectedRegion?.stateCode}
         onPublishClick={() => setPublishSheetOpen(true)}
+        excludeCategoryId={activeCategorySlug ? undefined : wantedCategoryId}
+        variant={activeCategorySlug === "wanted" ? "wanted" : "grid"}
       />
 
       {publishSheetOpen ? (

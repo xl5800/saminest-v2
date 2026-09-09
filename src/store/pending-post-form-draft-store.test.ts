@@ -21,6 +21,10 @@ const sampleDraft = {
   price: "1200",
   contactMethod: "email",
   contactValue: "alice@example.com",
+  // 31 号卡新增字段——跟其它字段一样是原始表单字符串，一起参与下面这些
+  // 用例的 round-trip 断言。
+  posterAge: "25",
+  posterGender: "女",
   images: [sampleFile],
   existingImages: []
 };

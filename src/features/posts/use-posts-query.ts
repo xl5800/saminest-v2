@@ -12,6 +12,9 @@ export interface UsePostsInfiniteQueryInput {
   /** 22 号卡新增，透传给 listApprovedPosts——发帖者主页用来只请求某一个
    *  作者的帖子，见该函数 input 类型上的注释。 */
   authorId?: string;
+  /** 31 号卡新增，透传给 listApprovedPosts——首页"推荐"流排除求租分类帖子
+   *  用，见该函数 input 类型上的注释。 */
+  excludeCategoryId?: string;
   pageSize?: number;
 }
 
@@ -32,7 +35,7 @@ export interface UsePostsInfiniteQueryInput {
  */
 export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
   const pageSize = input.pageSize ?? DEFAULT_POSTS_PAGE_SIZE;
-  const { categoryId, searchQuery, stateCode, authorId } = input;
+  const { categoryId, searchQuery, stateCode, authorId, excludeCategoryId } = input;
 
   return useInfiniteQuery({
     queryKey: [
@@ -42,11 +45,24 @@ export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
         searchQuery: searchQuery ?? null,
         stateCode: stateCode ?? null,
         authorId: authorId ?? null,
+        // 31 号卡：跟 categoryId/stateCode/authorId 一样进 queryKey——不带
+        // 进去的话，"推荐"（带 excludeCategoryId）和"求租" Tab（categoryId
+        // 就是求租分类自己，不带 excludeCategoryId）这两个场景如果凑巧算出
+        // 同一组其它参数，会被 TanStack Query 误判成同一个缓存条目。
+        excludeCategoryId: excludeCategoryId ?? null,
         pageSize
       }
     ],
     queryFn: ({ pageParam }) =>
-      listApprovedPosts({ categoryId, searchQuery, stateCode, authorId, page: pageParam, pageSize }),
+      listApprovedPosts({
+        categoryId,
+        searchQuery,
+        stateCode,
+        authorId,
+        excludeCategoryId,
+        page: pageParam,
+        pageSize
+      }),
     initialPageParam: 0,
     getNextPageParam: (lastPage, _allPages, lastPageParam) =>
       lastPage.hasNextPage ? lastPageParam + 1 : undefined

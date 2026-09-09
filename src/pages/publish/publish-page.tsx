@@ -10,6 +10,7 @@ import { useCategoriesQuery } from "../../features/categories/use-categories-que
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
 import { useUpdatePostMutation } from "../../features/my-posts/use-update-post-mutation";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
+import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import {
   type CreatePostImageInput,
   insertPostImages
@@ -25,6 +26,7 @@ import {
   CONTACT_METHOD_OPTIONS,
   DESCRIPTION_MAX_LENGTH,
   DESCRIPTION_MIN_LENGTH,
+  GENDER_OPTIONS,
   OTHER_LOCATION_VALUE,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
@@ -213,6 +215,27 @@ async function uploadAndInsertPostImages(input: {
  * 不让服务端数据覆盖刚恢复回来的草稿；读到草稿后立刻清空 store，避免
  * 下次全新进入这个页面时读到旧草稿。详见
  * pending-post-form-draft-store.ts 顶部注释。
+ *
+ * 31 号卡（求租板块改版）：新增"性别"/"年龄"两个字段，只在当前选中分类的
+ * slug 是 "wanted" 时渲染（categories?.find((c) => c.id === categoryId)?.slug
+ * ——跟 presetCategorySlug 那个 effect 是同一种"从 categories 列表反查"的
+ * 写法）。两者都是"可选、不强制"，不因为是求租分类就变成必填，见
+ * publish-validation.ts 顶部对应注释。
+ *
+ * 年龄自动填充只发生在"新建 + 当前是求租分类"这一种场景，且只填一次
+ * （ageAutoFilledRef，跟 seededRef/presetSeededRef 是完全同一个"只做一次"
+ * 模式）：用 useMyProfileQuery() 读一次当前用户 profiles.age 当初始值，
+ * 填进去之后这个输入框就完全独立于 profiles.age 了——用户在这里改的值
+ * 不会写回 profiles 表，profiles.age 之后再变也不会回头覆盖这个表单。
+ * 编辑模式不做这个自动填充：既有帖子已经有自己保存的 posterAge/
+ * posterGender（回填逻辑见下面 seededRef 那个 effect），不应该被一个
+ * 可能早就变过的 profiles.age 悄悄覆盖。
+ *
+ * 提交时如果当前分类不是求租（不管是本来就不是，还是用户填完之后又把
+ * 分类切换成了别的），一律把这两个字段当成没填（提交 null/null），不管
+ * state 里当下留着什么值——分类下拉本身没有一个专门"切走求租分类时清空
+ * 这两个字段"的 handler，靠提交这一刻统一兜底比在 onChange 里额外加一段
+ * 清空逻辑更不容易漏掉。
  */
 export function PublishPage() {
   const navigate = useNavigate();
@@ -235,6 +258,11 @@ export function PublishPage() {
   const updatePostMutation = useUpdatePostMutation();
   const removePostImageMutation = useRemovePostImageMutation();
   const queryClient = useQueryClient();
+  // 31 号卡：年龄自动填充只在新建模式下需要，见组件顶部注释——编辑模式下
+  // 这个 query 不会被用到，但 hooks 不能条件调用，跟别处 usePostDetailQuery
+  // 用 enabled 挡住不必要请求是同一个道理，这里 useMyProfileQuery 内部本身
+  // 已经靠 auth-store 的 userId 判断 enabled，不需要额外传参。
+  const { data: myProfile } = useMyProfileQuery();
 
   // 27 号卡：只在组件首次挂载时读一次这个 store 的快照（useRef 的构造
   // 参数只在第一次渲染生效）——不用 useEffect 读，因为下面每个字段的
@@ -255,6 +283,10 @@ export function PublishPage() {
   const [price, setPrice] = useState(initialDraft?.price ?? "");
   const [contactMethod, setContactMethod] = useState(initialDraft?.contactMethod ?? "");
   const [contactValue, setContactValue] = useState(initialDraft?.contactValue ?? "");
+  // 31 号卡：求租分类专属字段，跟其它字段一样吃草稿回填——见组件顶部注释
+  // 和 handleOpenRegionSelect() 里存草稿的地方。
+  const [posterAge, setPosterAge] = useState(initialDraft?.posterAge ?? "");
+  const [posterGender, setPosterGender] = useState(initialDraft?.posterGender ?? "");
   const [images, setImages] = useState<File[]>(initialDraft?.images ?? []);
   const [existingImages, setExistingImages] = useState<PostDetailImage[]>(
     initialDraft?.existingImages ?? []
@@ -275,6 +307,11 @@ export function PublishPage() {
   // 可能是用户自己改过的），不应该再被下面这个 effect 拿 URL 上的预设值
   // 重新覆盖一遍。
   const presetSeededRef = useRef(initialDraft !== null);
+  // 31 号卡：年龄自动填充"只做一次"的挡板——初始值同样看草稿是否存在：
+  // 草稿里的 posterAge 已经代表"用户最近一次的真实值"（可能就是自动填充
+  // 出来的，也可能是用户自己又改过的），不应该被下面那个 effect 用
+  // profiles.age 重新覆盖一遍，跟 seededRef/presetSeededRef 是同一个理由。
+  const ageAutoFilledRef = useRef(initialDraft !== null);
 
   // 27 号卡：草稿只应该在"从 /region-select 跳回来的这一次挂载"生效一次，
   // 挂载后立刻清空——不然下次用户发完这一条、再打开这个页面发布下一条
@@ -317,6 +354,11 @@ export function PublishPage() {
     setPrice(existingPost.priceAmount !== null ? String(existingPost.priceAmount) : "");
     setContactMethod(existingPost.contactMethod ?? "");
     setContactValue(existingPost.contactValue ?? "");
+    // 31 号卡：编辑模式回填这两个字段用帖子自己保存的 posterAge/
+    // posterGender，不是当前 profiles.age——帖子已经有自己那份保存值，
+    // 不应该被一个之后可能变过的 profile 值悄悄覆盖，见组件顶部注释。
+    setPosterAge(existingPost.posterAge !== null ? String(existingPost.posterAge) : "");
+    setPosterGender(existingPost.posterGender ?? "");
     setExistingImages(existingPost.images);
   }, [isEditMode, existingPost]);
 
@@ -340,6 +382,32 @@ export function PublishPage() {
       setCategoryId(matched.id);
     }
   }, [isEditMode, presetCategorySlug, categories]);
+
+  // 31 号卡：当前选中分类是不是"求租"——从已经查出来的 categories 列表反查
+  // slug，跟上面 presetCategorySlug 那个 effect 是同一种写法，不新起一套
+  // "分类类型判断"逻辑。categories 还没加载完成时 selectedCategorySlug 是
+  // undefined，isWantedCategory 自然是 false（性别/年龄字段和自动填充都
+  // 先不生效，等分类数据到了之后重新渲染会自然纠正，不需要额外的 loading
+  // 分支）。
+  const selectedCategorySlug = categories?.find((category) => category.id === categoryId)?.slug;
+  const isWantedCategory = selectedCategorySlug === "wanted";
+
+  // 31 号卡：年龄自动填充——只在"新建 + 当前是求租分类 + profile 已经查到"
+  // 时生效一次（ageAutoFilledRef 挡住之后的重复赋值，声明和理由见上面）。
+  // 用 profile.age 而不是空字符串兜底：profile.age 本身就允许是 null（用户
+  // 没填过），这种情况下这个 effect 什么都不做，输入框保持空白，用户
+  // 自己手动填，不强行写一个空字符串进去（跟不做这个 effect 的初始状态
+  // 没有区别，不需要特殊处理）。
+  useEffect(() => {
+    if (isEditMode || ageAutoFilledRef.current || !isWantedCategory || !myProfile) {
+      return;
+    }
+    ageAutoFilledRef.current = true;
+
+    if (myProfile.age !== null) {
+      setPosterAge(String(myProfile.age));
+    }
+  }, [isEditMode, isWantedCategory, myProfile]);
 
   // 12 号卡：地区字段从原生 <select> 改成跳转 /region-select?mode=form
   // 整页选择、回填。见 pending-form-region-store.ts 顶部注释——"选完带参数
@@ -393,6 +461,8 @@ export function PublishPage() {
       price,
       contactMethod,
       contactValue,
+      posterAge,
+      posterGender,
       images,
       existingImages
     });
@@ -437,6 +507,11 @@ export function PublishPage() {
       return;
     }
 
+    // 31 号卡：不是求租分类时，不管 posterAge/posterGender 这两个 state
+    // 里当下留着什么（比如用户在求租分类下填过之后又把分类切走），提交时
+    // 一律当成没填——校验函数收到空字符串会走"可选、留空"分支，最终得到
+    // null/null，不需要在这之外再单独判断一次"当前分类是不是求租"来决定
+    // 提交哪个值，两处判断条件保持逐字一致（都是 isWantedCategory）。
     const validation = validatePublishInput({
       categoryId,
       locationId,
@@ -445,7 +520,9 @@ export function PublishPage() {
       description,
       price,
       contactMethod,
-      contactValue
+      contactValue,
+      posterAge: isWantedCategory ? posterAge : "",
+      posterGender: isWantedCategory ? posterGender : ""
     });
     if (!validation.success) {
       setError(validation.error.message);
@@ -467,7 +544,9 @@ export function PublishPage() {
           description: validation.data.description,
           priceAmount: validation.data.priceAmount,
           contactMethod: validation.data.contactMethod,
-          contactValue: validation.data.contactValue
+          contactValue: validation.data.contactValue,
+          posterAge: validation.data.posterAge,
+          posterGender: validation.data.posterGender
         });
       } catch (submitError) {
         setError(
@@ -488,7 +567,9 @@ export function PublishPage() {
           description: validation.data.description,
           priceAmount: validation.data.priceAmount,
           contactMethod: validation.data.contactMethod,
-          contactValue: validation.data.contactValue
+          contactValue: validation.data.contactValue,
+          posterAge: validation.data.posterAge,
+          posterGender: validation.data.posterGender
         });
         resolvedPostId = created.id;
       } catch (submitError) {
@@ -652,6 +733,48 @@ export function PublishPage() {
                 ) : null}
               </div>
             </div>
+
+            {isWantedCategory ? (
+              <>
+                {/* 31 号卡：性别/年龄只在求租分类下渲染，位置在"地区"和
+                    "标题"之间（任务卡原话，位置可调整不是强约束）。两个
+                    都是可选字段，label 文案跟"价格（可选）"一样带上
+                    "（可选）"提示，不强制填写。 */}
+                <label className="mb-4 block">
+                  <span className="mb-2 block text-xs font-semibold text-text">性别（可选）</span>
+                  <span className="relative block">
+                    <select
+                      value={posterGender}
+                      onChange={(event) => setPosterGender(event.target.value)}
+                      className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                    >
+                      <option value="">请选择性别</option>
+                      {GENDER_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      aria-hidden="true"
+                      size={16}
+                      className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
+                    />
+                  </span>
+                </label>
+
+                <label className="mb-4 block">
+                  <span className="mb-2 block text-xs font-semibold text-text">年龄（可选）</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={posterAge}
+                    onChange={(event) => setPosterAge(event.target.value)}
+                    className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                </label>
+              </>
+            ) : null}
 
             <label className="mb-4 block">
               <span className="mb-2 block text-xs font-semibold text-text">标题</span>
