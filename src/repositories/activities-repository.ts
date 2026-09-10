@@ -584,6 +584,13 @@ export interface ActivityParticipant {
    *  locations 表，跟 PublicProfile.locationName 同一套取法，没有就是
    *  null。可选属性的理由跟上面 age 完全一样。 */
   locationName?: string | null;
+  /** 任务卡（活动详情页——发起人不能报名自己的活动 +"已加入"名单加头像/
+   *  简介）：参与者个人简介，来自 profiles.bio，跟 PublicProfile.bio 同
+   *  一个字段、同一套"可选、用户自己填"的语义，没有就是 null。可选属性的
+   *  理由跟上面 age/locationName 完全一样——activity-card.test.tsx/
+   *  activity-participant-avatars.test.tsx 手写的测试夹具同样没有这个
+   *  字段。 */
+  bio?: string | null;
 }
 
 interface ActivityParticipantRow {
@@ -593,6 +600,7 @@ interface ActivityParticipantRow {
     avatar_url: string | null;
     age: number | null;
     location: { name: string } | null;
+    bio: string | null;
   } | null;
 }
 
@@ -613,6 +621,12 @@ interface ActivityParticipantRow {
  * age/locationName 对它们完全不可见、也不影响 TypeScript 类型检查（多出
  * 的字段不会破坏结构类型的兼容性），只是每次查询多带两列数据，这个体量
  * 下（个位数到几十个参与者）可以忽略不计。
+ *
+ * 任务卡（"已加入"名单加头像/简介）：同样的理由再加一列 bio——详情页
+ * "已加入"名单这次要在每行展示参与者简介，取法跟 age/locationName 一样
+ * 照抄 profiles-repository.ts，activity-card.tsx/
+ * ActivityParticipantAvatars 同样不读这个字段，多查出来的这一列对它们
+ * 没有任何影响。
  */
 function mapActivityParticipantRow(row: ActivityParticipantRow): ActivityParticipant {
   return {
@@ -620,7 +634,8 @@ function mapActivityParticipantRow(row: ActivityParticipantRow): ActivityPartici
     displayName: row.user?.display_name ?? "未知用户",
     avatarUrl: row.user?.avatar_url ?? null,
     age: row.user?.age ?? null,
-    locationName: row.user?.location?.name ?? null
+    locationName: row.user?.location?.name ?? null,
+    bio: row.user?.bio ?? null
   };
 }
 
@@ -660,7 +675,7 @@ export async function listActivityParticipants(
 ): Promise<ActivityParticipant[]> {
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select("user_id, user:profiles(display_name, avatar_url, age, location:locations(name))")
+    .select("user_id, user:profiles(display_name, avatar_url, age, bio, location:locations(name))")
     .eq("activity_id", activityId)
     .eq("status", "approved")
     .is("cancelled_at", null)
@@ -706,7 +721,7 @@ export async function listActivityParticipantPreviews(
 
   const { data, error } = await getSupabaseClient()
     .from("activity_participants")
-    .select("activity_id, user_id, user:profiles(display_name, avatar_url, age, location:locations(name))")
+    .select("activity_id, user_id, user:profiles(display_name, avatar_url, age, bio, location:locations(name))")
     .in("activity_id", activityIds)
     .eq("status", "approved")
     .is("cancelled_at", null)

@@ -301,7 +301,7 @@ describe("ActivityDetailPage", () => {
     expect(screen.queryByText(/参与者（/)).not.toBeInTheDocument();
   });
 
-  it("still feeds useActivityParticipantsQuery's data into the avatar stack (rendered as an avatar initial), even though the text list is gone", () => {
+  it("still feeds useActivityParticipantsQuery's data into the avatar stack (rendered as an avatar initial)", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -316,9 +316,13 @@ describe("ActivityDetailPage", () => {
       route: "/activities/:id"
     });
 
-    // Bob 没有头像图，退化成昵称首字母占位"B"——这个字符只可能来自头像
-    // 堆叠（唯一还在消费 useActivityParticipantsQuery 数据的地方）。
-    expect(screen.getByText("B")).toBeInTheDocument();
+    // 任务卡（"已加入"名单加头像/简介）之后，Bob 没有头像图这件事会在
+    // 两个地方各退化出一个首字母占位"B"：头像堆叠、和下面新加的"已加入"
+    // 名单行头像。用"已加入的参与者"这个 aria-label 把两者区分开——排除
+    // 掉那个列表内部的"B"之后剩下的就一定是头像堆叠里的那一个。
+    const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
+    const matches = screen.getAllByText("B");
+    expect(matches.some((el) => !joinedList.contains(el))).toBe(true);
   });
 
   it("renders the '参加活动' button alongside the real content", () => {
@@ -370,6 +374,77 @@ describe("ActivityDetailPage", () => {
 
     expect(screen.queryByRole("link", { name: "查看发起人" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "我要报名" })).toHaveClass("w-full");
+  });
+
+  // 任务卡（活动详情页——发起人不能报名自己的活动）：sampleActivityDetail
+  // 的 organizerId 是 "user-1"，发起人自己登录查看这场活动时，"参加活动"
+  // 那一行应该变成一段说明文字，头像堆叠的空位也不能再点。
+  describe("organizer cannot join their own activity", () => {
+    it("shows an explanatory '你是发起人' text instead of the '我要报名' button", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByText("你是发起人，不能报名自己发起的活动")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "我要报名" })).not.toBeInTheDocument();
+    });
+
+    it("does not let the organizer tap an empty avatar-stack slot to join", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      // capacity=4、participants 为空，头像堆叠会渲染出 4 个空位按钮，
+      // aria-label 都是"报名加入活动"——逐个断言都不可点。
+      const emptySlotButtons = screen.getAllByRole("button", { name: "报名加入活动" });
+      expect(emptySlotButtons.length).toBeGreaterThan(0);
+      for (const emptySlotButton of emptySlotButtons) {
+        expect(emptySlotButton).toBeDisabled();
+      }
+
+      fireEvent.click(emptySlotButtons[0]);
+      expect(mutateParticipationMock).not.toHaveBeenCalled();
+    });
+
+    it("does not affect a non-organizer visitor — '我要报名' still works normally", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.queryByText("你是发起人，不能报名自己发起的活动")).not.toBeInTheDocument();
+      const button = screen.getByRole("button", { name: "我要报名" });
+      expect(button).not.toBeDisabled();
+
+      fireEvent.click(button);
+      expect(mutateParticipationMock).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: "user-2", isCurrentlyJoined: false }),
+        expect.objectContaining({ onError: expect.any(Function) })
+      );
+    });
   });
 
   it("renders an organizer card (avatar + nickname + '发起人' label) linking to the same /users/:organizerId destination", () => {
@@ -926,10 +1001,14 @@ describe("ActivityDetailPage", () => {
 
       // 用 aria-label 限定到"已加入"这个 <ul>——页面上头像拼图自己也是一个
       // <ul>/<li> 结构，不加限定的话 getAllByRole("listitem") 会把两处的
-      // <li> 混在一起。
+      // <li> 混在一起。每个 <li> 现在除了这行文字，左边还多了一个头像/
+      // 首字母占位，所以不能直接比较整个 <li> 的 textContent（会把占位的
+      // 首字母也拼进去）——改成只取 formatJoinedParticipantLine 那一个
+      // <p>（DOM 顺序里排在头像/首字母占位之后的第一个 <p>）的文字。
       const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
       const items = within(joinedList).getAllByRole("listitem");
-      expect(items.map((item) => item.textContent)).toEqual(["Kevin 25岁 · 住Arlington", "Bob"]);
+      const lines = items.map((item) => item.querySelector("p")?.textContent);
+      expect(lines).toEqual(["Kevin 25岁 · 住Arlington", "Bob"]);
     });
 
     it("does not render the section at all (no heading, no empty-state placeholder) when participants is an empty array", () => {
@@ -947,6 +1026,129 @@ describe("ActivityDetailPage", () => {
 
       expect(screen.queryByRole("heading", { name: "已加入" })).not.toBeInTheDocument();
       expect(screen.queryByText(/暂无/)).not.toBeInTheDocument();
+    });
+
+    // 任务卡（"已加入"名单加头像/简介）：去掉分隔线，每行加头像/首字母
+    // 兜底 + 个人简介，昵称/年龄/地区这行文字保留不变。
+    describe("avatar + bio (公开主页 Facebook 风格头图改版同批任务)", () => {
+      it("no longer uses divide-y/border classes on the list — plain spacing between rows instead", () => {
+        useActivityParticipantsQuery.mockReturnValue({
+          data: [{ userId: "user-2", displayName: "Kevin", avatarUrl: null, age: null, locationName: null }]
+        });
+        useActivityDetailQuery.mockReturnValue({
+          data: sampleActivityDetail,
+          isPending: false,
+          isError: false
+        });
+
+        renderWithProviders(<ActivityDetailPage />, {
+          initialEntries: ["/activities/act-1"],
+          route: "/activities/:id"
+        });
+
+        const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
+        expect(joinedList.className).not.toMatch(/divide-y/);
+        expect(joinedList.className).not.toMatch(/\bborder\b/);
+      });
+
+      it("renders an <img> avatar for a participant with avatarUrl", () => {
+        useActivityParticipantsQuery.mockReturnValue({
+          data: [
+            {
+              userId: "user-2",
+              displayName: "Kevin",
+              avatarUrl: "https://img.example.com/kevin.jpg",
+              age: null,
+              locationName: null
+            }
+          ]
+        });
+        useActivityDetailQuery.mockReturnValue({
+          data: sampleActivityDetail,
+          isPending: false,
+          isError: false
+        });
+
+        renderWithProviders(<ActivityDetailPage />, {
+          initialEntries: ["/activities/act-1"],
+          route: "/activities/:id"
+        });
+
+        const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
+        // 跟 person-card.test.tsx 同一个查法——这个头像 alt="" 是纯装饰性
+        // 图片，不用 getByRole("img")（空 alt 在无障碍树里映射不到 img
+        // 角色），直接用 querySelector 找元素本身。
+        const avatarImg = joinedList.querySelector("img");
+        expect(avatarImg).toHaveAttribute("src", "https://img.example.com/kevin.jpg");
+      });
+
+      it("falls back to an initial-letter placeholder when avatarUrl is null", () => {
+        useActivityParticipantsQuery.mockReturnValue({
+          data: [{ userId: "user-2", displayName: "Kevin", avatarUrl: null, age: null, locationName: null }]
+        });
+        useActivityDetailQuery.mockReturnValue({
+          data: sampleActivityDetail,
+          isPending: false,
+          isError: false
+        });
+
+        renderWithProviders(<ActivityDetailPage />, {
+          initialEntries: ["/activities/act-1"],
+          route: "/activities/:id"
+        });
+
+        const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
+        expect(within(joinedList).getByText("K")).toBeInTheDocument();
+      });
+
+      it("renders the participant's bio below the nickname/age/location line", () => {
+        useActivityParticipantsQuery.mockReturnValue({
+          data: [
+            {
+              userId: "user-2",
+              displayName: "Kevin",
+              avatarUrl: null,
+              age: 25,
+              locationName: "Arlington",
+              bio: "Love hiking and board games."
+            }
+          ]
+        });
+        useActivityDetailQuery.mockReturnValue({
+          data: sampleActivityDetail,
+          isPending: false,
+          isError: false
+        });
+
+        renderWithProviders(<ActivityDetailPage />, {
+          initialEntries: ["/activities/act-1"],
+          route: "/activities/:id"
+        });
+
+        expect(screen.getByText("Kevin 25岁 · 住Arlington")).toBeInTheDocument();
+        expect(screen.getByText("Love hiking and board games.")).toBeInTheDocument();
+      });
+
+      it("does not render a bio line when bio is null/missing", () => {
+        useActivityParticipantsQuery.mockReturnValue({
+          data: [{ userId: "user-2", displayName: "Kevin", avatarUrl: null, age: null, locationName: null }]
+        });
+        useActivityDetailQuery.mockReturnValue({
+          data: sampleActivityDetail,
+          isPending: false,
+          isError: false
+        });
+
+        renderWithProviders(<ActivityDetailPage />, {
+          initialEntries: ["/activities/act-1"],
+          route: "/activities/:id"
+        });
+
+        const joinedList = screen.getByRole("list", { name: "已加入的参与者" });
+        const item = within(joinedList).getByRole("listitem");
+        // 这一行只应该有昵称那一个 <p>，没有第二个 bio 段落。
+        expect(item.querySelectorAll("p")).toHaveLength(1);
+      });
     });
   });
 });

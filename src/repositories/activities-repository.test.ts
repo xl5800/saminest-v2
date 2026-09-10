@@ -683,7 +683,7 @@ describe("leaveActivity", () => {
 describe("listActivityParticipants", () => {
   beforeEach(resetAllMocks);
 
-  it("queries non-cancelled, approved participants for the activity, ordered by joined_at ascending, with a nested profile select including age/locationName", async () => {
+  it("queries non-cancelled, approved participants for the activity, ordered by joined_at ascending, with a nested profile select including age/bio/locationName", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listActivityParticipants("act-1");
@@ -691,8 +691,9 @@ describe("listActivityParticipants", () => {
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     // 任务卡 9：联表多选出 age 和 location:locations(name)——取法照抄
     // profiles-repository.ts 的 getPublicProfile()，不另起一套 join 方式。
+    // 任务卡（"已加入"名单加头像/简介）：同样理由再加一列 bio。
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "user_id, user:profiles(display_name, avatar_url, age, location:locations(name))"
+      "user_id, user:profiles(display_name, avatar_url, age, bio, location:locations(name))"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
     // 顺手修的 bug：过滤掉 pending/rejected，只保留已确认参与者，跟
@@ -703,7 +704,7 @@ describe("listActivityParticipants", () => {
     expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: true });
   });
 
-  it("maps rows to ActivityParticipant, including avatarUrl/age/locationName", async () => {
+  it("maps rows to ActivityParticipant, including avatarUrl/age/bio/locationName", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -712,10 +713,14 @@ describe("listActivityParticipants", () => {
             display_name: "Alice",
             avatar_url: "https://img.example.com/alice.jpg",
             age: 25,
+            bio: "Hi there, I like hiking.",
             location: { name: "Arlington" }
           }
         },
-        { user_id: "user-2", user: { display_name: "Bob", avatar_url: null, age: null, location: null } }
+        {
+          user_id: "user-2",
+          user: { display_name: "Bob", avatar_url: null, age: null, bio: null, location: null }
+        }
       ],
       error: null
     });
@@ -728,13 +733,14 @@ describe("listActivityParticipants", () => {
         displayName: "Alice",
         avatarUrl: "https://img.example.com/alice.jpg",
         age: 25,
+        bio: "Hi there, I like hiking.",
         locationName: "Arlington"
       },
-      { userId: "user-2", displayName: "Bob", avatarUrl: null, age: null, locationName: null }
+      { userId: "user-2", displayName: "Bob", avatarUrl: null, age: null, bio: null, locationName: null }
     ]);
   });
 
-  it("falls back to a placeholder display name, and null avatarUrl/age/locationName, when the joined profile is missing", async () => {
+  it("falls back to a placeholder display name, and null avatarUrl/age/bio/locationName, when the joined profile is missing", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [{ user_id: "user-1", user: null }],
       error: null
@@ -745,6 +751,7 @@ describe("listActivityParticipants", () => {
     expect(result[0].displayName).toBe("未知用户");
     expect(result[0].avatarUrl).toBeNull();
     expect(result[0].age).toBeNull();
+    expect(result[0].bio).toBeNull();
     expect(result[0].locationName).toBeNull();
   });
 
@@ -776,7 +783,7 @@ describe("listActivityParticipantPreviews", () => {
     expect(fromMock).not.toHaveBeenCalled();
   });
 
-  it("queries approved, non-cancelled participants across the given activity ids, ordered by joined_at ascending, with a nested profile select including age/locationName", async () => {
+  it("queries approved, non-cancelled participants across the given activity ids, ordered by joined_at ascending, with a nested profile select including age/bio/locationName", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listActivityParticipantPreviews(["act-1", "act-2"]);
@@ -784,11 +791,11 @@ describe("listActivityParticipantPreviews", () => {
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     // 任务卡 9：这个函数跟 listActivityParticipants 共用同一个
     // ActivityParticipant 类型/mapActivityParticipantRow 映射函数，所以
-    // select 语句也带上了 age/location:locations(name)——即使活动卡片/
-    // ActivityParticipantAvatars（这个函数唯一的消费方）不读这两个新字段，
+    // select 语句也带上了 age/bio/location:locations(name)——即使活动卡片/
+    // ActivityParticipantAvatars（这个函数唯一的消费方）不读这些字段，
     // 见 activities-repository.ts 里 mapActivityParticipantRow 的注释。
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "activity_id, user_id, user:profiles(display_name, avatar_url, age, location:locations(name))"
+      "activity_id, user_id, user:profiles(display_name, avatar_url, age, bio, location:locations(name))"
     );
     expect(queryBuilder.in).toHaveBeenCalledWith("activity_id", ["act-1", "act-2"]);
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
@@ -796,7 +803,7 @@ describe("listActivityParticipantPreviews", () => {
     expect(queryBuilder.order).toHaveBeenCalledWith("joined_at", { ascending: true });
   });
 
-  it("groups rows by activity_id into a Map<activityId, ActivityParticipant[]>, including age/locationName", async () => {
+  it("groups rows by activity_id into a Map<activityId, ActivityParticipant[]>, including age/bio/locationName", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -806,18 +813,19 @@ describe("listActivityParticipantPreviews", () => {
             display_name: "Alice",
             avatar_url: "https://img.example.com/alice.jpg",
             age: 25,
+            bio: "Hi there, I like hiking.",
             location: { name: "Arlington" }
           }
         },
         {
           activity_id: "act-1",
           user_id: "user-2",
-          user: { display_name: "Bob", avatar_url: null, age: null, location: null }
+          user: { display_name: "Bob", avatar_url: null, age: null, bio: null, location: null }
         },
         {
           activity_id: "act-2",
           user_id: "user-3",
-          user: { display_name: "Carol", avatar_url: null, age: null, location: null }
+          user: { display_name: "Carol", avatar_url: null, age: null, bio: null, location: null }
         }
       ],
       error: null
@@ -831,18 +839,19 @@ describe("listActivityParticipantPreviews", () => {
         displayName: "Alice",
         avatarUrl: "https://img.example.com/alice.jpg",
         age: 25,
+        bio: "Hi there, I like hiking.",
         locationName: "Arlington"
       },
-      { userId: "user-2", displayName: "Bob", avatarUrl: null, age: null, locationName: null }
+      { userId: "user-2", displayName: "Bob", avatarUrl: null, age: null, bio: null, locationName: null }
     ]);
     expect(result.get("act-2")).toEqual([
-      { userId: "user-3", displayName: "Carol", avatarUrl: null, age: null, locationName: null }
+      { userId: "user-3", displayName: "Carol", avatarUrl: null, age: null, bio: null, locationName: null }
     ]);
     // 没有任何参与者的活动 id 不应该出现在 Map 里（不是空数组占位）。
     expect(result.has("act-3")).toBe(false);
   });
 
-  it("falls back to a placeholder display name, and null avatarUrl/age/locationName, when the joined profile is missing", async () => {
+  it("falls back to a placeholder display name, and null avatarUrl/age/bio/locationName, when the joined profile is missing", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [{ activity_id: "act-1", user_id: "user-1", user: null }],
       error: null
@@ -851,7 +860,7 @@ describe("listActivityParticipantPreviews", () => {
     const result = await listActivityParticipantPreviews(["act-1"]);
 
     expect(result.get("act-1")).toEqual([
-      { userId: "user-1", displayName: "未知用户", avatarUrl: null, age: null, locationName: null }
+      { userId: "user-1", displayName: "未知用户", avatarUrl: null, age: null, bio: null, locationName: null }
     ]);
   });
 

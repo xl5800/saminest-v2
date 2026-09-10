@@ -85,6 +85,23 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  * 按这个页面已有的"带边框的圆角小卡片"视觉语言处理（跟地点/联系方式两个
  * 区块是同一套 border-border 圆角容器），不强求逐像素还原方案图。
  *
+ * 任务卡（活动详情页——发起人不能报名自己的活动 +"已加入"名单加头像/
+ * 简介）："已加入"名单这次改版：外层 `<ul>` 去掉了 divide-y divide-border
+ * + 整体的 border-border 卡片容器（原来是一整块带边框的白色卡片、行与行
+ * 之间靠分隔线区分），换成 `space-y-3` 纯间距、每行各自是独立的一个
+ * flex 行，不再有任何边框/分隔线——每行左边加圆形头像（复用
+ * person-card.tsx 已经在用的"有头像用 img，没有就是首字母兜底圆圈
+ * （bg-primary/10 + text-primary）"这套样式，不是另起一套），右边
+ * formatJoinedParticipantLine 拼的那行文字（昵称/年龄/地区，逻辑不变）
+ * 下面新增一行 bio（个人简介），用 `truncate` 单行省略号截断（跟
+ * my-posts-page.tsx 里同类"次要说明文字"用的是同一个截断方式），
+ * participant.bio 为空/null 时这一行整体不渲染。ActivityParticipant 类型
+ * 和 listActivityParticipants/listActivityParticipantPreviews 共用的
+ * mapActivityParticipantRow 因此新增了 bio 字段（取法照抄 age/
+ * locationName，见 activities-repository.ts 对应注释）——BARRY 确认过
+ * "还差 N 人"这个人数计算逻辑本身没问题，这次没有碰 participant_count/
+ * capacity 相关的任何计算。
+ *
  * 04 号卡（find-buddy-flow）改版：顶部换成 TopBar 的 detail 变体（返回
  * 箭头 + "…"更多菜单），原来页面底部平铺的"收藏/分享/举报"操作行收进了
  * 这个更多菜单——ActivityFavoriteButton/handleShare/举报链接三个实现完全
@@ -147,6 +164,21 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  * 是否等于当前登录用户 id，跟 ContactSellerButton 隐藏"联系发布者"给作者
  * 本人看的判断是同一个写法；未登录用户仍然能看到按钮（点击后跳
  * /login，不是隐藏，因为这时候还判断不出"是不是自己"）。
+ *
+ * 任务卡（活动详情页——发起人不能报名自己的活动）：这个页面之前完全没有
+ * 判断"当前登录用户是不是发起人"就允许点"参加活动"（唯一的例外是上面
+ * 任务卡 4 加的那个纯前端的 isOrganizer 局部变量，只用来决定要不要展示
+ * "📢通知参与者"链接，从来没有跟报名按钮的可点性挂钩）——发起人理论上
+ * 可以对自己发起的活动点"我要报名"。这次在
+ * useActivityParticipationAction 内部新增了一个 isOrganizer 判断分支
+ * （`userId === organizerId` 时 disabled 恒为 true、文案变成"你是发起人，
+ * 不能报名自己发起的活动"，具体见该 hook 的注释），这个页面本身不需要
+ * 改：canTapEmptySlot = `!participationAction.disabled && !participationAction.isApproved`
+ * 这一行不用动，新分支 disabled 已经是 true，头像堆叠的空位自然也点不动。
+ * 数据库层同步补了一条 RLS 校验兜底（activity_participants_insert_own
+ * 加了 organizer_id 不等于 user_id 的条件，见对应迁移文件），不是只在
+ * 前端隐藏/禁用按钮就足够——BARRY 明确要求这次改动不动"还差 N 人"这个
+ * 人数计算逻辑，这里也确实没有碰 participant_count 相关的任何代码。
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -349,13 +381,29 @@ export function ActivityDetailPage() {
             {participants && participants.length > 0 ? (
               <div>
                 <h2 className="mb-1 text-sm font-semibold text-text">已加入</h2>
-                <ul
-                  aria-label="已加入的参与者"
-                  className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-white"
-                >
+                <ul aria-label="已加入的参与者" className="space-y-3">
                   {participants.map((participant) => (
-                    <li key={participant.userId} className="px-3 py-2 text-sm text-text">
-                      {formatJoinedParticipantLine(participant)}
+                    <li key={participant.userId} className="flex items-start gap-3">
+                      {participant.avatarUrl ? (
+                        <img
+                          src={participant.avatarUrl}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-full object-cover"
+                        />
+                      ) : (
+                        <span
+                          aria-hidden="true"
+                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
+                        >
+                          {participant.displayName.trim().charAt(0).toUpperCase() || "?"}
+                        </span>
+                      )}
+                      <div className="min-w-0 flex-1 pt-0.5">
+                        <p className="text-sm text-text">{formatJoinedParticipantLine(participant)}</p>
+                        {participant.bio ? (
+                          <p className="mt-0.5 truncate text-xs text-text-muted">{participant.bio}</p>
+                        ) : null}
+                      </div>
                     </li>
                   ))}
                 </ul>
