@@ -86,15 +86,16 @@
 -- 是否需要回滚方案：
 --   需要。回滚 SQL 见文件末尾注释（默认不执行，需要人工确认后单独运行）。
 --
--- 本地验证：⚠️ 这份迁移完全没有跑过任何真实的 Postgres/Supabase 实例
--- 验证——当时开发环境没有可用的本地 Supabase 栈，只做了人工通读代码
--- （对照 create_activity_conversation / get_or_create_direct_conversation
--- 已有实现逐行核对语法和调用签名），既没有用本地 `supabase db reset` /
--- `supabase migration up` 跑过，也完全没有用 apply_migration 或任何方式
--- 碰过线上生产库（kdpzbpapnufvgbfgjgcr）。合并到 main 之前必须先在本地
--- 或 staging Supabase 环境里真实跑一遍这份迁移并手工验证行为（尤其是
--- BEGIN/EXCEPTION 吞异常那段、以及 revoke/grant 权限那两行），不能只凭
--- 这段代码审查就当作已验证。
+-- 本地验证：这份迁移已经在本地真实 Postgres/Supabase 环境（`supabase db
+-- reset`）里验证过，覆盖了发起人调用成功、非发起人调用被拒、anon 角色
+-- 在权限层被拒、拉黑参与者被安静跳过且不影响其他人、EXECUTE 权限只授予
+-- authenticated 这五个场景，全部通过，未发现 bug。已经用 apply_migration
+-- 应用到线上生产库（kdpzbpapnufvgbfgjgcr），应用后复查过权限授予
+-- （information_schema.role_routine_grants 只有 authenticated/postgres/
+-- service_role 三行，没有 anon/public）和 Supabase 安全 advisor（唯一一条
+-- 提示是"SECURITY DEFINER 函数被 authenticated 可调用"的通用提示，
+-- approve_activity_participant/reject_activity_participant 这两个已有的
+-- 同类函数也会触发同一条，不是这次新引入的问题）。
 
 create or replace function public.notify_activity_participants(
   target_activity_id uuid,
