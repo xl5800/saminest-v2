@@ -246,6 +246,44 @@ describe("ActivityParticipationButton", () => {
     );
   });
 
+  // 任务卡（活动详情页——发起人不能报名自己的活动）：organizerId 等于当前
+  // 登录用户 id 时，跟 isRejected 一样渲染成一段说明文字，不是一个能点的
+  // 按钮，也不会调用 mutation。
+  describe("organizer viewing their own activity (不能报名自己发起的活动)", () => {
+    it("shows an explanatory '你是发起人' text with no button at all, instead of '我要报名'", () => {
+      useAuthStore.getState().setSession({ user: { id: "organizer-1" } } as never);
+      useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
+
+      renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
+
+      expect(screen.getByText("你是发起人，不能报名自己发起的活动")).toBeInTheDocument();
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+      expect(mutateMock).not.toHaveBeenCalled();
+    });
+
+    it("still shows the organizer text even when the activity requires approval", () => {
+      useAuthStore.getState().setSession({ user: { id: "organizer-1" } } as never);
+      useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
+
+      renderWithProviders(
+        <ActivityParticipationButton {...defaultProps} requiresApproval={true} />
+      );
+
+      expect(screen.getByText("你是发起人，不能报名自己发起的活动")).toBeInTheDocument();
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    });
+
+    it("does not show the organizer text for a different logged-in user viewing the same activity", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });
+
+      renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
+
+      expect(screen.queryByText("你是发起人，不能报名自己发起的活动")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "我要报名" })).toBeInTheDocument();
+    });
+  });
+
   it("falls back to the generic error message for an unrecognized error code (does not leak raw DB error text)", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     useActivityParticipationQuery.mockReturnValue({ data: null, isPending: false });

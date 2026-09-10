@@ -45,6 +45,25 @@ export interface UseActivityParticipationActionInput {
  * 报名"的引导文案（跟原来的行为一致），头像堆叠那边空位也自然不可点
  * （canTapEmptySlot 由页面层用 `!disabled && !isApproved` 算出来，未登录时
  * disabled 恒为 true，天然满足"未登录不能点空位"）。
+ *
+ * 任务卡（活动详情页——发起人不能报名自己的活动）：新增第三个特殊分支
+ * isOrganizer——`userId === organizerId` 时命中，disabled 恒为
+ * true、handleClick 是空函数，文案改成"你是发起人，不能报名自己发起的
+ * 活动"，跟 loggedOut/isRejected 是同一种"提前短路、不进入正常状态机"的
+ * 处理方式。放在 loggedOut 判断之后（这个分支需要真的拿到 userId 才能跟
+ * organizerId 比较，未登录时走的还是上面那个分支，不会先命中这里）。
+ * 页面层 canTapEmptySlot = `!disabled && !isApproved` 这一行不用跟着改：
+ * 这个新分支 disabled 是 true，头像堆叠的空位自然也点不动。
+ *
+ * 数据库层同步加了一条防线：activity_participants_insert_own 这条 RLS
+ * 策略原来完全没有检查"要插入这行的 user_id 是不是这场活动的
+ * organizer_id"——只在这里禁用按钮只挡住了正常 UI 路径，直接绕开前端
+ * 调 PostgREST insert 完全不受影响。已经在
+ * 20260910120000_activity_participants_block_organizer_self_join.sql
+ * 里给这条策略加了 `a.organizer_id <> activity_participants.user_id`
+ * 这个条件并在本地 Postgres 实测验证过（发起人插入被拒绝、普通用户插入
+ * 不受影响），双重保险跟 contact-seller-button.tsx 提到的"数据库函数也会
+ * 拒绝"是同一个模式，见该迁移文件顶部注释。
  */
 export function useActivityParticipationAction({
   activityId,
@@ -68,8 +87,23 @@ export function useActivityParticipationAction({
   if (!userId) {
     return {
       loggedOut: true as const,
+      isOrganizer: false as const,
       disabled: true,
       label: "",
+      isApproved: false,
+      isPendingApplication: false,
+      isRejected: false,
+      error: null as string | null,
+      handleClick: () => {}
+    };
+  }
+
+  if (userId === organizerId) {
+    return {
+      loggedOut: false as const,
+      isOrganizer: true as const,
+      disabled: true,
+      label: "你是发起人，不能报名自己发起的活动",
       isApproved: false,
       isPendingApplication: false,
       isRejected: false,
@@ -139,6 +173,7 @@ export function useActivityParticipationAction({
 
   return {
     loggedOut: false as const,
+    isOrganizer: false as const,
     disabled,
     label,
     isApproved,

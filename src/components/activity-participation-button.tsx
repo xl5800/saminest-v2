@@ -52,6 +52,16 @@ export function ActivityParticipationButtonView({ action }: { action: ActivityPa
     </p>
   ) : null;
 
+  // 任务卡（活动详情页——发起人不能报名自己的活动）：跟 isRejected 同一种
+  // 渲染方式——一段说明文字，不是一个"看起来能点、点了才报错"的按钮。
+  if (action.isOrganizer) {
+    return (
+      <p className="w-full rounded-xl border border-border px-4 py-2 text-center text-sm text-text-muted">
+        {action.label}
+      </p>
+    );
+  }
+
   if (action.isRejected) {
     return (
       <div>
@@ -90,6 +100,10 @@ export function ActivityParticipationButtonView({ action }: { action: ActivityPa
  * （getActivityParticipationStatus 的返回值），按钮要表达五种界面状态
  * （未参与不需审核/未参与需审核/pending/approved/rejected），具体每种
  * 状态对应的文案和可点性见 useActivityParticipationAction 的注释。
+ *
+ * 任务卡（活动详情页——发起人不能报名自己的活动）：新增第六种界面状态
+ * isOrganizer——当前登录用户就是这场活动的发起人时命中，跟 isRejected
+ * 一样渲染成一段说明文字（不是按钮），文案见 useActivityParticipationAction。
  *
  * 头像堆叠改版：这个组件的状态机 + 提交逻辑已经整体搬到
  * useActivityParticipationAction 这个 hook 里，渲染逻辑搬到上面的
