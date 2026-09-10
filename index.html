@@ -2,7 +2,13 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover：帖子详情页的沉浸式头图（post-detail-page.tsx
+         任务卡3）需要网页内容能延伸到安全区（状态栏/刘海）底下，配合
+         env(safe-area-inset-*) 才有意义——没有这个 fit 值，iOS Safari/
+         PWA 下 env() 变量始终是 0，安全区适配（这个页面悬浮关闭按钮的
+         top、底部工具栏的 paddingBottom 等）不受影响，但沉浸式头图也就
+         无从"延伸到安全区底下"。 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>Saminest</title>
   </head>
   <body>

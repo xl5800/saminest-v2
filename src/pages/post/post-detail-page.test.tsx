@@ -13,6 +13,7 @@ const {
   useCreateCommentMutation,
   useDeleteCommentMutation,
   shareMock,
+  clipboardWriteMock,
   navigateMock
 } = vi.hoisted(() => ({
   useFavoritePostIdsQuery: vi.fn(),
@@ -24,6 +25,10 @@ const {
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
   shareMock: vi.fn(),
+  // 任务卡3：分享弹层"复制链接"选项背后的 @capacitor/clipboard——跟
+  // shareMock（@capacitor/share）同一个 mock 模式，避免测试环境里真的
+  // 触达浏览器 Clipboard API / 原生桥。
+  clipboardWriteMock: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -70,6 +75,9 @@ vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
 }));
 vi.mock("@capacitor/share", () => ({
   Share: { share: shareMock }
+}));
+vi.mock("@capacitor/clipboard", () => ({
+  Clipboard: { write: clipboardWriteMock }
 }));
 
 import { useAuthStore } from "../../store/auth-store";
@@ -128,6 +136,8 @@ describe("PostDetailPage", () => {
     useDeleteCommentMutation.mockReset();
     shareMock.mockReset();
     shareMock.mockResolvedValue(undefined);
+    clipboardWriteMock.mockReset();
+    clipboardWriteMock.mockResolvedValue(undefined);
     navigateMock.mockReset();
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });
     useToggleFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
@@ -247,6 +257,32 @@ describe("PostDetailPage", () => {
     expect(images).toHaveLength(2);
     expect(images[0]).toHaveAttribute("src", "https://img.example.com/1.jpg");
     expect(images[1]).toHaveAttribute("src", "https://img.example.com/2.jpg");
+  });
+
+  // 任务卡3：描述正文上方加"描述"小节标题，改版前这里没有任何标题文字，
+  // 跟活动详情页"活动描述"同一个写法（<h2 className="mb-1 text-sm
+  // font-semibold text-text">）。
+  it("renders a '描述' section heading directly above the description text", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: samplePostDetail,
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    const heading = screen.getByRole("heading", { name: "描述" });
+    const description = screen.getByText(
+      "A lovely room near the metro, walking distance to everything."
+    );
+    expect(heading).toBeInTheDocument();
+    // Node.DOCUMENT_POSITION_FOLLOWING (4): description 在 heading 之后。
+    expect(
+      heading.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   // 23 号卡：分类标签 pill 和发布时间这两项，新的信息顺序里没有列出来，
@@ -408,11 +444,12 @@ describe("PostDetailPage", () => {
     ).toBeInTheDocument();
   });
 
-  // 23 号卡：分享/收藏/举报三个图标一行，收藏用 FavoriteButton 新增的
-  // icon 变体（可访问名从"☆ 收藏"变成"收藏"，见 favorite-button.tsx）；
-  // 底部常驻"咨询"大按钮复用 ContactSellerButton（文案从"联系发布者"
-  // 换成"咨询"，背后逻辑没变）。
-  it("still renders FavoriteButton (icon variant), the 咨询 button (ContactSellerButton relabeled) and the 举报 link alongside the real content", () => {
+  // 任务卡3：分享/咨询/收藏合并成同一条固定底部工具栏，收藏用
+  // FavoriteButton 的 icon 变体（可访问名从"☆ 收藏"变成"收藏"，见
+  // favorite-button.tsx）；咨询复用 ContactSellerButton（文案从"联系
+  // 发布者"换成"咨询"，背后逻辑没变）；举报不再是独立图标/链接，挪进了
+  // 点击"分享"弹出的自定义弹层里（见下面"分享弹层"describe 块）。
+  it("still renders FavoriteButton (icon variant), the 咨询 button (ContactSellerButton relabeled) and a 分享 button — but no standalone 举报 link", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -426,20 +463,15 @@ describe("PostDetailPage", () => {
 
     expect(screen.getByRole("button", { name: "收藏" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "咨询" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
-      "href",
-      "/post/post-1/report"
-    );
     expect(screen.getByRole("button", { name: "分享" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "举报" })).not.toBeInTheDocument();
   });
 
-  // 任务卡2：底部"咨询"按钮从撑满宽度的大色块横条改成白底容器（左右各
-  // 16px 留白）里的一个 48px 高、12px 圆角、15px 字号的按钮，跟对方消息
-  // 气泡那类"纯 className/布局调整"任务一样，只断言外层容器和按钮自己的
-  // 关键样式类，不重新验证 ContactSellerButton 内部的点击/建会话逻辑
-  // （那部分有它自己的 contact-seller-button.test.tsx）。
-  describe("底部'咨询'按钮容器（任务卡2：改小、改克制）", () => {
-    it("wraps the button in a white, bottom-padded, 16px-inset container with a top border, and keeps the safe-area padding on the container", () => {
+  // 任务卡2/任务卡3：底部工具栏从"只放一个咨询按钮"合并成"分享/咨询/收藏
+  // 三个操作横排"，容器本身的定位/边框/安全区适配是任务卡2定下的，这次
+  // 只是不再是空的时候才隐藏（因为工具栏现在总有分享+收藏两个图标）。
+  describe("底部固定工具栏（任务卡3：分享/咨询/收藏合并）", () => {
+    it("wraps the toolbar in a white, bottom-padded, 16px-inset flex container with a top border, and keeps the safe-area padding on the container", () => {
       usePostDetailQuery.mockReturnValue({
         data: samplePostDetail,
         isPending: false,
@@ -452,7 +484,17 @@ describe("PostDetailPage", () => {
       });
 
       const bar = screen.getByTestId("post-detail-contact-bar");
-      expect(bar).toHaveClass("bg-white", "border-t", "border-border", "px-4", "fixed", "inset-x-0", "bottom-0");
+      expect(bar).toHaveClass(
+        "bg-white",
+        "border-t",
+        "border-border",
+        "px-4",
+        "fixed",
+        "inset-x-0",
+        "bottom-0",
+        "flex",
+        "items-center"
+      );
       expect(bar.style.paddingBottom).toBe("calc(0.75rem + env(safe-area-inset-bottom))");
     });
 
@@ -474,17 +516,12 @@ describe("PostDetailPage", () => {
       expect(button.className).not.toContain("shadow-fab");
     });
 
-    // 任务卡2 保留的原有行为：作者查看自己发布的帖子时 ContactSellerButton
-    // 内部直接 return null（这条判断在组件内部，任务卡明确不让动）。改版前
-    // 这个按钮自己就是唯一的 fixed 元素，不渲染就是真的什么都没有；这次
-    // 新包了一层容器之后，如果容器不管里面渲不渲染都无条件显示，会在这个
-    // 场景下多出一条空的白色横条——这是这次任务卡范围内需要连带避免的
-    // 视觉回归，容器加了 empty:hidden（Tailwind 内置 :empty 伪类变体）。
-    // jsdom 不会真的执行 CSS（没有加载/应用生成的样式表），没法在这里断言
-    // "肉眼看不见"，但可以断言 DOM 结构层面的前提成立——容器确实渲染成了
-    // 一个没有任何子节点的空元素，:empty 选择器要匹配的正是这个状态；
-    // 真正"肉眼确认不可见"是在真实浏览器里做的，见完工报告。
-    it("renders the contact bar container as a truly empty DOM node (no children) when the current user is viewing their own post, matching the :empty CSS precondition on the empty:hidden class", () => {
+    // ContactSellerButton 在作者查看自己发布的帖子时内部直接 return null
+    // （这条判断在组件内部，任务卡明确不让动）——不像改版前那样让整条工具栏
+    // 消失（那个 empty:hidden 技巧已经不适用，因为工具栏现在总有分享+收藏
+    // 两个图标子节点，DOM 层面永远不会真的是空的），这次这种场景下工具栏
+    // 本身仍然渲染，只是里面少了"咨询"这一个按钮。
+    it("still renders the toolbar (分享 + 收藏) but hides the 咨询 button when the current user is viewing their own post", () => {
       useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
       // samplePostDetail.authorId 是 "user-2"——跟上面登录的用户同一个 id，
       // 触发 ContactSellerButton 内部"作者不能联系自己"的隐藏判断。
@@ -502,60 +539,156 @@ describe("PostDetailPage", () => {
 
       expect(screen.queryByRole("button", { name: "咨询" })).not.toBeInTheDocument();
       const bar = screen.getByTestId("post-detail-contact-bar");
-      expect(bar).toHaveClass("empty:hidden");
-      expect(bar.children).toHaveLength(0);
-      expect(bar.textContent).toBe("");
-    });
-  });
-
-  it("calls Share.share with the post title, formatted price, and the hardcoded production domain (not window.location.origin) when 分享 is clicked", async () => {
-    usePostDetailQuery.mockReturnValue({
-      data: samplePostDetail,
-      isPending: false,
-      isError: false
+      expect(bar).not.toHaveClass("empty:hidden");
+      expect(within(bar).getByRole("button", { name: "分享" })).toBeInTheDocument();
+      expect(within(bar).getByRole("button", { name: "收藏" })).toBeInTheDocument();
     });
 
-    renderWithProviders(<PostDetailPage />, {
-      initialEntries: ["/post/post-1"],
-      route: "/post/:id"
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "分享" }));
-
-    await waitFor(() => {
-      expect(shareMock).toHaveBeenCalledWith({
-        title: "Sunny room near metro",
-        text: "USD 1,200",
-        url: "https://www.saminest.com/post/post-1",
-        dialogTitle: "分享"
+    // 任务卡3 顺带修正：分享需要 data.title/价格拼分享文案，帖子还没加载
+    // 出来、或者"帖子未找到"这两种状态下渲染这条工具栏没有意义——原来的
+    // 容器在这两种状态下也会渲染（只是里面的 ContactSellerButton 自己保持
+    // 隐藏），合并成一条工具栏之后一并修正。
+    it("does not render the toolbar while the post detail query is pending", () => {
+      usePostDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
       });
+      expect(screen.queryByTestId("post-detail-contact-bar")).not.toBeInTheDocument();
+    });
+
+    it("does not render the toolbar when the post is not found", () => {
+      usePostDetailQuery.mockReturnValue({ data: null, isPending: false, isError: false });
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+      expect(screen.queryByTestId("post-detail-contact-bar")).not.toBeInTheDocument();
     });
   });
 
-  // 用户主动关掉系统分享面板也会让 Share.share() reject——这跟真的调用
-  // 失败没法可靠区分，按设计应该静默吞掉，不弹任何用户可见的错误提示。
-  it("does not show any error message when Share.share rejects (e.g. the user dismissed the native share sheet)", async () => {
-    usePostDetailQuery.mockReturnValue({
-      data: samplePostDetail,
-      isPending: false,
-      isError: false
+  // 任务卡3：点击"分享"不再直接调 Share.share()，改成弹出自定义弹层——
+  // 弹层自己的三个选项行为由 post-share-action-sheet.test.tsx 覆盖，这里
+  // 只验证 PostDetailPage 正确接入了这个弹层（打开时机、分享到微信最终
+  // 还是调用同一个 handleShare()/Share.share()）。
+  describe("分享弹层（任务卡3）", () => {
+    it("opens the share sheet (dialog with 复制链接/分享到微信/举报) when 分享 is clicked, without calling Share.share directly", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "分享" }));
+
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /复制链接/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /分享到微信/ })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /举报/ })).toBeInTheDocument();
+      expect(shareMock).not.toHaveBeenCalled();
     });
-    shareMock.mockRejectedValue(new Error("Share canceled"));
-    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    renderWithProviders(<PostDetailPage />, {
-      initialEntries: ["/post/post-1"],
-      route: "/post/:id"
+    it("calls Share.share with the post title, formatted price, and the hardcoded production domain (not window.location.origin) when 分享到微信 is clicked", async () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "分享" }));
+      fireEvent.click(screen.getByRole("button", { name: /分享到微信/ }));
+
+      await waitFor(() => {
+        expect(shareMock).toHaveBeenCalledWith({
+          title: "Sunny room near metro",
+          text: "USD 1,200",
+          url: "https://www.saminest.com/post/post-1",
+          dialogTitle: "分享"
+        });
+      });
+      // 分享到微信点击后弹层立即关闭——系统分享面板会覆盖在上面。
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "分享" }));
+    // 用户主动关掉系统分享面板也会让 Share.share() reject——这跟真的调用
+    // 失败没法可靠区分，按设计应该静默吞掉，不弹任何用户可见的错误提示。
+    it("does not show any error message when Share.share rejects (e.g. the user dismissed the native share sheet)", async () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+      shareMock.mockRejectedValue(new Error("Share canceled"));
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    await waitFor(() => {
-      expect(shareMock).toHaveBeenCalled();
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "分享" }));
+      fireEvent.click(screen.getByRole("button", { name: /分享到微信/ }));
+
+      await waitFor(() => {
+        expect(shareMock).toHaveBeenCalled();
+      });
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+      consoleErrorSpy.mockRestore();
     });
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 
-    consoleErrorSpy.mockRestore();
+    it("copies the post link to the clipboard when 复制链接 is clicked, without closing the sheet", async () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "分享" }));
+      fireEvent.click(screen.getByRole("button", { name: /复制链接/ }));
+
+      await waitFor(() => {
+        expect(clipboardWriteMock).toHaveBeenCalledWith({
+          string: "https://www.saminest.com/post/post-1"
+        });
+      });
+      expect(screen.getByRole("dialog")).toBeInTheDocument();
+    });
+
+    it("navigates to /post/:id/report when 举报 is clicked", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: samplePostDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, {
+        initialEntries: ["/post/post-1"],
+        route: "/post/:id"
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "分享" }));
+      fireEvent.click(screen.getByRole("button", { name: /举报/ }));
+
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-1/report");
+    });
   });
 
   // 23 号卡补完：发帖者从纯文字换成 PersonCard（头像+昵称+副标题+chevron，

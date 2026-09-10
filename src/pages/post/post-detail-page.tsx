@@ -1,13 +1,16 @@
+import { Capacitor } from "@capacitor/core";
 import { Share } from "@capacitor/share";
-import { Flag, Share2, X } from "lucide-react";
-import { type UIEvent, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { StatusBar, Style } from "@capacitor/status-bar";
+import { Share2, X } from "lucide-react";
+import { type UIEvent, useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
 import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
 import { PersonCard } from "../../components/person-card";
+import { PostShareActionSheet } from "../../components/post-share-action-sheet";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
@@ -59,10 +62,15 @@ interface PostDetailLocationState {
  * 2. "收藏"（FavoriteButton）"分享"（下面 handleShare，调用同一个
  *    @capacitor/share）背后的逻辑完全没动，这次只是新增了一个 icon 展示
  *    变体（FavoriteButton 新增 variant="icon" prop）+ 换了位置。
+ *    ——这一条里"分享/收藏/举报三个图标一行"的具体布局已被下面的任务卡3
+ *    取代（三个操作合并进固定底部工具栏），这一条只保留"背后逻辑没动"这个
+ *    结论，位置/布局以任务卡3为准。
  * 3. "举报"：这个仓库本来就有帖子举报功能——独立路由 /post/:id/report
  *    （report-post-page.tsx），改版前就以文字链接的形式挂在这个页面上,
  *    这次复用同一个路由，只是把文字链接换成图标样式、挪到新的位置，
- *    没有新增任何数据库表/迁移。
+ *    没有新增任何数据库表/迁移。——入口位置同样已被任务卡3取代（举报现在
+ *    是"分享"弹层里的一个选项，不再是内容区里的独立图标/链接），路由和
+ *    repository 逻辑不变。
  * 4. "发帖者导航条（头像+昵称+活跃时间）"：初版发现这个东西不存在（只有
  *    一行纯文字"发布者：{authorDisplayName}"），补完这一版之后已经建成
  *    真正的可点卡片——见下面第 5 点。
@@ -110,6 +118,51 @@ interface PostDetailLocationState {
  *   aria-label），见该组件文件顶部注释；标题以外的文案（输入框
  *   placeholder、按钮文案、空态文案）不在"标题"这个措辞的范围内，没有
  *   动，这也写进了完工报告方便你确认要不要一并改。
+ *
+ * 任务卡3（帖子详情页操作区改版：固定底部工具栏 + 分享弹层 + 沉浸式头图）：
+ *
+ * 1. 固定底部工具栏：分享/咨询/收藏合并成同一条 fixed 底部工具栏（顺序
+ *    固定），取代了原来"内容区里一行分享/收藏/举报图标"+"单独 fixed 的
+ *    咨询按钮"这两块分开的东西——data-testid="post-detail-contact-bar"
+ *    这个容器复用了原来那个咨询按钮容器的定位/边框/安全区适配，只是现在
+ *    横排三个操作而不是只放一个按钮。原来的 empty:hidden 技巧不再适用
+ *    （容器现在总有分享+收藏两个图标子节点，永远不会真的是空的），改成
+ *    始终渲染整条工具栏；ContactSellerButton 在作者查看自己帖子时仍然
+ *    返回 null（组件内部逻辑没动），这种情况下工具栏里自然只剩两个图标，
+ *    不需要额外判断。工具栏跟主内容一起只在 data 加载成功后才渲染（原来
+ *    这个容器在 isPending/data===null 时也会渲染，只是 ContactSellerButton
+ *    自己内部保持隐藏——这次顺带修正了这一点：分享既然需要 data.title/
+ *    价格文案，工具栏整体没有理由在帖子还没加载出来、或者"帖子未找到"页面
+ *    上出现）。
+ * 2. "咨询按钮有些帖子不显示"排查结论：读了 use-post-author-query.ts /
+ *    getPostAuthorId() 背后的 RLS 策略（posts_select_public_or_own_or_admin，
+ *    见 supabase/migrations/20260715220300_create_posts_table.sql），它
+ *    和 getPostDetail() 主查询命中的是同一张表、同一行、同一套 RLS 分支
+ *    （approved+public，或 author_id=自己，或管理员）——对同一个查看者、
+ *    同一个帖子，这两个查询的可见性永远一致，没有找到任何"帖子详情能看到
+ *    但作者 ID 查不到"的代码路径。结论：这不是 bug，是"作者查看自己发布的
+ *    帖子"这种预期行为（ContactSellerButton 组件内部 authorId===userId
+ *    时故意返回 null，不能联系自己）——没有为这一条改 use-post-author-
+ *    query.ts / posts-repository.ts / contact-seller-button.tsx 任何代码。
+ * 3. 分享改成自定义弹层（见 post-share-action-sheet.tsx）：复制链接/分享到
+ *    微信/举报三个选项，跟 publish-action-sheet.tsx 同一套弹层模式。
+ * 4. 沉浸式头图：图片轮播从 aspect-[4/3] 改成 h-[50dvh]（占满上半屏，跟
+ *    conversation-page.tsx 用 dvh 而不是 vh 是同一个理由——避免移动端浏览
+ *    器地址栏收起/展开时的视口高度跳动），配合 index.html 新增的
+ *    viewport-fit=cover 和下面 useEffect 里对 @capacitor/status-bar 的
+ *    per-page 覆盖（overlaysWebView: true 让图片延伸到状态栏底下）。状态栏
+ *    图标明暗没有按图片内容动态判断（那需要采样图片像素算亮度，这个仓库
+ *    目前的照片来源是用户上传的任意内容，明暗不可预测，做不到稳定可靠）
+ *    ——退回任务卡建议的另一条路：图片顶部叠一层黑到透明的渐变遮罩，配合
+ *    固定的 Style.Dark（白色图标），保证图标在任何照片上都看得清。离开
+ *    这个页面（或者帖子没有图片）时必须把状态栏恢复成 mobile-bootstrap.ts
+ *    里设的全局默认（overlaysWebView: false + Style.Light），不能让这个
+ *    页面的临时设置泄漏到其它页面；这两个插件调用只在原生壳里有意义，跟
+ *    mobile-bootstrap.ts 一样用 Capacitor.isNativePlatform() 判断，网页版
+ *    直接跳过。
+ * 5. "描述"小节标题：跟活动详情页"活动描述"的 <h2 className="mb-1 text-sm
+ *    font-semibold text-text"> 同一个写法，加在 data.description 正文
+ *    上方。
  */
 export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -120,6 +173,9 @@ export function PostDetailPage() {
 
   const { data, isPending, isError } = usePostDetailQuery(id ?? "");
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  // 任务卡3：点击底部工具栏"分享"图标弹出的自定义弹层（复制链接/分享到
+  // 微信/举报），见 post-share-action-sheet.tsx。
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
   // 大图轮播当前滚动到第几张，驱动底部"1 / 5"这种计数指示器。用原生
   // scroll-snap（横向 overflow-x-auto + snap-x snap-mandatory 容器、每张图
   // snap-center）实现滑动，不引入额外的手势/轮播库；这里只是监听容器的
@@ -170,6 +226,27 @@ export function PostDetailPage() {
   }
 
   const priceUnset = data ? isPriceUnset(data.priceAmount, data.priceLabel) : true;
+  const hasImmersiveHeader = Boolean(data && data.images.length > 0);
+
+  // 任务卡3：沉浸式头图——只在原生壳（App，不是网页版）+ 帖子确实有图片
+  // 时，把状态栏切到 overlay 模式（图片延伸到状态栏底下）+ 白色图标
+  // （Style.Dark，配合图片顶部的黑到透明渐变遮罩保证任何照片背景下都看得
+  // 清）。依赖 hasImmersiveHeader 这个布尔值而不是 data 本身——data 每次
+  // refetch 都是新的对象引用，但"有没有图片"这件事通常不变，用布尔值避免
+  // 每次 refetch 都重新调用一次原生插件。离开页面（或者 hasImmersiveHeader
+  // 变成 false）时必须还原成 mobile-bootstrap.ts 设的全局默认，不能让这个
+  // 页面的临时设置泄漏到其它页面。
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || !hasImmersiveHeader) {
+      return;
+    }
+    void StatusBar.setOverlaysWebView({ overlay: true });
+    void StatusBar.setStyle({ style: Style.Dark });
+    return () => {
+      void StatusBar.setOverlaysWebView({ overlay: false });
+      void StatusBar.setStyle({ style: Style.Light });
+    };
+  }, [hasImmersiveHeader]);
 
   return (
     <main>
@@ -188,43 +265,58 @@ export function PostDetailPage() {
         <X size={20} aria-hidden="true" />
       </button>
 
-      {/* 底部留出空间给下面 fixed 的"咨询"按钮容器（那个按钮自己是否渲染由
-          ContactSellerButton 内部决定——作者查看自己的帖子时不渲染，这里
-          统一留白，own-post 场景下会多一点空白，比为了这一种情况再判断
-          一次"我是不是作者"更简单）。任务卡2 把按钮从"贴边大色块"改成
-          "容器 pt-3 + 48px 按钮高 + pb-[0.75rem+安全区]"这个更矮的浮动
-          按钮之后，pb-24（96px）在有底部安全区的机型上不够留（新容器
-          总高约 72px + 安全区，安全区较大时会逼近/超过 96px），这里跟着
-          改成 pb-28（112px），留出稳妥的余量——这一处调整是"咨询"按钮
-          高度变化的直接连带结果，不是碰其它区域的布局。 */}
+      {/* 底部留出空间给下面 fixed 的分享/咨询/收藏工具栏（作者查看自己的
+          帖子时 ContactSellerButton 内部返回 null，工具栏只剩分享+收藏
+          两个图标，高度基本不变，这里统一留白，不为这一种情况单独算一次
+          留白高度）。任务卡2 把按钮从"贴边大色块"改成"容器 pt-3 + 48px
+          按钮高 + pb-[0.75rem+安全区]"这个更矮的浮动按钮之后，pb-24
+          （96px）在有底部安全区的机型上不够留（容器总高约 72px + 安全区，
+          安全区较大时会逼近/超过 96px），改成了 pb-28（112px）留出稳妥
+          余量；任务卡3 合并成三操作工具栏后容器高度基本没变（两侧图标
+          跟中间按钮高度相近），继续沿用 pb-28，不需要再调整。 */}
       <div className="pb-28">
         {data && data.images.length > 0 ? (
           <div>
-            <div
-              data-testid="post-image-carousel"
-              onScroll={handleCarouselScroll}
-              className="flex snap-x snap-mandatory overflow-x-auto"
-            >
-              {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
-                <button
-                  key={imageId}
-                  type="button"
-                  aria-label="查看大图"
-                  disabled={indexInLightbox === null}
-                  onClick={() => {
-                    if (indexInLightbox !== null) {
-                      setLightboxIndex(indexInLightbox);
-                    }
-                  }}
-                  className="block w-full flex-none snap-center disabled:cursor-default"
-                >
-                  <img
-                    src={publicUrl ?? undefined}
-                    alt={data.title}
-                    className="aspect-[4/3] w-full object-cover"
-                  />
-                </button>
-              ))}
+            {/* 任务卡3：沉浸式头图——高度从 aspect-[4/3] 改成 h-[50dvh]（占满
+                上半屏，不是按图片比例决定高度），配合 index.html 的
+                viewport-fit=cover + 上面 useEffect 里的状态栏 overlay 设置，
+                让图片真正延伸到状态栏底下。relative 定位是给下面的渐变遮罩
+                用的。 */}
+            <div className="relative">
+              <div
+                data-testid="post-image-carousel"
+                onScroll={handleCarouselScroll}
+                className="flex h-[50dvh] snap-x snap-mandatory overflow-x-auto"
+              >
+                {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
+                  <button
+                    key={imageId}
+                    type="button"
+                    aria-label="查看大图"
+                    disabled={indexInLightbox === null}
+                    onClick={() => {
+                      if (indexInLightbox !== null) {
+                        setLightboxIndex(indexInLightbox);
+                      }
+                    }}
+                    className="block h-full w-full flex-none snap-center disabled:cursor-default"
+                  >
+                    <img
+                      src={publicUrl ?? undefined}
+                      alt={data.title}
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+              {/* 渐变遮罩：不管照片本身明暗，状态栏区域始终有一层半透明黑
+                  打底，配合上面 useEffect 设的 Style.Dark（白色图标），保证
+                  时间/信号/电量图标在任何照片背景下都清晰可见——见任务卡3
+                  文档注释里"为什么不按图片明暗动态判断"的说明。 */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent"
+              />
             </div>
             {data.images.length > 1 ? (
               <p className="mt-2 text-center text-xs text-text-muted">
@@ -269,27 +361,6 @@ export function PostDetailPage() {
                 {data.locationName ? formatLocationDisplayName(data.locationName) : "地区未填写"}
               </p>
 
-              <div className="flex items-center gap-6">
-                <button
-                  type="button"
-                  onClick={() => void handleShare(data)}
-                  className="flex flex-col items-center gap-1 text-text-muted hover:text-primary"
-                >
-                  <Share2 size={22} aria-hidden="true" />
-                  <span className="text-xs">分享</span>
-                </button>
-                {id ? <FavoriteButton postId={id} variant="icon" /> : null}
-                {id ? (
-                  <Link
-                    to={`/post/${id}/report`}
-                    className="flex flex-col items-center gap-1 text-text-muted hover:text-danger"
-                  >
-                    <Flag size={22} aria-hidden="true" />
-                    <span className="text-xs">举报</span>
-                  </Link>
-                ) : null}
-              </div>
-
               {data.contactMethod && data.contactValue ? (
                 <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
                   <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
@@ -297,9 +368,15 @@ export function PostDetailPage() {
                 </div>
               ) : null}
 
-              <p className="whitespace-pre-wrap break-words text-sm text-text">
-                {data.description}
-              </p>
+              {/* 任务卡3：正文上方加"描述"小节标题——跟活动详情页"活动描述"
+                  的写法（<h2 className="mb-1 text-sm font-semibold
+                  text-text">）完全一致，改版前这里没有任何标题文字。 */}
+              <div>
+                <h2 className="mb-1 text-sm font-semibold text-text">描述</h2>
+                <p className="whitespace-pre-wrap break-words text-sm text-text">
+                  {data.description}
+                </p>
+              </div>
 
               <PersonCard
                 userId={data.authorId}
@@ -322,48 +399,59 @@ export function PostDetailPage() {
         </div>
       </div>
 
-      {/* 任务卡2："咨询"按钮从撑满宽度的大色块横条改成更克制的浮动按钮——
-          外层这个 div 是新增的容器：白底、左右各 16px 留白（px-4）、顶部
-          一条细边框跟正文区分开（border-t border-border，取代原来那圈
-          偏醒目的 shadow-fab 蓝色投影），安全区适配原样保留在这一层
-          （pb-[calc(0.75rem+env(safe-area-inset-bottom))]，只是从按钮自己
-          身上挪到了容器上）。ContactSellerButton 组件本身（含它内部的
-          <span> 包裹结构）完全没有改，只是传给它的 className 变了：
-          h-12（48px）+ rounded-xl（12px，这个设计系统目前没有单独命名的
-          "control"圆角 token，Tailwind 内置的 rounded-xl 正好是 12px，
-          跟任务卡给的具体数值一致）+ text-[15px]（原来是 text-base/16px）+
-          w-full 撑满容器内的可用宽度（容器已经用 px-4 留出左右各 16px，
-          按钮不需要自己再额外收窄）。没有加图标——ContactSellerButton
-          目前只把 label 当纯文字渲染，没有留图标插槽，要加图标就得改这个
-          组件自己的 JSX，而这次任务卡明确禁止改 contact-seller-button.tsx
-          的任何逻辑，图标本身在任务卡里也是"可以加"而不是必须——所以这次
-          没有加，写在完工报告里。
+      {/* 任务卡3：固定底部工具栏——分享/咨询/收藏合并成同一条，取代原来
+          "内容区一行分享/收藏/举报图标"+"单独 fixed 的咨询按钮"这两块。
+          容器本身的 fixed 定位、白底+顶部细边框、安全区适配（原来任务卡2
+          留下的 pt-3 + pb-[0.75rem+安全区]）都不变。
 
-          这层新包的容器带了 empty:hidden：ContactSellerButton 在"作者查看
-          自己发布的帖子"时内部直接 return null（组件原有行为，任务卡明确
-          不让动），改版前这个按钮自己就是 fixed 元素、没有外层容器，
-          "不渲染"意味着屏幕底部真的什么都没有；现在多包了一层容器，如果
-          容器本身不管里面渲不渲染都无条件显示，author 查看自己帖子时就会
-          多出一条空的白色横条+顶部细边框悬在屏幕底部——这是改版前特意
-          避免、这次不应该引入的新问题。加 empty:hidden（Tailwind 内置的
-          :empty 伪类变体）之后，只要 ContactSellerButton 真的渲染了 null
-          （容器唯一的子节点变成"什么都没有"，容器本身在 DOM 里就是空
-          元素），容器自动整个隐藏——不需要在这个页面里另外重复一遍"我是
-          不是作者"的判断（那正是任务卡不让碰的按钮可见性逻辑），纯靠
-          CSS 跟 DOM 是否为空联动，没有碰 contact-seller-button.tsx 一行
-          代码。 */}
-      {id ? (
+          不再用 empty:hidden：ContactSellerButton 在作者查看自己帖子时
+          仍然内部返回 null（组件逻辑没动），但容器现在总有分享+收藏两个
+          图标子节点，DOM 层面永远不会真的是空的，:empty 选择器不会再命中
+          ——直接始终渲染整条工具栏，author 查看自己帖子时自然就是"分享+
+          收藏两个图标"，不需要在这个页面里额外判断一次"我是不是作者"。
+
+          整条工具栏（连同下面的正文）都挂在 data 加载成功之后才渲染——
+          分享需要 data.title/价格拼分享文案，帖子还没加载出来或者
+          "帖子未找到"页面上出现这条工具栏没有意义（原来的容器在这两种
+          状态下也会渲染，只是里面的 ContactSellerButton 自己保持隐藏；
+          这次顺带修正了这一点，不算独立的额外改动，是合并三个操作后的
+          自然结果）。
+
+          中间的"咨询"按钮包了一层 flex-1 的 div 让它占满两个图标之外的
+          剩余宽度——ContactSellerButton 组件本身（含它内部的 <span> 包裹
+          结构）和传给它的 className 完全没变，还是任务卡2定下的 h-12 +
+          rounded-xl + text-[15px] + w-full。 */}
+      {id && data ? (
         <div
           data-testid="post-detail-contact-bar"
-          className="empty:hidden fixed inset-x-0 bottom-0 z-20 border-t border-border bg-white px-4 pt-3"
+          className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-white px-4 pt-3"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
         >
-          <ContactSellerButton
-            postId={id}
-            label="咨询"
-            className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          />
+          <button
+            type="button"
+            onClick={() => setIsShareSheetOpen(true)}
+            className="flex flex-col items-center gap-1 text-text-muted hover:text-primary"
+          >
+            <Share2 size={22} aria-hidden="true" />
+            <span className="text-xs">分享</span>
+          </button>
+          <div className="flex-1">
+            <ContactSellerButton
+              postId={id}
+              label="咨询"
+              className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </div>
+          <FavoriteButton postId={id} variant="icon" />
         </div>
+      ) : null}
+
+      {isShareSheetOpen && id && data ? (
+        <PostShareActionSheet
+          postId={id}
+          onShareToWechat={() => void handleShare(data)}
+          onClose={() => setIsShareSheetOpen(false)}
+        />
       ) : null}
     </main>
   );
