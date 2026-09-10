@@ -9,6 +9,12 @@ export interface Comment {
   parentId: string | null;
   content: string;
   authorDisplayName: string;
+  /** 33 号卡（留言区头像展示 + 长按弹出举报）新增：作者头像，没有头像时
+   *  为 null，由 comment-item.tsx 渲染首字母兜底圆圈——照抄
+   *  posts-repository.ts 的 getPostDetail() 那种"作者信息本来就在同一次
+   *  嵌套 select 里查，多加一列 avatar_url，不为这一个字段单独发第二次
+   *  请求"的做法。 */
+  authorAvatarUrl: string | null;
   createdAt: string;
   isDeleted: boolean;
 }
@@ -21,7 +27,7 @@ interface CommentRow {
   content: string;
   created_at: string;
   deleted_at: string | null;
-  author: { display_name: string } | null;
+  author: { display_name: string; avatar_url: string | null } | null;
 }
 
 /**
@@ -45,7 +51,7 @@ export async function listPostComments(postId: string): Promise<Comment[]> {
   const { data, error } = await getSupabaseClient()
     .from("comments")
     .select(
-      "id, post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name)"
+      "id, post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
     )
     .eq("post_id", postId)
     .order("created_at", { ascending: true })
@@ -62,6 +68,7 @@ export async function listPostComments(postId: string): Promise<Comment[]> {
     parentId: row.parent_id,
     content: row.content,
     authorDisplayName: row.author?.display_name ?? "未知用户",
+    authorAvatarUrl: row.author?.avatar_url ?? null,
     createdAt: row.created_at,
     isDeleted: row.deleted_at !== null
   }));

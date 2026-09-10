@@ -10,6 +10,7 @@ function makeComment(overrides: Partial<Comment> & Pick<Comment, "id">): Comment
     parentId: null,
     content: `content-${overrides.id}`,
     authorDisplayName: "Alice",
+    authorAvatarUrl: null,
     createdAt: "2026-08-04T00:00:00.000Z",
     isDeleted: false,
     ...overrides
