@@ -43,7 +43,7 @@ describe("listPostComments", () => {
 
     expect(fromMock).toHaveBeenCalledWith("comments");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name)"
+      "id, post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("post_id", "post-1");
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
@@ -60,7 +60,7 @@ describe("listPostComments", () => {
           content: "hello",
           created_at: "2026-08-04T00:00:00.000Z",
           deleted_at: null,
-          author: { display_name: "Alice" }
+          author: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" }
         },
         {
           id: "c2",
@@ -70,7 +70,7 @@ describe("listPostComments", () => {
           content: "a deleted reply",
           created_at: "2026-08-04T00:01:00.000Z",
           deleted_at: "2026-08-04T00:05:00.000Z",
-          author: { display_name: "Bob" }
+          author: { display_name: "Bob", avatar_url: null }
         }
       ],
       error: null
@@ -86,6 +86,7 @@ describe("listPostComments", () => {
         parentId: null,
         content: "hello",
         authorDisplayName: "Alice",
+        authorAvatarUrl: "https://img.example.com/alice.jpg",
         createdAt: "2026-08-04T00:00:00.000Z",
         isDeleted: false
       },
@@ -96,6 +97,7 @@ describe("listPostComments", () => {
         parentId: "c1",
         content: "a deleted reply",
         authorDisplayName: "Bob",
+        authorAvatarUrl: null,
         createdAt: "2026-08-04T00:01:00.000Z",
         isDeleted: true
       }

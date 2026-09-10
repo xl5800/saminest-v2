@@ -1,4 +1,11 @@
-import { type FormEvent, useState } from "react";
+import {
+  type FormEvent,
+  type MouseEvent as ReactMouseEvent,
+  type TouchEvent as ReactTouchEvent,
+  useEffect,
+  useRef,
+  useState
+} from "react";
 
 import { useCreateCommentMutation } from "../features/comments/use-create-comment-mutation";
 import { useDeleteCommentMutation } from "../features/comments/use-delete-comment-mutation";
@@ -28,6 +35,16 @@ const REPORT_DEFAULT_ERROR_MESSAGE = "举报提交失败，请稍后重试。";
 const DELETE_ERROR_MESSAGE = "删除失败，请稍后重试。";
 const REPLY_DEFAULT_ERROR_MESSAGE = "回复发表失败，请稍后重试。";
 
+// 33 号卡（留言区头像展示 + 长按弹出举报）：按住多久算一次长按——参考
+// 移动端系统手势（iOS/Android 长按普遍在 400～600ms 区间）取的中间值，
+// 不是照抄某个具体产品的精确数值。
+const LONG_PRESS_MS = 500;
+// 按下之后指针/手指移动超过这个像素数就取消这次长按，当成一次滚动/拖动
+// 意图，不弹出举报入口——跟 conversation-swipe-row.tsx 的
+// DRAG_CLICK_THRESHOLD_PX 是同一个"区分按住不动 vs 移动手势"的道理，取值
+// 也保持一致。
+const LONG_PRESS_MOVE_CANCEL_PX = 8;
+
 type ActiveAction = "reply" | "delete" | "report" | null;
 
 /**
@@ -54,6 +71,43 @@ type ActiveAction = "reply" | "delete" | "report" | null;
  * 时间/操作按钮，字号更小、视觉权重更低）。这个判断只看当前节点自己的
  * isDeleted + children.length，不递归清理"整条链都是空的已删除节点"这种
  * 边界情况——概率很低，保持实现简单。
+ *
+ * 33 号卡（留言区头像展示 + 长按弹出举报，仿小红书）：
+ * - 头像：作者昵称/时间那一行左边加一个圆形头像（没有头像时首字母兜底
+ *   圆圈，照抄 post-list.tsx `variant="wanted"` 卡片/person-card.tsx 已经
+ *   用过的 `bg-primary/10 text-primary` 样式，不发明新的兜底视觉）。
+ *   顶层评论用 32px（h-8 w-8），回复用 24px（h-6 w-6）——回复本身已经靠
+ *   paddingLeft 缩进表达了"层级更深"，头像跟着缩小一档，视觉上更协调，
+ *   也避免深层回复（缩进 + 头像 + 昵称 + 时间挤在一行）在窄屏上显得拥挤；
+ *   这是这次改动里没有强制要求、我自己做的取舍，见完工报告。
+ * - "举报"从常驻文字按钮改成长按（桌面用"按住鼠标不放"模拟）弹出：按住
+ *   评论头像+昵称+时间+正文这一整块内容区域（不含下面回复/删除按钮那一
+ *   行，否则会跟点击那两个按钮的手势冲突）超过 LONG_PRESS_MS 弹出一个
+ *   居中的小浮层，只有一个"举报"按钮，点了之后原样触发
+ *   `setActiveAction("report")`——举报表单本身（原因单选/补充说明/提交）
+ *   一个字都没有改，只是换了个入口触发方式。
+ * - 长按手势用 mousedown/mousemove/mouseup（桌面）+ touchstart/touchmove/
+ *   touchend/touchcancel（触屏）两组原生事件实现，不是更"现代"的统一
+ *   Pointer Events API——跟 conversation-swipe-row.tsx 左滑手势是同一个
+ *   理由：这个仓库的 jsdom 测试环境不支持 window.PointerEvent
+ *   （fireEvent.pointerDown 在这里拿到的 clientX/clientY 全部是
+ *   undefined），只写 Pointer Events 会完全没法写自动化测试；mouse 系列 +
+ *   touch 系列事件分别覆盖桌面和触屏，核心的开始/移动取消/结束逻辑
+ *   （beginLongPress/updateLongPress/endLongPress）是共享的，不重复。
+ *   鼠标场景下 mousemove/mouseup 挂在 window 上而不是内容区域自己身上，
+ *   理由也跟 conversation-swipe-row.tsx 一样：按住之后指针很容易移出这块
+ *   不大的内容区域，只挂元素自己会导致移出范围后收不到后续事件。
+ * - 长按弹出的浮层选了"居中小 sheet"（照抄 my-posts-page.tsx 删除确认弹窗
+ *   `fixed inset-0 flex items-center justify-center bg-black/40` +
+ *   `w-full max-w-xs rounded-2xl bg-white p-5 shadow-card` 那个模式），
+ *   不是"贴着长按位置定位的气泡菜单"——原因：气泡菜单需要拿长按发生时的
+ *   clientX/clientY 算浮层位置、还要处理"贴着屏幕边缘时要不要翻转方向"
+ *   这类视口边界问题，居中 sheet 直接复用现成的、已经在这个仓库跑通过的
+ *   弹层模式，不需要任何定位计算，实现更简单、更不容易出视觉 bug，长按
+ *   之后弹层出现在屏幕中央（而不是手指/鼠标正下方）这点视觉差异对"只有
+ *   一个按钮"的极简菜单来说影响很小。点击浮层背景或"取消"按钮关闭，不做
+ *   Esc 键关闭（跟 my-posts-page.tsx 的删除确认弹窗一致，PublishActionSheet
+ *   那种"选一项就导航离开当前页面"的场景才需要 Esc 快捷退出，这里不是）。
  */
 export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
@@ -71,6 +125,14 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
   const [reportSubmitted, setReportSubmitted] = useState(false);
   const createReportMutation = useCreateReportMutation();
 
+  // 33 号卡：长按弹出的"举报"入口浮层是否展开——跟 activeAction 是两个
+  // 独立的 state：activeAction 控制"举报表单本身有没有展开"，这个只控制
+  // "长按弹出的那个只有一个按钮的小浮层有没有展开"，浮层里点"举报"之后
+  // 才会关掉浮层、把 activeAction 设成 "report" 真正展开举报表单。
+  const [showLongPressReportPrompt, setShowLongPressReportPrompt] = useState(false);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+
   const canAct = currentUserId !== null;
   const isOwnComment = currentUserId !== null && node.userId === currentUserId;
 
@@ -79,6 +141,91 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
     // 切换到另一个互斥操作时，清掉上一个操作留下的错误提示——不清的话
     // 用户点开"回复"看到的可能是刚才"删除"失败时留下的错误文字，牛头
     // 不对马嘴。
+    setReplyError(null);
+    setDeleteError(null);
+    setReportError(null);
+  }
+
+  function clearLongPressTimer(): void {
+    if (longPressTimerRef.current !== null) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }
+
+  // 组件卸载时（比如评论列表因为父组件重新拉取而整体重渲染）清掉还没
+  // 触发的计时器——不清的话，长按到一半突然卸载会在卸载之后的 setTimeout
+  // 回调里调用 setShowLongPressReportPrompt，触发"在已卸载组件上调用
+  // setState"的警告。
+  useEffect(() => clearLongPressTimer, []);
+
+  function beginLongPress(x: number, y: number): void {
+    if (!canAct) return;
+    longPressStartRef.current = { x, y };
+    clearLongPressTimer();
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTimerRef.current = null;
+      setShowLongPressReportPrompt(true);
+    }, LONG_PRESS_MS);
+  }
+
+  function updateLongPress(x: number, y: number): void {
+    const start = longPressStartRef.current;
+    if (!start) return;
+    if (
+      Math.abs(x - start.x) > LONG_PRESS_MOVE_CANCEL_PX ||
+      Math.abs(y - start.y) > LONG_PRESS_MOVE_CANCEL_PX
+    ) {
+      clearLongPressTimer();
+    }
+  }
+
+  function endLongPress(): void {
+    clearLongPressTimer();
+  }
+
+  function handleContentMouseDown(event: ReactMouseEvent<HTMLDivElement>): void {
+    if (event.button !== 0) return;
+    beginLongPress(event.clientX, event.clientY);
+    // 挂在 window 上而不是内容区域自己身上——按住之后指针很容易移出这块
+    // 不大的区域，只挂元素自己的话移出范围后就收不到后续的
+    // mousemove/mouseup，长按判定会不准确，跟 conversation-swipe-row.tsx
+    // 的拖动手势是同一个理由。一次性监听器，长按判定结束（不管是弹出了
+    // 举报入口还是提前松手取消）立刻摘除，不常驻。
+    function handleWindowMouseMove(moveEvent: MouseEvent): void {
+      updateLongPress(moveEvent.clientX, moveEvent.clientY);
+    }
+    function handleWindowMouseUp(): void {
+      window.removeEventListener("mousemove", handleWindowMouseMove);
+      window.removeEventListener("mouseup", handleWindowMouseUp);
+      endLongPress();
+    }
+    window.addEventListener("mousemove", handleWindowMouseMove);
+    window.addEventListener("mouseup", handleWindowMouseUp);
+  }
+
+  function handleContentTouchStart(event: ReactTouchEvent<HTMLDivElement>): void {
+    const touch = event.touches[0];
+    if (!touch) return;
+    beginLongPress(touch.clientX, touch.clientY);
+  }
+
+  function handleContentTouchMove(event: ReactTouchEvent<HTMLDivElement>): void {
+    const touch = event.touches[0];
+    if (!touch) return;
+    updateLongPress(touch.clientX, touch.clientY);
+  }
+
+  function handleContentTouchEnd(): void {
+    endLongPress();
+  }
+
+  function handleOpenReportFromLongPress(): void {
+    setShowLongPressReportPrompt(false);
+    setActiveAction("report");
+    // 跟 toggleAction 一样，展开举报表单前清掉其它操作可能留下的错误
+    // 提示——这里不能直接复用 toggleAction("report")，那个函数是"toggle"
+    // 语义（再点一次会关掉），这里始终是"打开"，两种语义不一样。
     setReplyError(null);
     setDeleteError(null);
     setReportError(null);
@@ -169,6 +316,11 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
   }
 
   const indentPx = Math.min(depth, MAX_INDENT_DEPTH) * INDENT_PX_PER_LEVEL;
+  // 33 号卡：顶层评论头像 32px，回复头像 24px——回复本身已经靠 indentPx
+  // 缩进表达了"层级更深"，头像跟着缩小一档视觉上更协调，也给深层回复
+  // （缩进 + 头像 + 昵称 + 时间挤在一行）省一点横向空间。
+  const avatarSizeClass = depth === 0 ? "h-8 w-8" : "h-6 w-6";
+  const avatarInitialTextClass = depth === 0 ? "text-xs" : "text-[10px]";
 
   // 已删除且没有任何回复——整条从列表里消失（包括外层容器都不渲染），
   // 就像没发过一样；已删除但下面还挂着别人的回复，不能直接不渲染，否则
@@ -185,17 +337,49 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
           <p className="text-xs text-text-muted">该评论已删除</p>
         ) : (
           <div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="break-words text-sm font-medium text-text">
-                {node.authorDisplayName}
-              </span>
-              <span className="shrink-0 text-xs text-text-muted">
-                {formatListingDate(node.createdAt)}
-              </span>
+            {/* 33 号卡：这一整块（头像+昵称+时间+正文）是长按弹出举报入口的
+                触发区域，不含下面回复/删除按钮那一行——那一行本身就是可点击
+                按钮，混进长按区域会跟点击手势冲突。onContextMenu 拦掉移动端
+                长按时浏览器原生弹出的"复制/分享"上下文菜单，不然会跟这里
+                自定义的长按菜单打架。 */}
+            <div
+              data-testid="comment-content"
+              className="flex items-start gap-2"
+              onMouseDown={handleContentMouseDown}
+              onTouchStart={handleContentTouchStart}
+              onTouchMove={handleContentTouchMove}
+              onTouchEnd={handleContentTouchEnd}
+              onTouchCancel={handleContentTouchEnd}
+              onContextMenu={(event) => event.preventDefault()}
+            >
+              {node.authorAvatarUrl ? (
+                <img
+                  src={node.authorAvatarUrl}
+                  alt=""
+                  className={`${avatarSizeClass} shrink-0 rounded-full object-cover`}
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className={`flex ${avatarSizeClass} shrink-0 items-center justify-center rounded-full bg-primary/10 ${avatarInitialTextClass} font-semibold text-primary`}
+                >
+                  {node.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="break-words text-sm font-medium text-text">
+                    {node.authorDisplayName}
+                  </span>
+                  <span className="shrink-0 text-xs text-text-muted">
+                    {formatListingDate(node.createdAt)}
+                  </span>
+                </div>
+                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-text">
+                  {node.content}
+                </p>
+              </div>
             </div>
-            <p className="mt-1 whitespace-pre-wrap break-words text-sm text-text">
-              {node.content}
-            </p>
 
             {canAct ? (
               <div className="mt-1 flex gap-3 text-xs text-text-muted">
@@ -215,13 +399,6 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                     删除
                   </button>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => toggleAction("report")}
-                  className="hover:text-danger"
-                >
-                  举报
-                </button>
               </div>
             ) : null}
 
@@ -357,6 +534,41 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                   </div>
                 </form>
               )
+            ) : null}
+
+            {/* 33 号卡：长按内容区域弹出的举报入口——只有一个"举报"按钮，
+                点了之后关闭这个浮层、展开上面 activeAction === "report" 那
+                一整块（举报原因/补充说明/提交，原样复用，见组件顶部注释）。
+                居中小 sheet，不是贴着长按位置的气泡菜单，理由见组件顶部
+                注释。 */}
+            {showLongPressReportPrompt ? (
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label="留言操作"
+                className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-4"
+                onClick={() => setShowLongPressReportPrompt(false)}
+              >
+                <div
+                  className="w-full max-w-xs rounded-2xl bg-white p-2 shadow-card"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={handleOpenReportFromLongPress}
+                    className="w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-danger hover:bg-danger/10"
+                  >
+                    举报
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLongPressReportPrompt(false)}
+                    className="mt-1 w-full rounded-xl px-3 py-2.5 text-left text-sm font-medium text-text hover:bg-bg"
+                  >
+                    取消
+                  </button>
+                </div>
+              </div>
             ) : null}
           </div>
         )}
