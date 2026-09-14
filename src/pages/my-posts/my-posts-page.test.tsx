@@ -122,7 +122,11 @@ describe("MyPostsPage", () => {
 
     renderWithProviders(<MyPostsPage />);
 
-    expect(await screen.findByTestId("my-post-thumbnail-placeholder")).toBeInTheDocument();
+    // 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：占位逻辑抽成了共享组件
+    // PostThumbnail（post-thumbnail.tsx），三个调用点（这里/post-list.tsx/
+    // favorites-page.tsx）现在共用同一个 testid，不再是这个页面自己起的
+    // "my-post-thumbnail-placeholder"。
+    expect(await screen.findByTestId("post-thumbnail-placeholder")).toBeInTheDocument();
   });
 
   it("falls back to '地区未填写' when locationName is null", async () => {

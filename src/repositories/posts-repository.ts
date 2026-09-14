@@ -72,7 +72,9 @@ export interface ListApprovedPostsResult {
   hasNextPage: boolean;
 }
 
-interface PostFeedImageRow {
+// 导出理由跟下面 resolveCoverImageUrl 一致：favorites-repository.ts 复用
+// 这个函数时，传入的 post_images 行类型要跟这个函数的参数类型对得上。
+export interface PostFeedImageRow {
   public_url: string | null;
   sort_order: number;
   deleted_at: string | null;
@@ -140,8 +142,14 @@ export function resolveLocationName(
  * 行之后，在这个函数里先按 deleted_at 过滤出活跃图片，再取 sort_order
  * 最小的一张——跟 getPostDetail 是同一个"先过滤再选"的思路，不依赖
  * SQL 层面排序结果的第一条就一定是想要的那条。
+ *
+ * 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）导出这个函数：收藏列表页
+ * （favorites-repository.ts 的 listFavoritedPosts）这次也要展示封面图，
+ * 复用同一套"取 sort_order 最小的未删除图片"规则，不在那个文件里重新
+ * 写一遍同样的逻辑——两处对"封面图"这件事的定义必须永远保持一致，写
+ * 两份容易日后改一处漏改另一处。
  */
-function resolveCoverImageUrl(images: PostFeedImageRow[] | null): string | null {
+export function resolveCoverImageUrl(images: PostFeedImageRow[] | null): string | null {
   const activeImages = (images ?? []).filter((image) => image.deleted_at === null);
   if (activeImages.length === 0) {
     return null;

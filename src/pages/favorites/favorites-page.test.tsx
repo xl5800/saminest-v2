@@ -22,6 +22,21 @@ import { FavoritesPage } from "./favorites-page";
 
 const initialAuthState = useAuthStore.getState();
 
+// 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：跟 post-list.test.tsx/
+// my-posts-page.test.tsx 的 samplePost 同一个模式，收藏列表页现在也要
+// 展示 categoryName/coverImageUrl。
+const samplePost = {
+  id: "post-1",
+  title: "Sunny room",
+  priceAmount: 1200,
+  priceLabel: null,
+  currencyCode: "USD",
+  locationName: "Rockville",
+  createdAt: "2000-07-01T00:00:00.000Z",
+  categoryName: "租房",
+  coverImageUrl: "https://img.example.com/cover.jpg"
+};
+
 describe("FavoritesPage", () => {
   afterEach(() => {
     cleanup();
@@ -82,17 +97,7 @@ describe("FavoritesPage", () => {
   });
 
   it("renders the favorited posts with title/price/location", async () => {
-    listFavoritedPosts.mockResolvedValue([
-      {
-        id: "post-1",
-        title: "Sunny room",
-        priceAmount: 1200,
-        priceLabel: null,
-        currencyCode: "USD",
-        locationName: "Rockville",
-        createdAt: "2000-07-01T00:00:00.000Z"
-      }
-    ]);
+    listFavoritedPosts.mockResolvedValue([samplePost]);
     listFavoritedPostIds.mockResolvedValue(["post-1"]);
 
     renderWithProviders(<FavoritesPage />);
@@ -103,18 +108,51 @@ describe("FavoritesPage", () => {
     expect(screen.getByText("2000-07-01")).toBeInTheDocument();
   });
 
+  // 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：收藏列表页改动前完全没有
+  // 缩略图（四种帖子卡片呈现里唯一"看不到图"的一个），这组测试覆盖新加的
+  // PostThumbnail——有封面图/无封面图两种情况都要覆盖，还有卡片容器 class
+  // 改成跟 my-posts-page.tsx/activity-card.tsx 一致这条验收标准。
+  describe("缩略图 + 卡片容器（帖子卡片统一视觉）", () => {
+    it("renders a cover image thumbnail when the post has one", async () => {
+      listFavoritedPosts.mockResolvedValue([samplePost]);
+      listFavoritedPostIds.mockResolvedValue(["post-1"]);
+
+      const { container } = renderWithProviders(<FavoritesPage />);
+      await screen.findByText("Sunny room");
+
+      const img = container.querySelector("img");
+      expect(img).toHaveAttribute("src", "https://img.example.com/cover.jpg");
+      expect(screen.queryByTestId("post-thumbnail-placeholder")).not.toBeInTheDocument();
+    });
+
+    it("renders the shared category-color icon placeholder (not plain text) when the post has no cover image", async () => {
+      listFavoritedPosts.mockResolvedValue([{ ...samplePost, coverImageUrl: null }]);
+      listFavoritedPostIds.mockResolvedValue(["post-1"]);
+
+      const { container } = renderWithProviders(<FavoritesPage />);
+      await screen.findByText("Sunny room");
+
+      const placeholder = screen.getByTestId("post-thumbnail-placeholder");
+      expect(placeholder).toHaveClass("bg-primary-light");
+      expect(placeholder.querySelector("svg.lucide-house")).toBeInTheDocument();
+      expect(container.querySelector("img")).not.toBeInTheDocument();
+    });
+
+    it("uses the rounded-2xl/border/shadow-card container that my-posts-page.tsx and activity-card.tsx already use, not the old rounded-lg/no-shadow combo", async () => {
+      listFavoritedPosts.mockResolvedValue([samplePost]);
+      listFavoritedPostIds.mockResolvedValue(["post-1"]);
+
+      renderWithProviders(<FavoritesPage />);
+      const title = await screen.findByText("Sunny room");
+
+      const card = title.closest("li");
+      expect(card).toHaveClass("rounded-2xl", "border", "border-border", "bg-white", "shadow-card");
+      expect(card).not.toHaveClass("rounded-lg");
+    });
+  });
+
   it("removes the row from the list after un-favoriting via FavoriteButton", async () => {
-    listFavoritedPosts.mockResolvedValue([
-      {
-        id: "post-1",
-        title: "Sunny room",
-        priceAmount: 1200,
-        priceLabel: null,
-        currencyCode: "USD",
-        locationName: "Rockville",
-        createdAt: "2000-07-01T00:00:00.000Z"
-      }
-    ]);
+    listFavoritedPosts.mockResolvedValue([samplePost]);
     listFavoritedPostIds.mockResolvedValue(["post-1"]);
     removeFavorite.mockResolvedValue(undefined);
 

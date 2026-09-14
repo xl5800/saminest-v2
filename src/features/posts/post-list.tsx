@@ -1,7 +1,8 @@
-import { Home, ImageOff, MapPin, Search, Tag } from "lucide-react";
+import { MapPin } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
+import { PostThumbnail } from "../../components/post-thumbnail";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { formatPrice, formatWantedPosterMeta, isPriceUnset } from "../../utils/format";
 import { usePostsInfiniteQuery } from "./use-posts-query";
@@ -39,33 +40,6 @@ export interface PostListProps {
    *  不一样，不是在现有 .map() 里加 if/else 判断每张卡片，而是整个渲染
    *  路径分两套，见下面组件内部的实现。 */
   variant?: "grid" | "wanted";
-}
-
-/**
- * 32 号卡（分类专属的帖子无图占位）：分类专属无图占位卡片图标——按
- * categoryName 精确字符串匹配。这次改动前是所有分类共用同一套灰底🖼占位，
- * 看起来很像"图片加载失败"；现在按分类
- * 换成品牌浅蓝底 + 对应的线性图标 + 分类名文字，一眼能看出"这类帖子本来
- * 就不配图"，是设计好的样式，不是缺了什么东西。
- *
- * 按字符串（不是分类 id/slug）匹配，是这次改动刻意选的简化方案：现在
- * 分类是固定的三个（rent/wanted/used，见 categories 表种子数据），按
- * categoryName 这个中文名字符串匹配足够用，不需要为此专门引入一张
- * 分类 slug→图标的配置表。代价是：以后分类名字改了，或者新增了分类，
- * 这里会静默退回 ImageOff 兜底图标（文案仍然用 categoryName 本身，不会
- * 报错、也不会"猜"一个合适的图标）——这个代价是可以接受的。
- */
-function getCategoryPlaceholderIcon(categoryName: string) {
-  switch (categoryName) {
-    case "求租":
-      return Search;
-    case "租房":
-      return Home;
-    case "二手":
-      return Tag;
-    default:
-      return ImageOff;
-  }
 }
 
 /**
@@ -270,29 +244,25 @@ export function PostList({
       <div className="grid grid-cols-2 gap-3">
         {posts.map((post) => {
           const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
-          const PlaceholderIcon = getCategoryPlaceholderIcon(post.categoryName);
           return (
             <Link
               key={post.id}
               to={`/post/${post.id}`}
               className="block overflow-hidden rounded-2xl bg-card"
             >
-              {post.coverImageUrl ? (
-                <img
-                  src={post.coverImageUrl}
-                  alt={post.title}
-                  className="aspect-[4/5] w-full object-cover"
-                />
-              ) : (
-                <div
-                  aria-hidden="true"
-                  data-testid="post-thumbnail-placeholder"
-                  className="flex aspect-[4/5] w-full flex-col items-center justify-center gap-1.5 bg-primary-light"
-                >
-                  <PlaceholderIcon aria-hidden="true" size={28} className="text-primary" />
-                  <span className="text-xs font-medium text-primary">{post.categoryName}</span>
-                </div>
-              )}
+              {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/分类色底
+                  占位这段展示逻辑抽成了共享组件 PostThumbnail（见该文件顶部
+                  注释），my-posts-page.tsx/favorites-page.tsx 现在复用同一个
+                  组件展示缩略图，不再各自维护一套。这里传的
+                  sizeClassName/alt 保持跟改动前的内联 JSX 完全一致
+                  （aspect-[4/5] w-full + alt={post.title}），渲染结果没有
+                  变化，纯提取重构。 */}
+              <PostThumbnail
+                coverImageUrl={post.coverImageUrl}
+                categoryName={post.categoryName}
+                sizeClassName="aspect-[4/5] w-full"
+                alt={post.title}
+              />
               <div className="space-y-0.5 p-2.5">
                 <p className="truncate text-sm text-text">{post.title}</p>
                 {priceUnset ? null : (
