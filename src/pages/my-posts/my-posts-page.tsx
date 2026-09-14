@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
+import { PostThumbnail } from "../../components/post-thumbnail";
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
@@ -265,21 +266,18 @@ export function MyPostsPage() {
               className="rounded-2xl border border-border bg-white p-3 shadow-card"
             >
               <div className="flex gap-3">
-                {post.coverImageUrl ? (
-                  <img
-                    src={post.coverImageUrl}
-                    alt={post.title}
-                    className="h-20 w-20 shrink-0 rounded-xl object-cover"
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    data-testid="my-post-thumbnail-placeholder"
-                    className="flex h-20 w-20 shrink-0 items-center justify-center rounded-xl bg-bg text-2xl"
-                  >
-                    🖼
-                  </div>
-                )}
+                {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/占位
+                    改用共享组件 PostThumbnail（见 post-thumbnail.tsx），
+                    占位从纯 emoji 🖼 换成跟首页信息流一致的"分类色底 +
+                    图标"样式，不再是两套不一样的东西。容器尺寸
+                    （h-20 w-20）和圆角（rounded-xl）保持不变。 */}
+                <PostThumbnail
+                  coverImageUrl={post.coverImageUrl}
+                  categoryName={post.categoryName}
+                  sizeClassName="h-20 w-20 shrink-0 rounded-xl"
+                  compact
+                  alt={post.title}
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-2">
                     <p className="line-clamp-2 break-words text-base text-text">{post.title}</p>

@@ -1,7 +1,12 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
-import { resolveLocationName, type PostListItem } from "./posts-repository";
+import {
+  resolveCoverImageUrl,
+  resolveLocationName,
+  type PostFeedImageRow,
+  type PostListItem
+} from "./posts-repository";
 
 // Postgres/PostgREST 的 unique_violation 错误码，对应 favorites 表的
 // favorites_user_id_post_id_key 唯一约束（见
@@ -200,7 +205,27 @@ interface FavoritedPostRow {
     deleted_at: string | null;
     location: { name: string } | null;
     location_text: string | null;
+    // 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）新增：收藏列表页这次要展示
+    // 缩略图，跟着补上分类名/封面图这两列的嵌套行类型。
+    category: { name_zh: string } | null;
+    post_images: PostFeedImageRow[] | null;
   } | null;
+}
+
+/**
+ * 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）新增：PostListItem 的最小扩展，
+ * 只加这次展示缩略图需要的两个字段（分类名、封面图）。**故意不直接换成
+ * posts-repository.ts 的 PostFeedItem**——那个类型还带
+ * authorDisplayName/favoriteCount/commentCount/posterAge/posterGender
+ * 这些收藏列表用不上、这里的查询也没有去 join/查出来的字段，硬套 PostFeedItem
+ * 会让类型上"看起来能用"但实际上大半字段永远是 undefined，是比"专门开一个
+ * 最小扩展类型"更容易踩坑的做法。这个类型只在收藏列表页这一条链路
+ * （favorites-repository.ts → use-favorited-posts-query.ts →
+ * favorites-page.tsx）里使用。
+ */
+export interface FavoritedPostListItem extends PostListItem {
+  categoryName: string;
+  coverImageUrl: string | null;
 }
 
 /**
@@ -221,12 +246,19 @@ interface FavoritedPostRow {
  * 引用的 posts 行不会被物理删除（只会软删除），所以 row.post 不会是
  * null；这里保留 null 判断只是防御性的。多选一列 deleted_at 的开销可以
  * 忽略不计，比引入嵌套资源的 inner-join 过滤语法更直观、也更容易测试。
+ *
+ * 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：加了 category/post_images 两个
+ * 嵌套 join，取法照抄 posts-repository.ts 里其它查询的写法
+ * （category:categories(name_zh)、post_images(public_url, sort_order,
+ * deleted_at)）；封面图复用 posts-repository.ts 导出的
+ * resolveCoverImageUrl，不在这里重新写一遍"取 sort_order 最小的未删除
+ * 图片"逻辑——两处对"封面图"的定义必须永远保持一致。
  */
-export async function listFavoritedPosts(userId: string): Promise<PostListItem[]> {
+export async function listFavoritedPosts(userId: string): Promise<FavoritedPostListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("favorites")
     .select(
-      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name), location_text)"
+      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name), location_text, category:categories(name_zh), post_images(public_url, sort_order, deleted_at))"
     )
     .eq("user_id", userId)
     .overrideTypes<FavoritedPostRow[]>();
@@ -247,6 +279,8 @@ export async function listFavoritedPosts(userId: string): Promise<PostListItem[]
       priceLabel: row.post.price_label,
       currencyCode: row.post.currency_code,
       locationName: resolveLocationName(row.post.location, row.post.location_text),
-      createdAt: row.post.created_at
+      createdAt: row.post.created_at,
+      categoryName: row.post.category?.name_zh ?? "未知分类",
+      coverImageUrl: resolveCoverImageUrl(row.post.post_images)
     }));
 }

@@ -151,7 +151,7 @@ describe("listFavoritedPosts", () => {
     eqMock.mockReturnValue(queryBuilder);
   });
 
-  it("returns the favorited posts, mapped to PostListItem, for the given user", async () => {
+  it("returns the favorited posts, mapped to FavoritedPostListItem, for the given user", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -163,7 +163,11 @@ describe("listFavoritedPosts", () => {
             currency_code: "USD",
             created_at: "2026-07-01T00:00:00.000Z",
             deleted_at: null,
-            location: { name: "Rockville" }
+            location: { name: "Rockville" },
+            category: { name_zh: "租房" },
+            post_images: [
+              { public_url: "https://img.example.com/cover.jpg", sort_order: 0, deleted_at: null }
+            ]
           }
         }
       ],
@@ -173,8 +177,10 @@ describe("listFavoritedPosts", () => {
     const result = await listFavoritedPosts("user-1");
 
     expect(fromMock).toHaveBeenCalledWith("favorites");
+    // 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：加了 category/post_images
+    // 两个嵌套 join，供收藏列表页展示缩略图。
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name), location_text)"
+      "post:posts(id, title, price_amount, price_label, currency_code, created_at, deleted_at, location:locations(name), location_text, category:categories(name_zh), post_images(public_url, sort_order, deleted_at))"
     );
     expect(eqMock).toHaveBeenCalledWith("user_id", "user-1");
     expect(result).toEqual([
@@ -185,9 +191,37 @@ describe("listFavoritedPosts", () => {
         priceLabel: null,
         currencyCode: "USD",
         locationName: "Rockville",
-        createdAt: "2026-07-01T00:00:00.000Z"
+        createdAt: "2026-07-01T00:00:00.000Z",
+        categoryName: "租房",
+        coverImageUrl: "https://img.example.com/cover.jpg"
       }
     ]);
+  });
+
+  it("maps a missing category to '未知分类' and no active images to a null coverImageUrl", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          post: {
+            id: "post-1",
+            title: "Sunny room",
+            price_amount: 1200,
+            price_label: null,
+            currency_code: "USD",
+            created_at: "2026-07-01T00:00:00.000Z",
+            deleted_at: null,
+            location: null,
+            category: null,
+            post_images: []
+          }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listFavoritedPosts("user-1");
+
+    expect(result[0]).toMatchObject({ categoryName: "未知分类", coverImageUrl: null });
   });
 
   it("filters out favorites whose post has been soft-deleted", async () => {
@@ -202,7 +236,9 @@ describe("listFavoritedPosts", () => {
             currency_code: "USD",
             created_at: "2026-07-01T00:00:00.000Z",
             deleted_at: "2026-07-10T00:00:00.000Z",
-            location: null
+            location: null,
+            category: null,
+            post_images: []
           }
         },
         {
@@ -214,7 +250,9 @@ describe("listFavoritedPosts", () => {
             currency_code: "USD",
             created_at: "2026-07-02T00:00:00.000Z",
             deleted_at: null,
-            location: null
+            location: null,
+            category: { name_zh: "二手" },
+            post_images: []
           }
         }
       ],
@@ -231,7 +269,9 @@ describe("listFavoritedPosts", () => {
         priceLabel: null,
         currencyCode: "USD",
         locationName: null,
-        createdAt: "2026-07-02T00:00:00.000Z"
+        createdAt: "2026-07-02T00:00:00.000Z",
+        categoryName: "二手",
+        coverImageUrl: null
       }
     ]);
   });

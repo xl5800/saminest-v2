@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { listFavoritedPosts } from "../../repositories/favorites-repository";
-import type { PostListItem } from "../../repositories/posts-repository";
+import {
+  listFavoritedPosts,
+  type FavoritedPostListItem
+} from "../../repositories/favorites-repository";
 import { useAuthStore } from "../../store/auth-store";
 
 /**
@@ -16,7 +18,7 @@ import { useAuthStore } from "../../store/auth-store";
 export function useFavoritedPostsQuery() {
   const userId = useAuthStore((s) => s.session)?.user.id;
 
-  return useQuery<PostListItem[]>({
+  return useQuery<FavoritedPostListItem[]>({
     queryKey: ["favorited-posts", userId],
     queryFn: () => listFavoritedPosts(userId as string),
     enabled: !!userId
