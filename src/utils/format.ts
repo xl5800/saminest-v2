@@ -105,19 +105,35 @@ export function formatActivityStartAt(startAt: string): string {
  * 紧迫感），凑满/超过人数上限（理论上不应该发生，触发器会在满员时把
  * status 切成 'full' 挡住新报名，但界面上仍然防御性地用 Math.max 兜底，
  * 不展示负数）时改成"已满员"。
+ *
+ * 活动"人数上限"语义修正——上限包含发起人本人：BARRY 发现一个数字不一致
+ * 的 bug（capacity=4、0 个非发起人参与者的活动，头像格正确画出"1 个发起人
+ * 头像 + 3 个虚线空位"，这行文字却显示"还差 4 人"，两者对不上）。调查
+ * 发现 activity-participant-avatars.tsx 的头像格填充逻辑（computeSlots）
+ * 本来就是"capacity 含发起人"这个语义（joinedCount = 1 + 参与者数），真正
+ * 没跟上的只有这一行文字——它直接拿"不含发起人的参与者数"去跟 capacity
+ * 比较，比视觉上的空位数多算了 1 个"还差"的名额。这里补上 +1（发起人
+ * 本人），跟 computeSlots 的 joinedCount 口径保持一致；capacity === null
+ * 那个分支的"已有 X 人报名"原来也是不含发起人的，一并改成含发起人，两个
+ * 分支不能一个含一个不含。函数签名不变——两个调用方
+ * （activity-participant-avatars.tsx / my-activities-page.tsx）传进来的
+ * 仍然是"不含发起人的参与者数"，加 1 的动作在函数内部完成，不需要改调用方。
+ * 明确决定：不迁移已有活动的 capacity 数值，老活动的"还差 N 人"文字会
+ * 因为这次语义变化自然少算 1，这是产品确认接受的结果。
  */
 export function formatActivityParticipantSummary(
   participantCount: number,
   capacity: number | null
 ): string {
+  const joinedCount = participantCount + 1; // +1：发起人本人
   if (capacity === null) {
-    return `已有 ${participantCount} 人报名`;
+    return `已有 ${joinedCount} 人报名`;
   }
 
-  const remaining = Math.max(capacity - participantCount, 0);
+  const remaining = Math.max(capacity - joinedCount, 0);
   return remaining > 0
-    ? `还差 ${remaining} 人（${participantCount}/${capacity}）`
-    : `已满员（${participantCount}/${capacity}）`;
+    ? `还差 ${remaining} 人（${joinedCount}/${capacity}）`
+    : `已满员（${joinedCount}/${capacity}）`;
 }
 
 /**

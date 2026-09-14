@@ -419,7 +419,13 @@ export function CreateActivityPage() {
           </label>
 
           <div className="mb-4">
-            <span className="mb-1 block text-sm font-medium text-text">人数上限（不填表示不限）</span>
+            {/* 活动"人数上限"语义修正：这个数字含发起人本人（见
+                format.ts 的 formatActivityParticipantSummary 顶部注释），
+                不是"除自己以外还需要多少人"——补一句"含你自己"，避免发起人
+                填错数字（比如想凑 4 人拼车却填了 3，以为不含自己）。 */}
+            <span className="mb-1 block text-sm font-medium text-text">
+              人数上限（含你自己，不填表示不限）
+            </span>
             <div className="flex items-center gap-3">
               <button
                 type="button"

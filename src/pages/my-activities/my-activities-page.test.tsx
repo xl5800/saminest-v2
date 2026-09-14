@@ -195,7 +195,9 @@ describe("MyActivitiesPage", () => {
     expect(link).toHaveTextContent("🍜 周末吃火锅");
     expect(link).toHaveTextContent("吃饭搭子");
     expect(link).toHaveTextContent("海底捞");
-    expect(link).toHaveTextContent("还差 2 人（2/4）");
+    // 活动"人数上限"语义修正：sampleOrganizedActivity 是 2 个参与者 + 1
+    // 个发起人 = 3 人已加入，还差 4-3=1 个名额，不是老口径下的"还差 2 人"。
+    expect(link).toHaveTextContent("还差 1 人（3/4）");
     expect(screen.getByText("招募中")).toBeInTheDocument();
   });
 
@@ -411,8 +413,14 @@ describe("MyActivitiesPage", () => {
   });
 
   it("calls approveActivityParticipant on 同意, removes the applicant from the panel, and bumps participantCount locally", async () => {
+    // 活动"人数上限"语义修正：capacity 现在含发起人本人，participantCount
+    // 从 2 改成 1——如果还用 2，approve 之后 nextCount=3、
+    // nextJoinedCount=3+1=4 会正好撞满 capacity=4，这个测试的意图是"还没
+    // 撞满、只是本地计数+1"，跟下一个"填满最后一个名额"的测试要分开验证。
+    // 改成 1 之后：approve 后 nextCount=1+1=2，nextJoinedCount=2+1=3<4，
+    // 还没满。
     listMyOrganizedActivities.mockResolvedValue([
-      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 2, capacity: 4 }
+      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 1, capacity: 4 }
     ]);
     listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
     approveActivityParticipant.mockResolvedValue(undefined);
@@ -430,8 +438,13 @@ describe("MyActivitiesPage", () => {
   });
 
   it("flips an organized activity to '已满员' locally when an approval fills the last spot", async () => {
+    // participantCount 从 3 改成 2：approve 前 joinedCount = 2+1 = 3 < 4
+    // （还没满，跟 fixture 里 status: 'open' 的初始状态自洽），approve 后
+    // nextCount = 2+1 = 3，nextJoinedCount = 3+1 = 4 = capacity——这一次
+    // 批准正好填满最后一个名额，这才是这个用例名字（"an approval fills the
+    // last spot"）描述的场景。
     listMyOrganizedActivities.mockResolvedValue([
-      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 3, capacity: 4 }
+      { ...sampleOrganizedActivity, requiresApproval: true, participantCount: 2, capacity: 4 }
     ]);
     listPendingActivityParticipants.mockResolvedValue([samplePendingApplicant]);
     approveActivityParticipant.mockResolvedValue(undefined);
@@ -460,7 +473,9 @@ describe("MyActivitiesPage", () => {
       expect(rejectActivityParticipant).toHaveBeenCalledWith("participant-1");
     });
     expect(screen.queryByText("Bob")).not.toBeInTheDocument();
-    expect(screen.getByText("还差 2 人（2/4）")).toBeInTheDocument();
+    // 活动"人数上限"语义修正：capacity 含发起人，2 个参与者 + 1 个发起人 =
+    // 3，还差 4-3=1 个名额，不是老口径下的"还差 2 人"。
+    expect(screen.getByText("还差 1 人（3/4）")).toBeInTheDocument();
   });
 
   it("sends a '被同意了' notification to the applicant via findExistingActivityConversation + sendMessage when approving", async () => {

@@ -401,16 +401,26 @@ export function MyActivitiesPage() {
 
   // 同意成功后本地把这张活动的 participantCount +1、按容量判断要不要
   // 翻成 'full'——跟 sync_activity_participant_count 触发器里
-  // "capacity is not null and count>=capacity and status='open' then
+  // "capacity is not null and count+1>=capacity and status='open' then
   // 'full'"这一支逐字对应，见上面函数级注释。拒绝不改变计数，不需要
   // 更新 organizedActivities。
+  //
+  // 活动"人数上限"语义修正——上限包含发起人本人：这里的 nextCount 是
+  // "不含发起人的已批准参与者数"（跟 activity.participantCount 是同一个
+  // 口径），要跟 capacity 比较之前得再加 1（发起人本人）——这是
+  // sync_activity_participant_count 触发器那次修正的前端镜像，两边必须
+  // 保持同一个 +1 才不会出现"本地已经显示已满员、刷新后服务端还是
+  // open"（或反过来）这种前后端状态对不上的情况。
   function applyApprovalLocally(activityId: string): void {
     setOrganizedActivities((prev) =>
       (prev ?? []).map((activity) => {
         if (activity.id !== activityId) return activity;
         const nextCount = activity.participantCount + 1;
+        const nextJoinedCount = nextCount + 1; // +1：发起人本人
         const nextStatus =
-          activity.capacity !== null && nextCount >= activity.capacity && activity.status === "open"
+          activity.capacity !== null &&
+          nextJoinedCount >= activity.capacity &&
+          activity.status === "open"
             ? "full"
             : activity.status;
         return { ...activity, participantCount: nextCount, status: nextStatus };

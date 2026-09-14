@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  formatActivityParticipantSummary,
   formatListingDate,
   formatMessageTimeDivider,
   formatPrice,
@@ -200,5 +201,34 @@ describe("formatMessageTimeDivider", () => {
 
   it("returns an empty string for an invalid timestamp", () => {
     expect(formatMessageTimeDivider("not-a-date", now)).toBe("");
+  });
+});
+
+// 活动"人数上限"语义修正——上限包含发起人本人：这个函数之前没有独立的
+// 单测（只在 activity-participant-avatars.test.tsx 里被当作"预期文案"的
+// 计算器调用，不是一个独立的正确性断言，语义改了那边也会跟着自动改，
+// 测不出这次的 bug），这里补一组直接覆盖三个分支的用例，参数
+// participantCount 保持"不含发起人"的既有约定（调用方传的也是这个口径）。
+describe("formatActivityParticipantSummary", () => {
+  it("adds the organizer (+1) when there is no capacity limit", () => {
+    // 截图场景之外的 capacity === null 分支：0 个参与者时也应该显示
+    // "已有 1 人报名"（发起人本人），不是"已有 0 人报名"。
+    expect(formatActivityParticipantSummary(0, null)).toBe("已有 1 人报名");
+    expect(formatActivityParticipantSummary(3, null)).toBe("已有 4 人报名");
+  });
+
+  it("counts the organizer toward '还差 N 人' and the M/N fraction (BARRY 截图场景：capacity=4，0 个非发起人参与者)", () => {
+    expect(formatActivityParticipantSummary(0, 4)).toBe("还差 3 人（1/4）");
+  });
+
+  it("shows 已满员 once participants + organizer reach capacity", () => {
+    // 3 个参与者 + 1 个发起人 = 4，正好等于 capacity。
+    expect(formatActivityParticipantSummary(3, 4)).toBe("已满员（4/4）");
+  });
+
+  it("still shows 已满员 (not a negative remaining count) when participants + organizer exceed capacity", () => {
+    // 理论上不应该发生（触发器会在满员时挡住新报名），但界面侧仍然要防御
+    // 性地用 Math.max 兜底，不展示负数。
+    expect(formatActivityParticipantSummary(5, 4)).toBe("已满员（6/4）");
   });
 });
