@@ -419,8 +419,11 @@ export function PostDetailPage() {
 
           中间的"咨询"按钮包了一层 flex-1 的 div 让它占满两个图标之外的
           剩余宽度——ContactSellerButton 组件本身（含它内部的 <span> 包裹
-          结构）和传给它的 className 完全没变，还是任务卡2定下的 h-12 +
-          rounded-xl + text-[15px] + w-full。 */}
+          结构）没变，传给它的 className 还是任务卡2定下的 h-12 +
+          text-[15px] + w-full，圆角这次从 rounded-xl（12px）换成新的
+          rounded-button（14px，见 index.css --radius-button 的说明）——
+          这是这个页面唯一的主要 CTA（报名/联系类按钮），矩形形状符合
+          "按钮"这一档，不是 Pill，套用这个新 token 没有歧义。 */}
       {id && data ? (
         <div
           data-testid="post-detail-contact-bar"
@@ -439,7 +442,7 @@ export function PostDetailPage() {
             <ContactSellerButton
               postId={id}
               label="咨询"
-              className="flex h-12 w-full items-center justify-center rounded-xl bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-12 w-full items-center justify-center rounded-button bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
           <FavoriteButton postId={id} variant="icon" />

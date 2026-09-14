@@ -29,6 +29,14 @@ export interface FabProps {
  * home 变体）——这是页面级的使用决策，不是这个组件自己要处理的逻辑，组件
  * 本身对"谁在用它"没有任何假设。
  */
+// 全 App 视觉 Token 体系（第一批，找搭子页"发起搭子"CTA）：这个组件的圆角
+// 保持 rounded-full 不变，没有换成任务卡里"主要 CTA 按钮"提到的新
+// --radius-button（14px）——index.css 的圆角表把 999px 的胶囊/圆形按钮
+// （Pill 档）和 14px 的矩形主按钮（按钮档）分成两个不同档位，这个组件是
+// 悬浮胶囊按钮，形状上属于前者，套用 14px 会把胶囊变成圆角矩形，是视觉
+// 倒退，不是任务卡的本意。shadow-fab 这个 class 名字不变，index.css 里
+// 对应的数值这次已经更新（透明度从 0.35 降到 0.18、颜色跟随新
+// --color-primary 换算），不需要在这个文件里额外改。
 export function Fab({ label, variant = "default", onClick, disabled }: FabProps) {
   return (
     <button

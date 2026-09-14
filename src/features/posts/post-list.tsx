@@ -87,6 +87,14 @@ export interface PostListProps {
  * 的层次感（两个颜色亮度接近），卡片有没有清晰边界才是关键，所以这次
  * 一并补齐。只加 class，不改布局/间距/图片比例。
  *
+ * 全 App 视觉 Token 体系（第一批）：圆角从 `rounded-2xl`（16px）换成新的
+ * `rounded-card-lg`（20px，见 index.css `--radius-card-lg` 的说明）——
+ * 这是首页信息流这个全站曝光最高的位置，属于"主力曝光位卡片"，圆角要
+ * 比次要卡片（16px 不变）大一档。`border-border`/`shadow-card` 这两个
+ * class 名字不变，引用的 token 数值这次跟着更新，不用改 class 本身。
+ * grid/wanted 两个 variant 都改，检查过这个文件没有跟这批新 token 语义
+ * 重复的硬编码十六进制颜色，没有需要额外改的场景。
+ *
  * 分页：用"哨兵元素 + IntersectionObserver"实现无限滚动：列表底部放一个
  * 不可见的哨兵 div，它进入视口时触发 fetchNextPage()。哨兵只在
  * hasNextPage 为真时渲染——没有下一页时彻底不挂这个元素，而不是渲染出来
@@ -201,7 +209,7 @@ export function PostList({
               <Link
                 key={post.id}
                 to={`/post/${post.id}`}
-                className="block rounded-2xl border border-border bg-card p-4 shadow-card"
+                className="block rounded-card-lg border border-border bg-card p-4 shadow-card"
               >
                 <p className="line-clamp-2 break-words text-base font-medium text-text">
                   {post.title}
@@ -256,7 +264,7 @@ export function PostList({
             <Link
               key={post.id}
               to={`/post/${post.id}`}
-              className="block overflow-hidden rounded-2xl border border-border bg-card shadow-card"
+              className="block overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
             >
               {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/分类色底
                   占位这段展示逻辑抽成了共享组件 PostThumbnail（见该文件顶部

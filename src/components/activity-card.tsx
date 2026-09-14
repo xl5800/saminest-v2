@@ -60,6 +60,11 @@ export interface ActivityCardProps {
  * 让头像区往上贴近文字区，同时保留 p-5 提供的左右内边距（20px）不变——
  * 这条 pb-2 只影响文字区跟头像区之间的垂直间距，不影响文字区内部标题/
  * 地点/时间三行之间的间距（那是靠各自的 mt-1 控制的，没有改）。
+ *
+ * 全 App 视觉 Token 体系（第一批）：卡片圆角从 `rounded-2xl`（16px）换成
+ * `rounded-card-lg`（20px）——找搭子卡片是这个页面的主力曝光位，跟首页
+ * post-list.tsx 网格卡片同一档，见 index.css `--radius-card-lg` 的说明。
+ * 只改这一个 class，其它结构/间距/交互不变。
  */
 export function ActivityCard({ activity, participants }: ActivityCardProps) {
   const { emoji } = getActivityChannelMeta(activity.channel);
@@ -67,7 +72,7 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
   return (
     <Link
       to={`/activities/${activity.id}`}
-      className="block overflow-hidden rounded-2xl border border-border bg-card shadow-card"
+      className="block overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
     >
       <div className="p-5 pt-3 pb-2">
         <p className="line-clamp-2 break-words text-base text-text">

@@ -511,7 +511,9 @@ describe("PostDetailPage", () => {
       });
 
       const button = screen.getByRole("button", { name: "咨询" });
-      expect(button).toHaveClass("h-12", "rounded-xl", "text-[15px]", "w-full", "bg-primary", "text-white");
+      // 全 App 视觉 Token 体系（第一批）：圆角从 rounded-xl（12px）换成
+      // 新的 rounded-button（14px），断言跟着更新。
+      expect(button).toHaveClass("h-12", "rounded-button", "text-[15px]", "w-full", "bg-primary", "text-white");
       expect(button.className).not.toContain("text-base");
       expect(button.className).not.toContain("shadow-fab");
     });

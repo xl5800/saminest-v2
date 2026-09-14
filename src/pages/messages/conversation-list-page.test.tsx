@@ -142,6 +142,9 @@ describe("ConversationListPage", () => {
 
   // 10.1 扁平化：容器改成 divide-y divide-border（对应 --line token），
   // 每一行不再是独立的圆角/投影/白底卡片。
+  //
+  // 全 App 视觉 Token 体系（第一批）：分隔线换成专门的 --color-divider
+  // （divide-divider），不再跟卡片边框共用 divide-border，断言跟着更新。
   it("renders a flat, divider-separated list — no per-row card border/rounded/shadow classes", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
@@ -155,7 +158,7 @@ describe("ConversationListPage", () => {
     const { container } = renderWithProviders(<ConversationListPage />);
 
     const list = container.querySelector("ul");
-    expect(list).toHaveClass("divide-y", "divide-border");
+    expect(list).toHaveClass("divide-y", "divide-divider");
 
     const rows = container.querySelectorAll("li");
     expect(rows).toHaveLength(2);

@@ -31,9 +31,14 @@ const NOTIFICATIONS_PATH = "/notifications";
  * 哪一行处于滑开状态 → 渲染扁平的 <ul>"，不再直接拼一行的 DOM。
  *
  * 列表容器改成 divide-y divide-border（对应 saminest_final_screens.html
- * 的 --line token，这个仓库已经落地成 --color-border/border-border，
+ * 的 --line token，这个仓库当时落地成 --color-border/border-border，
  * 两者是同一个值 #ececef），去掉每行原来的圆角/投影/白底卡片/行间距——
  * 通栏铺满，只靠这一条分隔线区隔，是这次任务卡明确要求的视觉改动。
+ *
+ * 全 App 视觉 Token 体系（第一批）：分隔线换成了专门新增的
+ * --color-divider（divide-divider），不再跟 --color-border 共用同一个
+ * 值——这次的方案把"卡片边框"和"列表分割线"拆成两种独立语义，分割线要
+ * 更淡，见 index.css 里 --color-divider 的说明。
  *
  * openRowId：同一时间最多一行处于"左滑菜单打开"状态，滑开新的一行会
  * 自动收起上一行——这个状态提到页面这一层持有（而不是每行自己独立维护），
@@ -107,7 +112,11 @@ export function ConversationListPage() {
           <p role="status" className="px-4 text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
         ) : null}
         {!isPending && !isError && visibleConversations.length > 0 ? (
-          <ul className="divide-y divide-border">
+          // 全 App 视觉 Token 体系（第一批）：分割线从 divide-border（卡片
+          // 边框语义）换成 divide-divider（列表分割线专用，比卡片边框更
+          // 淡，见 index.css --color-divider 的说明）——这次特意区分"卡片
+          // 边框"和"列表分割线"两种语义，不再共用同一个 token。
+          <ul className="divide-y divide-divider">
             {visibleConversations.map((conversation) => (
               <ConversationSwipeRow
                 key={conversation.id}

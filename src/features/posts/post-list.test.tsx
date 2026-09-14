@@ -469,7 +469,7 @@ describe("PostList variant='wanted'", () => {
     // 背景换中性浅灰 + 卡片边框/阴影撑出层次（新一轮 UI 审计）：这个
     // variant 改动前已经有 shadow-card，这次补上 border-border，两者
     // 一起跟其它卡片列表项保持一致。
-    expect(link).toHaveClass("rounded-2xl", "border", "border-border", "bg-card", "shadow-card");
+    expect(link).toHaveClass("rounded-card-lg", "border", "border-border", "bg-card", "shadow-card");
     expect(link).toHaveTextContent("Looking for a quiet room near metro");
     expect(link).toHaveTextContent("USD 1,200");
     expect(link).toHaveTextContent("Rockville");

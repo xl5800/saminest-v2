@@ -2,22 +2,40 @@
 name: Saminest
 description: DMV 地区（华盛顿 DC / 弗吉尼亚 / 马里兰）华人社区同城生活服务 App —— 租房、求租、二手、找搭子。
 colors:
-  primary: "#3457e8"
-  primary-hover: "#2743b8"
+  primary: "#315bea"
+  primary-hover: "#2b52d4"
+  primary-pressed: "#2449c9"
   primary-dark: "#2743b8"
-  primary-light: "#eef1fd"
+  primary-light: "#eaf0ff"
+  primary-lighter: "#f3f6ff"
   primary-soft: "#c9d5fb"
-  accent: "#3457e8"
-  bg: "#f3f5fa"
+  accent: "#315bea"
+  bg: "#f5f7fb"
+  bg-secondary: "#f0f3f8"
   card: "#ffffff"
-  text: "#1c1c1e"
-  text-muted: "#8a8a8e"
-  text-subtle: "#b0b0b5"
-  border: "#ececef"
+  surface-muted: "#eef1f7"
+  surface-hover: "#f8f9fc"
+  surface-pressed: "#f0f2f6"
+  text: "#20242c"
+  text-muted: "#697386"
+  text-subtle: "#9aa3b2"
+  text-placeholder: "#a8afbc"
+  text-disabled: "#c3c8d1"
+  border: "#e7eaf0"
+  border-light: "#eceef3"
+  divider: "#e9ecf2"
   chevron: "#c7c7cc"
-  success: "#2e7d32"
-  warning: "#b7791f"
-  danger: "#c0392b"
+  success: "#2e9b62"
+  success-light: "#eaf7f0"
+  warning: "#d98b24"
+  warning-light: "#fff5e6"
+  danger: "#d94b4b"
+  danger-light: "#fdeeee"
+  info: "#4c78e8"
+  info-light: "#edf2ff"
+  image-placeholder-icon: "#a7afbd"
+  nav-icon: "#8c95a3"
+  overlay: "rgba(20, 26, 38, 0.45)"
 typography:
   title-lg:
     fontFamily: "{typography.fontStack}"
@@ -54,7 +72,9 @@ rounded:
   avatar-tile: 6px
   list-box: 8px
   control: 12px
+  button: 14px
   card: 16px
+  card-lg: 20px
   profile-card: 20px
   search: 26px
   full: 9999px
@@ -85,7 +105,7 @@ components:
     backgroundColor: "{colors.primary}"
     height: 48px
     rounded: "{rounded.full}"
-    shadow: "0 6px 16px rgba(52, 87, 232, 0.35)"
+    shadow: "0 6px 16px rgba(49, 91, 234, 0.18)"
   fab-dark-variant:
     backgroundColor: "{colors.primary-dark}"
   icon-button:
@@ -108,7 +128,14 @@ components:
   card-content:
     backgroundColor: "{colors.card}"
     rounded: "{rounded.card}"
-    shadow: "0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04)"
+    shadow: "0 1px 2px rgba(20, 30, 50, 0.03), 0 4px 12px rgba(20, 30, 50, 0.04)"
+  # 全 App 视觉 Token 体系（第一批）新增：帖子卡片/找搭子卡片这类主力
+  # 曝光位改用 rounded.card-lg（20px），跟这里的通用 card-content（16px，
+  # 次要/非主力曝光位）区分开，见下方 Design Tokens「圆角」小节说明。
+  card-content-lg:
+    backgroundColor: "{colors.card}"
+    rounded: "{rounded.card-lg}"
+    shadow: "0 1px 2px rgba(20, 30, 50, 0.03), 0 4px 12px rgba(20, 30, 50, 0.04)"
   card-profile-compact:
     backgroundColor: "{colors.card}"
     rounded: "{rounded.profile-card}"
@@ -142,24 +169,50 @@ motion:
 
 ### 颜色
 
+> 2026-09-14 更新为"全 App 视觉 Token 体系（第一批）"的数值——BARRY 提出
+> 一套完整的颜色/圆角/阴影/文字层级方案，解决"纯白刺眼"、"各页面各一套
+> 白色"的问题。当前只有首页信息流/找搭子列表/消息列表/帖子详情四个页面
+> 实际接入了新数值（见下面每个 token 用途说明里标注的"目前用在哪"），
+> 其余页面第二批任务卡再扫，但下面的 Hex 数值全部是 `src/index.css`
+> 里当前实际生效的值（token 定义本身是全局的，第二批只是"哪些页面已经
+> 用上新样式"的问题，不是"数值本身还没改"）。
+
 | Token（代码里的实际变量名） | Hex | 用途 |
 |---|---|---|
-| `--color-primary` | `#3457E8` | 品牌主色/强调蓝——按钮、链接、选中态、分类高亮，全站唯一的强调色相 |
-| `--color-primary-hover` | `#2743B8` | Primary 按钮的 hover 反馈色 |
+| `--color-primary` | `#315BEA` | 品牌主色/强调蓝——按钮、链接、选中态、分类高亮，全站唯一的强调色相 |
+| `--color-primary-hover` | `#2B52D4` | Primary 按钮的 hover 反馈色 |
+| `--color-primary-pressed` | `#2449C9` | Primary 按钮的按下态，跟 hover 是两个不同交互阶段 |
 | `--color-primary-dark` | `#2743B8` | 数值与 hover 相同，但语义独立——用于"找搭子"页悬浮按钮等需要跟默认场景区分的地方 |
-| `--color-primary-light` | `#EEF1FD` | 浅蓝底，分类标签 / 高亮态背景 |
+| `--color-primary-light` | `#EAF0FF` | 浅蓝底，分类标签 / 高亮态背景 |
+| `--color-primary-lighter` | `#F3F6FF` | 比 primary-light 更淡一档 |
 | `--color-primary-soft` | `#C9D5FB` | 更浅一级的蓝，空状态占位色 |
-| `--color-accent` | `#3457E8` | 历史遗留的独立 token（曾经是不同的蓝），现已收敛成跟 primary 完全相同的值；分类选中态、发布按钮、底部导航中间按钮仍在用这个类名，只改值未改名 |
-| `--color-bg` | `#F3F5FA` | 全站页面画布背景（唯一的页面级背景色） |
+| `--color-accent` | `#315BEA` | 历史遗留的独立 token（曾经是不同的蓝），现已收敛成跟 primary 完全相同的值；分类选中态、发布按钮、底部导航中间按钮仍在用这个类名，只改值未改名 |
+| `--color-bg` | `#F5F7FB` | 全站页面画布背景（唯一的页面级背景色） |
+| `--color-bg-secondary` | `#F0F3F8` | 次级页面背景，比主背景再区分一档 |
 | `--color-card` | `#FFFFFF` | 卡片 / 圆形图标按钮等"白色元素"背景 |
-| `--color-text` | `#1C1C1E` | 主文字 |
-| `--color-text-muted` | `#8A8A8E` | 次要文字（说明文字、未读态之外的默认状态） |
-| `--color-text-subtle` | `#B0B0B5` | 三级文字（邮箱、极小标签这类最弱化的文字） |
-| `--color-border` | `#ECECEF` | 分隔线 / 输入框边框 |
+| `--color-surface-muted` | `#EEF1F7` | 弱化表面 / 图片占位底色（目前用在找搭子卡片的头像空位占位格） |
+| `--color-surface-hover` | `#F8F9FC` | 列表项 hover 态 |
+| `--color-surface-pressed` | `#F0F2F6` | 列表项按下态 |
+| `--color-text` | `#20242C` | 主文字 |
+| `--color-text-muted` | `#697386` | 次要文字（说明文字、未读态之外的默认状态） |
+| `--color-text-subtle` | `#9AA3B2` | 三级文字（邮箱、极小标签这类最弱化的文字） |
+| `--color-text-placeholder` | `#A8AFBC` | 输入框占位文字 |
+| `--color-text-disabled` | `#C3C8D1` | 禁用态文字 |
+| `--color-border` | `#E7EAF0` | 卡片边框 / 输入框边框 |
+| `--color-border-light` | `#ECEEF3` | 比 border 更淡一档的分割线 |
+| `--color-divider` | `#E9ECF2` | 列表行与行之间的分割线（跟卡片边框刻意区分成两种语义，目前用在消息列表） |
 | `--color-chevron` | `#C7C7CC` | 弱化图标 / chevron 箭头专用色，比 text-muted 更淡 |
-| `--color-success` | `#2E7D32` | 成功态 |
-| `--color-warning` | `#B7791F` | 警告态 |
-| `--color-danger` | `#C0392B` | 危险 / 错误态（含"退出"、"删除"等破坏性操作文字色） |
+| `--color-success` | `#2E9B62` | 成功态 |
+| `--color-success-light` | `#EAF7F0` | 成功态浅底色 |
+| `--color-warning` | `#D98B24` | 警告态 |
+| `--color-warning-light` | `#FFF5E6` | 警告态浅底色 |
+| `--color-danger` | `#D94B4B` | 危险 / 错误态（含"退出"、"删除"等破坏性操作文字色；未读消息徽章沿用这个 token，BARRY 明确确认保留红色不改蓝） |
+| `--color-danger-light` | `#FDEEEE` | 危险态浅底色 |
+| `--color-info` | `#4C78E8` | 信息提示色 |
+| `--color-info-light` | `#EDF2FF` | 信息提示浅底色 |
+| `--color-image-placeholder-icon` | `#A7AFBD` | 图片占位图标颜色（目前用在找搭子卡片的头像空位"+"图标） |
+| `--color-nav-icon` | `#8C95A3` | 底部导航未选中图标颜色，比 text-muted 稍浅 |
+| `--color-overlay` | `rgba(20, 26, 38, 0.45)` | 弹窗 / BottomSheet 遮罩层，替代黑色遮罩 |
 
 全站**只有一套蓝色层级**（primary 及其深/浅变体），没有第二种强调色相（不用橙色、珊瑚色等）。
 
@@ -192,25 +245,40 @@ motion:
 
 ### 圆角
 
-按实际使用场景整理出的一套隐性规律（没有写成正式规范文档，是从组件代码里读出来的）：
+按实际使用场景整理出的一套隐性规律（没有写成正式规范文档，是从组件代码里读出来的）。
+
+> 2026-09-14 更新：全 App 视觉 Token 体系（第一批）新增 `--radius-card-lg`
+> （20px）和 `--radius-button`（14px）两个 token，是**一次全站级别的
+> 圆角约定变更**：主内容卡片这一档从单一的 16px 拆成两级——"主力曝光位"
+> 卡片（帖子卡片 `post-list.tsx`、找搭子卡片 `activity-card.tsx`，这批
+> 已经接入）用新的 20px，其余"次要/非主力曝光位"卡片（分类 tile、聊天
+> 气泡等，第二批再扫）继续维持 16px 不变。矩形主要 CTA 按钮（比如帖子
+> 详情页"咨询"按钮）从 12px 升到 14px 这个新档位；胶囊形/圆形按钮（FAB、
+> 空状态引导按钮）本来就是 9999px 的 Pill 档，不受这次调整影响。
 
 | 圆角值 | Tailwind 类 | 使用场景 |
 |---|---|---|
 | 6px | `rounded-md` | **找搭子活动的方形头像 tile**（`activity-participant-avatars.tsx`，17 号卡明确加的一圈小圆角，区别于圆形头像的 `rounded-full`） |
 | 8px | `rounded-lg` | 边框信息框、后台管理列表行、表单 `fieldset` 分组 |
-| 12px | `rounded-xl` | 标准按钮、表单输入框、下拉/更多操作菜单弹层 |
-| 16px | `rounded-2xl` | 主内容卡片——帖子卡片、活动卡片、分类 tile、聊天气泡 |
+| 12px | `rounded-xl` | 表单输入框、下拉/更多操作菜单弹层 |
+| 14px（自定义 token `--radius-button`） | `rounded-button` | 矩形主要 CTA 按钮（这批已接入：帖子详情页"咨询"按钮） |
+| 16px | `rounded-2xl` | 次要/非主力曝光位卡片——分类 tile、聊天气泡（帖子卡片/活动卡片这两个主力曝光位已经升级到下面的 20px，见上方更新说明） |
 | 20px（自定义 token `--radius-profile-card`） | `rounded-profile-card` | "我的"页头像紧凑卡片专属 |
+| 20px（自定义 token `--radius-card-lg`） | `rounded-card-lg` | 主力曝光位主内容卡片——帖子卡片、找搭子卡片（跟 profile-card 数值相同、语义独立的两个 token，沿用项目里 primary-hover/primary-dark 那种"数值相同也保留两个名字"的既有约定） |
 | 26px（自定义 token `--radius-search`） | `rounded-search` | 胶囊搜索框专属 |
 | 9999px | `rounded-full` | 圆形头像、圆形图标按钮、FAB、胶囊按钮 |
 
 ### 投影
 
+> 2026-09-14 更新：`--shadow-card` 换成带一点冷蓝调的低透明度投影（呼应新
+> 的 `--color-text`），`--shadow-fab` 的 RGB 分量同步换算成新的
+> `--color-primary`、透明度从 0.35 降到 0.18（BARRY 给的按钮投影数值）。
+
 | Token | 值 | 用途 |
 |---|---|---|
-| `--shadow-card` | `0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)` | 双层轻投影，Airbnb 风格的内容卡片 |
+| `--shadow-card` | `0 1px 2px rgba(20,30,50,0.03), 0 4px 12px rgba(20,30,50,0.04)` | 双层轻投影，Airbnb 风格的内容卡片 |
 | `--shadow-search` | `0 1px 4px rgba(0,0,0,0.06)` | 搜索框，比卡片投影更轻一档 |
-| `--shadow-fab` | `0 6px 16px rgba(52,87,232,0.35)` | 悬浮发布按钮专属，带品牌蓝色调（不是中性黑） |
+| `--shadow-fab` | `0 6px 16px rgba(49,91,234,0.18)` | 悬浮发布按钮专属，带品牌蓝色调（不是中性黑） |
 | `--shadow-settings-item` | `0 2px 12px rgba(0,0,0,0.05)` | "我的"/设置页的列表行 |
 
 ### 动效
@@ -232,7 +300,7 @@ Saminest 是面向 DMV 地区（华盛顿 DC、弗吉尼亚、马里兰）华人
 
 ### 色彩策略
 
-全站只用 `#3457E8` 这一支蓝作为唯一的品牌强调色，深浅两级（`primary-dark` / `primary-light` / `primary-soft`）服务于状态区分（hover、场景区分、高亮背景、空状态），不引入第二个色相。这个约束本身就是"可信赖"这个定位的视觉体现——同城生活服务类产品（对标 Craigslist、Facebook Marketplace 这类)最怕的是视觉上显得杂乱随意，单一强调色相能天然维持克制感。中性色阶（`bg` 画布灰、`card` 纯白、三级文字灰）之间的对比也刻意做得柔和（`text-muted` #8A8A8E、`text-subtle` #B0B0B5 都不是死黑/死灰），呼应 iOS 原生系统 App（如"信息"、"设置"）的柔和中性色调，而不是安卓 Material Design 那种更高饱和度的配色逻辑。
+全站只用 `#315BEA` 这一支蓝作为唯一的品牌强调色（2026-09-14 全 App 视觉 Token 体系第一批之前是 `#3457E8`，这次一起调整），深浅两级（`primary-dark` / `primary-light` / `primary-soft`，以及这次新增的 `primary-pressed` / `primary-lighter`）服务于状态区分（hover、按下、场景区分、高亮背景、空状态），不引入第二个色相。这个约束本身就是"可信赖"这个定位的视觉体现——同城生活服务类产品（对标 Craigslist、Facebook Marketplace 这类)最怕的是视觉上显得杂乱随意，单一强调色相能天然维持克制感。中性色阶（`bg` 画布灰、`card` 纯白、三级文字灰）之间的对比也刻意做得柔和（`text-muted` #697386、`text-subtle` #9AA3B2 都不是死黑/死灰），呼应 iOS 原生系统 App（如"信息"、"设置"）的柔和中性色调，而不是安卓 Material Design 那种更高饱和度的配色逻辑。
 
 ### 排版
 
@@ -244,11 +312,11 @@ Saminest 是面向 DMV 地区（华盛顿 DC、弗吉尼亚、马里兰）华人
 
 ### 层次与深度
 
-投影整体极轻（`shadow-card` 的双层阴影 opacity 只有 4-6%），呼应 Airbnb 式"近乎扁平但有一丝浮起感"的卡片层级，而不是强投影、强边框那种"卡片感"过重的设计。唯一投影明显加重、且带品牌色调的地方是悬浮发布按钮（`shadow-fab`，蓝色投影），这是刻意的——全站只有这一个元素需要"漂浮在内容之上、随时可点"的强存在感，其余界面元素都不应该抢它的视觉优先级。
+投影整体极轻（`shadow-card` 的双层阴影 opacity 只有 3-4%，2026-09-14 全 App 视觉 Token 体系第一批把它从纯中性黑换成带一点冷蓝调的投影，透明度也进一步调淡），呼应 Airbnb 式"近乎扁平但有一丝浮起感"的卡片层级，而不是强投影、强边框那种"卡片感"过重的设计。唯一投影明显加重、且带品牌色调的地方是悬浮发布按钮（`shadow-fab`，蓝色投影，这次同步换算成新的 primary 蓝、透明度从 0.35 降到 0.18），这是刻意的——全站只有这一个元素需要"漂浮在内容之上、随时可点"的强存在感，其余界面元素都不应该抢它的视觉优先级。
 
 ### 形状语言
 
-圆角随"元素的功能层级"递进，不是随便取值：功能性小元素（找搭子方形头像 6px、边框信息框 8px）用小圆角，交互控件（按钮、输入框 12px）中等圆角，主内容容器（卡片 16px）更大的圆角，纯装饰/强调型元素（胶囊搜索框 26px、圆形头像/按钮 9999px）用最大或全圆。这套递进关系整体贴近 iOS 原生控件的圆角观感（iOS 系统 App 的按钮/卡片/输入框也遵循类似的"越是容器级元素、圆角越大"的规律），而不是 Material Design 那种圆角更统一、更方正的语言。
+圆角随"元素的功能层级"递进，不是随便取值：功能性小元素（找搭子方形头像 6px、边框信息框 8px）用小圆角，交互控件（表单输入框 12px、矩形主要 CTA 按钮 14px）中等圆角，主内容容器（次要卡片 16px、主力曝光位卡片如帖子卡片/找搭子卡片 20px——2026-09-14 全 App 视觉 Token 体系第一批新增的一档，主力曝光位圆角更大一级）更大的圆角，纯装饰/强调型元素（胶囊搜索框 26px、圆形头像/按钮/胶囊按钮 9999px）用最大或全圆。这套递进关系整体贴近 iOS 原生控件的圆角观感（iOS 系统 App 的按钮/卡片/输入框也遵循类似的"越是容器级元素、圆角越大"的规律），而不是 Material Design 那种圆角更统一、更方正的语言。
 
 ### 动效
 

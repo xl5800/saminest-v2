@@ -68,26 +68,80 @@
  * 阴影，所以保留原值不动，只更新下面的 --shadow-fab 匹配设计稿要求的
  * 蓝色投影（悬浮按钮/菜单弹层本来就是唯一允许带投影的地方）。
  */
+/*
+ * 全 App 视觉 Token 体系（第一批，2026-09-14）：BARRY 提出一套完整的
+ * 颜色/圆角/阴影/文字层级方案，目标是彻底解决"纯白刺眼"的问题，同时避免
+ * "首页好看了、其它页面还是各自一套白色"这种不统一的状态——参考
+ * Airbnb/Facebook Marketplace/Apple 原生设计语言，不是小红书/游戏那种
+ * 风格，蓝色主色只用在少数关键点，不做大面积上色。
+ *
+ * 这是**今天第二次**改这批 token——上面 --color-bg 那段是今天早些时候
+ * "背景色改中性浅灰+卡片边框投影"那次调整留下的说明（#f3f5fa→#f5f5f5），
+ * 这次在那次基础上做一版更完整的（#f5f5f5→#F5F7FB，同时联动改了
+ * primary/text/border/success/warning/danger 等其它十来个 token 的数值，
+ * 不是单独再调一次背景色）。那次的说明文字本身没有错（背景要跟卡片拉开
+ * 亮度差这个道理依然成立），保留不删，但下面这批新数值才是当前生效的值。
+ *
+ * 分两批做：这次（第一批）落地 token 体系本身 + 覆盖曝光量最高的四个
+ * 页面/组件（首页信息流 post-list.tsx、找搭子列表 activity-list-page.tsx/
+ * activity-card.tsx/activity-participant-avatars.tsx、消息列表
+ * conversation-list-page.tsx/conversation-swipe-row.tsx、帖子详情
+ * post-detail-page.tsx）；BARRY 会先在真机上确认这一批效果，第二批再扫
+ * 剩下所有页面（发布/登录注册/搜索/筛选/收藏/我的/聊天/设置/Modal/
+ * Bottom Sheet/Loading/Empty/Error）。这次**只改颜色/边框/阴影/圆角/
+ * 文字色**，不碰布局、组件结构、交互逻辑——项目已经上线 App Store，这条
+ * 约束严格遵守。
+ *
+ * 映射原则跟 Meet5 那次改版一样：**能复用现有 token 名字的一律复用，只
+ * 改数值**（primary/primary-hover/primary-light/accent/bg/text/
+ * text-muted/text-subtle/border/success/warning/danger 这些名字全部不
+ * 变），不新建一套语义重复、命名不同的第二套颜色系统——这正是之前审计出
+ * 的 bg-white/bg-card 那个 P1 问题的教训。BARRY 方案里的 `error` 对应
+ * 项目里一直叫的 `--color-danger`，沿用现有名字，不做一次多余的全站改名；
+ * `surface` 就是这里的 `--color-card`，同理不新建同义 token。
+ *
+ * `--color-primary-dark`/`--color-primary-soft`/`--color-chevron` 这次
+ * 不动——BARRY 方案里没有明确覆盖这几个，等第二批扫到具体用到它们的页面
+ * 时再看要不要跟着调，不在这次任务范围内先斩后奏。
+ *
+ * 新增的一批 token（primary-pressed/primary-lighter/bg-secondary/
+ * surface-muted/surface-hover/surface-pressed/text-placeholder/
+ * text-disabled/border-light/divider/success-light/warning-light/
+ * danger-light/info/info-light/image-placeholder-icon/nav-icon/overlay）
+ * 各自命名已经就是语义本身，不重复解释每一个；几个容易被误会成"重复造
+ * 轮子"的取舍单独说明：
+ * - `--color-surface-muted` 和 BARRY 方案里的 `surface-muted`/
+ *   `image-placeholder` 是同一个值，这次统一成一个 token，不为了跟原方案
+ *   名字一一对应而重复建两个数值相同的 token。
+ * - `--color-divider`（列表分割线）故意跟 `--color-border`（卡片边框）
+ *   分成两个不同数值的 token，即使这次之前两者长期共用同一个值——列表
+ *   分割线（比如消息列表行与行之间）应该比卡片边框更淡，这次借着这批
+ *   token 梳理把两种语义拆开，不是多余的重复。
+ * - `navigation-background`/`navigation-active`/`surface-elevated`/
+ *   `text-on-primary` 这几个 BARRY 方案里提到的名字这次不新建 token——
+ *   分别直接复用 `--color-card`、`--color-primary`、（`surface-elevated`
+ *   跟 `--color-card` 这批暂时同值，等真的出现"比普通卡片再浮起一级"的
+ *   场景再新增）、Tailwind 内置的 `text-white`，避免为了跟原方案名字对齐
+ *   而硬造没有独立数值的重复 token。
+ */
 @theme {
-  --color-primary: #3457e8;
-  --color-primary-hover: #2743b8;
+  --color-primary: #315bea;
+  /* 按下态（--color-primary-pressed）是这批新增的，跟 hover 反馈是两个
+     不同交互阶段，之前项目里没有区分过。 */
+  --color-primary-pressed: #2449c9;
+  --color-primary-hover: #2b52d4;
   --color-primary-dark: #2743b8;
-  --color-primary-light: #eef1fd;
+  --color-primary-light: #eaf0ff;
+  /* 比 primary-light 更淡一档，这批新增。 */
+  --color-primary-lighter: #f3f6ff;
   --color-primary-soft: #c9d5fb;
-  --color-accent: #3457e8;
-  /*
-   * --color-bg（页面背景）：BARRY 反馈"背景太白，想要 Airbnb 那种感觉"。
-   * 原值 #f3f5fa 是偏冷的浅蓝灰，跟 --color-card 的纯白 #ffffff 亮度差
-   * 只有约 4%，屏幕上基本看不出区别——这是"感觉太白"的直接原因。这次
-   * 给 BARRY 看了几个候选背景色（配实际卡片样式对比），选定中性浅灰
-   * #f5f5f5（不偏冷不偏暖，去掉了原来的蓝色调）。跟这次同时做的"卡片
-   * 补边框+投影"是同一件事的两个手段：光换背景色本身效果有限（新旧两个
-   * 颜色亮度其实很接近），卡片本身有没有清晰的边界才是撑出"背景 vs. 卡片"
-   * 层次感的关键，见 post-list.tsx 这次的改动。--color-card 本身不变，
-   * 卡片仍然是纯白，层次感靠背景变灰+卡片加边框投影两件事一起撑出来，
-   * 不是把整体调成另一套配色。
-   */
-  --color-bg: #f5f5f5;
+  --color-accent: #315bea;
+  /* --color-bg 这次的说明合并进了上面"全 App 视觉 Token 体系"那段大注释，
+     不在这里重复贴一遍今天早上那版已经过时的对比说明。 */
+  --color-bg: #f5f7fb;
+  /* 次级页面背景，这批新增——给需要跟主页面背景区分一档、但又不到卡片
+     纯白程度的场景用，这一批四个页面暂时没有用到，留给第二批。 */
+  --color-bg-secondary: #f0f3f8;
   /*
    * --color-card（Card 背景，#FFFFFF，见 00-overview.md 全局设计 Token
    * 表格）：01 号卡的 token 落地漏掉了这一条，导致 top-bar.tsx 的
@@ -99,39 +153,93 @@
    * 实现头像堆叠"2.5px 白色描边"时发现的：ring-card 描边渲染成了
    * currentColor（黑色文字色）而不是白色，才顺带发现 bg-card 全站都受
    * 影响。跟 primary/text 等其它 token 一样只补值、不改名，全站 bg-card/
-   * ring-card/text-card 用法不用跟着改。
+   * ring-card/text-card 用法不用跟着改。这批视觉 Token 体系落地数值维持
+   * #ffffff 不变——层次感靠背景变灰+卡片边框投影撑出来，不是把卡片也
+   * 调灰。
    */
   --color-card: #ffffff;
-  --color-text: #1c1c1e;
-  --color-text-muted: #8a8a8e;
-  --color-text-subtle: #b0b0b5;
-  --color-border: #ececef;
+  /* 弱化表面/图片占位底色，这批新增——找搭子卡片的头像空位占位格这次换
+     成这个 token，见 activity-participant-avatars.tsx 的改动。 */
+  --color-surface-muted: #eef1f7;
+  /* 列表项 hover/按下态，这批新增，这一批四个页面暂时没有用到。 */
+  --color-surface-hover: #f8f9fc;
+  --color-surface-pressed: #f0f2f6;
+  --color-text: #20242c;
+  --color-text-muted: #697386;
+  --color-text-subtle: #9aa3b2;
+  /* 输入框占位文字/禁用态文字，这批新增，比 text-subtle 更淡一级，这一批
+     四个页面暂时没有用到。 */
+  --color-text-placeholder: #a8afbc;
+  --color-text-disabled: #c3c8d1;
+  --color-border: #e7eaf0;
+  /* 比 --color-border 更淡一档的分割线，这批新增，这一批暂时没有用到；
+     --color-divider 才是消息列表这类"行与行之间"场景专用的，见下面。 */
+  --color-border-light: #eceef3;
+  /* 列表项之间的分割线（比如消息列表行与行之间），跟卡片边框
+     --color-border 刻意区分成两个不同数值——分割线要更淡，这批新增，见
+     conversation-list-page.tsx 的改动。 */
+  --color-divider: #e9ecf2;
   --color-chevron: #c7c7cc;
-  --color-success: #2e7d32;
-  --color-warning: #b7791f;
-  --color-danger: #c0392b;
+  --color-success: #2e9b62;
+  /* 成功态浅底色，这批新增，这一批四个页面暂时没有用到。 */
+  --color-success-light: #eaf7f0;
+  --color-warning: #d98b24;
+  --color-warning-light: #fff5e6;
+  --color-danger: #d94b4b;
+  --color-danger-light: #fdeeee;
+  /* 信息提示色/浅底色，这批新增，这一批四个页面暂时没有用到。 */
+  --color-info: #4c78e8;
+  --color-info-light: #edf2ff;
+  /* 图片占位图标颜色，这批新增——找搭子卡片头像空位占位格里的"+"图标
+     这次换成这个 token，跟占位底色 surface-muted 配套使用。 */
+  --color-image-placeholder-icon: #a7afbd;
+  /* 底部导航未选中图标颜色，这批新增，比 --color-text-muted 稍浅——专门
+     给导航用，不复用 text-muted，这一批四个页面暂时没有用到（底部导航
+     在第二批范围）。 */
+  --color-nav-icon: #8c95a3;
+  /* 弹窗/BottomSheet 遮罩层，这批新增，替代黑色遮罩，这一批四个页面暂时
+     没有用到（Modal/BottomSheet 在第二批范围）。 */
+  --color-overlay: rgba(20, 26, 38, 0.45);
 
   /*
    * 圆角刻度：Tailwind 默认圆角档位（rounded-lg=8px, rounded-xl=12px,
    * rounded-2xl=16px, rounded-3xl=24px）里没有正好落在 20px / 26px 上的
    * 档位，这两个是规范里明确要求的具体数值，所以单独建具名 token。
    * rounded-2xl（16px）已经满足帖子卡片的圆角要求，不用再建一个重复的。
+   *
+   * 全 App 视觉 Token 体系（第一批）新增 --radius-card-lg（20px）——这是
+   * 一次全站级别的圆角约定变更：帖子卡片/找搭子卡片这类"主力曝光位"的
+   * 主内容卡片，圆角从原来统一的 16px（rounded-2xl）升一档到 20px，
+   * 跟"次要/非主力曝光位"的卡片（16px 不变）拉开一个层级，DESIGN.md
+   * 「圆角」小节已经同步更新说明，不是只改代码不留文档痕迹。数值恰好
+   * 跟已有的 --radius-profile-card 相同（都是 20px），但语义不同——沿用
+   * 项目里"数值相同也保留两个名字，方便调用点表达意图"的既有约定（跟
+   * primary-hover/primary-dark 同一个道理），不合并成一个 token。
+   * 新增 --radius-button（14px）——Tailwind 默认档位 12/16px 之间没有
+   * 14px 这一档，主要 CTA 按钮（比如帖子详情页"咨询"、找搭子页"发起
+   * 搭子"这类矩形主按钮）用这个；胶囊形/圆形按钮（FAB、"发起搭子"空状态
+   * 引导按钮等）本来就是 rounded-full（999px），属于下面圆角表里的
+   * "Pill" 档位，不套用这个 14px token，这批任务卡范围内没有改动。
    */
   --radius-search: 26px;
   --radius-profile-card: 20px;
+  --radius-card-lg: 20px;
+  --radius-button: 14px;
 
   /*
    * 阴影刻度：Airbnb 风格的双层轻阴影（卡片）+ 更轻一档（搜索框/设置列表项）
    * + 更重一档、突出层级（悬浮发布按钮）。
+   *
+   * 全 App 视觉 Token 体系（第一批）：--shadow-card 数值这次跟着调淡
+   * （rgba 从纯黑 0/0/0 换成带一点冷蓝调的 20/30/50，透明度也降低），
+   * 呼应新的 --color-text（#20242C）色相，投影不再是纯中性黑；
+   * --shadow-fab 的 RGB 分量同步换算成新的 --color-primary（#315BEA），
+   * 透明度从 0.35 降到 0.18，是 BARRY 给的按钮投影数值，不是随意调整。
    */
-  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.04);
+  --shadow-card:
+    0 1px 2px rgba(20, 30, 50, 0.03), 0 4px 12px rgba(20, 30, 50, 0.04);
   --shadow-search: 0 1px 4px rgba(0, 0, 0, 0.06);
-  /* 设计稿要求的悬浮按钮投影是带品牌蓝色调的，不是中性黑——
-     0 6px 16px rgba(52,87,232,0.35)，52/87/232 就是 Primary Blue #3457E8
-     的 RGB 分量。菜单弹层（TopBar detail 变体的"…"菜单）用的是
-     shadow-lg 这种中性投影，不复用这个 token——那是弹层，不是悬浮按钮，
-     没有理由带品牌色调。 */
-  --shadow-fab: 0 6px 16px rgba(52, 87, 232, 0.35);
+  --shadow-fab: 0 6px 16px rgba(49, 91, 234, 0.18);
   --shadow-settings-item: 0 2px 12px rgba(0, 0, 0, 0.05);
 }
 

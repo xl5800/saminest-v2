@@ -91,8 +91,18 @@ const SQUARE_AVATAR_TILE_CLASS_NAME = "aspect-square w-full rounded-md object-co
 // 不再用虚线圆圈"，所以这里没有沿用圆形版本 EMPTY_SLOT_CLASS_NAME 的
 // border-dashed。17 号卡：同样加 rounded-md，跟真实头像格保持一致的圆角，
 // 不然网格里空位格子和头像格子的角会长得不一样。
+//
+// 全 App 视觉 Token 体系（第一批）：底色从 bg-bg（页面背景色）换成语义更
+// 精确的 bg-surface-muted（"弱化表面/图片占位底色"），"+"图标颜色从
+// text-text-muted 换成 text-image-placeholder-icon——这个空位格视觉上
+// 就是"图片占位区域"，语义上不该复用泛用的页面背景/次要文字色。这个常量
+// 是活动卡片（activity-card.tsx，这批任务卡范围内）和活动详情页
+// （activity-detail-page.tsx，两者共用 shape="square" 头像网格，见组件
+// 顶部注释）共享的，改这里两处都会跟着变——这不是额外去碰了详情页文件，
+// 是共享组件本身该用哪个语义 token 这件事对两处调用点同样成立，没有为了
+// 避免"波及"详情页而临时拆出两份重复常量。
 const SQUARE_EMPTY_SLOT_CLASS_NAME =
-  "flex aspect-square w-full items-center justify-center rounded-md bg-bg text-text-muted";
+  "flex aspect-square w-full items-center justify-center rounded-md bg-surface-muted text-image-placeholder-icon";
 
 export interface ActivityParticipantAvatarsProps {
   organizerId: string;

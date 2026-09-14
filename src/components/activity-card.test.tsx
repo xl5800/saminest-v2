@@ -76,15 +76,18 @@ describe("ActivityCard", () => {
   // 14 号卡：头像拼图铺满卡片整宽、贴着卡片边缘，不能再有卡片自己的左右
   // 内边距——外层 <Link> 因此不带 p-5，只带 overflow-hidden（配合卡片圆角，
   // 见组件顶部注释）。任务卡 7c 把头像区从 <Link> 的第一个直接子元素挪到
-  // 了最后一个（顺序对调，文字区排到了前面）——overflow-hidden/rounded-2xl
-  // 这两个类名断言跟顺序无关，不用改；"头像格贴边"这条断言原来查的是
+  // 了最后一个（顺序对调，文字区排到了前面）——overflow-hidden/圆角这两个
+  // 类名断言跟顺序无关，不用改；"头像格贴边"这条断言原来查的是
   // firstElementChild，现在头像区排最后，改成查 lastElementChild。
+  //
+  // 全 App 视觉 Token 体系（第一批）：圆角从 rounded-2xl 换成
+  // rounded-card-lg（20px），断言跟着更新。
   it("renders the avatar grid flush against the card's edges (no outer padding on the <Link>), clipped to the card's rounded corners", () => {
     const { container } = renderCard();
 
     const link = container.querySelector("a");
     expect(link).toHaveClass("overflow-hidden");
-    expect(link).toHaveClass("rounded-2xl");
+    expect(link).toHaveClass("rounded-card-lg");
     expect(link?.lastElementChild?.querySelector("ul")).toBeInTheDocument();
   });
 

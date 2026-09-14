@@ -428,6 +428,8 @@ describe("ActivityParticipantAvatars", () => {
       expect(organizerAvatar.className).not.toContain("h-16");
     });
 
+    // 全 App 视觉 Token 体系（第一批）：占位底色从 bg-bg 换成语义更精确的
+    // bg-surface-muted（"弱化表面/图片占位底色"），断言跟着更新。
     it("renders empty slots as light-background squares with a '+' icon, not the round variant's dashed circle", () => {
       renderAvatars({
         organizerId: "org-1",
@@ -441,7 +443,7 @@ describe("ActivityParticipantAvatars", () => {
 
       const emptySlots = document.querySelectorAll("li span[aria-hidden='true']");
       const emptySlot = Array.from(emptySlots).find((el) => el.querySelector("svg.lucide-plus"));
-      expect(emptySlot).toHaveClass("aspect-square", "w-full", "bg-bg");
+      expect(emptySlot).toHaveClass("aspect-square", "w-full", "bg-surface-muted");
       expect(emptySlot?.className).not.toContain("border-dashed");
       expect(emptySlot?.className).not.toContain("rounded-full");
     });
