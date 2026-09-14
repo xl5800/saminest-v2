@@ -671,6 +671,13 @@ export function PublishPage() {
               </p>
             ) : null}
 
+            {/* 全 App 视觉 Token 体系（第二批）：这个表单里所有输入类控件的
+                focus 态从改动前的细描边 `focus:ring-1 focus:ring-primary`
+                统一换成 `focus:ring-4 focus:ring-primary-light`——BARRY
+                明确要求"不用加粗边框"这种方式，改成一圈柔和的浅蓝色光晕，
+                这个文件下面每一个输入框/下拉/文本域都是同一处改动，不逐个
+                重复写注释。圆角本来就是 rounded-xl（12px，Tailwind 默认
+                档位），跟 index.css 圆角表"输入框 12px"这条一致，未改。 */}
             <label className="mb-4 block">
               <span className="mb-2 block text-xs font-semibold text-text">分类</span>
               <span className="relative block">
@@ -679,7 +686,7 @@ export function PublishPage() {
                   onChange={(event) => setCategoryId(event.target.value)}
                   disabled={categoriesPending}
                   required
-                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                 >
                   <option value="">请选择分类</option>
                   {(categories ?? []).map((category) => (
@@ -746,7 +753,7 @@ export function PublishPage() {
                     <select
                       value={posterGender}
                       onChange={(event) => setPosterGender(event.target.value)}
-                      className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                     >
                       <option value="">请选择性别</option>
                       {GENDER_OPTIONS.map((option) => (
@@ -770,7 +777,7 @@ export function PublishPage() {
                     inputMode="numeric"
                     value={posterAge}
                     onChange={(event) => setPosterAge(event.target.value)}
-                    className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                   />
                 </label>
               </>
@@ -786,7 +793,7 @@ export function PublishPage() {
                 maxLength={TITLE_MAX_LENGTH}
                 placeholder="起个标题"
                 required
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
             </label>
 
@@ -799,7 +806,7 @@ export function PublishPage() {
                 maxLength={DESCRIPTION_MAX_LENGTH}
                 placeholder="详细描述一下…"
                 required
-                className="min-h-[120px] w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-primary"
+                className="min-h-[120px] w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
             </label>
 
@@ -811,7 +818,7 @@ export function PublishPage() {
                 step="0.01"
                 value={price}
                 onChange={(event) => setPrice(event.target.value)}
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
             </label>
 
@@ -821,7 +828,7 @@ export function PublishPage() {
                 <select
                   value={contactMethod}
                   onChange={(event) => setContactMethod(event.target.value)}
-                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                 >
                   <option value="">请选择联系方式</option>
                   {CONTACT_METHOD_OPTIONS.map((option) => (
@@ -844,7 +851,7 @@ export function PublishPage() {
                 type="text"
                 value={contactValue}
                 onChange={(event) => setContactValue(event.target.value)}
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
             </label>
 

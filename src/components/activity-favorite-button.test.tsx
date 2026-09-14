@@ -94,13 +94,16 @@ describe("ActivityFavoriteButton", () => {
     );
   });
 
-  it("renders a filled heart icon (text-danger) when the activity is already favorited", () => {
+  // 全 App 视觉 Token 体系（第二批）：填充色从 text-danger（红色心形）
+  // 换成 text-primary（品牌蓝）——BARRY 明确要求"不要用大红色心形"，断言
+  // 跟着更新。
+  it("renders a filled heart icon (text-primary) when the activity is already favorited", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     useActivityFavoriteIdsQuery.mockReturnValue({ data: ["act-1"] });
 
     const { container } = renderWithProviders(<ActivityFavoriteButton activityId="act-1" />);
 
-    expect(container.querySelector("svg.lucide-heart")).toHaveClass("fill-current", "text-danger");
+    expect(container.querySelector("svg.lucide-heart")).toHaveClass("fill-current", "text-primary");
   });
 
   it("renders an outline (non-filled) heart icon when the activity is not favorited", () => {

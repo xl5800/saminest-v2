@@ -628,11 +628,20 @@ export function MessageConversationPage() {
                         />
                       ) : null}
                       <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+                        {/* 全 App 视觉 Token 体系（第二批）：现状核实过——
+                            自己发的气泡已经是 bg-primary + text-white，
+                            完全符合 BARRY 方案，没有改；对方气泡原来是
+                            bg-card + text-text，但没有边框，这次页面
+                            背景（<main> 的 bg-bg）是浅灰蓝，白色气泡贴着
+                            灰背景没有边界会糊在一起——补上
+                            border border-border，让气泡边界跟背景拉开，
+                            对应 BARRY 方案"对方消息气泡 = bg-card 底 +
+                            border-border 边框 + text-text 深字"这条。 */}
                         <div
                           className={
                             isMine
                               ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
-                              : "min-w-0 whitespace-pre-wrap rounded-2xl bg-card px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
+                              : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
                           }
                         >
                           {message.body}
@@ -703,6 +712,13 @@ export function MessageConversationPage() {
               {submitError}
             </p>
           ) : null}
+          {/* 全 App 视觉 Token 体系（第二批）：输入框 focus 态跟其它表单
+              统一换成柔光（focus:ring-4 focus:ring-primary-light），
+              bg-bg 这个底色是刻意保留的——输入框陷在白色 bg-card 工具栏
+              里、用页面背景色做"凹陷"视觉区分，是既有的合理设计，不是
+              占位/空状态场景，不套用 bg-surface-muted。发送按钮圆角从
+              rounded-xl（12px）换成新的 rounded-button（14px）——这是
+              矩形主 CTA，不是圆形/胶囊按钮。 */}
           <div className="flex min-w-0 items-center gap-2">
             <label className="min-w-0 flex-1">
               <span className="sr-only">消息内容</span>
@@ -711,13 +727,13 @@ export function MessageConversationPage() {
                 onChange={(event) => setBody(event.target.value)}
                 rows={1}
                 placeholder="输入消息"
-                className="h-12 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-bg px-4 py-3 text-base leading-6 text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                className="h-12 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-bg px-4 py-3 text-base leading-6 text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
             </label>
             <button
               type="submit"
               disabled={sendDisabled}
-              className="h-12 shrink-0 rounded-xl bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-12 shrink-0 rounded-button bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {sendMessageMutation.isPending ? "发送中…" : "发送"}
             </button>

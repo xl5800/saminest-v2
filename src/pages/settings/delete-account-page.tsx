@@ -196,20 +196,29 @@ export function DeleteAccountPage() {
               />
             </div>
 
+            {/* 全 App 视觉 Token 体系（第二批）：这个确认输入框的 focus
+                态是危险操作专属的红色版本，跟其它表单的柔光处理是同一个
+                原则——细描边（focus:border-danger + focus:ring-1
+                focus:ring-danger）换成柔和光晕（focus:ring-4
+                focus:ring-danger-light，第一批已经建好的 token），圆角同
+                其它输入框统一成 rounded-xl。 */}
             <label className="mb-6 block text-sm font-medium text-text">
               {`请输入"${CONFIRM_TEXT}"确认操作`}
               <input
                 type="text"
                 value={confirmText}
                 onChange={(event) => setConfirmText(event.target.value)}
-                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-danger focus:outline-none focus:ring-1 focus:ring-danger"
+                className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-base text-text focus:outline-none focus:ring-4 focus:ring-danger-light"
               />
             </label>
 
+            {/* 圆角从 rounded（4px）换成 rounded-button（14px）——矩形主
+                CTA 按钮，颜色本来就是 bg-danger（危险操作红），符合任务卡
+                "不要跟普通按钮同色"这条要求，颜色本身未改。 */}
             <button
               type="submit"
               disabled={verifyingPassword || requestMutation.isPending}
-              className="w-full rounded bg-danger px-4 py-2 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-button bg-danger px-4 py-2 font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {verifyingPassword || requestMutation.isPending ? "处理中…" : "确认注销账号"}
             </button>

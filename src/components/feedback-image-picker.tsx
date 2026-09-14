@@ -176,11 +176,14 @@ export function FeedbackImagePicker({
     <div>
       <label htmlFor={inputId} className="mb-2 block cursor-pointer text-sm font-medium text-text">
         添加截图（可选，最多 {MAX_FEEDBACK_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 {MAX_FEEDBACK_IMAGE_SIZE_MB}MB）
+        {/* 全 App 视觉 Token 体系（第二批）：占位底色从 bg-bg 换成
+            bg-surface-muted，跟 post-image-picker.tsx 同一个处理，见该
+            文件的改动注释。 */}
         <div
           data-testid="feedback-image-drop-zone"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          className="mt-2 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-bg px-4 py-8 text-center font-normal"
+          className="mt-2 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-surface-muted px-4 py-8 text-center font-normal"
         >
           <input
             id={inputId}

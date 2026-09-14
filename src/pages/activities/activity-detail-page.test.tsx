@@ -560,6 +560,9 @@ describe("ActivityDetailPage", () => {
     });
   });
 
+  // 全 App 视觉 Token 体系（第二批）：ActivityFavoriteButton 的填充色从
+  // text-danger 换成 text-primary（BARRY 明确要求"不要用大红色心形"），
+  // 断言跟着更新，见 activity-favorite-button.tsx 的改动说明。
   it("renders the ActivityFavoriteButton (♡ 收藏) inside the more-menu", () => {
     useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
     useActivityDetailQuery.mockReturnValue({
@@ -578,7 +581,7 @@ describe("ActivityDetailPage", () => {
 
     const heartIcon = container.querySelector("svg.lucide-heart");
     expect(heartIcon).toBeInTheDocument();
-    expect(heartIcon).toHaveClass("fill-current", "text-danger");
+    expect(heartIcon).toHaveClass("fill-current", "text-primary");
   });
 
   // 这是这次改版最重要的一致性测试：头像堆叠的"空位"点击必须触发跟

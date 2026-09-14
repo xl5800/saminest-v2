@@ -87,7 +87,12 @@ export function ContactSellerButton({ postId, label, className }: ContactSellerB
       >
         {createConversation.isPending ? "创建会话中…" : (label ?? "联系发布者")}
       </button>
-      {error ? <p role="alert">{error}</p> : null}
+      {/* 全 App 视觉 Token 体系（第二批）：这条 role="alert" 之前完全没有
+          颜色 class，直接继承默认黑字，补上 text-danger——组件本身的按钮
+          className 完全由调用方传入（见上面 className prop 的注释），
+          这条错误文字是组件内部固定渲染的，不受调用方控制，所以在这里
+          直接补颜色。 */}
+      {error ? <p role="alert" className="mt-1 text-xs text-danger">{error}</p> : null}
     </span>
   );
 }

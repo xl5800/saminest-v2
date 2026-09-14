@@ -161,11 +161,16 @@ export function PostImagePicker({
     <div>
       <label htmlFor={inputId} className="mb-2 block cursor-pointer text-sm font-medium text-text">
         上传图片（最多 {MAX_POST_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 {MAX_POST_IMAGE_SIZE_MB}MB）
+        {/* 全 App 视觉 Token 体系（第二批）：占位底色从 bg-bg（通用页面
+            背景）换成 bg-surface-muted——这里是一个图片占位/上传区域，
+            语义上应该用第一批专门为"弱化表面/图片占位"建的 token，不是
+            借用泛用的页面背景色，跟 activity-participant-avatars.tsx 的
+            找搭子头像空位占位格是同一个处理模式。 */}
         <div
           data-testid="post-image-drop-zone"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          className="mt-2 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-bg px-4 py-8 text-center font-normal"
+          className="mt-2 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-surface-muted px-4 py-8 text-center font-normal"
         >
           <input
             id={inputId}

@@ -313,8 +313,13 @@ export function UserProfilePage() {
 
       {!isPending && !isError && data === null ? (
         <div className="p-4">
-          <h1>用户未找到</h1>
-          <p role="alert">用户不存在。</p>
+          <h1 className="text-lg font-semibold text-text">用户未找到</h1>
+          {/* 全 App 视觉 Token 体系（第二批）：这条 role="alert" 之前完全
+              没有颜色 class（直接继承默认黑字），补上 text-danger，跟这个
+              页面上面 isError 分支的 alert 文字同一个颜色语义。 */}
+          <p role="alert" className="mt-1 text-sm text-danger">
+            用户不存在。
+          </p>
         </div>
       ) : null}
 

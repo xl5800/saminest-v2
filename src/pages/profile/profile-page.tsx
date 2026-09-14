@@ -65,10 +65,16 @@ function GroupRow({ to, icon: Icon, label }: GroupRowProps) {
  * 一张。divide-y 在行之间画分隔线，overflow-hidden 保证子行不会盖住卡片
  * 自己的圆角（子行本身是矩形，没有裁切的话直角会露在圆角外面，跟
  * activity-card.tsx 处理方形头像格铺满卡片时用的是同一个理由）。
+ *
+ * 全 App 视觉 Token 体系（第二批）：分隔线从 divide-border 换成
+ * divide-divider——这是"行与行之间"的列表分割线场景（跟第一批
+ * conversation-list-page.tsx 同一个语义），不是卡片自己的边框（这张卡片
+ * 本身没有描边，只有 shadow-settings-item 投影），所以用专门的列表分割线
+ * token，不是卡片边框 token。
  */
 function GroupCard({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-6 divide-y divide-border overflow-hidden rounded-2xl bg-card shadow-settings-item">
+    <div className="mb-6 divide-y divide-divider overflow-hidden rounded-2xl bg-card shadow-settings-item">
       {children}
     </div>
   );
@@ -187,7 +193,10 @@ export function ProfilePage() {
               avatarHref={currentUserId ? `/users/${currentUserId}` : undefined}
               profileHref={currentUserId ? `/users/${currentUserId}` : undefined}
             >
-              <div className="mt-3 grid grid-cols-2 divide-x divide-border">
+              {/* 全 App 视觉 Token 体系（第二批）：这是卡片内部两个统计
+                  格之间的分隔，不是列表行分割线，换成更淡一档的
+                  divide-border-light（"非列表场景，比如卡片内部分隔"）。 */}
+              <div className="mt-3 grid grid-cols-2 divide-x divide-border-light">
                 <Link
                   to="/my-posts"
                   className="flex flex-col items-center gap-1 py-2 text-center hover:opacity-80"

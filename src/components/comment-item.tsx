@@ -412,12 +412,16 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                     {replyError}
                   </p>
                 ) : null}
+                {/* 全 App 视觉 Token 体系（第二批）：回复/编辑这两处
+                    textarea 圆角原来是 Tailwind 最小档 rounded（4px），
+                    统一成输入框标准的 rounded-xl（12px）；focus 态从
+                    细描边换成柔和光晕，跟这个批次其它表单统一。 */}
                 <label className="block text-xs font-medium text-text">
                   回复 {node.authorDisplayName}
                   <textarea
                     value={replyContent}
                     onChange={(event) => setReplyContent(event.target.value)}
-                    className="mt-1 min-h-[60px] w-full rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    className="mt-1 min-h-[60px] w-full rounded-xl border border-border px-2 py-1 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                   />
                 </label>
                 <div className="mt-1 flex gap-2">
@@ -513,7 +517,7 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                     <textarea
                       value={reportDescription}
                       onChange={(event) => setReportDescription(event.target.value)}
-                      className="mt-1 w-full rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                      className="mt-1 w-full rounded-xl border border-border px-2 py-1 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                     />
                   </label>
                   <div className="mt-1 flex gap-2">

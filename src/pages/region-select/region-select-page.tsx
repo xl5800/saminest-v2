@@ -317,7 +317,13 @@ export function RegionSelectPage() {
         ) : null}
 
         {!isPending && !isError ? (
-          <ul className="mt-3 divide-y divide-border rounded-2xl bg-card">
+          // 全 App 视觉 Token 体系（第二批）：分割线从 divide-border（卡片
+          // 边框语义）换成 divide-divider（列表分割线专用），跟第一批
+          // conversation-list-page.tsx 同一个处理——这里的行与行之间是
+          // 列表分割线场景，不是卡片边框场景。容器圆角维持 rounded-2xl
+          // （16px）不变：这是一个次要的选择列表容器，不是帖子/找搭子那类
+          // 主力曝光位卡片，不套用 rounded-card-lg。
+          <ul className="mt-3 divide-y divide-divider rounded-2xl bg-card">
             {/* 「全美」只在最外层的州列表视图展示——不属于 51 项、不参与
                 排序/搜索，见组件顶部注释；12 号卡起额外要求 form 场景
                 （发布表单选地区）完全不展示这个选项。 */}

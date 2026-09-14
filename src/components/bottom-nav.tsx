@@ -44,9 +44,18 @@ function isActivePath(pathname: string, to: string): boolean {
  * Tab 一起用线性 SVG 图标观感更统一、更接近现代 App 标准做法，经用户
  * 确认后引入）。
  *
- * 图标+文字都用同一个 text-primary（选中）/text-text-muted（未选中）
+ * 图标+文字都用同一个 text-primary（选中）/text-nav-icon（未选中）
  * 颜色类控制，不需要给 <Icon> 单独传颜色 prop——lucide 图标默认
  * `stroke="currentColor"`，跟随父级文字颜色。
+ *
+ * 全 App 视觉 Token 体系（第二批）：这里原来是 text-text-muted（通用次要
+ * 文字色），换成第一批专门为底部导航建的 --color-nav-icon（比
+ * text-muted 稍浅）——图标和下面的文字标签共用同一个 class 控制颜色是
+ * 既有架构（见上一段），继续保持"一个 class 同时管图标和文字"，不拆成
+ * 图标单独一个颜色 prop（那是组件结构改动，这次不做）。导航栏背景同时
+ * 从 bg-bg（页面背景，浅灰蓝）换成 bg-card（纯白）——BARRY 方案明确要求
+ * "背景白"，之前用页面背景色会让导航栏跟页面本身糊在一起，顶部
+ * border-t border-border（浅灰边框）本来就是对的，没有改。
  *
  * 安全区适配：iOS Safari 底部有 Home Indicator，贴底固定定位的导航栏如果
  * 不额外让出这块区域，图标文字会紧贴/被系统手势条遮挡——这个问题之前只在
@@ -76,7 +85,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="底部导航"
-      className="fixed inset-x-0 bottom-0 z-10 flex items-center border-t border-border bg-bg pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-10 flex items-center border-t border-border bg-card pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5 md:hidden"
     >
       {NAV_ITEMS.map(({ to, label, Icon }) => {
         const active = isActivePath(location.pathname, to);
@@ -88,7 +97,7 @@ export function BottomNav() {
             to={to}
             aria-current={active ? "page" : undefined}
             className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-xs ${
-              active ? "font-semibold text-primary" : "text-text-muted"
+              active ? "font-semibold text-primary" : "text-nav-icon"
             }`}
           >
             <span className="relative">

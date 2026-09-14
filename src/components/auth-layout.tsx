@@ -3,11 +3,20 @@ import { Link, useNavigate } from "react-router-dom";
 
 export const authLabelClassName = "block text-sm font-medium text-text";
 
+// 全 App 视觉 Token 体系（第二批）：输入框 focus 态从细描边
+// （focus:border-primary + focus:ring-1 focus:ring-primary）换成一圈柔和
+// 的浅蓝色光晕（focus:ring-4 focus:ring-primary-light）——BARRY 明确要求
+// 不用加粗边框这种方式，登录/注册/忘记密码/重置密码四个页面共用这一个
+// class，改这一处四个页面同时生效。圆角本来就是 rounded-xl（12px），
+// 跟 index.css 圆角表"输入框 12px"一致，未改。
 export const authInputClassName =
-  "mt-1 h-11 w-full rounded-xl border border-border px-3 text-base text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary";
+  "mt-1 h-11 w-full rounded-xl border border-border px-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light";
 
+// 全 App 视觉 Token 体系（第二批）：圆角从 rounded-xl（12px）换成新的
+// rounded-button（14px）——这是四个认证页面共用的矩形主 CTA（登录/注册/
+// 发送重置邮件），符合"矩形主要 CTA 按钮圆角"这一档。
 export const authSubmitButtonClassName =
-  "h-11 w-full rounded-xl bg-primary font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
+  "h-11 w-full rounded-button bg-primary font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60";
 
 export interface AuthLayoutProps {
   children: ReactNode;

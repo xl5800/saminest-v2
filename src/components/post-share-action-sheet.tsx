@@ -31,8 +31,12 @@ const OPTIONS: ShareOption[] = [
 /**
  * 帖子详情页点击底部工具栏"分享"图标弹出的自定义底部弹层——跟
  * publish-action-sheet.tsx 是同一套"fixed inset-0 + 本地 state + Esc/背景
- * 点击关闭 + 锁 body 滚动"模式，同样没有引入新的 Dialog/Modal 组件，遮罩色
- * 也是同一个 bg-black/40。
+ * 点击关闭 + 锁 body 滚动"模式，同样没有引入新的 Dialog/Modal 组件。
+ *
+ * 全 App 视觉 Token 体系（第二批）：遮罩色/圆角这次跟 publish-action-sheet.tsx
+ * 同步换成 `bg-overlay`（第一批新建的遮罩层 token）和 `rounded-t-3xl`
+ * （index.css 圆角表"Modal/BottomSheet 24px"这一档），详细理由见那个文件
+ * 的改动注释，这里不重复贴一遍。
  *
  * 三个选项：
  * - 复制链接：把生产环境域名拼的帖子链接写入剪贴板（@capacitor/clipboard，
@@ -104,11 +108,11 @@ export function PostShareActionSheet({ postId, onShareToWechat, onClose }: PostS
       role="dialog"
       aria-modal="true"
       aria-label="分享"
-      className="fixed inset-0 z-30 flex items-end bg-black/40"
+      className="fixed inset-0 z-30 flex items-end bg-overlay"
       onClick={onClose}
     >
       <div
-        className="w-full rounded-t-profile-card bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-card"
+        className="w-full rounded-t-3xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-card"
         onClick={(event) => event.stopPropagation()}
       >
         <p className="mb-3 text-center text-sm font-medium text-text-muted">分享</p>

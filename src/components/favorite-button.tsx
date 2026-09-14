@@ -34,6 +34,13 @@ export interface FavoriteButtonProps {
  * "既有的通用失败兜底文案"可以对照，所以只在能识别出 ACCOUNT_RESTRICTED
  * 时才展示错误，其它未知失败原因维持这个按钮原来"静默无反应"的行为，不在
  * 这次任务里顺带给它加一个通用错误兜底（那是超出这次任务范围的改动）。
+ *
+ * 全 App 视觉 Token 体系（第二批）：收藏态图标已经是 text-primary（蓝色），
+ * 未收藏态是 text-text-muted，没有红色心形，检查过符合"不要用大红色心形"
+ * 这条要求，未改动。顺手发现两处 restrictedError 的 role="alert" 文字
+ * 之前完全没有颜色 class（直接继承默认黑字），补上 text-danger——这是
+ * 任务卡"Loading/Empty/Error 状态"那条要求顺手检查的场景，范围很小（就
+ * 这一个文件两处），直接改了，不是大范围改动。
  */
 export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonProps) {
   const navigate = useNavigate();
@@ -93,7 +100,7 @@ export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonPr
           />
           <span className="text-xs">收藏</span>
         </button>
-        {restrictedError ? <p role="alert">{restrictedError}</p> : null}
+        {restrictedError ? <p role="alert" className="mt-1 text-xs text-danger">{restrictedError}</p> : null}
       </span>
     );
   }
@@ -115,7 +122,7 @@ export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonPr
           className={isFavorited ? "text-primary" : undefined}
         />
       </button>
-      {restrictedError ? <p role="alert">{restrictedError}</p> : null}
+      {restrictedError ? <p role="alert" className="mt-1 text-xs text-danger">{restrictedError}</p> : null}
     </span>
   );
 }

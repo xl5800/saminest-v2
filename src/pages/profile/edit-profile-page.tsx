@@ -52,6 +52,18 @@ const AVATAR_UPLOAD_ERROR_MESSAGE = "头像上传失败，请稍后重试。";
  * updateProfileMutation 提交），不单独开一个 mutation。年龄是用户自己
  * 填写的整数，不是出生日期，没有任何自动计算逻辑——见
  * supabase/migrations/20260903050000_add_profile_age.sql 顶部说明。
+ *
+ * 全 App 视觉 Token 体系（第二批）：昵称/简介/城市/年龄四个输入控件圆角
+ * 之前是 Tailwind 默认最小档 `rounded`（4px），既不是发布/登录注册表单
+ * 统一在用的 `rounded-xl`（12px），也不在 index.css 圆角表任何一档上，是
+ * 一个遗漏——这次统一成 `rounded-xl`；focus 态同步从细描边
+ * （focus:border-primary + focus:ring-1 focus:ring-primary）换成柔和光晕
+ * （focus:ring-4 focus:ring-primary-light），跟发布页/登录注册同一套处理。
+ * "保存"提交按钮圆角同理从 `rounded` 换成新的 `rounded-button`（14px）。
+ * 这个文件顶部注释提到"卡片容器/视觉风格照抄 submit-feedback-page.tsx"——
+ * 那个文件不在这批任务卡列出的文件清单里，这次没有跟着一起改，两个页面
+ * 的输入框/按钮圆角可能因此暂时不再完全一致，供后续任务卡确认要不要
+ * 一起处理。
  */
 export function EditProfilePage() {
   const navigate = useNavigate();
@@ -219,7 +231,7 @@ export function EditProfilePage() {
                 value={displayName}
                 onChange={(event) => setDisplayName(event.target.value)}
                 disabled={formDisabled}
-                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
             <label className="mb-4 block text-sm font-medium text-text">
@@ -228,7 +240,7 @@ export function EditProfilePage() {
                 value={bio}
                 onChange={(event) => setBio(event.target.value)}
                 disabled={formDisabled}
-                className="mt-1 min-h-[80px] w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 min-h-[80px] w-full rounded-xl border border-border px-3 py-2 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
             <label className="mb-4 block text-sm font-medium text-text">
@@ -237,7 +249,7 @@ export function EditProfilePage() {
                 value={locationId}
                 onChange={(event) => setLocationId(event.target.value)}
                 disabled={formDisabled}
-                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="">不选择城市</option>
                 {(locations ?? []).map((location) => (
@@ -255,13 +267,13 @@ export function EditProfilePage() {
                 value={age}
                 onChange={(event) => setAge(event.target.value)}
                 disabled={formDisabled}
-                className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
             <button
               type="submit"
               disabled={formDisabled}
-              className="w-full rounded bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-button bg-primary px-4 py-2 font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {updateProfileMutation.isPending ? "保存中…" : "保存"}
             </button>

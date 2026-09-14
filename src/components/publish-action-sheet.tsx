@@ -43,11 +43,17 @@ const EMPHASIZED_KEY = OPTIONS[0].key;
  *
  * 这个仓库没有专门的 Dialog/Modal 组件，沿用 image-lightbox.tsx /
  * my-posts-page.tsx 删除确认弹窗同一个"fixed inset-0 + 本地 state + Esc/
- * 背景点击关闭 + 锁 body 滚动"的模式，不新增一个通用弹层组件；遮罩色沿用
- * 这几处已有的 bg-black/40，跟设计稿字面的 rgba(17,24,39,0.4) 数值上有
- * 细微差别（纯黑 vs 深灰蓝黑），但全站弹层遮罩目前都是这一个值，为了这一
- * 处弹层单独引入一个新的一次性遮罩色数值，反而违反 01 号卡"不再出现散落
- * 色值"的初衷。
+ * 背景点击关闭 + 锁 body 滚动"的模式，不新增一个通用弹层组件。
+ *
+ * 全 App 视觉 Token 体系（第二批）：遮罩色从硬编码的 `bg-black/40`（上面
+ * 这段历史注释里"为了不引入一次性色值所以沿用 bg-black/40"的理由这次不
+ * 再成立——第一批已经专门为这个场景建好了 `--color-overlay`
+ * （`bg-overlay`，rgba(20,26,38,0.45)，比纯黑更柔和），这次就是要把这类
+ * 散落的遮罩色统一到这个 token 上，不是繼續新增散落色值，换成 `bg-overlay`
+ * 正是这批任务卡的目的。弹层圆角同理从借用的 `rounded-t-profile-card`
+ * （20px，本来是"我的"页头像卡片专用的 token，这里只是凑巧数值相近就
+ * 拿来用）换成 index.css 圆角表里明确写好的"Modal/BottomSheet 24px"这一档
+ * （Tailwind 默认 `rounded-t-3xl`，不需要新建 token）。
  */
 export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
   const navigate = useNavigate();
@@ -82,11 +88,11 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
       role="dialog"
       aria-modal="true"
       aria-label="选择发布类型"
-      className="fixed inset-0 z-20 flex items-end bg-black/40"
+      className="fixed inset-0 z-20 flex items-end bg-overlay"
       onClick={onClose}
     >
       <div
-        className="w-full rounded-t-profile-card bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-card"
+        className="w-full rounded-t-3xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-card"
         onClick={(event) => event.stopPropagation()}
       >
         <p className="mb-3 text-center text-sm font-medium text-text-muted">选择发布类型</p>

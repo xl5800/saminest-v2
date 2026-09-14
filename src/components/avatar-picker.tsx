@@ -113,9 +113,15 @@ export function AvatarPicker({
             className="h-20 w-20 rounded-full object-cover"
           />
         ) : (
+          // 全 App 视觉 Token 体系（第二批）：占位底色从 bg-bg 换成
+          // bg-surface-muted——这次任务卡明确点名"头像占位区颜色跟图片
+          // 占位区同一个处理逻辑"，专门针对这个组件的占位圆圈；未改文字色
+          // （text-text-muted 本来就是有效 token，任务卡没有要求这里也换
+          // 成 text-image-placeholder-icon——这是一个昵称首字母，不是一个
+          // 图标）。
           <div
             aria-hidden="true"
-            className="flex h-20 w-20 items-center justify-center rounded-full bg-bg text-2xl font-semibold text-text-muted"
+            className="flex h-20 w-20 items-center justify-center rounded-full bg-surface-muted text-2xl font-semibold text-text-muted"
           >
             {displayNameInitial}
           </div>

@@ -6,6 +6,11 @@ import { PublishActionSheet } from "./publish-action-sheet";
 /**
  * 全局持久顶部导航栏，由 AppShell 包在每一个路由外层渲染。
  *
+ * 全 App 视觉 Token 体系（第二批）：背景从 bg-bg（页面背景，浅灰蓝）换成
+ * bg-card（纯白）——这是持久导航栏（跟底部 BottomNav 是同一类"常驻
+ * chrome"），BARRY 方案明确要求这类导航背景是白色，之前用页面背景色会
+ * 让它跟下面的内容区糊在一起，见 bottom-nav.tsx 同一处修正的详细说明。
+ *
  * 分类链接不在这里渲染：AppHeader 是每个路由外层都有的全局 chrome
  * （帖子详情页、发布页、后台管理页……），"当前处于哪个分类"这个概念在
  * 这些页面上并不成立。分类浏览天生是页面级的（首页 / 分类页 feed），
@@ -25,7 +30,7 @@ export function AppHeader() {
   const showBackButton = location.pathname !== "/";
 
   return (
-    <header className="sticky top-0 z-10 border-b border-border bg-bg">
+    <header className="sticky top-0 z-10 border-b border-border bg-card">
       <div className="flex h-14 items-center gap-4 px-4">
         {showBackButton ? (
           <button
@@ -45,7 +50,7 @@ export function AppHeader() {
         <button
           type="button"
           onClick={() => setPublishSheetOpen(true)}
-          className="ml-auto shrink-0 rounded-xl bg-accent px-4 py-2 font-semibold text-white"
+          className="ml-auto shrink-0 rounded-button bg-accent px-4 py-2 font-semibold text-white"
         >
           发布
         </button>

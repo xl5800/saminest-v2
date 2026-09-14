@@ -133,7 +133,11 @@ export function CommentSection({ postId }: CommentSectionProps) {
               {submitError}
             </p>
           ) : null}
-          <div className="flex items-end gap-2 rounded-full border border-border bg-bg px-4 py-2 focus-within:border-primary">
+          {/* 全 App 视觉 Token 体系（第二批）：focus 态从
+              focus-within:border-primary（描边变蓝）换成
+              focus-within:ring-4 focus-within:ring-primary-light（柔和
+              光晕），跟其它表单输入统一，不用加粗/变色边框这种方式。 */}
+          <div className="flex items-end gap-2 rounded-full border border-border bg-bg px-4 py-2 focus-within:ring-4 focus-within:ring-primary-light">
             <textarea
               ref={textareaRef}
               value={content}
