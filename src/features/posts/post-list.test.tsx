@@ -133,7 +133,11 @@ describe("PostList", () => {
 
   // 19 号卡：图片区域从 16:9 改成更接近人像照片的 4:5（任务卡给的 3:4～4:5
   // 区间内）。
-  it("renders the cover image at a 4:5 aspect ratio, and the card itself with no border/shadow", async () => {
+  //
+  // 背景换中性浅灰 + 卡片边框/阴影撑出层次（新一轮 UI 审计）：卡片改动前
+  // 是无边框/无投影，这次补上跟其它卡片列表项一致的 border-border/
+  // shadow-card，这条断言跟着从"没有"改成"有"。
+  it("renders the cover image at a 4:5 aspect ratio, and the card itself with a border + shadow", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
@@ -142,7 +146,7 @@ describe("PostList", () => {
     expect(img).toHaveClass("aspect-[4/5]");
 
     const link = screen.getByRole("link");
-    expect(link).not.toHaveClass("border-border", "shadow-card");
+    expect(link).toHaveClass("border", "border-border", "shadow-card");
   });
 
   // 19 号卡：价格为空时，那一整行文字完全不渲染——不是渲染出来但显示
@@ -462,7 +466,10 @@ describe("PostList variant='wanted'", () => {
 
     expect(container.querySelector(".grid.grid-cols-2")).not.toBeInTheDocument();
     expect(container.querySelector(".flex.flex-col.gap-3.px-4")).toBeInTheDocument();
-    expect(link).toHaveClass("rounded-2xl", "bg-card", "shadow-card");
+    // 背景换中性浅灰 + 卡片边框/阴影撑出层次（新一轮 UI 审计）：这个
+    // variant 改动前已经有 shadow-card，这次补上 border-border，两者
+    // 一起跟其它卡片列表项保持一致。
+    expect(link).toHaveClass("rounded-2xl", "border", "border-border", "bg-card", "shadow-card");
     expect(link).toHaveTextContent("Looking for a quiet room near metro");
     expect(link).toHaveTextContent("USD 1,200");
     expect(link).toHaveTextContent("Rockville");

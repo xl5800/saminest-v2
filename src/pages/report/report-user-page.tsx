@@ -112,7 +112,7 @@ export function ReportUserPage() {
       <main>
         <TopBar variant="nav-only" title="举报用户" />
         <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
             <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
               {SELF_REPORT_MESSAGE}
             </p>
@@ -127,7 +127,7 @@ export function ReportUserPage() {
       <main>
         <TopBar variant="nav-only" title="举报用户" />
         <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
             <p role="status" className="rounded border border-success bg-success/10 px-3 py-2 text-sm text-success">
               {SUBMIT_SUCCESS_MESSAGE}
             </p>
@@ -141,7 +141,7 @@ export function ReportUserPage() {
     <main>
       <TopBar variant="nav-only" title="举报用户" />
       <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+        <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
           <form onSubmit={handleSubmit} noValidate>
             {validationError ? (
               <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">

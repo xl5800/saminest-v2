@@ -99,7 +99,7 @@ type ActiveAction = "reply" | "delete" | "report" | null;
  *   不大的内容区域，只挂元素自己会导致移出范围后收不到后续事件。
  * - 长按弹出的浮层选了"居中小 sheet"（照抄 my-posts-page.tsx 删除确认弹窗
  *   `fixed inset-0 flex items-center justify-center bg-black/40` +
- *   `w-full max-w-xs rounded-2xl bg-white p-5 shadow-card` 那个模式），
+ *   `w-full max-w-xs rounded-2xl bg-card p-5 shadow-card` 那个模式），
  *   不是"贴着长按位置定位的气泡菜单"——原因：气泡菜单需要拿长按发生时的
  *   clientX/clientY 算浮层位置、还要处理"贴着屏幕边缘时要不要翻转方向"
  *   这类视口边界问题，居中 sheet 直接复用现成的、已经在这个仓库跑通过的
@@ -550,7 +550,7 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                 onClick={() => setShowLongPressReportPrompt(false)}
               >
                 <div
-                  className="w-full max-w-xs rounded-2xl bg-white p-2 shadow-card"
+                  className="w-full max-w-xs rounded-2xl bg-card p-2 shadow-card"
                   onClick={(event) => event.stopPropagation()}
                 >
                   <button

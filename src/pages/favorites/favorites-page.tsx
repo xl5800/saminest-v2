@@ -29,7 +29,7 @@ import { formatListingDate, formatPrice } from "../../utils/format";
  * 呈现里唯一"看不到图"的一个（纯文字行），卡片容器也用错了圆角级别
  * （rounded-lg 是 DESIGN.md 给后台管理列表行定的规格，帖子卡片应该用
  * rounded-2xl）。这次对齐 my-posts-page.tsx/activity-card.tsx 已经在用的
- * `rounded-2xl border border-border bg-white shadow-card` 组合，并加上
+ * `rounded-2xl border border-border bg-card shadow-card` 组合，并加上
  * PostThumbnail（见 post-thumbnail.tsx）展示缩略图——有封面图显示封面图，
  * 没有的话显示跟首页信息流一致的"分类色底 + 图标"占位，不再是纯文字。
  * 缩略图用 compact（80×80 小方块，只显示图标不显示分类名文字），跟
@@ -94,7 +94,7 @@ export function FavoritesPage() {
           {posts.map((post) => (
             <li
               key={post.id}
-              className="flex gap-3 rounded-2xl border border-border bg-white p-3 shadow-card"
+              className="flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
             >
               <PostThumbnail
                 coverImageUrl={post.coverImageUrl}

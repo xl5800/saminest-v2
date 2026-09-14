@@ -68,7 +68,7 @@ function GroupRow({ to, icon: Icon, label }: GroupRowProps) {
  */
 function GroupCard({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-6 divide-y divide-border overflow-hidden rounded-2xl bg-white shadow-settings-item">
+    <div className="mb-6 divide-y divide-border overflow-hidden rounded-2xl bg-card shadow-settings-item">
       {children}
     </div>
   );
@@ -234,7 +234,7 @@ export function ProfilePage() {
           type="button"
           onClick={handleLogout}
           disabled={isLoggingOut}
-          className="flex h-14 w-full items-center justify-center rounded-2xl bg-white text-base font-medium text-danger shadow-settings-item transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-14 w-full items-center justify-center rounded-2xl bg-card text-base font-medium text-danger shadow-settings-item transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {isLoggingOut ? "退出中…" : "退出登录"}
         </button>

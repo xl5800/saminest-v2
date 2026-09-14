@@ -146,7 +146,7 @@ describe("FavoritesPage", () => {
       const title = await screen.findByText("Sunny room");
 
       const card = title.closest("li");
-      expect(card).toHaveClass("rounded-2xl", "border", "border-border", "bg-white", "shadow-card");
+      expect(card).toHaveClass("rounded-2xl", "border", "border-border", "bg-card", "shadow-card");
       expect(card).not.toHaveClass("rounded-lg");
     });
   });

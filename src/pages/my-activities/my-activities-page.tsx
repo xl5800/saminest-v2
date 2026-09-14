@@ -72,7 +72,7 @@ function ActivityCard({ activity, error, note, action, extra }: ActivityCardProp
   const { emoji, label } = getActivityChannelMeta(activity.channel);
 
   return (
-    <li className="rounded-2xl border border-border bg-white p-3 shadow-card">
+    <li className="rounded-2xl border border-border bg-card p-3 shadow-card">
       <Link to={`/activities/${activity.id}`} className="block">
         <div className="flex items-start justify-between gap-2">
           <p className="line-clamp-2 break-words text-base text-text">
@@ -619,7 +619,7 @@ export function MyActivitiesPage() {
             aria-label="确认取消"
             className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-4"
           >
-            <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-card">
+            <div className="w-full max-w-xs rounded-2xl bg-card p-5 shadow-card">
               <p className="mb-4 text-base text-text">确定要取消这场活动吗？取消后无法恢复。</p>
               {rowErrors[confirmCancelId] ? (
                 <p role="alert" className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">

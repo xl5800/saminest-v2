@@ -100,7 +100,7 @@ export function ActivityNotifyPage() {
     <main>
       <TopBar variant="nav-only" title={pageTitle} />
       <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+        <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
           {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
 
           {isError ? (

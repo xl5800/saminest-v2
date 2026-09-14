@@ -135,7 +135,7 @@ export function DeleteAccountPage() {
       <main>
         <TopBar variant="nav-only" title="注销账号" />
         <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-          <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+          <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
             <p className="mb-2 text-sm text-text">
               你的账号将在 <strong>{formatDate(status.scheduledPurgeAt)}</strong> 注销
               （还剩 {daysRemaining(status.scheduledPurgeAt)} 天）。
@@ -166,7 +166,7 @@ export function DeleteAccountPage() {
     <main>
       <TopBar variant="nav-only" title="注销账号" />
       <div className="flex justify-center px-4 py-10 pb-20 md:pb-10">
-        <div className="w-full max-w-md rounded-lg border border-border bg-white p-6 shadow-sm">
+        <div className="w-full max-w-md rounded-lg border border-border bg-card p-6 shadow-sm">
           <p className="mb-2 text-sm text-text">
             注销后你的账号将在 {GRACE_PERIOD_DAYS} 天后正式清除：昵称、头像、简介、地区等个人资料会被清空，且无法再用当前邮箱登录。
           </p>

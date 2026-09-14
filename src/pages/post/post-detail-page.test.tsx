@@ -485,7 +485,7 @@ describe("PostDetailPage", () => {
 
       const bar = screen.getByTestId("post-detail-contact-bar");
       expect(bar).toHaveClass(
-        "bg-white",
+        "bg-card",
         "border-t",
         "border-border",
         "px-4",

@@ -424,7 +424,7 @@ export function PostDetailPage() {
       {id && data ? (
         <div
           data-testid="post-detail-contact-bar"
-          className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-white px-4 pt-3"
+          className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-card px-4 pt-3"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
         >
           <button

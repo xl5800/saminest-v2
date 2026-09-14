@@ -385,7 +385,7 @@ export function AdminReportsPage() {
             const isFormOpen = openFormRowId === report.id;
 
             return (
-              <li key={report.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+              <li key={report.id} className="mb-2 rounded-lg border border-border bg-card p-4">
                 <span className="mr-3 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
                   {REASON_LABELS[report.reasonCode] ?? report.reasonCode}
                 </span>

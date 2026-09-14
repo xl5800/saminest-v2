@@ -76,8 +76,16 @@ export interface PostListProps {
  *
  * 原来卡片上的作者名字、发布时间、收藏数/评论数、FavoriteButton 更早之前
  * 就已经去掉了（Facebook Marketplace 风格那次改版）——列表页不需要承载
- * 这些社交互动信息，详情页仍然完整展示。卡片本身依旧无边框/无投影
- * （`overflow-hidden rounded-2xl bg-card`），这条这次没有变。
+ * 这些社交互动信息，详情页仍然完整展示。
+ *
+ * 背景换中性浅灰 + 卡片边框/阴影撑出层次（新一轮 UI 审计）：卡片容器
+ * 从原来的无边框/无投影（`overflow-hidden rounded-2xl bg-card`）补上
+ * `border border-border shadow-card`——这是全站曝光最高的卡片（首页/
+ * 分类页主力信息流），之前唯独这里没有跟 activity-card.tsx/
+ * my-posts-page.tsx 等其它卡片列表项统一用同一套"边框+投影"语言，
+ * `--color-bg` 这次改成中性浅灰后，光换背景色本身撑不出"背景 vs. 卡片"
+ * 的层次感（两个颜色亮度接近），卡片有没有清晰边界才是关键，所以这次
+ * 一并补齐。只加 class，不改布局/间距/图片比例。
  *
  * 分页：用"哨兵元素 + IntersectionObserver"实现无限滚动：列表底部放一个
  * 不可见的哨兵 div，它进入视口时触发 fetchNextPage()。哨兵只在
@@ -193,7 +201,7 @@ export function PostList({
               <Link
                 key={post.id}
                 to={`/post/${post.id}`}
-                className="block rounded-2xl bg-card p-4 shadow-card"
+                className="block rounded-2xl border border-border bg-card p-4 shadow-card"
               >
                 <p className="line-clamp-2 break-words text-base font-medium text-text">
                   {post.title}
@@ -248,7 +256,7 @@ export function PostList({
             <Link
               key={post.id}
               to={`/post/${post.id}`}
-              className="block overflow-hidden rounded-2xl bg-card"
+              className="block overflow-hidden rounded-2xl border border-border bg-card shadow-card"
             >
               {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/分类色底
                   占位这段展示逻辑抽成了共享组件 PostThumbnail（见该文件顶部

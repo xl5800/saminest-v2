@@ -30,7 +30,7 @@ export function PersonCard({ userId, displayName, avatarUrl, subtitle }: PersonC
   return (
     <Link
       to={`/users/${userId}`}
-      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-white p-3 hover:border-primary"
+      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 hover:border-primary"
     >
       <span className="flex min-w-0 items-center gap-3">
         {avatarUrl ? (

@@ -263,7 +263,7 @@ export function MyPostsPage() {
           return (
             <li
               key={post.id}
-              className="rounded-2xl border border-border bg-white p-3 shadow-card"
+              className="rounded-2xl border border-border bg-card p-3 shadow-card"
             >
               <div className="flex gap-3">
                 {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/占位
@@ -362,7 +362,7 @@ export function MyPostsPage() {
           aria-label="确认删除"
           className="fixed inset-0 z-20 flex items-center justify-center bg-black/40 px-4"
         >
-          <div className="w-full max-w-xs rounded-2xl bg-white p-5 shadow-card">
+          <div className="w-full max-w-xs rounded-2xl bg-card p-5 shadow-card">
             <p className="mb-4 text-base text-text">确定要删除这条帖子吗？删除后无法恢复。</p>
             {rowErrors[confirmDeletePostId] ? (
               <p role="alert" className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">

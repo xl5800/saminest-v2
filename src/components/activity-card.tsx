@@ -67,7 +67,7 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
   return (
     <Link
       to={`/activities/${activity.id}`}
-      className="block overflow-hidden rounded-2xl border border-border bg-white shadow-card"
+      className="block overflow-hidden rounded-2xl border border-border bg-card shadow-card"
     >
       <div className="p-5 pt-3 pb-2">
         <p className="line-clamp-2 break-words text-base text-text">

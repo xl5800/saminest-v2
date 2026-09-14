@@ -47,7 +47,7 @@ function BlockedUserRow({ blockerId, user }: BlockedUserRowProps) {
   const avatarInitial = user.displayName.trim().charAt(0).toUpperCase() || "?";
 
   return (
-    <li className="flex items-center justify-between gap-4 rounded-lg border border-border bg-white p-4">
+    <li className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
       <Link to={`/users/${user.blockedUserId}`} className="flex min-w-0 items-center gap-3">
         {user.avatarUrl ? (
           <img

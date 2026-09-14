@@ -262,7 +262,7 @@ export function AdminCategoriesPage() {
     trimmedCreateSlug !== "" && existingSlugs.has(trimmedCreateSlug);
 
   const createForm = (
-    <form onSubmit={handleCreateSubmit} noValidate className="mb-6 rounded-lg border border-border bg-white p-4">
+    <form onSubmit={handleCreateSubmit} noValidate className="mb-6 rounded-lg border border-border bg-card p-4">
       <h2 className="mb-3 text-sm font-semibold text-text">新建分类</h2>
       {createError ? (
         <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
@@ -387,7 +387,7 @@ export function AdminCategoriesPage() {
             const draft = editDrafts[category.id] ?? draftFromCategory(category);
 
             return (
-              <li key={category.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+              <li key={category.id} className="mb-2 rounded-lg border border-border bg-card p-4">
                 {rowErrors[category.id] ? (
                   <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                     {rowErrors[category.id]}

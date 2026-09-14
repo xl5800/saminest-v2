@@ -153,7 +153,7 @@ export function AdminFeedbackPage() {
             );
 
             return (
-              <li key={item.id} className="mb-2 rounded-lg border border-border bg-white p-4">
+              <li key={item.id} className="mb-2 rounded-lg border border-border bg-card p-4">
                 <span className="mr-3 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
                   {TYPE_LABELS[item.type] ?? item.type}
                 </span>

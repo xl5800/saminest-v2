@@ -75,7 +75,19 @@
   --color-primary-light: #eef1fd;
   --color-primary-soft: #c9d5fb;
   --color-accent: #3457e8;
-  --color-bg: #f3f5fa;
+  /*
+   * --color-bg（页面背景）：BARRY 反馈"背景太白，想要 Airbnb 那种感觉"。
+   * 原值 #f3f5fa 是偏冷的浅蓝灰，跟 --color-card 的纯白 #ffffff 亮度差
+   * 只有约 4%，屏幕上基本看不出区别——这是"感觉太白"的直接原因。这次
+   * 给 BARRY 看了几个候选背景色（配实际卡片样式对比），选定中性浅灰
+   * #f5f5f5（不偏冷不偏暖，去掉了原来的蓝色调）。跟这次同时做的"卡片
+   * 补边框+投影"是同一件事的两个手段：光换背景色本身效果有限（新旧两个
+   * 颜色亮度其实很接近），卡片本身有没有清晰的边界才是撑出"背景 vs. 卡片"
+   * 层次感的关键，见 post-list.tsx 这次的改动。--color-card 本身不变，
+   * 卡片仍然是纯白，层次感靠背景变灰+卡片加边框投影两件事一起撑出来，
+   * 不是把整体调成另一套配色。
+   */
+  --color-bg: #f5f5f5;
   /*
    * --color-card（Card 背景，#FFFFFF，见 00-overview.md 全局设计 Token
    * 表格）：01 号卡的 token 落地漏掉了这一条，导致 top-bar.tsx 的

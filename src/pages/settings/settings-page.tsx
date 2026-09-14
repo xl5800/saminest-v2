@@ -26,7 +26,7 @@ export function SettingsPage() {
           <h2 className="mb-2 text-sm font-medium text-text-muted">账号与安全</h2>
           <Link
             to="/settings/delete-account"
-            className="flex h-14 items-center justify-between rounded-2xl bg-white px-4 text-base font-medium text-danger shadow-settings-item transition-opacity hover:opacity-90"
+            className="flex h-14 items-center justify-between rounded-2xl bg-card px-4 text-base font-medium text-danger shadow-settings-item transition-opacity hover:opacity-90"
           >
             <span>注销账号</span>
             <ChevronRight aria-hidden="true" size={18} className="text-chevron" />

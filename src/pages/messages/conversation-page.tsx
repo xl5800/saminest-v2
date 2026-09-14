@@ -75,7 +75,7 @@ interface SystemNotificationCardProps {
  */
 function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardProps) {
   const content = (
-    <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-white p-3">
+    <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-3">
       <div
         aria-hidden="true"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
@@ -116,7 +116,7 @@ function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardPr
  */
 function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCardProps) {
   const content = (
-    <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-white p-3">
+    <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-3">
       <div
         aria-hidden="true"
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
@@ -292,7 +292,7 @@ function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCard
  * `/my-activities?pendingActivityId=<活动id>`（见 my-activities-page.tsx
  * 怎么用这个查询参数自动展开+滚动到对应审核面板）。方案 A 明确要求"不改
  * 消息形式"——这条消息本身仍然是 sender_id 为真实用户的普通消息，不是
- * senderId 为 null 的系统通知，气泡样式（bg-primary/bg-white 的聊天泡）
+ * senderId 为 null 的系统通知，气泡样式（bg-primary/bg-card 的聊天泡）
  * 完全不变，双方仍然可以在这条会话里继续互相发消息；"查看申请 →"只是
  * 气泡下面单独多一行，不是把整条消息换成 SystemNotificationCard 那种
  * 卡片。链接只在 !isMine（收到这条消息的一方，也就是发起人自己）这一侧
@@ -470,7 +470,7 @@ export function MessageConversationPage() {
 
   return (
     <main className="mx-auto grid h-dvh w-full max-w-2xl grid-rows-[3.5rem_minmax(0,1fr)_auto] overflow-hidden bg-bg">
-      <header className="grid h-14 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-border bg-white px-2">
+      <header className="grid h-14 grid-cols-[2.75rem_minmax(0,1fr)_2.75rem] items-center border-b border-border bg-card px-2">
         <button
           type="button"
           aria-label="返回"
@@ -518,7 +518,7 @@ export function MessageConversationPage() {
               <div
                 role="menu"
                 onClick={() => setMenuOpen(false)}
-                className="absolute right-0 top-11 z-20 min-w-[132px] overflow-hidden rounded-xl border border-border bg-white py-1 shadow-lg"
+                className="absolute right-0 top-11 z-20 min-w-[132px] overflow-hidden rounded-xl border border-border bg-card py-1 shadow-lg"
               >
                 <button
                   type="button"
@@ -632,7 +632,7 @@ export function MessageConversationPage() {
                           className={
                             isMine
                               ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
-                              : "min-w-0 whitespace-pre-wrap rounded-2xl bg-white px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
+                              : "min-w-0 whitespace-pre-wrap rounded-2xl bg-card px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
                           }
                         >
                           {message.body}
@@ -678,7 +678,7 @@ export function MessageConversationPage() {
       {!isSystemConversation && isBlockedPair ? (
         <div
           data-testid="conversation-blocked-banner"
-          className="sticky bottom-0 z-10 shrink-0 border-t border-border bg-white px-4 py-3 text-center text-sm text-text-muted"
+          className="sticky bottom-0 z-10 shrink-0 border-t border-border bg-card px-4 py-3 text-center text-sm text-text-muted"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
         >
           {BLOCKED_COMPOSER_MESSAGE}
@@ -690,7 +690,7 @@ export function MessageConversationPage() {
           onSubmit={handleSubmit}
           noValidate
           data-testid="conversation-composer"
-          className="sticky bottom-0 z-10 flex shrink-0 flex-col gap-2 border-t border-border bg-white px-4 pt-3"
+          className="sticky bottom-0 z-10 flex shrink-0 flex-col gap-2 border-t border-border bg-card px-4 pt-3"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
         >
           {validationError ? (
