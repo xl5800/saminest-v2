@@ -164,6 +164,7 @@ vi.mock("../repositories/user-blocks-repository", async () => {
 import { AppShell } from "../components/app-shell";
 import { ActivityDetailPage } from "../pages/activities/activity-detail-page";
 import { ActivityListPage } from "../pages/activities/activity-list-page";
+import { ActivityNotifyPage } from "../pages/activities/activity-notify-page";
 import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
@@ -229,6 +230,16 @@ function renderAt(path: string | string[]) {
             element: (
               <RequireAuth>
                 <ReportActivityPage />
+              </RequireAuth>
+            )
+          },
+          {
+            // 任务卡（修复 "*" 通配符 bug + 补登记本条）：之前这份并行的
+            // 路由树里也没有这一条，一并补上。
+            path: "activities/:id/notify",
+            element: (
+              <RequireAuth>
+                <ActivityNotifyPage />
               </RequireAuth>
             )
           },
@@ -398,7 +409,19 @@ function renderAt(path: string | string[]) {
           { path: "reset-password", element: <ResetPasswordPage /> },
           { path: "terms", element: <TermsPage /> },
           { path: "privacy", element: <PrivacyPage /> },
-          { path: "*", element: <NotFoundPage /> }
+          {
+            // 任务卡（修复 "*" 通配符 bug）：跟真实 routes.tsx 保持一致，
+            // 显式标 id: "not-found"，app-shell.tsx 用 useMatches() 找
+            // 这个 id 来判断"是不是真的落到 404 了"——这个测试文件维护
+            // 一份独立的路由树（不是直接 import 真实 routes.tsx），如果
+            // 这里漏加这个 id，下面"renders the not-found page for an
+            // unknown path"这条测试仍然能通过（NotFoundPage 本来就会
+            // 渲染），但会悄悄验证不到"AppHeader 没有跟着叠加渲染"这件事，
+            // 见该测试新增的断言。
+            id: "not-found",
+            path: "*",
+            element: <NotFoundPage />
+          }
         ]
       }
     ],
@@ -606,6 +629,29 @@ describe("app routes", () => {
     expect(screen.getByRole("heading", { name: "举报活动" })).toBeInTheDocument();
   });
 
+  it("redirects /activities/:id/notify to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/activities/act-1/notify");
+
+    expect(
+      screen.getByRole("heading", { name: "登录 Saminest" })
+    ).toBeInTheDocument();
+  });
+
+  // 任务卡（修复 "*" 通配符 bug + 补登记 /activities/:id/notify）：这个
+  // 页面一直无条件渲染自己的 TopBar nav-only 变体，之前漏登记进
+  // TOPBAR_MIGRATED_PATTERNS，只是被 "*" bug 意外掩盖了，见
+  // app-shell.tsx 顶部注释。这里验证补登记之后不会叠加旧的全局
+  // AppHeader（"Saminest" 品牌链接）——这是这次改动要保证不出现的双重
+  // 顶部栏。
+  it("renders the activity-notify page at /activities/:id/notify when a session exists, without the global AppHeader", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/activities/act-1/notify");
+
+    expect(await screen.findByRole("heading", { name: "通知参与者" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+  });
+
   it("renders the login page at /login without the global header/bottom nav chrome", () => {
     renderAt("/login");
 
@@ -658,10 +704,17 @@ describe("app routes", () => {
     expect(screen.getByRole("heading", { name: "隐私政策" })).toBeInTheDocument();
   });
 
-  it("renders the not-found page for an unknown path", () => {
+  // 任务卡（修复 "*" 通配符 bug）：这条路径两个数组都没登记、也没有真的
+  // 匹配到任何具体路由，NotFoundPage 自己无条件渲染了自己的 TopBar——
+  // 断言旧的全局 AppHeader（"Saminest" 品牌链接）没有跟着叠加渲染，这是
+  // 这次 bug 修复要保证的核心行为，改动前这个断言本来就会通过（"*" bug
+  // 意外地"蒙对"了这个结果），改动后要靠 useMatches() 的 id 判断继续
+  // 正确得到同样的结果，不是巧合。
+  it("renders the not-found page for an unknown path, without the global AppHeader", () => {
     renderAt("/does-not-exist");
 
     expect(screen.getByRole("heading", { name: "页面未找到" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
   });
 
   it("redirects /publish to /login when there is no session (reuses RequireAuth)", () => {

@@ -324,6 +324,15 @@ export const router = createBrowserRouter([
         element: <PrivacyPage />
       },
       {
+        // 显式 id：app-shell.tsx 用 useMatches() 找这个 id 来判断"当前是不是
+        // 真的落到了 404 兜底页"，不再靠拿 pathname 字符串去跟一个 "*"
+        // 通配符 pattern 比对——matchPath({ path: "*" }, pathname) 对任意
+        // pathname 都会匹配上，之前 TOPBAR_MIGRATED_PATTERNS 数组里那条
+        // "*" 就是靠这个语义"蒙对"了 404 页，副作用是让 hasOwnTopBar 对
+        // 全站所有路径都变成 true，AppHeader 分支永远走不到，见
+        // app-shell.tsx 顶部注释。id 是 createBrowserRouter 路由对象自带
+        // 支持的字段，不需要额外依赖。
+        id: "not-found",
         path: "*",
         element: <NotFoundPage />
       }

@@ -1,4 +1,4 @@
-import { matchPath, Outlet, useLocation } from "react-router-dom";
+import { matchPath, Outlet, useLocation, useMatches } from "react-router-dom";
 
 import { useOnlineStatus } from "../utils/use-online-status";
 import { AppHeader } from "./app-header";
@@ -97,13 +97,34 @@ const NO_CHROME_PATTERNS = [
  * （/profile/edit）、设置页（/settings、/settings/delete-account）、
  * 已屏蔽用户列表（/blocked-users）、六个后台管理页（/admin/posts、
  * /admin/posts/all、/admin/reports、/admin/feedback、/admin/users、
- * /admin/categories）、用户协议（/terms）、隐私政策（/privacy）、404 兜底页
- * （*）。其中 /my-posts（我的帖子）单独多传了一个 nav-only 新增的可选
- * `right` 图标按钮（见 top-bar.tsx 里 TopBarNavOnlyProps 的注释），保留了
- * 一个"发布"入口，但换成小图标样式，不再是旧 AppHeader 那种大按钮——这 18
- * 条路由都本来就有底部 Tab 栏（举报页/编辑资料/设置这类二级页面也是从
- * 有底部 Tab 栏的页面跳过来的），不属于完全沉浸式，因此也是挪进这个名单
- * 而不是 NO_CHROME_PATTERNS。
+ * /admin/categories）、用户协议（/terms）、隐私政策（/privacy）。其中
+ * /my-posts（我的帖子）单独多传了一个 nav-only 新增的可选 `right` 图标
+ * 按钮（见 top-bar.tsx 里 TopBarNavOnlyProps 的注释），保留了一个"发布"
+ * 入口，但换成小图标样式，不再是旧 AppHeader 那种大按钮——这 18 条路由都
+ * 本来就有底部 Tab 栏（举报页/编辑资料/设置这类二级页面也是从有底部 Tab
+ * 栏的页面跳过来的），不属于完全沉浸式，因此也是挪进这个名单而不是
+ * NO_CHROME_PATTERNS。（26 号卡当时把 404 兜底页也用字面量 "*" 塞进了
+ * 这个数组——这是个 bug，见下面 hasOwnTopBar 的说明，这次已经改掉。）
+ *
+ * "*" 通配符 bug 修复 + 补登记 /activities/:id/notify：这个数组用
+ * matchesAnyPattern（内部是 matchPath({ path: pattern, end: true }, ...)）
+ * 逐条测试，而 matchPath 对 pattern 是字面量 "*" 的语义是"匹配任意
+ * pathname"，不是"只匹配真的没有命中任何具体路由、落到 404 的那种特殊
+ * 情况"——26 号卡当初往这个数组末尾加的那条 "*"（本意是给 404 兜底页也
+ * 标记"已经有自己的 TopBar"）实际效果是让 hasOwnTopBar 对全站任意路径都
+ * 恒为 true，连带 showAppHeader 恒为 false，下面注释里"其余尚未迁移的
+ * 页面，AppHeader/BottomNav 都渲染"这条分支因此变成永远走不到的死代码。
+ * 现在改成：数组里不再放 "*"，404 兜底页改用 useMatches() + routes.tsx
+ * 里那个路由对象的显式 id（"not-found"）单独判断，可靠地只匹配"真的没有
+ * 命中任何具体路由"这一种情况，见下面 isNotFoundRoute 的注释。
+ *
+ * 顺带补登记了一条之前漏掉的路由：/activities/:id/notify（发起人群发
+ * 通知参与者页，见 activity-notify-page.tsx）——这个页面从任务卡 4 落地
+ * 起就一直无条件渲染自己的 TopBar nav-only 变体，但从来没有被加进这个
+ * 数组，只是因为上面那个 "*" bug"误打误撞"让 hasOwnTopBar 对它也是
+ * true，没有露出双重顶部栏；bug 修好之后如果不补上这一条，这个页面会
+ * 立刻变成"旧 AppHeader + 自己的 TopBar"同时渲染，所以这次一并补上，放
+ * 在同样是"活动详情页子路由"的 /activities/:id/report 旁边。
  */
 const TOPBAR_MIGRATED_PATTERNS = [
   "/",
@@ -118,6 +139,10 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/favorites",
   // 26 号卡新增：
   "/activities/:id/report",
+  // 任务卡（修复 "*" 通配符 bug + 补登记本条）：activity-notify-page.tsx
+  // 从任务卡 4 落地起就一直无条件渲染自己的 TopBar nav-only 变体，之前
+  // 漏登记，见本文件顶部这次改动的说明。
+  "/activities/:id/notify",
   "/post/:id/report",
   "/users/:userId/report",
   "/feedback",
@@ -133,8 +158,7 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/admin/users",
   "/admin/categories",
   "/terms",
-  "/privacy",
-  "*"
+  "/privacy"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {
@@ -145,9 +169,20 @@ function matchesAnyPattern(pathname: string, patterns: string[]): boolean {
  * 根布局路由的 element：
  * - 完全沉浸式页面（NO_CHROME_PATTERNS）：AppHeader、BottomNav 都不渲染，
  *   页面自己是唯一的 chrome。
- * - 已迁移到 TopBar 的页面（TOPBAR_MIGRATED_PATTERNS）：不渲染 AppHeader
- *   （页面自己渲染 TopBar），但渲染 BottomNav。
+ * - 已迁移到 TopBar 的页面（TOPBAR_MIGRATED_PATTERNS，或者真的落到了 404
+ *   兜底页）：不渲染 AppHeader（页面自己渲染 TopBar），但渲染 BottomNav。
  * - 其余尚未迁移的页面：维持改版前的行为，AppHeader、BottomNav 都渲染。
+ *
+ * isNotFoundRoute 用 useMatches() 拿到当前渲染的路由树、找 routes.tsx 里
+ * 那个显式标了 `id: "not-found"` 的通配路由对象——用路由本身的 id 判断
+ * "这是不是真的落到 404 了"，不是拿 location.pathname 字符串去跟一个
+ * "*" pattern 做 matchPath 比对。这两种判断方式看起来像是同一件事，实际
+ * 语义完全不同：matchPath({ path: "*" }, pathname) 对任意 pathname 都会
+ * 匹配上（"*" 表示"匹配一切"，不是"只匹配未命中的情况"），这正是
+ * TOPBAR_MIGRATED_PATTERNS 数组之前出的那个 bug——见该数组顶部注释。
+ * useMatches() 返回的每一项对应路由树里一层匹配到的路由，只有真的落到
+ * 那个通配路由（其它路由都没匹配上）时，`matches` 里才会出现
+ * `id === "not-found"` 的一项，不会有歧义。
  *
  * 断网提示条放在这里（而不是每个页面各自处理）：这是全站所有路由共用的
  * 外层组件，一处判断就能覆盖所有页面，包括完全沉浸式页面——网络断开这件事
@@ -156,10 +191,14 @@ function matchesAnyPattern(pathname: string, patterns: string[]): boolean {
  */
 export function AppShell() {
   const location = useLocation();
+  const matches = useMatches();
   const isOnline = useOnlineStatus();
 
+  const isNotFoundRoute = matches.some((match) => match.id === "not-found");
+
   const isNoChrome = matchesAnyPattern(location.pathname, NO_CHROME_PATTERNS);
-  const hasOwnTopBar = matchesAnyPattern(location.pathname, TOPBAR_MIGRATED_PATTERNS);
+  const hasOwnTopBar =
+    matchesAnyPattern(location.pathname, TOPBAR_MIGRATED_PATTERNS) || isNotFoundRoute;
 
   const showAppHeader = !isNoChrome && !hasOwnTopBar;
   const showBottomNav = !isNoChrome;
