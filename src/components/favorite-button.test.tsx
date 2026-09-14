@@ -52,6 +52,70 @@ describe("FavoriteButton", () => {
     expect(mutateMock).not.toHaveBeenCalled();
   });
 
+  // UI 审计 P0 #2：default variant 之前是裸文字"★ 已收藏"/"☆ 收藏"，没有
+  // 任何样式；这次补成跟 icon variant 同一套 Star 图标+aria-label 的圆形
+  // 图标按钮（DESIGN.md 的 icon-button token，36×36），不再有这两个字符
+  // 本身可断言，改成断言可访问性属性和图标的 fill/颜色 class。
+  describe("default variant styling (UI 审计 P0 #2)", () => {
+    it("renders a circular Star icon button (not bare '☆ 收藏' text) with a '收藏' aria-label when not yet favorited", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useFavoritePostIdsQuery.mockReturnValue({ data: [] });
+
+      const { container } = renderWithProviders(<FavoriteButton postId="post-1" />);
+
+      const button = screen.getByRole("button", { name: "收藏" });
+      expect(button).not.toHaveTextContent("☆ 收藏");
+      expect(button).toHaveClass("h-9", "w-9", "rounded-full");
+
+      const star = container.querySelector("svg.lucide-star");
+      expect(star).toBeInTheDocument();
+      expect(star).toHaveAttribute("fill", "none");
+      expect(star).not.toHaveClass("text-primary");
+    });
+
+    it("renders a '取消收藏' aria-label with a filled, primary-colored Star icon when already favorited", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useFavoritePostIdsQuery.mockReturnValue({ data: ["post-1"] });
+
+      const { container } = renderWithProviders(<FavoriteButton postId="post-1" />);
+
+      const button = screen.getByRole("button", { name: "取消收藏" });
+      expect(button).not.toHaveTextContent("★ 已收藏");
+
+      const star = container.querySelector("svg.lucide-star");
+      expect(star).toHaveAttribute("fill", "currentColor");
+      expect(star).toHaveClass("text-primary");
+    });
+
+    // 点击后（未收藏 → 已收藏）视觉状态切换：aria-pressed/aria-label/图标
+    // fill 三者一起随 isFavorited 变化——FavoriteButton 本身不维护乐观
+    // 更新的本地 state，展示状态完全来自 useFavoritePostIdsQuery 的返回值，
+    // 这里用两次独立渲染模拟"收藏前"/"收藏成功后返回的收藏列表已经包含
+    // 这个帖子"这两个真实状态（不用 rerender——renderWithProviders 包了
+    // 一层 QueryClientProvider/MemoryRouter，rerender 会把整棵树换成裸的
+    // <FavoriteButton />，丢掉这些 Provider）。
+    it("shows the unfilled/muted Star before favoriting, and the filled/primary Star once the post is already favorited", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useFavoritePostIdsQuery.mockReturnValue({ data: [] });
+
+      const before = renderWithProviders(<FavoriteButton postId="post-1" />);
+      expect(screen.getByRole("button", { name: "收藏" })).toHaveAttribute(
+        "aria-pressed",
+        "false"
+      );
+      expect(before.container.querySelector("svg.lucide-star")).toHaveAttribute("fill", "none");
+      cleanup();
+
+      useFavoritePostIdsQuery.mockReturnValue({ data: ["post-1"] });
+      const after = renderWithProviders(<FavoriteButton postId="post-1" />);
+      const button = screen.getByRole("button", { name: "取消收藏" });
+      expect(button).toHaveAttribute("aria-pressed", "true");
+      const star = after.container.querySelector("svg.lucide-star");
+      expect(star).toHaveAttribute("fill", "currentColor");
+      expect(star).toHaveClass("text-primary");
+    });
+  });
+
   it("calls the mutation to add a favorite when logged in and the post is not yet favorited", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     useFavoritePostIdsQuery.mockReturnValue({ data: [] });

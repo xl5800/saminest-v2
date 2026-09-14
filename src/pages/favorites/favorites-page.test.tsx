@@ -125,7 +125,10 @@ describe("FavoritesPage", () => {
     // 取消收藏之后，重新拉取到的收藏列表里这个帖子应该已经不在了。
     listFavoritedPosts.mockResolvedValue([]);
 
-    const favoriteButton = await screen.findByRole("button", { name: "★ 已收藏" });
+    // UI 审计 P0 #2：default variant 从裸文字"★ 已收藏"改成圆形 Star 图标
+    // 按钮，可访问名从文字本身变成 aria-label（"取消收藏"，见
+    // favorite-button.tsx）。
+    const favoriteButton = await screen.findByRole("button", { name: "取消收藏" });
     fireEvent.click(favoriteButton);
 
     await waitFor(() => {

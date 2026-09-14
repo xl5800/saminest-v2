@@ -9,12 +9,14 @@ import { AppError } from "../utils/app-error";
 
 export interface FavoriteButtonProps {
   postId: string;
-  /** default（现状："★ 已收藏"/"☆ 收藏" 纯文字，我的收藏列表页
-   *  favorites-page.tsx 在用）｜ icon（23 号卡新增：Star 图标 + 小字号
-   *  文字标签竖排，帖子详情页的分享/收藏/举报三图标一行在用）。只改展示
-   *  形式，下面的登录跳转/收藏切换/错误提示这套逻辑两个变体完全共用，
-   *  不重复实现。不传就是 default，favorites-page.tsx 的调用点不用跟着
-   *  改。 */
+  /** default（我的收藏列表页 favorites-page.tsx 在用：36×36 圆形图标
+   *  按钮，DESIGN.md 的 icon-button token——UI 审计 P0 #2 之前这里是裸
+   *  文字"★ 已收藏"/"☆ 收藏"，没有任何样式，现在跟 icon 变体一样用
+   *  Star 图标+aria-label，只是没有竖排的文字标签）｜ icon（23 号卡
+   *  新增：Star 图标 + 小字号文字标签竖排，帖子详情页的分享/收藏/举报
+   *  三图标一行在用）。只改展示形式，下面的登录跳转/收藏切换/错误提示
+   *  这套逻辑两个变体完全共用，不重复实现。不传就是 default，
+   *  favorites-page.tsx 的调用点不用跟着改。 */
   variant?: "default" | "icon";
 }
 
@@ -101,10 +103,17 @@ export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonPr
       <button
         type="button"
         aria-pressed={isFavorited}
+        aria-label={isFavorited ? "取消收藏" : "收藏"}
         disabled={toggleFavorite.isPending}
         onClick={handleClick}
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {isFavorited ? "★ 已收藏" : "☆ 收藏"}
+        <Star
+          size={18}
+          aria-hidden="true"
+          fill={isFavorited ? "currentColor" : "none"}
+          className={isFavorited ? "text-primary" : undefined}
+        />
       </button>
       {restrictedError ? <p role="alert">{restrictedError}</p> : null}
     </span>
