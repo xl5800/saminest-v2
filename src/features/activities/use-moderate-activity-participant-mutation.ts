@@ -4,52 +4,27 @@ import {
   approveActivityParticipant,
   rejectActivityParticipant
 } from "../../repositories/activities-repository";
-import { findExistingActivityConversation } from "../../repositories/conversations-repository";
-import { sendMessage } from "../../repositories/messages-repository";
 
 export interface ModerateActivityParticipantInput {
   participantId: string;
   decision: "approve" | "reject";
-  /** 被同意/拒绝的申请人——通知的收件人。 */
-  applicantId: string;
-  /** 当前操作者（发起人）——通知的发送人，措辞见 notifyApplicant。 */
-  organizerId: string;
-  activityTitle: string;
 }
 
 /**
- * 发起人同意/拒绝申请成功后，反过来通知申请人——跟
- * use-toggle-activity-participation-mutation.ts 的 notifyOrganizer 是
- * 相反方向的同一个模式，但不能直接复用 createActivityConversation：那个
- * RPC 固定把"对方"解析成活动的 organizer_id，发起人自己调用时"调用者"和
- * "解析出来的对方"是同一个人，会撞上 RPC 自己的"不能和自己建会话"防御
- * 检查。这次任务范围明确"数据库已完成，不用碰"，不新增 RPC，改用
- * findExistingActivityConversation 去找申请人当初申请时已经建好的那条
- * 会话，找不到就静默跳过（不阻塞同意/拒绝本身）——细节和这个设计选择的
- * 局限性见 conversations-repository.ts 里那个函数的详细注释。
- */
-async function notifyApplicant(input: ModerateActivityParticipantInput): Promise<void> {
-  if (input.applicantId === input.organizerId) return;
-
-  const conversation = await findExistingActivityConversation({
-    applicantUserId: input.applicantId,
-    organizerUserId: input.organizerId
-  });
-  if (!conversation) return;
-
-  const verb = input.decision === "approve" ? "被同意了" : "被拒绝了";
-  await sendMessage({
-    conversationId: conversation.conversationId,
-    senderId: input.organizerId,
-    body: `你申请加入的《${input.activityTitle}》${verb}`
-  });
-}
-
-/**
- * 发起人处理一条报名申请（同意/拒绝）。通知申请人是核心操作成功之后的
- * 附加动作，用 try/catch 包起来、失败只 console.error，不影响同意/拒绝
- * 本身的成败——跟 notifyOrganizer 那边"核心操作与次要副作用分开判定成败"
- * 是同一个原则。
+ * 发起人处理一条报名申请（同意/拒绝）。
+ *
+ * 通知申请人这一步这次改成完全交给数据库：
+ * approve_activity_participant/reject_activity_participant 这两个 RPC
+ * 现在自己在函数体末尾调用 notify_user()（见
+ * 20260914050110_notify_applicant_on_activity_moderation.sql），不再需要
+ * 这个 hook 额外发一条私信——之前这里有一个 notifyApplicant()，靠
+ * findExistingActivityConversation() 去找申请人当初申请时建好的会话，找
+ * 不到就静默跳过、不发通知也不报错，是一个真实的可靠性缺口；换成数据库
+ * 层的 notify_user() 之后不再依赖会话是否存在，且避免了"申请人同时收到
+ * 一条私信 + 一条系统通知"这种重复体验。`applicantId`/`organizerId`/
+ * `activityTitle` 三个字段也是只为了喂给那个已删除的 notifyApplicant()
+ * 才存在的，跟着一起从这个类型和调用点（my-activities-page.tsx）里
+ * 去掉，不留死代码。
  *
  * 不在这里做本地列表更新（从待处理列表移除这条申请、给对应活动的
  * participant_count/status 加一）——那是 my-activities-page.tsx 自己的
@@ -71,12 +46,6 @@ export function useModerateActivityParticipantMutation() {
         await approveActivityParticipant(input.participantId);
       } else {
         await rejectActivityParticipant(input.participantId);
-      }
-
-      try {
-        await notifyApplicant(input);
-      } catch (notifyError) {
-        console.error("活动报名审核通知发送失败：", notifyError);
       }
     },
     onSuccess: () => {

@@ -18,7 +18,6 @@ const {
   approveActivityParticipant,
   rejectActivityParticipant,
   createActivityConversation,
-  findExistingActivityConversation,
   sendMessage,
   getMyProfile
 } = vi.hoisted(() => ({
@@ -30,7 +29,6 @@ const {
   approveActivityParticipant: vi.fn(),
   rejectActivityParticipant: vi.fn(),
   createActivityConversation: vi.fn(),
-  findExistingActivityConversation: vi.fn(),
   sendMessage: vi.fn(),
   getMyProfile: vi.fn()
 }));
@@ -51,12 +49,14 @@ vi.mock("../../repositories/activities-repository", async (importOriginal) => {
 // "退出"这个 tab 现在走 useToggleActivityParticipationMutation（真实实现，
 // 没有 mock 掉这个 hook 本身）——那个 hook 除了 leaveActivity 还会尝试给
 // 发起人发一条私信通知，依赖这几个仓库函数，这里一并 mock 掉，避免测试
-// 时真的打到 Supabase。findExistingActivityConversation 是
-// useModerateActivityParticipantMutation（同意/拒绝申请后反向通知申请人）
-// 依赖的查找函数，同一个原因需要 mock。
+// 时真的打到 Supabase。
+//
+// 报名审核结果通知改用数据库 notify_user()：useModerateActivityParticipant
+// Mutation（同意/拒绝申请）这次改成完全不再发私信、不再依赖
+// findExistingActivityConversation 查会话，所以这个函数不再需要 mock——
+// 见下面"同意/拒绝不再发送私信"那组用例。
 vi.mock("../../repositories/conversations-repository", () => ({
-  createActivityConversation,
-  findExistingActivityConversation
+  createActivityConversation
 }));
 vi.mock("../../repositories/messages-repository", () => ({
   sendMessage
@@ -118,7 +118,6 @@ describe("MyActivitiesPage", () => {
     approveActivityParticipant.mockReset();
     rejectActivityParticipant.mockReset();
     createActivityConversation.mockReset();
-    findExistingActivityConversation.mockReset();
     sendMessage.mockReset();
     getMyProfile.mockReset();
     // 两个 tab 背后是两个独立查询，默认都给一个已解决的空结果，避免每个
@@ -128,7 +127,6 @@ describe("MyActivitiesPage", () => {
     listPendingActivityParticipants.mockResolvedValue([]);
     getMyProfile.mockResolvedValue({ displayName: "Alice", avatarUrl: null });
     createActivityConversation.mockResolvedValue({ conversationId: "conv-1" });
-    findExistingActivityConversation.mockResolvedValue({ conversationId: "conv-1" });
     sendMessage.mockResolvedValue({ id: "msg-1" });
     scrollIntoViewMock.mockReset();
   });
@@ -478,7 +476,13 @@ describe("MyActivitiesPage", () => {
     expect(screen.getByText("还差 1 人（3/4）")).toBeInTheDocument();
   });
 
-  it("sends a '被同意了' notification to the applicant via findExistingActivityConversation + sendMessage when approving", async () => {
+  // 报名审核结果通知改用数据库 notify_user()：同意/拒绝申请这次改成完全
+  // 不再从前端发私信——通知交给 approve_activity_participant/
+  // reject_activity_participant 两个 RPC 函数体末尾的 notify_user() 调用
+  // （见对应迁移文件），不依赖 findExistingActivityConversation 查会话，
+  // 也不会导致申请人同时收到"私信 + 系统通知"两条。这组用例直接断言
+  // sendMessage 没有被调用，锁定"只有一条通知，不是两条"这个行为。
+  it("does not send a private message to the applicant when approving (notification is now the database's notify_user())", async () => {
     listMyOrganizedActivities.mockResolvedValue([
       { ...sampleOrganizedActivity, requiresApproval: true }
     ]);
@@ -491,20 +495,12 @@ describe("MyActivitiesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "同意" }));
 
     await waitFor(() => {
-      expect(sendMessage).toHaveBeenCalled();
+      expect(approveActivityParticipant).toHaveBeenCalledWith("participant-1");
     });
-    expect(findExistingActivityConversation).toHaveBeenCalledWith({
-      applicantUserId: "applicant-1",
-      organizerUserId: "user-1"
-    });
-    expect(sendMessage).toHaveBeenCalledWith({
-      conversationId: "conv-1",
-      senderId: "user-1",
-      body: "你申请加入的《周末吃火锅》被同意了"
-    });
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it("sends a '被拒绝了' notification to the applicant when rejecting", async () => {
+  it("does not send a private message to the applicant when rejecting (notification is now the database's notify_user())", async () => {
     listMyOrganizedActivities.mockResolvedValue([
       { ...sampleOrganizedActivity, requiresApproval: true }
     ]);
@@ -517,12 +513,9 @@ describe("MyActivitiesPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "拒绝" }));
 
     await waitFor(() => {
-      expect(sendMessage).toHaveBeenCalledWith({
-        conversationId: "conv-1",
-        senderId: "user-1",
-        body: "你申请加入的《周末吃火锅》被拒绝了"
-      });
+      expect(rejectActivityParticipant).toHaveBeenCalledWith("participant-1");
     });
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it("shows a row-level error and keeps the applicant in the panel when approveActivityParticipant fails", async () => {

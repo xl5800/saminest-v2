@@ -1,0 +1,63 @@
+-- Migration: 紧急修正——approve_activity_participant/reject_activity_participant
+-- 之前一直误留了 anon 角色的执行权限，且函数内部的身份校验对匿名调用者
+-- 形同虚设，导致任何未登录用户都能批准/拒绝任意活动的任意报名申请
+--
+-- 这不是这次"报名审核结果通知"任务本身要改的东西——是在按任务卡要求
+-- 核实"这次改动有没有意外把 notify_user() 的执行权限泄漏给 anon"时，
+-- 顺带查这两个函数（这次改动直接触碰的函数）本身的权限时发现的，级别
+-- 比"泄漏了一个不该暴露的通知发送口子"严重得多，所以单独开一个migration
+-- 立即修正，不跟主任务的迁移文件混在一起，方便审计/回滚各自独立。
+--
+-- 漏洞的两个组成部分，缺一不可：
+--   1. 20260816175611_activity_join_approval.sql 当初只写了
+--      `revoke execute ... from public`，没有像
+--      20260818163106_fix_notify_user_anon_execute_leak.sql 后来对
+--      notify_user() 做的那样额外显式 `revoke ... from anon`——这个项目的
+--      Supabase 实例会给新建函数默认单独授予 anon 角色 EXECUTE，
+--      `revoke ... from public` 不会连带收回这种单独授予，两者是独立的
+--      权限记录，20260818163106 那份迁移的说明原文写得很清楚，但这次没有
+--      对这两个函数也做同一处理，缺口留到现在。
+--   2. 更严重的是函数体内部的身份校验对匿名调用者完全不起作用：
+--      `if v_organizer_id <> auth.uid() then raise exception ...`——匿名
+--      调用（anon 角色，没有登录 session）时 auth.uid() 返回 NULL，
+--      `v_organizer_id <> NULL` 在 SQL 三值逻辑下结果是 NULL（既不是
+--      true 也不是 false），PL/pgSQL 的 `IF NULL THEN ...` 视为
+--      false——这个分支直接被跳过，不会 raise exception，函数会一路往下
+--      执行到 UPDATE 那一步，真的把这条报名记录的 status 改成
+--      approved/rejected。这不是"理论上可能"，是在本地环境用真实的匿名
+--      HTTP 请求实测验证过的：unauthenticated 的 POST
+--      /rest/v1/rpc/approve_activity_participant 带一个真实存在的
+--      target_participant_id，返回 204，数据库里那条记录的 status 确实
+--      变成了 approved（这次任务报告里附了完整的验证步骤和清理记录）。
+--
+--   两个问题任何一个单独存在都不足以构成漏洞（光有 anon 执行权限、但
+--   函数内部正确拒绝匿名调用者，或者函数逻辑有这个 NULL 比较问题、但
+--   anon 压根没有执行权限，都不会被外部利用），但两个凑一起就是一个
+--   完全可以被任何未登录用户远程利用的权限绕过——任何人不需要登录，只要
+--   能猜到/枚举到一个 activity_participants.id（这张表的 id 是随机
+--   uuid，直接枚举不现实，但只要通过任何其它信息泄漏路径拿到一个 id，
+--   比如同一个申请人自己的浏览器网络面板），就能批准或拒绝任意一场活动
+--   的任意报名申请，完全绕开"只有发起人能操作"这条业务规则。
+--
+-- 这份迁移只做最小的修正——把 anon 的执行权限也显式收回，跟
+-- 20260818163106_fix_notify_user_anon_execute_leak.sql 收回 notify_user()
+-- 权限泄漏是同一个模式。不改函数体内部的身份校验逻辑本身（那条
+-- `<> auth.uid()` 判断对已登录的合法调用者而言逻辑上没有问题，问题只在
+-- "匿名调用者根本不应该有资格走到这一步"），也不改这两个函数其它任何
+-- 业务逻辑。
+--
+-- 是否影响现有数据：
+--   不影响，不修改任何现有行，只收回一项从一开始就不该给出去的权限。
+--
+-- 是否需要回滚方案：
+--   不需要——收回一个本不该存在的权限，没有"回滚回漏洞状态"的理由，见
+--   20260818163106 那份迁移同样的处理方式。
+--
+-- 生产环境影响：这个漏洞从 20260816175611_activity_join_approval.sql
+-- 上线那一刻起就存在，如果线上生产库应用过那份迁移，同样的匿名绕过在
+-- 生产环境这段时间里一直是可利用的，这份修正迁移需要尽快同步应用到
+-- 生产库（kdpzbpapnufvgbfgjgcr）——这一步需要人工确认后单独执行，本次
+-- 改动只提交这份迁移文件，不代表已经操作过生产环境。
+
+revoke execute on function public.approve_activity_participant(uuid) from anon;
+revoke execute on function public.reject_activity_participant(uuid) from anon;

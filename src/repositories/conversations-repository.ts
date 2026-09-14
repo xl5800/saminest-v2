@@ -347,124 +347,6 @@ export async function createDirectConversation(
 }
 
 /**
- * 查找发起人和某个申请人之间已有的会话（P2 报名审核制：发起人同意/拒绝
- * 申请时要反过来通知申请人，见 use-moderate-activity-participant-mutation.ts）。
- *
- * 为什么不能像 createActivityConversation 那样直接调一个 RPC 拿到/建出
- * 会话——create_activity_conversation(target_activity_id) 内部固定把
- * "对方"解析成这场活动的 organizer_id，调用者是谁就把谁和 organizer_id
- * 连起来。申请人申请加入时調用它没问题（调用者是申请人，对方解析成
- * 发起人）；但发起人同意/拒绝申请时如果也调这个函数，调用者（auth.uid()）
- * 和函数内部解析出来的"对方"会是同一个人（发起人自己的活动），直接撞上
- * 函数里"不能和自己建会话"的防御检查而报错——这个函数的设计就没打算支持
- * "发起人主动联系某个参与者"这个方向，仿造一个新 RPC 专门支持这个方向、
- * 或者放宽现有 RPC 接受任意目标用户 id，都会重新打开"可以拉任意用户建
- * 私聊"这个在 P0 阶段特意堵上的口子（见 create_activity_conversation 那份
- * 迁移文件的说明），所以这里换一个不需要新 RPC 的思路：直接查
- * conversation_members 表找"申请人和发起人是不是同一条会话的成员"。
- *
- * 申请人申请加入时触发的 notifyOrganizer 已经用
- * create_activity_conversation 建好（或复用了一条已有）会话，并把发起人
- * 也拉进了 conversation_members（该 RPC 内部一次完成两步）。这条会话本来
- * 就存在，发起人已经是成员，可以直接用 sendMessage() 往里面发消息
- * （messages_insert_own_as_active_member 这条 RLS 只要求 sender_id =
- * auth.uid() 且是这个会话的活跃成员，不要求 sender 是会话创建者）——不需要
- * 新建会话，只需要"找到"它。
- *
- * 16 号卡「对话去重」之后查找方式改了一处关键的地方：不再要求
- * created_by = 申请人、post_id 为空——两个人之间现在只会有一条 direct
- * 会话（不管最初是通过帖子/活动/个人主页哪个入口建的、也不管是谁先发起
- * 联系的，见 get_or_create_direct_conversation() 那份迁移），所以查找
- * 必须是双向的、不限来源：先查申请人参与的所有会话，再看发起人是不是
- * 也在其中某一条里，不能再假设"申请人是这条会话的 created_by"或者"这条
- * 会话没有挂在任何帖子下"——这两个假设在改版前成立（当时活动会话是
- * 唯一一种 post_id 为空的会话），改版后不再成立：比如发起人之前已经通过
- * 帖子联系过这个申请人，这次报名会复用那条会话，created_by 是发起人、
- * post_id 也可能是 null（新建的都是 null）或者历史遗留的某个帖子 id，
- * 原来那两个过滤条件在这种情况下会漏掉它。
- *
- * 分两步（conversation_members_select_of_own_conversations 这条 RLS
- * "能看到同一会话里的其它成员，不只是自己那一行"保证第二步能查到）：
- *   1. 查申请人参与的所有会话 id。
- *   2. 在这批候选里，找一条发起人也是成员的——16 号卡保证同一对用户之间
- *      最多只有一条未软删除的 direct 会话，.maybeSingle() 是安全的。
- *   3. 确认这条会话确实是 type = 'direct' 且未软删除（conversation_members
- *      本身不区分会话软删除状态，这一步在 conversations 表上单独确认）。
- *
- * 找不到时返回 null（不抛错）——调用方把这个当成"没有已有会话可以发通知"，
- * 静默跳过，不阻塞同意/拒绝这个核心操作本身，见
- * use-moderate-activity-participant-mutation.ts 的 notifyApplicant。
- * 这是这个实现方式的已知局限：如果申请人当初申请时，
- * create_activity_conversation 那一步因为网络问题失败了（notifyOrganizer
- * 本身是 best-effort、失败只 console.error，不会重试），这里就找不到
- * 会话，发起人处理申请时也就发不出"被同意/拒绝了"这条通知——这个概率
- * 很低（申请这个核心操作和建会话这个副作用几乎总是一起成功或都还没
- * 发生网络问题的中间状态），但不是不可能，比起为了这个边缘情况新增一个
- * RPC，选择接受这个已知的小概率静默失败。
- */
-export async function findExistingActivityConversation(input: {
-  applicantUserId: string;
-  organizerUserId: string;
-}): Promise<{ conversationId: string } | null> {
-  const client = getSupabaseClient();
-
-  const { data: applicantMemberships, error: applicantError } = await client
-    .from("conversation_members")
-    .select("conversation_id")
-    .eq("user_id", input.applicantUserId)
-    .overrideTypes<{ conversation_id: string }[]>();
-
-  if (applicantError) {
-    throw new AppError(
-      applicantError.message,
-      "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
-      applicantError
-    );
-  }
-
-  const candidateIds = (applicantMemberships ?? []).map((row) => row.conversation_id);
-  if (candidateIds.length === 0) {
-    return null;
-  }
-
-  const { data: organizerMembership, error: organizerError } = await client
-    .from("conversation_members")
-    .select("conversation_id")
-    .eq("user_id", input.organizerUserId)
-    .in("conversation_id", candidateIds)
-    .maybeSingle();
-
-  if (organizerError) {
-    throw new AppError(
-      organizerError.message,
-      "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
-      organizerError
-    );
-  }
-  if (!organizerMembership) {
-    return null;
-  }
-
-  const { data: conversation, error: conversationError } = await client
-    .from("conversations")
-    .select("id")
-    .eq("id", organizerMembership.conversation_id)
-    .eq("type", "direct")
-    .is("deleted_at", null)
-    .maybeSingle();
-
-  if (conversationError) {
-    throw new AppError(
-      conversationError.message,
-      "ACTIVITY_CONVERSATION_LOOKUP_FAILED",
-      conversationError
-    );
-  }
-
-  return conversation ? { conversationId: conversation.id } : null;
-}
-
-/**
  * 创建（或获取已有的）"活动报名/退出通知"私聊会话——"一起去"功能第二批
  * 用（报名/退出活动时提醒发起人，见 activities-repository.ts /
  * use-toggle-activity-participation-mutation.ts）。
@@ -618,9 +500,9 @@ interface SystemConversationRow {
  * 上，PostgREST 返回的是数组还是对象要看具体版本/关系推断，这里没有一个
  * 已登录用户的真实 session 能实际跑一遍确认返回形状；拆成两次都是这个
  * 仓库里已经反复用过的简单形状（.maybeSingle() 拿单行），跟
- * findExistingActivityConversation()/fetchConversationMemberInfo() 是同一个
- * "拆成多个无歧义的简单查询"风格，不需要猜 PostgREST 嵌套 select 的返回
- * 结构，多一次查询的成本对这个"只在底部导航渲染时查一次"的场景可以接受。
+ * fetchConversationMemberInfo() 是同一个"拆成多个无歧义的简单查询"风格，
+ * 不需要猜 PostgREST 嵌套 select 的返回结构，多一次查询的成本对这个
+ * "只在底部导航渲染时查一次"的场景可以接受。
  *
  * "有没有比上次读取时间更新的消息"这段判断跟 listMyConversations 给每条
  * 会话算 isUnread 是同一套逻辑，抽成了上面的 computeIsUnread 共享。

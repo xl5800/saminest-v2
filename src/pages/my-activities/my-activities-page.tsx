@@ -441,10 +441,7 @@ export function MyActivitiesPage() {
     try {
       await moderateMutation.mutateAsync({
         participantId: applicant.participantId,
-        decision,
-        applicantId: applicant.userId,
-        organizerId: userId,
-        activityTitle: activity.title
+        decision
       });
       if (decision === "approve") {
         applyApprovalLocally(activity.id);
