@@ -264,6 +264,53 @@ describe("MessageConversationPage", () => {
     expect(container.querySelectorAll("time")).toHaveLength(1);
   });
 
+  // 聊天页滚动定位任务卡：消息加载完成后，消息列表容器应该自动滚到底部
+  // （最新消息），不是停在默认位置需要手动下滑。jsdom 不做真实布局，
+  // scrollHeight 恒为 0——用 spyOn 把它 stub 成一个非零值，断言
+  // scrollTop 确实被设成了这个值，才能证明这个 effect 真的执行了，不是
+  // 因为两边都是 0 而巧合"相等"。
+  it("scrolls the message list container to the bottom once messages finish loading", () => {
+    const scrollHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockReturnValue(1200);
+
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "第一条", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "第二条", notificationPayload: null, createdAt: "2026-07-20T12:02:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    const messageRegion = screen.getByTestId("conversation-messages");
+    expect(messageRegion.scrollTop).toBe(1200);
+
+    scrollHeightSpy.mockRestore();
+  });
+
+  // 消息还在加载中（isPending）、或者加载完但列表是空的，都不应该去碰
+  // scrollTop——effect 里的早退条件（见 conversation-page.tsx）覆盖的
+  // 正是这两种情况，这里各断言一次，确认没有在不该动的时候误触发。
+  it("does not touch scrollTop while messages are still pending, or when the list is empty", () => {
+    const scrollHeightSpy = vi
+      .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+      .mockReturnValue(1200);
+
+    useMessagesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    const { unmount } = renderPage();
+    expect(screen.getByTestId("conversation-messages").scrollTop).toBe(0);
+    unmount();
+
+    useMessagesQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    renderPage();
+    expect(screen.getByTestId("conversation-messages").scrollTop).toBe(0);
+
+    scrollHeightSpy.mockRestore();
+  });
+
   it("only shows a time divider before the first message of a tightly-spaced run", () => {
     useMessagesQuery.mockReturnValue({
       data: [

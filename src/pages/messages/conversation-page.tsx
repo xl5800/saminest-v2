@@ -277,11 +277,14 @@ function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCard
  *
  * 28.2 实现：我方消息气泡加了右侧头像（数据源 useMyProfileQuery()，跟
  * "我的"页读的是同一个 hook/同一个 queryKey，没有新写一个查询），跟对方
- * 头像共用同一个 Avatar 组件、同一个 h-7 w-7 尺寸；气泡所在 <li> 的
- * flex 布局从"仅对方侧 items-start justify-start gap-2 / 我方侧单纯
- * justify-end"统一成两侧都是 items-start + gap-2，只是 justify-end/
- * justify-start 决定头像在右边还是左边、DOM 顺序也对调（我方：气泡在前、
- * 头像在后；对方：头像在前、气泡在后），视觉上左右对称。每条消息各自
+ * 头像共用同一个 Avatar 组件、同一个尺寸（原来是 h-7 w-7=28px，后来的
+ * 任务卡"聊天页头像字体太小"改成了 h-9 w-9=36px，见 <li> 内 Avatar 调用
+ * 处的注释）；气泡所在 <li> 的 flex 布局从"仅对方侧
+ * items-start justify-start gap-2 / 我方侧单纯 justify-end"统一成两侧
+ * 都是 items-start + gap（原来是 gap-2，后来放大头像/字号时微调成
+ * gap-2.5），只是 justify-end/justify-start 决定头像在右边还是左边、
+ * DOM 顺序也对调（我方：气泡在前、头像在后；对方：头像在前、气泡在后），
+ * 视觉上左右对称。每条消息各自
  * 渲染自己的头像（不分组、没有 spacer 占位，见上面第 3 点），两侧的
  * data-testid 分别是 message-avatar（对方）/message-avatar-self（我方）。
  *
@@ -344,6 +347,15 @@ export function MessageConversationPage() {
   const [blockActionError, setBlockActionError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  // 聊天页滚动定位：消息列表容器（<section data-testid="conversation-
+  // messages">）之前没有任何滚动定位逻辑，进入一个消息较多的会话时停在
+  // 浏览器给的默认位置（观察到的是顶部/上次缓存位置），不是最新消息，
+  // 需要手动下滑。这个仓库没有 Realtime、消息列表只在首次加载和自己发
+  // 消息成功后才会变化（见 use-send-message-mutation.ts 的 invalidate），
+  // 不存在"对方消息实时推进、持续把用户拉回底部打扰阅读历史"这种更复杂的
+  // 场景，所以只需要在 messageList 变化时无条件把容器滚到底部一次，不需要
+  // 判断"用户是否正停留在底部附近"。
+  const messagesContainerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -447,6 +459,21 @@ export function MessageConversationPage() {
   }
 
   const messageList = messages ?? [];
+
+  // 首次进入会话、消息加载完成时，以及自己发送新消息成功、列表因为
+  // invalidate 重新拉取之后，都会命中这个 effect（messageList 的引用/
+  // 长度会变）——直接把 scrollTop 设成 scrollHeight，不需要平滑动画，
+  // 参考大多数聊天 App 打开会话时的观感。conversationId 也放进依赖数组：
+  // 如果以后从一个会话直接切换到另一个会话（路由参数变了但组件没有被
+  // 卸载重建），确保切换后同样会重新定位到新会话的最新消息，不依赖组件
+  // 重新挂载这个前提。
+  useEffect(() => {
+    if (messagesPending || messageList.length === 0) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTop = container.scrollHeight;
+  }, [conversationId, messagesPending, messageList.length]);
+
   const sendDisabled = sendMessageMutation.isPending || body.trim().length === 0;
   // 28 号卡：我方消息气泡右侧头像的昵称首字母兜底——跟 otherPartyLabel
   // 用同一个"取首字母"规则（见 profile-summary.tsx 的 avatarInitial），
@@ -545,6 +572,7 @@ export function MessageConversationPage() {
       </header>
 
       <section
+        ref={messagesContainerRef}
         aria-label="消息记录"
         data-testid="conversation-messages"
         className="min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-4 pb-6"
@@ -617,13 +645,22 @@ export function MessageConversationPage() {
                     <li
                       data-message-owner={isMine ? "self" : "other"}
                       aria-label={isMine ? "我发送的消息" : "对方发送的消息"}
-                      className={`flex items-start gap-2 ${isMine ? "justify-end" : "justify-start"}`}
+                      className={`flex items-start gap-2.5 ${isMine ? "justify-end" : "justify-start"}`}
                     >
+                      {/* 聊天页头像/字体放大（对齐小红书私信界面的尺寸感）：
+                          头像从 h-7 w-7（28px）放大到 h-9 w-9（36px），
+                          气泡文字从 text-sm（14px）放大到 text-base
+                          （16px，项目正文标准字号，见 index.css 顶部
+                          "Body 正文...text-base"这条约定），气泡内边距
+                          跟着从 px-3 py-2 放大到 px-3.5 py-2.5 配合更大的
+                          字号，外层 gap 从 gap-2 微调到 gap-2.5——放大后
+                          头像和气泡之间的间距如果还是 8px 显得略挤，加大
+                          2px 更协调，数值以实际截图观感为准。 */}
                       {!isMine ? (
                         <Avatar
                           avatarUrl={conversation?.otherAvatarUrl ?? null}
                           initial={otherPartyLabel.charAt(0)}
-                          sizeClassName="h-7 w-7"
+                          sizeClassName="h-9 w-9"
                           testId="message-avatar"
                         />
                       ) : null}
@@ -640,8 +677,8 @@ export function MessageConversationPage() {
                         <div
                           className={
                             isMine
-                              ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3 py-2 text-sm text-white [overflow-wrap:anywhere]"
-                              : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3 py-2 text-sm text-text [overflow-wrap:anywhere]"
+                              ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3.5 py-2.5 text-base text-white [overflow-wrap:anywhere]"
+                              : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
                           }
                         >
                           {message.body}
@@ -671,7 +708,7 @@ export function MessageConversationPage() {
                         <Avatar
                           avatarUrl={myProfile?.avatarUrl ?? null}
                           initial={myInitial}
-                          sizeClassName="h-7 w-7"
+                          sizeClassName="h-9 w-9"
                           testId="message-avatar-self"
                         />
                       ) : null}
