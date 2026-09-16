@@ -280,6 +280,13 @@ function MoreMenu({ userId, isBlocking, isBlockActionPending, onToggleBlock }: M
  * 同一个"自己主页不显示、加载完成前不展示"的判断——不能举报自己，也不能
  * 在还不确定 isOwnProfile 之前先闪一下这个入口，见 report-user-page.tsx
  * 顶部注释里更完整的说明。
+ *
+ * 头像放大任务卡：头像从上面第 2 点定下的 h-[60px] w-[60px]（60px）
+ * 再放大到 h-[88px] w-[88px]（88px）——BARRY 已确认要这个方向，横排
+ * 布局（头像+昵称+年龄胶囊同一行）不变，不引入渐变头图/横幅，不是回到
+ * 22 号卡那版"Facebook 风格头图"。首字母占位的字号跟着从 text-2xl 调到
+ * text-3xl（按容器放大比例适当调大，不是硬性要求的数值）。只改这一处
+ * 尺寸，"我的"页身份卡（profile-summary.tsx）的头像维持 56px 不变。
  */
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -419,9 +426,13 @@ export function UserProfilePage() {
         // 按钮让出空间）改成 pt-4——按钮已经挪进上面那条页内工具栏，这里
         // 不再需要专门空出高度，pt-4 只是跟工具栏之间留一点常规间距。
         <div className="mx-auto max-w-md px-4 pb-20 pt-4 text-left md:pb-6">
-          {/* 头像/昵称/年龄同一行：头像从 h-24 w-24（96px）缩小到
-              h-[60px] w-[60px]（60px）。年龄从"昵称文字块里单独一行纯
-              文字"改成跟昵称同一行的胶囊（视觉上跟"我的"页身份卡
+          {/* 头像/昵称/年龄同一行：头像先从 h-24 w-24（96px）缩小到
+              h-[60px] w-[60px]（60px，profile-card-interactions 任务卡），
+              这次又放大到 h-[88px] w-[88px]（88px，BARRY 确认过要这个
+              方向——横排布局不变、不带渐变头图/横幅，不是回到 22 号卡的
+              "Facebook 风格头图"那版）；只改头像尺寸，"我的"页身份卡
+              （profile-summary.tsx，56px）不受影响。年龄从"昵称文字块里
+              单独一行纯文字"改成跟昵称同一行的胶囊（视觉上跟"我的"页身份卡
               profile-summary.tsx 的年龄胶囊是同一套样式）。简介保持在
               头像/昵称/年龄这一整行下面、独立成一行，位置跟改版前相对
               关系不变。 */}
@@ -430,12 +441,12 @@ export function UserProfilePage() {
               <img
                 src={data.avatarUrl}
                 alt=""
-                className="h-[60px] w-[60px] shrink-0 rounded-full object-cover"
+                className="h-[88px] w-[88px] shrink-0 rounded-full object-cover"
               />
             ) : (
               <div
                 aria-hidden="true"
-                className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-bg text-2xl font-semibold text-text-muted"
+                className="flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted"
               >
                 {avatarInitial}
               </div>

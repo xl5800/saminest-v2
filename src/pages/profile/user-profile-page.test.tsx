@@ -271,9 +271,11 @@ describe("UserProfilePage", () => {
     });
   });
 
-  // 头像缩小 + 年龄胶囊 + 发消息满宽任务卡。
-  describe("头像缩小 + 年龄胶囊 + 发消息满宽 (返回/更多同行等任务卡)", () => {
-    it("shrinks the no-avatar placeholder to 60px", () => {
+  // 头像缩小 + 年龄胶囊 + 发消息满宽任务卡（60px），后续头像放大任务卡
+  // 又把头像从 60px 改成了 88px——这里的用例断言当前生效的尺寸（88px），
+  // 不是历史上的每一版数值。
+  describe("头像尺寸 + 年龄胶囊 + 发消息满宽 (返回/更多同行等任务卡 + 头像放大任务卡)", () => {
+    it("renders the no-avatar placeholder at 88px", () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -283,12 +285,13 @@ describe("UserProfilePage", () => {
       renderPage();
 
       const placeholder = screen.getByText("B");
-      expect(placeholder.className).toMatch(/h-\[60px\]/);
-      expect(placeholder.className).toMatch(/w-\[60px\]/);
+      expect(placeholder.className).toMatch(/h-\[88px\]/);
+      expect(placeholder.className).toMatch(/w-\[88px\]/);
       expect(placeholder.className).not.toMatch(/h-24/);
+      expect(placeholder.className).not.toMatch(/h-\[60px\]/);
     });
 
-    it("shrinks the <img> avatar to 60px when avatarUrl is present", () => {
+    it("renders the <img> avatar at 88px when avatarUrl is present", () => {
       usePublicProfileQuery.mockReturnValue({
         data: { ...samplePublicProfile, avatarUrl: "https://example.com/bob.jpg" },
         isPending: false,
@@ -298,9 +301,10 @@ describe("UserProfilePage", () => {
       const { container } = renderPage();
 
       const img = container.querySelector("img");
-      expect(img?.className).toMatch(/h-\[60px\]/);
-      expect(img?.className).toMatch(/w-\[60px\]/);
+      expect(img?.className).toMatch(/h-\[88px\]/);
+      expect(img?.className).toMatch(/w-\[88px\]/);
       expect(img?.className).not.toMatch(/h-24/);
+      expect(img?.className).not.toMatch(/h-\[60px\]/);
     });
 
     it("styles the age as a pill (rounded-full, muted background) matching the '我的' page identity card's age pill", () => {
