@@ -256,4 +256,11 @@
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
+  /* iOS 沉浸式状态栏 + 安全区适配任务卡：配合 mobile-bootstrap.ts 的
+     overlay:true，把整个页面内容往下推开状态栏（含刘海）高度。env() 在
+     没有安全区的环境（桌面浏览器、大多数 Android、没有刘海的 iOS 设备）
+     下解析成 0，不影响非目标场景；index.html 的 viewport 已经带了
+     viewport-fit=cover，这里不用再加。状态栏那块区域露出来的是这行
+     background-color（--color-bg），不再是原生层的黑色。 */
+  padding-top: env(safe-area-inset-top);
 }

@@ -236,6 +236,15 @@ export function PostDetailPage() {
   // 每次 refetch 都重新调用一次原生插件。离开页面（或者 hasImmersiveHeader
   // 变成 false）时必须还原成 mobile-bootstrap.ts 设的全局默认，不能让这个
   // 页面的临时设置泄漏到其它页面。
+  //
+  // iOS 沉浸式状态栏 + 安全区适配任务卡：mobile-bootstrap.ts 的全局默认
+  // 从 overlay:false 改成了 overlay:true（配合 index.css 的
+  // padding-top: env(safe-area-inset-top) 修复真机上的黑边+回弹僵硬问题，
+  // 见该文件的注释），这个 effect 的 cleanup 因此也要跟着把"还原成全局
+  // 默认"的 overlay 值从 false 改成 true——不改的话，任何一次"看一篇带图
+  // 帖子再返回"都会把 overlay 悄悄改回 false，让上面那个全局修复对这次
+  // 会话里剩下的页面失效（Style 那一行不用动，Style.Light 一直都是全局
+  // 默认，没有变过）。
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || !hasImmersiveHeader) {
       return;
@@ -243,7 +252,7 @@ export function PostDetailPage() {
     void StatusBar.setOverlaysWebView({ overlay: true });
     void StatusBar.setStyle({ style: Style.Dark });
     return () => {
-      void StatusBar.setOverlaysWebView({ overlay: false });
+      void StatusBar.setOverlaysWebView({ overlay: true });
       void StatusBar.setStyle({ style: Style.Light });
     };
   }, [hasImmersiveHeader]);
