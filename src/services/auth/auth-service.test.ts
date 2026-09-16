@@ -57,9 +57,38 @@ describe("authService", () => {
         id: "user-1",
         display_name: "小明",
         role: "user",
-        account_status: "active"
+        account_status: "active",
+        phone: null
       });
       expect(result.user?.id).toBe("user-1");
+    });
+
+    // 登录/注册支持手机号任务卡：手机号注册路径传入的 phone 要原样
+    // 落到 createProfile 的 insert payload 里。
+    it("passes the phone digits through to the profile insert when provided", async () => {
+      authMocks.signUp.mockResolvedValue({
+        data: {
+          user: { id: "user-1" },
+          session: { access_token: "token" }
+        },
+        error: null
+      });
+      insertMock.mockResolvedValue({ error: null });
+
+      await authService.signUp({
+        email: "7035550199@phone.saminest.internal",
+        password: "password123",
+        displayName: "小明",
+        phone: "7035550199"
+      });
+
+      expect(insertMock).toHaveBeenCalledWith({
+        id: "user-1",
+        display_name: "小明",
+        role: "user",
+        account_status: "active",
+        phone: "7035550199"
+      });
     });
 
     it("skips the profile insert when signUp does not return a session (email confirmation pending)", async () => {

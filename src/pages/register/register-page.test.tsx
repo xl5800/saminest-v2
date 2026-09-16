@@ -40,7 +40,7 @@ function fillForm(overrides: Partial<typeof validValues> = {}) {
   fireEvent.change(screen.getByLabelText("显示名称"), {
     target: { value: values.displayName }
   });
-  fireEvent.change(screen.getByLabelText("邮箱"), {
+  fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
     target: { value: values.email }
   });
   fireEvent.change(screen.getByLabelText("密码"), {
@@ -68,7 +68,7 @@ describe("RegisterPage", () => {
     renderRegisterPage();
 
     expect(screen.getByLabelText("显示名称")).toBeInTheDocument();
-    expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.getByLabelText("邮箱或手机号")).toBeInTheDocument();
     expect(screen.getByLabelText("密码")).toBeInTheDocument();
     expect(screen.getByLabelText("确认密码")).toBeInTheDocument();
   });
@@ -184,8 +184,39 @@ describe("RegisterPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("该邮箱已经注册，请直接登录或使用找回密码。");
+    expect(alert).toHaveTextContent("该邮箱或手机号已经注册，请直接登录或使用找回密码。");
     expect(alert.textContent).not.toContain("User already registered");
+  });
+
+  // 登录/注册支持手机号任务卡：影子邮箱方案——用户输入手机号时，
+  // authService.signUp 收到的是算出来的影子邮箱 + 归一化后的真实手机号，
+  // 不是用户输入的原始字符串。
+  it("derives a shadow email and passes the phone digits when the identifier looks like a phone number", async () => {
+    signUp.mockResolvedValue({ user: null, session: null });
+    renderRegisterPage();
+    fillForm({ email: "703-555-0199" });
+
+    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+
+    await waitFor(() => {
+      expect(signUp).toHaveBeenCalledWith({
+        email: "7035550199@phone.saminest.internal",
+        password: "password123",
+        displayName: "小明",
+        phone: "7035550199"
+      });
+    });
+    expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+  });
+
+  it("shows a friendly error when the identifier looks like neither an email nor a phone number", async () => {
+    renderRegisterPage();
+    fillForm({ email: "not-an-identifier" });
+
+    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("请输入正确的邮箱或手机号。");
+    expect(signUp).not.toHaveBeenCalled();
   });
 
   it("falls back to a generic message for an unmapped error code", async () => {

@@ -10,6 +10,7 @@ import {
 import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
+import { isLikelyEmail, isLikelyPhone, normalizePhoneDigits, phoneToShadowEmail } from "../../utils/phone-identity";
 
 const DEFAULT_ERROR_MESSAGE = "登录失败，请稍后重试。";
 
@@ -46,15 +47,25 @@ export function LoginPage() {
     if (submitting) return;
 
     setError(null);
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !password) {
-      setError("请填写邮箱和密码。");
+    const trimmedIdentifier = email.trim();
+    if (!trimmedIdentifier || !password) {
+      setError("请填写邮箱或手机号和密码。");
+      return;
+    }
+
+    let loginEmail: string;
+    if (isLikelyEmail(trimmedIdentifier)) {
+      loginEmail = trimmedIdentifier;
+    } else if (isLikelyPhone(trimmedIdentifier)) {
+      loginEmail = phoneToShadowEmail(normalizePhoneDigits(trimmedIdentifier));
+    } else {
+      setError("请输入正确的邮箱或手机号。");
       return;
     }
 
     setSubmitting(true);
     try {
-      await authService.signIn({ email: trimmedEmail, password });
+      await authService.signIn({ email: loginEmail, password });
       navigate("/", { replace: true });
     } catch (cause) {
       setError(friendlyErrorMessage(cause));
@@ -75,10 +86,10 @@ export function LoginPage() {
       <form onSubmit={handleSubmit} noValidate>
         <div className="space-y-4">
           <label className={authLabelClassName}>
-            邮箱
+            邮箱或手机号
             <input
-              type="email"
-              autoComplete="email"
+              type="text"
+              autoComplete="username"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required

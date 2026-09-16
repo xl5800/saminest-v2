@@ -380,8 +380,21 @@ describe("createProfile", () => {
       id: "user-1",
       display_name: "小明",
       role: "user",
-      account_status: "active"
+      account_status: "active",
+      phone: null
     });
+  });
+
+  // 登录/注册支持手机号任务卡：手机号注册路径传入的 phone 要原样写进
+  // insert payload，邮箱注册路径不传时落成 null（上一条用例已覆盖）。
+  it("inserts the phone column when a phone number is provided", async () => {
+    insertMock.mockResolvedValue({ error: null });
+
+    await createProfile({ id: "user-1", displayName: "小明", phone: "7035550199" });
+
+    expect(insertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: "7035550199" })
+    );
   });
 
   it("falls back to a default display name when given an empty/whitespace-only value", async () => {
@@ -540,7 +553,8 @@ describe("ensureProfileExists", () => {
       id: "user-1",
       display_name: "小明",
       role: "user",
-      account_status: "active"
+      account_status: "active",
+      phone: null
     });
   });
 

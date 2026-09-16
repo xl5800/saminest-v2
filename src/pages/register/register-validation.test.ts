@@ -48,19 +48,48 @@ describe("validateRegisterInput", () => {
     });
   });
 
-  it("requires an email", () => {
+  it("requires an email or phone number", () => {
     expect(validateRegisterInput(input({ email: "" }))).toEqual({
       success: false,
       data: null,
-      error: { code: "REGISTER_EMAIL_REQUIRED", message: "请填写邮箱。" }
+      error: { code: "REGISTER_IDENTIFIER_REQUIRED", message: "请填写邮箱或手机号。" }
     });
   });
 
-  it("rejects a malformed email", () => {
+  it("rejects a string that looks like neither an email nor a phone number", () => {
     expect(validateRegisterInput(input({ email: "not-an-email" }))).toEqual({
       success: false,
       data: null,
-      error: { code: "REGISTER_EMAIL_INVALID", message: "邮箱格式不正确。" }
+      error: { code: "REGISTER_IDENTIFIER_INVALID", message: "请输入正确的邮箱或手机号。" }
+    });
+  });
+
+  // 登录/注册支持手机号任务卡：手机号路径走影子邮箱方案，data.email 是
+  // phoneToShadowEmail() 算出来的值，data.phone 是归一化后的真实手机号，
+  // register-page.tsx 不需要再判断一次，直接把 data 传给 authService.signUp。
+  it("accepts a well-formed 10-digit phone number and derives a shadow email", () => {
+    expect(validateRegisterInput(input({ email: "703-555-0199" }))).toEqual({
+      success: true,
+      data: {
+        email: "7035550199@phone.saminest.internal",
+        password: "password123",
+        displayName: "小明",
+        phone: "7035550199"
+      },
+      error: null
+    });
+  });
+
+  it("accepts a phone number with a leading +1 country code", () => {
+    expect(validateRegisterInput(input({ email: "+1 (703) 555-0199" }))).toEqual({
+      success: true,
+      data: {
+        email: "17035550199@phone.saminest.internal",
+        password: "password123",
+        displayName: "小明",
+        phone: "17035550199"
+      },
+      error: null
     });
   });
 

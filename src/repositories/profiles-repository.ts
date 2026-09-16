@@ -8,6 +8,10 @@ const DEFAULT_PROFILE_DISPLAY_NAME = "新用户";
 export interface CreateProfileInput {
   id: string;
   displayName: string;
+  /** 手机号注册任务卡新增：真实手机号（归一化后的数字），只在手机号注册
+   *  路径有值，邮箱注册路径传 null/不传——写进 profiles.phone 这一列，
+   *  这一列没有公开 SELECT 权限，不影响 getPublicProfile/getMyProfile。 */
+  phone?: string | null;
 }
 
 /**
@@ -30,7 +34,8 @@ export async function createProfile(input: CreateProfileInput): Promise<void> {
     id: input.id,
     display_name: displayName,
     role: "user",
-    account_status: "active"
+    account_status: "active",
+    phone: input.phone ?? null
   };
   const { error } = await getSupabaseClient().from("profiles").insert(payload);
 

@@ -7,6 +7,11 @@ export interface SignUpInput {
   email: string;
   password: string;
   displayName: string;
+  /** 手机号注册任务卡新增：真实手机号（归一化后的数字，不是影子邮箱），
+   *  只在用户走手机号注册路径时有值——邮箱注册路径不传。写进
+   *  profiles.phone，不参与登录判断（登录判断靠 email 这个字段本身，
+   *  不管它是真邮箱还是影子邮箱）。 */
+  phone?: string;
 }
 
 export interface SignInInput {
@@ -43,7 +48,7 @@ export const authService = {
        * ensureProfileExists 兜底补上（两处共用同一份 createProfile 插入
        * 逻辑，见 profiles-repository.ts）。
        */
-      await createProfile({ id: data.user.id, displayName: input.displayName });
+      await createProfile({ id: data.user.id, displayName: input.displayName, phone: input.phone ?? null });
     }
 
     return { user: data.user, session: data.session };

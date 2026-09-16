@@ -61,7 +61,7 @@ describe("LoginPage", () => {
   it("renders the email and password fields plus a link to /register", () => {
     renderLoginPage();
 
-    expect(screen.getByLabelText("邮箱")).toBeInTheDocument();
+    expect(screen.getByLabelText("邮箱或手机号")).toBeInTheDocument();
     expect(screen.getByLabelText("密码")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "去注册" })).toHaveAttribute(
       "href",
@@ -109,7 +109,7 @@ describe("LoginPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("请填写邮箱和密码。");
+    expect(await screen.findByRole("alert")).toHaveTextContent("请填写邮箱或手机号和密码。");
     expect(authMock.signInWithPassword).not.toHaveBeenCalled();
   });
 
@@ -122,7 +122,7 @@ describe("LoginPage", () => {
     );
 
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱"), {
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
       target: { value: "user@example.com" }
     });
     fireEvent.change(screen.getByLabelText("密码"), {
@@ -150,7 +150,7 @@ describe("LoginPage", () => {
     });
 
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱"), {
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
       target: { value: "user@example.com" }
     });
     fireEvent.change(screen.getByLabelText("密码"), {
@@ -167,6 +167,46 @@ describe("LoginPage", () => {
     expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
   });
 
+  // 登录/注册支持手机号任务卡：输入手机号时，signInWithPassword 收到的
+  // email 参数是算出来的影子邮箱，不是用户输入的原始手机号字符串。
+  it("derives a shadow email and signs in when the identifier looks like a phone number", async () => {
+    authMock.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+      error: null
+    });
+
+    renderLoginPage();
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
+      target: { value: "703-555-0199" }
+    });
+    fireEvent.change(screen.getByLabelText("密码"), {
+      target: { value: "password123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(authMock.signInWithPassword).toHaveBeenCalledWith({
+        email: "7035550199@phone.saminest.internal",
+        password: "password123"
+      });
+    });
+    expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+  });
+
+  it("blocks submission and shows a friendly message when the identifier looks like neither an email nor a phone number", async () => {
+    renderLoginPage();
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
+      target: { value: "not-an-identifier" }
+    });
+    fireEvent.change(screen.getByLabelText("密码"), {
+      target: { value: "password123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("请输入正确的邮箱或手机号。");
+    expect(authMock.signInWithPassword).not.toHaveBeenCalled();
+  });
+
   it("shows a friendly message for invalid credentials instead of the raw Supabase error", async () => {
     authMock.signInWithPassword.mockResolvedValue({
       data: { user: null, session: null },
@@ -174,7 +214,7 @@ describe("LoginPage", () => {
     });
 
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱"), {
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
       target: { value: "user@example.com" }
     });
     fireEvent.change(screen.getByLabelText("密码"), {
@@ -194,7 +234,7 @@ describe("LoginPage", () => {
     });
 
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱"), {
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
       target: { value: "user@example.com" }
     });
     fireEvent.change(screen.getByLabelText("密码"), {
@@ -227,7 +267,7 @@ describe("LoginPage", () => {
       expect(useAuthStore.getState().isInitializing).toBe(false);
     });
 
-    fireEvent.change(screen.getByLabelText("邮箱"), {
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
       target: { value: "user@example.com" }
     });
     fireEvent.change(screen.getByLabelText("密码"), {

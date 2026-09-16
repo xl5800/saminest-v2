@@ -19,8 +19,8 @@ const DEFAULT_ERROR_MESSAGE = "注册失败，请稍后重试。";
  * 未命中的错误码一律回退到 DEFAULT_ERROR_MESSAGE，不把原始 Supabase 报错露给用户。
  */
 const FRIENDLY_ERROR_MESSAGES: Record<string, string> = {
-  email_exists: "该邮箱已经注册，请直接登录或使用找回密码。",
-  user_already_exists: "该邮箱已经注册，请直接登录或使用找回密码。",
+  email_exists: "该邮箱或手机号已经注册，请直接登录或使用找回密码。",
+  user_already_exists: "该邮箱或手机号已经注册，请直接登录或使用找回密码。",
   weak_password: "密码强度不够，请更换更复杂的密码。",
   email_address_invalid: "邮箱格式不正确，请检查后重新输入。",
   over_email_send_rate_limit: "操作过于频繁，请稍后再试。",
@@ -98,10 +98,10 @@ export function RegisterPage() {
             />
           </label>
           <label className={authLabelClassName}>
-            邮箱
+            邮箱或手机号
             <input
-              type="email"
-              autoComplete="email"
+              type="text"
+              autoComplete="username"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required
