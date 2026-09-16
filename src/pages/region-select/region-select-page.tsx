@@ -129,8 +129,22 @@ function findStateName(code: string): string {
  *   实现）；选中后写入 usePendingFormRegionStore 而不是
  *   useSelectedRegionStore——这是"我这次在表单里选了哪个地区"，一次性、
  *   不该影响首页/找搭子正在生效的筛选，见 pending-form-region-store.ts
- *   顶部注释。除了写入哪个 store、要不要展示"全美"这两点，两种场景下的
- *   列表/搜索/排序/下钻逻辑完全一样，不是两份重复代码。
+ *   顶部注释。
+ *
+ * 「地区筛选栏暂时只精确到州」任务卡起，筛选场景（!isFormMode）和表单
+ * 场景（isFormMode）的列表/搜索/下钻逻辑不再完全一样：筛选场景的地区
+ * 筛选本来就只用 stateCode 做查询条件（cityId/cityName 从未真正参与
+ * filter，见 posts-repository.ts / use-posts-query.ts），却保留了完整的
+ * 城市下钻交互，容易让用户误以为"选了具体城市"会影响结果。这条任务卡把
+ * 筛选场景收窄成只能选到州：点击州行（handleStateRowClick）一律直接
+ * selectState，不再下钻、也不再对 DC 这种"只有一个城市"的州自动选中那个
+ * 城市；有多个城市的州也不再展示右侧 chevron；搜索结果
+ * （searchResults）只保留匹配到的州，不再匹配/展示城市名。表单场景完全
+ * 不受影响，继续保留下钻、自动选中唯一城市、chevron、搜索城市这一整套
+ * 行为——因为发布表单（发起搭子/发布租房/求租/二手）本来就需要选到具体
+ * 城市。也就是说，"两种场景逻辑完全一样"这个说法从这张任务卡开始不再
+ * 成立，isFormMode 现在同时控制"写入哪个 store / 要不要展示全美 / 能不能
+ * 下钻到城市"三件事，不是两件。
  */
 export function RegionSelectPage() {
   const navigate = useNavigate();
@@ -195,17 +209,22 @@ export function RegionSelectPage() {
       onSelect: () => selectState(state)
     }));
 
-    const matchedCities: SelectableEntry[] = (cities ?? [])
-      .filter((city) => city.name.toLowerCase().includes(trimmedQuery))
-      .map((city) => ({
-        key: city.id,
-        name: city.name,
-        onSelect: () => selectCity(city, city.stateCode ?? "")
-      }));
+    // 地区筛选栏暂时只精确到州任务卡：筛选场景不做城市下钻，搜索结果里
+    // 也不应该再搜出具体城市——否则点了城市反而又绕回了旧的城市级选中
+    // 行为。表单场景继续搜城市 + 州，维持改动前的合并逻辑不变。
+    const matchedCities: SelectableEntry[] = isFormMode
+      ? (cities ?? [])
+          .filter((city) => city.name.toLowerCase().includes(trimmedQuery))
+          .map((city) => ({
+            key: city.id,
+            name: city.name,
+            onSelect: () => selectCity(city, city.stateCode ?? "")
+          }))
+      : [];
 
     return sortByMode([...matchedStates, ...matchedCities], sortMode);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cities, trimmedQuery, sortMode]);
+  }, [cities, trimmedQuery, sortMode, isFormMode]);
 
   function selectCity(city: LocationWithStateItem, stateCode: string): void {
     const region = {
@@ -242,7 +261,16 @@ export function RegionSelectPage() {
     navigate(-1);
   }
 
+  // 地区筛选栏暂时只精确到州任务卡：筛选场景（!isFormMode）不管这个州在
+  // locations 表里有几个真实城市，点击都直接 selectState(row)——不触发
+  // 下钻，也不像 DC 那样自动帮用户选中"唯一城市"。表单场景（isFormMode）
+  // 维持改动前的三段判断完全不变（下钻 / 自动选中唯一城市 / 直接选中
+  // 整个州），这条约束只收窄筛选场景的交互，不影响发布表单选地区。
   function handleStateRowClick(row: StateRow): void {
+    if (!isFormMode) {
+      selectState(row);
+      return;
+    }
     if (row.cities.length > 1) {
       setDrilldownCode(row.code);
       return;
@@ -379,7 +407,7 @@ export function RegionSelectPage() {
                     className="flex h-12 w-full items-center justify-between px-4 text-left text-base text-text"
                   >
                     <span>{formatStateLabel(row)}</span>
-                    {row.cities.length > 1 ? (
+                    {isFormMode && row.cities.length > 1 ? (
                       <ChevronRight aria-hidden="true" size={18} className="text-chevron" />
                     ) : null}
                   </button>
