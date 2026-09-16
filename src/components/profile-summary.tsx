@@ -21,9 +21,19 @@ export interface ProfileSummaryProps {
    *  进了"我的"页下面的分组卡片列表（profile-page.tsx 新增的一行
    *  GroupRow），不再是这张卡片自己的职责。 */
   profileHref?: string;
-  /** 渲染在"头像 + 昵称 + 图标按钮"这一行下面，紧贴着不加分割线——"我的"
-   *  页用来摆"我的发布/我的收藏"两个入口，组件本身不关心 children 具体
-   *  是什么，只负责摆放在这个固定位置。 */
+  /** 加回简介+年龄任务卡新增：渲染在头像/昵称/图标按钮这一行下面。为空
+   *  整段不渲染，不展示"简介未填写"这类占位文案——跟 user-profile-page.tsx
+   *  data.bio 的判空渲染是同一个约定。可选 prop，不传等同 null（不渲染）。 */
+  bio?: string | null;
+  /** 加回简介+年龄任务卡新增：渲染在简介下面（简介为空时紧跟在头像/
+   *  昵称行下面），为 null/不传整行不渲染，不做年龄段/星座这类推断——
+   *  同样跟 user-profile-page.tsx data.age 的判空渲染是同一个约定。 */
+  age?: number | null;
+  /** 渲染在"头像 + 昵称 + 图标按钮"这一行下面（简介/年龄之后），紧贴着
+   *  不加分割线——"我的"页原来用这个位置摆"我的发布/我的收藏"两个入口，
+   *  加回简介/年龄任务卡把这两个入口挪到了身份卡外面单独一张 GroupCard，
+   *  这个 prop 目前没有调用方在传了，保留是因为组件设计上"头像行下面还能
+   *  插入任意内容"这个能力本身依然合理，不强制清理，不影响验收。 */
   children?: ReactNode;
 }
 
@@ -50,6 +60,15 @@ export interface ProfileSummaryProps {
  * prop 的注释）——"编辑资料"这个入口挪进了 profile-page.tsx 下面的分组
  * 卡片列表，这张卡片右上角这个位置现在专门用来跳"我的公开主页"预览。
  *
+ * 加回简介+年龄任务卡：24 号卡精简掉的简介行这次加回来了（不是恢复
+ * 24 号卡之前那版的展示形式，是新增 bio/age 两个可选 prop，各自独立
+ * 判空渲染，为空/为 null 时整行不渲染）——渲染顺序是头像/昵称/图标按钮
+ * 那一行 → 简介（bio）→ 年龄（age）→ children，跟 user-profile-page.tsx
+ * 现在的顺序一致。"我的发布/我的收藏"这两个入口这次从 children 挪到了
+ * profile-page.tsx 里身份卡外面单独一张 GroupCard，不再通过 children
+ * 传进来，但 children 这个 prop 本身没有删——组件设计上"头像/简介/年龄
+ * 这些固定内容之后还能插入任意内容"这个能力依然合理，留着不强制清理。
+ *
  * displayName 为 null（理论上不应该发生，profiles.display_name 是
  * not null 列，这里的 null 只是防御性地兼容"数据还在加载中"这种调用方
  * 传 undefined/null 过来的中间状态）时退回"?"占位首字母，不是留空。
@@ -62,6 +81,8 @@ export function ProfileSummary({
   avatarUrl,
   avatarHref,
   profileHref,
+  bio,
+  age,
   children
 }: ProfileSummaryProps) {
   const avatarInitial = displayName?.trim().charAt(0).toUpperCase() || "?";
@@ -111,6 +132,16 @@ export function ProfileSummary({
           </Link>
         ) : null}
       </div>
+
+      {/* 加回简介+年龄任务卡：判空渲染逻辑照抄 user-profile-page.tsx
+          data.bio/data.age 的写法——为空/为 null 整行不渲染，不展示
+          "简介未填写"这类占位文案，不做年龄段/星座这类推断。 */}
+      {bio ? (
+        <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">{bio}</p>
+      ) : null}
+      {age !== null && age !== undefined ? (
+        <p className="mt-1 text-sm text-text-muted">{age} 岁</p>
+      ) : null}
 
       {children}
     </div>

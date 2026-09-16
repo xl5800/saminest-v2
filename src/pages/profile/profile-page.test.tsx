@@ -50,12 +50,14 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("Alice")).toBeInTheDocument();
   });
 
-  // 24 号卡：头像卡片不再展示简介/邮箱这两行文字——邮箱以前是靠
-  // ProfileSummary 的 tertiaryText 传的，这个 prop 已经整个删掉了。
-  it("does not show the bio or the email under the avatar (24 号卡：头像卡片精简)", async () => {
+  // 24 号卡当时把头像卡片精简成不展示邮箱这一行——邮箱以前是靠
+  // ProfileSummary 的 tertiaryText 传的，这个 prop 已经整个删掉了，这条
+  // 这次没有变。locationName 也从来不是 ProfileSummary 的真实 prop
+  // （getMyProfile 结果就算带了这个字段，组件本身也不认识、不会渲染），
+  // 这两条断言依然成立。
+  it("does not show the email under the avatar (24 号卡：头像卡片精简，邮箱这条至今未恢复)", async () => {
     getMyProfile.mockResolvedValue({
       displayName: "Alice",
-      bio: "Hi there, I like hiking.",
       avatarUrl: null,
       locationName: "Rockville"
     });
@@ -63,9 +65,38 @@ describe("ProfilePage", () => {
     renderWithProviders(<ProfilePage />);
 
     await screen.findByText("Alice");
-    expect(screen.queryByText("Hi there, I like hiking.")).not.toBeInTheDocument();
     expect(screen.queryByText("alice@example.com")).not.toBeInTheDocument();
     expect(screen.queryByText("Rockville")).not.toBeInTheDocument();
+  });
+
+  // 加回简介+年龄任务卡：24 号卡当时精简掉的简介这次加回来了，这条测试
+  // 反过来断言"有 bio 就应该展示出来"，是上面那条测试历史上验证过的
+  // 反向行为，不是遗漏。
+  it("shows the bio under the avatar when profile.bio is set", async () => {
+    getMyProfile.mockResolvedValue({
+      displayName: "Alice",
+      avatarUrl: null,
+      bio: "Hi there, I like hiking."
+    });
+
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(await screen.findByText("Hi there, I like hiking.")).toBeInTheDocument();
+  });
+
+  it("shows the age under the bio when profile.age is set, and shows neither line when both are missing", async () => {
+    getMyProfile.mockResolvedValue({
+      displayName: "Alice",
+      avatarUrl: null,
+      bio: null,
+      age: 28
+    });
+
+    renderWithProviders(<ProfilePage />);
+
+    await screen.findByText("Alice");
+    expect(await screen.findByText("28 岁")).toBeInTheDocument();
   });
 
   // 公开主页 Facebook 风格头图改版（联动）：头像卡片右上角的图标按钮从
@@ -91,11 +122,14 @@ describe("ProfilePage", () => {
     });
   });
 
-  // 头像卡片下面这两栏最初一版展示真实数字（复用 useMyPostsQuery/
+  // 这两个入口最初一版展示真实数字（复用 useMyPostsQuery/
   // useFavoritePostIdsQuery 取 .length），用户反馈不需要显示数字，改成了
   // 纯文字+图标的入口——不再调用那两个 hook，这里只验证"文字入口存在、
-  // 点击能跳转"，不再断言具体数字。
-  describe("avatar card: 我的发布/我的收藏 entries (24.2)", () => {
+  // 点击能跳转"，不再断言具体数字。24.2 时这两个入口在头像卡片内部的
+  // 两栏区块里，加回简介+年龄任务卡把它们挪到了身份卡下面单独一张
+  // GroupCard（"我的发布与收藏"），这里的断言本身（链接文本/href）不
+  // 关心具体挂在哪张卡片下，不受这次挪动影响。
+  describe("我的发布/我的收藏 entries (24.2，位置在加回简介+年龄任务卡后变了，见下)", () => {
     it("shows a '我的发布' entry linking to /my-posts, with no count number", async () => {
       renderWithProviders(<ProfilePage />);
 
@@ -190,14 +224,45 @@ describe("ProfilePage", () => {
       expect(links[1]).toHaveAttribute("href", "/blocked-users");
     });
 
-    // 24.2：我的发布/我的收藏挪到头像卡片下面的入口，不再是这张卡片/任何
-    // 列表里的一行。
-    it("no longer contains 我的发布/我的收藏 as list rows (moved under the avatar card)", async () => {
+    // 24.2：我的发布/我的收藏不是"我的内容"（我的活动/已屏蔽）这张卡片
+    // 里的一行——它们现在单独在自己的一张 GroupCard 里（见下面新增的
+    // describe 块），这条断言只验证"没有混进这张卡片"，不关心它们实际
+    // 挂在哪。
+    it("does not contain 我的发布/我的收藏 as rows inside the '我的内容' card", async () => {
       renderWithProviders(<ProfilePage />);
 
       const group = await screen.findByRole("navigation", { name: "我的内容" });
       expect(within(group).queryByText("我的发布")).not.toBeInTheDocument();
       expect(within(group).queryByText("我的收藏")).not.toBeInTheDocument();
+    });
+  });
+
+  // 加回简介+年龄任务卡：我的发布/我的收藏从身份卡内部的两栏图标按钮，
+  // 改成跟"我的活动/已屏蔽"一样的整行 GroupRow，单独一张 GroupCard，在
+  // 身份卡下面、"我的内容"卡片之前。
+  describe("'我的发布与收藏' group card (加回简介+年龄任务卡)", () => {
+    it("contains exactly 我的发布/我的收藏 two rows, in that order, linking to the existing pages", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      const group = screen.getByRole("navigation", { name: "我的发布与收藏" });
+      const links = within(group).getAllByRole("link");
+      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual(["我的发布", "我的收藏"]);
+      expect(links[0]).toHaveAttribute("href", "/my-posts");
+      expect(links[1]).toHaveAttribute("href", "/favorites");
+    });
+
+    it("is not nested inside the avatar (ProfileSummary) card", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      const group = screen.getByRole("navigation", { name: "我的发布与收藏" });
+      // ProfileSummary 渲染的身份卡是 rounded-profile-card bg-card 这张
+      // 容器——这个 nav 不应该是它的后代，确认两者是身份卡下面单独一张
+      // 卡片，不是身份卡内部的一部分。
+      const avatarCard = screen.getByText("Alice").closest(".rounded-profile-card");
+      expect(avatarCard).not.toBeNull();
+      expect(avatarCard).not.toContainElement(group);
     });
   });
 

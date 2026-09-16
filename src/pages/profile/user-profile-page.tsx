@@ -15,25 +15,31 @@ const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
 const BLOCK_ERROR_MESSAGE = "操作失败，请稍后重试。";
 
-// 悬浮在头图上的圆形图标按钮——半透明黑底、白色图标，跟 22 号卡任务卡
-// 要求的"跟 23 号卡详情页的关闭按钮同一个视觉语言"对齐。写这段代码时
-// 23 号卡（帖子详情页头图操作按钮）那个 worktree 还没有任何提交（只是
-// 刚从 main 分出来的空分支），没有现成组件可以直接 import 复用，这里先
-// 按任务卡描述的样式独立实现；如果 23 号卡落地后两边写法不一致，再考虑
-// 抽成共享组件。
+// 悬浮圆形图标按钮。原来是半透明黑底+白色图标（跟 22 号卡任务卡要求的
+// "跟 23 号卡详情页的关闭按钮同一个视觉语言"对齐），那套配色是专门给
+// 深色渐变头图设计的——去 Banner 改版把头图删掉之后，这两个按钮会浮在
+// 页面画布的浅灰背景上，半透明黑底+白图标在浅色背景上看起来像两个灰扑扑
+// 的色块、对比度也变得奇怪，这次改成浅色版本：bg-card 白底 + text-text
+// 深色图标 + border border-border 细边框（参照本文件"屏蔽此人"按钮已经
+// 在用的写法）+ shadow-settings-item 投影（项目里已有这个 token，
+// profile-page.tsx 退出登录卡片在用），撑出悬浮在内容上方的层次感，不是
+// 新引入一套配色语言。
 const FLOATING_ICON_BUTTON_CLASS_NAME =
-  "fixed top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white";
+  "fixed top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text shadow-settings-item";
 
 interface FloatingMoreMenuProps {
   userId: string;
 }
 
 /**
- * 头图右上角悬浮的"更多操作"圆形图标按钮，点开一个只有"举报用户"一项的
- * 下拉菜单——交互（点击外部/Esc 关闭、点菜单项自动收起）照抄 top-bar.tsx
- * 里 detail 变体用的 MoreMenuButton，那个组件没有导出、样式也是
- * bg-card 图标按钮（不是这次要的半透明黑底悬浮圆形），这里在本文件内
- * 单独实现一份，不跨文件复用，见函数级注释第 5 点。
+ * 悬浮的"更多操作"圆形图标按钮，点开一个只有"举报用户"一项的下拉菜单——
+ * 交互（点击外部/Esc 关闭、点菜单项自动收起）照抄 top-bar.tsx 里 detail
+ * 变体用的 MoreMenuButton，那个组件没有导出，这里在本文件内单独实现
+ * 一份，不跨文件复用，见函数级注释第 5 点。
+ *
+ * 去 Banner 改版：按钮配色从半透明黑底+白图标换成浅色版本，理由跟左上角
+ * 返回按钮（FLOATING_ICON_BUTTON_CLASS_NAME）完全一样，见那个常量上面的
+ * 注释，这里不重复贴一遍。
  */
 function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
   const [open, setOpen] = useState(false);
@@ -68,7 +74,7 @@ function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text shadow-settings-item"
       >
         <MoreHorizontal size={18} aria-hidden="true" />
       </button>
@@ -150,34 +156,35 @@ function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
  *      or_admin"这条 RLS 策略本身已经限定的"approved + public"集合，不是
  *      这次新加的可见性判断。
  *
- * 公开个人主页改版为 Facebook 风格头图：22 号卡那版"通栏正方形头像大图
- * （aspect-square w-full，直接用 avatarUrl 裁剪展示）"换成 Facebook 风格——
- * 顶部一块**纯装饰性**的深色渐变色块（h-28，bg-gradient-to-b
- * from-primary to-primary-dark，两端直接用现有的 --color-primary/
- * --color-primary-dark token，不引入新颜色——DESIGN.md"全站只用一支蓝"
- * 这条约束同样适用；这块色块背后没有任何 <img>，不是"封面图"，这次没有
- * 新增任何字段/Storage/上传逻辑，工作量上等同于加一段 CSS），圆形头像
- * （h-24 w-24）压在深色区和浅色区的交界线上——用 -mt-12（正好是头像高度
- * 的一半）把头像从紧跟在渐变色块下面的浅色内容区里拉上去，视觉上一半盖
- * 深色区、一半落在浅色区，配一圈 ring-4 ring-card 白色描边做出"悬浮在
- * 交界线上"的层次感（没有这圈描边，头像边缘会跟深色色块的颜色直接贴在
- * 一起，看不出分层）。头像右边并排展示昵称（items-end 让两者底部对齐），
- * 不再是头像下面另起一行——跟改版前"昵称独占一整行"是唯一的排布差异。
+ * 公开个人主页去 Banner 改版：BARRY 用 Claude Design 画了一版新 mockup
+ * 跟真实截图反复对比后确认，22 号卡加的 Facebook 风格深色渐变头图
+ * （h-28 bg-gradient-to-b from-primary to-primary-dark 那块纯装饰性色块，
+ * 背后没有任何 <img>、不是"封面图"）整个去掉——头像/昵称/年龄放回同一行
+ * （头像左，昵称+年龄纵向排列在右），年龄从"简介下面单独一行"挪进昵称
+ * 这个文字块里，跟改版前的相对顺序（简介在昵称下面、年龄在简介下面）不再
+ * 一样。头像不再需要 -mt-12（压在深色/浅色交界线上的悬浮效果）和
+ * ring-4 ring-card（白色描边，同样是给交界线上的头像用的），因为没有
+ * 交界线可"压"了，尺寸维持 h-24 w-24 不变。紧跟在头像/昵称行下面的
+ * 内容区不再需要那层专门跟渐变色块衔接的"整块白卡片"包装（bg-card），
+ * 直接用页面画布默认背景（不显式设置 class，继承 body 的 bg-bg），跟
+ * 站内其它页面一致；改成显式加一个 pt-6，补上原来靠渐变色块高度撑出来
+ * 的、不被悬浮返回/更多操作按钮遮住内容的顶部空间。
  *
- * 紧跟在渐变色块下面的这一整块内容区背景是 bg-card（白色），不是全站页面
- * 画布的 bg-bg——这是这次改版特有的"整块白卡片"处理，不是常规的单张卡片
- * 样式，跟 max-w-md 那层只负责横向内边距/居中宽度，背景色是外层这一层
- * 单独给的。
- *
- * 头像/昵称这一行下面依次：个人简介（data.bio，为空整段不渲染，逻辑不变）
- * → 年龄（data.age，PublicProfile 类型和 getPublicProfile() 早就在查这
- * 一列了——见 profiles-repository.ts，这次没有改仓库层，纯前端加一行
- * "XX 岁"文案，data.age 为 null 时这一行不渲染，不做年龄段/星座这类推断）
- * → 发消息/屏蔽按钮（位置和逻辑不变）→"发布的作品"标题+网格（不变）。
+ * 头像/昵称/年龄这一行下面依次：个人简介（data.bio，为空整段不渲染，
+ * 逻辑不变）→ 发消息/屏蔽按钮（位置和逻辑不变）→"作品"标题（改版前是
+ * "发布的作品"，这次精简成两个字）+ 网格（不变）。data.age（
+ * PublicProfile 类型和 getPublicProfile() 早就在查这一列了，见
+ * profiles-repository.ts，这次没有改仓库层）为 null 时那一行不渲染，
+ * 不做年龄段/星座这类推断，这条判断逻辑本身没有变，只是渲染位置变了。
  *
  * 没有头像时的首字母占位兜底样式沿用改版前已有的判断逻辑（data.avatarUrl
- * 是否存在），只是尺寸/位置按新布局调整（h-24 w-24 + 同一圈 ring-4
- * ring-card + 同一个 -mt-12），不是重新设计一套判断分支。
+ * 是否存在），只是去掉了 -mt-12/ring-4 ring-card 这两条"悬浮在交界线上"
+ * 专用的样式，不是重新设计一套判断分支。
+ *
+ * 悬浮返回/更多操作按钮的配色（FLOATING_ICON_BUTTON_CLASS_NAME、
+ * FloatingMoreMenu 内部按钮）也跟着从半透明黑底+白图标换成浅色版本——
+ * 那套配色是专门给深色渐变头图设计的，banner 去掉之后浮在浅色背景上会
+ * 看起来像两个灰扑扑的色块，见这两处各自的注释。
  *
  * "发消息"按钮结构照抄 contact-seller-button.tsx（同一个"未登录点击跳
  * /login、已登录调用 mutation、成功后跳转到会话详情页"的模式），区别是
@@ -324,102 +331,99 @@ export function UserProfilePage() {
       ) : null}
 
       {!isPending && !isError && data ? (
-        <>
-          {/* Facebook 风格头图：纯装饰性深色渐变色块，背后没有任何 <img>，
-              不是"封面图"（没有新增字段/Storage）。跟下面头像/昵称行放在
-              下一个白色内容区一起是这次改版的核心，见函数级注释。 */}
-          <div
-            data-testid="profile-cover-gradient"
-            className="h-28 bg-gradient-to-b from-primary to-primary-dark"
-          />
-
-          {/* 紧跟渐变色块的这一整块是 bg-card（白色），不是页面画布的
-              bg-bg——"整块白卡片"处理，max-w-md 只负责横向内边距/居中
-              宽度，背景色由这一层给。没有 pt-*：让头像的 -mt-12 精确从
-              这个容器的顶边（也就是紧贴渐变色块下沿）往上拉半个头像高度，
-              不被额外的顶部内边距抵消。 */}
-          <div className="bg-card">
-            <div className="mx-auto max-w-md px-4 pb-20 text-left md:pb-6">
-              {/* 头像压在深色/浅色交界线上：h-24 w-24（96px）+ -mt-12（正好
-                  半个头像高度，48px）把头像从这个容器顶边往上拉，视觉上
-                  一半盖住上面的渐变色块、一半落在这块白色区域里；
-                  ring-4 ring-card 白色描边做出"悬浮在交界线上"的分层感。
-                  items-end 让昵称的文字基线跟头像底部对齐，两者并排展示，
-                  不再是昵称独占一整行。 */}
-              <div className="flex items-end gap-4">
-                {data.avatarUrl ? (
-                  <img
-                    src={data.avatarUrl}
-                    alt=""
-                    className="-mt-12 h-24 w-24 shrink-0 rounded-full object-cover ring-4 ring-card"
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className="-mt-12 flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted ring-4 ring-card"
-                  >
-                    {avatarInitial}
-                  </div>
-                )}
-                <h1 className="min-w-0 truncate pb-1 text-xl font-bold text-text">
-                  {data.displayName}
-                </h1>
+        // 去 Banner 改版：Facebook 风格深色渐变头图（h-28
+        // bg-gradient-to-b from-primary to-primary-dark）整块删掉，跟着
+        // 一起去掉的还有紧跟在它下面那层专门跟它衔接的"整块白卡片"包装
+        // （bg-card，之前是因为要跟渐变色块的深浅交界线对齐才单独给的
+        // 背景，不是常规单张卡片样式）——现在直接用页面画布默认背景
+        // （不显式设置 class，继承 body 的 bg-bg），跟站内其它页面一致，
+        // 不再是这个页面特有的处理。顶部补一个 pt-6，给内容留出不被悬浮
+        // 返回/更多操作按钮遮住的空间（改版前这块空间是渐变色块撑出来
+        // 的，现在需要显式加）。原来这里是一个 Fragment 包着渐变色块 +
+        // 内容区两个 sibling，banner 删掉之后只剩这一个 div，不再需要
+        // Fragment 包裹。
+        <div className="mx-auto max-w-md px-4 pb-20 pt-6 text-left md:pb-6">
+          {/* 头像/昵称/年龄同一行：去掉了 -mt-12（压在深色/浅色交界线上的
+              悬浮效果，banner 没了这条就没有意义）和 ring-4 ring-card
+              （白色描边同理是给交界线上的头像用的），尺寸维持 h-24 w-24
+              不变。items-end 改成 items-center——原来靠"文字基线对齐头像
+              底部"制造头像和昵称并排的视觉效果，现在两者不再有 deliberate
+              的高度差，居中对齐更自然。年龄从原来紧跟在简介下面单独一行，
+              挪进昵称这个文字块里（昵称在上、年龄在下），简介保持在头像/
+              昵称/年龄这一整行下面、独立成一行，位置跟改版前相对关系
+              不变。 */}
+          <div className="flex items-center gap-4">
+            {data.avatarUrl ? (
+              <img
+                src={data.avatarUrl}
+                alt=""
+                className="h-24 w-24 shrink-0 rounded-full object-cover"
+              />
+            ) : (
+              <div
+                aria-hidden="true"
+                className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted"
+              >
+                {avatarInitial}
               </div>
-
-              {data.bio ? (
-                <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">
-                  {data.bio}
-                </p>
-              ) : null}
-
+            )}
+            <div className="min-w-0">
+              <h1 className="truncate text-xl font-bold text-text">{data.displayName}</h1>
               {data.age !== null ? (
-                <p className="mt-1 text-sm text-text-muted">{data.age} 岁</p>
+                <p className="mt-0.5 text-sm text-text-muted">{data.age} 岁</p>
               ) : null}
-
-              {error ? (
-                <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {error}
-                </p>
-              ) : null}
-              {blockError ? (
-                <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                  {blockError}
-                </p>
-              ) : null}
-
-              {!isOwnProfile ? (
-                <div className="mt-4 flex items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={handleMessage}
-                    disabled={createConversation.isPending}
-                    className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {createConversation.isPending ? "创建会话中…" : "发消息"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void handleToggleBlock()}
-                    disabled={isBlockActionPending}
-                    className="rounded-full border border-border px-6 py-2 text-sm font-semibold text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isBlockActionPending ? "处理中…" : isBlocking ? "取消屏蔽" : "屏蔽此人"}
-                  </button>
-                </div>
-              ) : null}
-
-              {/* 发布的作品：去掉了"发布/搭子/收藏"三个切换标签（这个仓库里
-                  本来就没建过），直接展示"发布"这一类——复用 PostList 组件
-                  背后的数据请求和卡片组件，只是多传一个 authorId，不是重新
-                  做一套。不管是不是自己的主页都展示这个区块，纯展示内容，
-                  不是一个需要区分身份的操作入口。 */}
-              <h2 className="mt-6 text-base font-semibold text-text">发布的作品</h2>
-              <div className="mt-3">
-                <PostList authorId={userId} />
-              </div>
             </div>
           </div>
-        </>
+
+          {data.bio ? (
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">
+              {data.bio}
+            </p>
+          ) : null}
+
+          {error ? (
+            <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {error}
+            </p>
+          ) : null}
+          {blockError ? (
+            <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {blockError}
+            </p>
+          ) : null}
+
+          {!isOwnProfile ? (
+            <div className="mt-4 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleMessage}
+                disabled={createConversation.isPending}
+                className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {createConversation.isPending ? "创建会话中…" : "发消息"}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleToggleBlock()}
+                disabled={isBlockActionPending}
+                className="rounded-full border border-border px-6 py-2 text-sm font-semibold text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isBlockActionPending ? "处理中…" : isBlocking ? "取消屏蔽" : "屏蔽此人"}
+              </button>
+            </div>
+          ) : null}
+
+          {/* "作品"（改版前是"发布的作品"，这次按任务卡要求精简成两个
+              字）：去掉了"发布/搭子/收藏"三个切换标签（这个仓库里本来就
+              没建过），直接展示"发布"这一类——复用 PostList 组件背后的
+              数据请求和卡片组件，只是多传一个 authorId，不是重新做一套。
+              不管是不是自己的主页都展示这个区块，纯展示内容，不是一个
+              需要区分身份的操作入口。 */}
+          <h2 className="mt-6 text-base font-semibold text-text">作品</h2>
+          <div className="mt-3">
+            <PostList authorId={userId} />
+          </div>
+        </div>
       ) : null}
     </main>
   );

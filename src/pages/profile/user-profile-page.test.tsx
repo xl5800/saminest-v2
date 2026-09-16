@@ -42,9 +42,10 @@ vi.mock("../../features/blocks/use-block-user-mutation", () => ({
 vi.mock("../../features/blocks/use-unblock-user-mutation", () => ({
   useUnblockUserMutation
 }));
-// 22 号卡：页面底部新增的"发布的作品"网格用的是真实的 PostList 组件（不是
-// 单独 mock 掉整个组件），只 mock 它最终依赖的仓库函数——跟这个文件里其它
-// hook 同一个"mock 网络边界，不 mock 组件树"的原则，见 post-list.test.tsx。
+// 22 号卡：页面底部新增的"作品"网格（改版前标题是"发布的作品"，去 Banner
+// 改版精简成两个字）用的是真实的 PostList 组件（不是单独 mock 掉整个
+// 组件），只 mock 它最终依赖的仓库函数——跟这个文件里其它 hook 同一个
+// "mock 网络边界，不 mock 组件树"的原则，见 post-list.test.tsx。
 vi.mock("../../repositories/posts-repository", () => ({
   listApprovedPosts
 }));
@@ -101,7 +102,7 @@ describe("UserProfilePage", () => {
     useIsBlockingQuery.mockReturnValue({ data: false });
     useBlockUserMutation.mockReturnValue({ mutateAsync: blockMutateAsyncMock, isPending: false });
     useUnblockUserMutation.mockReturnValue({ mutateAsync: unblockMutateAsyncMock, isPending: false });
-    // 这个文件里绝大多数测试不关心"发布的作品"网格具体展示什么，默认给
+    // 这个文件里绝大多数测试不关心"作品"网格具体展示什么，默认给
     // 一个已解决的空结果，避免每个测试都要重复 mock 这一个查询。
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
   });
@@ -178,11 +179,11 @@ describe("UserProfilePage", () => {
     expect(screen.queryByText("Hi there, I like hiking.")).not.toBeInTheDocument();
   });
 
-  // 公开主页 Facebook 风格头图改版：22 号卡"通栏正方形头像大图"换成了
-  // 深色渐变色块 + 压在交界线上的圆形头像，昵称跟头像并排展示，见
-  // user-profile-page.tsx 函数级注释。
-  describe("Facebook 风格头图 (公开主页改版)", () => {
-    it("renders a purely decorative gradient cover block with no <img> inside it (背后没有真实封面图)", () => {
+  // 公开主页去 Banner 改版：22 号卡加的 Facebook 风格深色渐变头图整个
+  // 去掉了，头像/昵称/年龄放回同一行（头像左，昵称+年龄纵向排列在右），
+  // 见 user-profile-page.tsx 函数级注释。
+  describe("去 Banner 改版 (公开主页)", () => {
+    it("does not render the removed gradient cover block", () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -191,12 +192,10 @@ describe("UserProfilePage", () => {
 
       renderPage();
 
-      const cover = screen.getByTestId("profile-cover-gradient");
-      expect(cover).toBeInTheDocument();
-      expect(cover.querySelector("img")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("profile-cover-gradient")).not.toBeInTheDocument();
     });
 
-    it("gives the no-avatar placeholder the overlap/ring classes so it sits on the dark/light boundary", () => {
+    it("no longer gives the no-avatar placeholder the banner-boundary overlap/ring classes", () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -206,13 +205,13 @@ describe("UserProfilePage", () => {
       renderPage();
 
       const placeholder = screen.getByText("B");
-      expect(placeholder.className).toMatch(/-mt-12/);
-      expect(placeholder.className).toMatch(/ring-4/);
-      expect(placeholder.className).toMatch(/ring-card/);
+      expect(placeholder.className).not.toMatch(/-mt-12/);
+      expect(placeholder.className).not.toMatch(/ring-4/);
+      expect(placeholder.className).not.toMatch(/ring-card/);
       expect(placeholder.className).toMatch(/rounded-full/);
     });
 
-    it("gives the <img> avatar the same overlap/ring classes when avatarUrl is present", () => {
+    it("no longer gives the <img> avatar the banner-boundary overlap/ring classes when avatarUrl is present", () => {
       usePublicProfileQuery.mockReturnValue({
         data: { ...samplePublicProfile, avatarUrl: "https://example.com/bob.jpg" },
         isPending: false,
@@ -222,9 +221,9 @@ describe("UserProfilePage", () => {
       const { container } = renderPage();
 
       const img = container.querySelector("img");
-      expect(img?.className).toMatch(/-mt-12/);
-      expect(img?.className).toMatch(/ring-4/);
-      expect(img?.className).toMatch(/ring-card/);
+      expect(img?.className).not.toMatch(/-mt-12/);
+      expect(img?.className).not.toMatch(/ring-4/);
+      expect(img?.className).not.toMatch(/ring-card/);
       expect(img?.className).toMatch(/rounded-full/);
     });
 
@@ -239,11 +238,13 @@ describe("UserProfilePage", () => {
 
       const heading = screen.getByRole("heading", { name: "Bob" });
       const placeholder = screen.getByText("B");
-      // 头像和昵称是同一个 flex 行的两个直接子元素。
-      expect(heading.parentElement).toContainElement(placeholder);
+      // 头像（placeholder）和"昵称+年龄"文字块是同一个 flex 行的两个
+      // 直接子元素，heading 本身是文字块内部再嵌一层，所以要往上找
+      // 两层父元素才是头像和文字块共同的容器。
+      expect(heading.parentElement?.parentElement).toContainElement(placeholder);
     });
 
-    it("shows the age as '25 岁' when data.age is a number", () => {
+    it("shows the age directly under the nickname, in the same text block", () => {
       usePublicProfileQuery.mockReturnValue({
         data: { ...samplePublicProfile, age: 25 },
         isPending: false,
@@ -252,7 +253,9 @@ describe("UserProfilePage", () => {
 
       renderPage();
 
-      expect(screen.getByText("25 岁")).toBeInTheDocument();
+      const heading = screen.getByRole("heading", { name: "Bob" });
+      const age = screen.getByText("25 岁");
+      expect(heading.parentElement).toContainElement(age);
     });
 
     it("does not render an age line when data.age is null", () => {
@@ -624,12 +627,13 @@ describe("UserProfilePage", () => {
     });
   });
 
-  // 22 号卡（用户主页改版）：新增的"发布的作品"网格，复用 PostList 组件，
-  // 只多传一个 authorId——只验证这条数据管线接对了（authorId 传的是当前
-  // 主页 userId、标题文案存在），不重复 PostList 自己那份详尽测试
-  // （加载中/空状态/分页/卡片渲染……见 post-list.test.tsx）。
-  describe("发布的作品 (22 号卡：复用 PostList，只按 authorId 筛选)", () => {
-    it("renders a '发布的作品' heading and requests posts filtered to this profile's userId", async () => {
+  // 22 号卡（用户主页改版）：新增的"作品"网格（改版前标题是"发布的
+  // 作品"，去 Banner 改版精简成两个字，见 user-profile-page.tsx），复用
+  // PostList 组件，只多传一个 authorId——只验证这条数据管线接对了
+  // （authorId 传的是当前主页 userId、标题文案存在），不重复 PostList
+  // 自己那份详尽测试（加载中/空状态/分页/卡片渲染……见 post-list.test.tsx）。
+  describe("作品 (22 号卡：复用 PostList，只按 authorId 筛选)", () => {
+    it("renders a '作品' heading and requests posts filtered to this profile's userId", async () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -638,7 +642,7 @@ describe("UserProfilePage", () => {
 
       renderPage();
 
-      expect(screen.getByRole("heading", { name: "发布的作品" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
       await waitFor(() => {
         expect(listApprovedPosts).toHaveBeenCalledWith({
           authorId: "user-2",
@@ -672,7 +676,7 @@ describe("UserProfilePage", () => {
 
       renderPage();
 
-      expect(screen.getByRole("heading", { name: "发布的作品" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "作品" })).toBeInTheDocument();
       await waitFor(() => {
         expect(listApprovedPosts).toHaveBeenCalledWith({
           authorId: "user-2",

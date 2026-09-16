@@ -132,7 +132,18 @@ function GroupCard({ children }: { children: ReactNode }) {
  * 那一行下面，中间不加分割线（24.2.2 明确要求）。avatarHref 维持不变
  * （11 号卡加的，头像本身仍然可以点进自己的公开主页预览）。这两栏入口
  * 不展示数字，只是图标+文字，点击行为不变（跳 /my-posts、/favorites），
- * 见上面第 4 点。
+ * 见上面第 4 点。（下面"加回简介+年龄"任务卡把这两栏入口整个挪出了
+ * ProfileSummary，见该段说明，这里保留是历史记录，不代表当前状态。）
+ *
+ * 加回简介+年龄任务卡：BARRY 用 Claude Design 画的新 mockup 确认，24 号
+ * 卡当时为了精简删掉的简介+年龄这两行需要加回来——ProfileSummary 新增
+ * bio/age 两个可选 prop（各自独立判空渲染，见该组件注释），profile-page.tsx
+ * 这次传 profile?.bio ?? null / profile?.age ?? null，不用改数据层
+ * （useMyProfileQuery 背后的 getMyProfile() 早就在查这两列）。同一张
+ * 任务卡还把"我的发布/我的收藏"从身份卡内部的两栏图标按钮，改成跟"我的
+ * 活动/已屏蔽"一样的整行 GroupRow——不再通过 ProfileSummary 的 children
+ * 传入，挪到身份卡下面单独一张 GroupCard（"我的发布与收藏"，在"我的
+ * 内容"卡片之前），直接复用文件里已有的 GroupRow/GroupCard，不新写样式。
  *
  * 24.3/24.4 功能列表：原来铺平的 SettingsRow 列表拆成两张 GroupCard——
  * "我的内容"（我的活动/已屏蔽）、"账号与服务"（帮助与客服/设置/
@@ -192,29 +203,22 @@ export function ProfilePage() {
               avatarUrl={profile?.avatarUrl ?? null}
               avatarHref={currentUserId ? `/users/${currentUserId}` : undefined}
               profileHref={currentUserId ? `/users/${currentUserId}` : undefined}
-            >
-              {/* 全 App 视觉 Token 体系（第二批）：这是卡片内部两个统计
-                  格之间的分隔，不是列表行分割线，换成更淡一档的
-                  divide-border-light（"非列表场景，比如卡片内部分隔"）。 */}
-              <div className="mt-3 grid grid-cols-2 divide-x divide-border-light">
-                <Link
-                  to="/my-posts"
-                  className="flex flex-col items-center gap-1 py-2 text-center hover:opacity-80"
-                >
-                  <FileText aria-hidden="true" size={18} className="text-text-muted" />
-                  <span className="text-xs text-text-muted">我的发布</span>
-                </Link>
-                <Link
-                  to="/favorites"
-                  className="flex flex-col items-center gap-1 py-2 text-center hover:opacity-80"
-                >
-                  <Star aria-hidden="true" size={18} className="text-text-muted" />
-                  <span className="text-xs text-text-muted">我的收藏</span>
-                </Link>
-              </div>
-            </ProfileSummary>
+              bio={profile?.bio ?? null}
+              age={profile?.age ?? null}
+            />
           </div>
         ) : null}
+
+        {/* 加回简介+年龄任务卡：我的发布/我的收藏从身份卡内部的两栏图标
+            按钮（原来通过 children 传给 ProfileSummary），改成跟"我的
+            活动/已屏蔽"一样的整行 GroupRow，挪到身份卡下面单独一张
+            GroupCard——不并进"我的内容"那张卡片里，是单独一张。 */}
+        <nav aria-label="我的发布与收藏">
+          <GroupCard>
+            <GroupRow to="/my-posts" icon={FileText} label="我的发布" />
+            <GroupRow to="/favorites" icon={Star} label="我的收藏" />
+          </GroupCard>
+        </nav>
 
         <nav aria-label="我的内容">
           <GroupCard>
