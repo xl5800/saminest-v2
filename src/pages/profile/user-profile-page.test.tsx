@@ -271,6 +271,117 @@ describe("UserProfilePage", () => {
     });
   });
 
+  // 头像缩小 + 年龄胶囊 + 发消息满宽任务卡。
+  describe("头像缩小 + 年龄胶囊 + 发消息满宽 (返回/更多同行等任务卡)", () => {
+    it("shrinks the no-avatar placeholder to 60px", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const placeholder = screen.getByText("B");
+      expect(placeholder.className).toMatch(/h-\[60px\]/);
+      expect(placeholder.className).toMatch(/w-\[60px\]/);
+      expect(placeholder.className).not.toMatch(/h-24/);
+    });
+
+    it("shrinks the <img> avatar to 60px when avatarUrl is present", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: { ...samplePublicProfile, avatarUrl: "https://example.com/bob.jpg" },
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      const img = container.querySelector("img");
+      expect(img?.className).toMatch(/h-\[60px\]/);
+      expect(img?.className).toMatch(/w-\[60px\]/);
+      expect(img?.className).not.toMatch(/h-24/);
+    });
+
+    it("styles the age as a pill (rounded-full, muted background) matching the '我的' page identity card's age pill", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: { ...samplePublicProfile, age: 25 },
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const age = screen.getByText("25 岁");
+      expect(age.tagName).toBe("SPAN");
+      expect(age.className).toMatch(/rounded-full/);
+      expect(age.className).toMatch(/bg-bg/);
+    });
+
+    it("renders '发消息' as a full-width button (not paired side-by-side with a block button)", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const messageButton = screen.getByRole("button", { name: "发消息" });
+      expect(messageButton.className).toMatch(/\bw-full\b/);
+    });
+
+    it("no longer renders a '屏蔽此人' button next to '发消息' in the page body", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      // 屏蔽此人已经挪进"更多操作"菜单（见 blocking 那组测试），菜单
+      // 没打开之前页面主体不应该出现这个文案。
+      expect(screen.queryByText("屏蔽此人")).not.toBeInTheDocument();
+    });
+
+    it("renders a divider below the '发消息' button, above the '作品' heading", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      const divider = container.querySelector(".border-t");
+      expect(divider).toBeInTheDocument();
+      const messageButton = screen.getByRole("button", { name: "发消息" });
+      const heading = screen.getByRole("heading", { name: "作品" });
+      // 分割线在文档顺序上应该排在"发消息"按钮之后、"作品"标题之前。
+      expect(
+        messageButton.compareDocumentPosition(divider as Element) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      expect(
+        heading.compareDocumentPosition(divider as Element) & Node.DOCUMENT_POSITION_PRECEDING
+      ).toBeTruthy();
+    });
+
+    it("does not render the divider when viewing your own profile (no '发消息' button to separate from '作品')", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      expect(container.querySelector(".border-t")).not.toBeInTheDocument();
+    });
+  });
+
   it("shows a '发消息' button for a visitor viewing someone else's profile", () => {
     usePublicProfileQuery.mockReturnValue({
       data: samplePublicProfile,
@@ -397,10 +508,12 @@ describe("UserProfilePage", () => {
     );
   });
 
-  // 22 号卡：不再用 TopBar，返回箭头换成悬浮在头图上的圆形按钮——但不管
-  // 加载中/加载失败/正常显示，这个按钮都应该在，跟改版前 TopBar 一直渲染
-  // 返回按钮是同一个行为，只是不再依赖 TopBar 这个组件本身。
-  it("renders a floating '返回' button even while the profile query is pending", () => {
+  // 22 号卡：不再用 TopBar，返回箭头换成一个圆形按钮——但不管加载中/
+  // 加载失败/正常显示，这个按钮都应该在，跟改版前 TopBar 一直渲染返回
+  // 按钮是同一个行为，只是不再依赖 TopBar 这个组件本身。返回/更多同行
+  // 任务卡把这个按钮从 fixed 悬浮改成了页面顶部一条普通的页内行，这条
+  // "不管什么状态都应该在"的约束本身没有变。
+  it("renders a '返回' button even while the profile query is pending", () => {
     usePublicProfileQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
     renderPage();
@@ -408,7 +521,7 @@ describe("UserProfilePage", () => {
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
   });
 
-  it("navigates back one entry in history when the floating back button is clicked", () => {
+  it("navigates back one entry in history when the back button is clicked", () => {
     usePublicProfileQuery.mockReturnValue({
       data: samplePublicProfile,
       isPending: false,
@@ -421,11 +534,74 @@ describe("UserProfilePage", () => {
     expect(navigateMock).toHaveBeenCalledWith(-1);
   });
 
+  // 返回/更多同行任务卡：返回箭头 + 更多操作从 fixed 悬浮改成页面顶部
+  // 一条普通的页内行，不再挡住下面的头像。
+  describe("返回/更多操作同行 (返回/更多同行任务卡)", () => {
+    it("no longer uses fixed positioning for the back button or the more-menu button", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const backButton = screen.getByRole("button", { name: "返回" });
+      const moreButton = screen.getByRole("button", { name: "更多操作" });
+      expect(backButton.className).not.toMatch(/\bfixed\b/);
+      expect(moreButton.className).not.toMatch(/\bfixed\b/);
+    });
+
+    it("renders the back button and the more-menu button as siblings in the same top row", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const backButton = screen.getByRole("button", { name: "返回" });
+      // 更多操作按钮外面包了一层 relative 容器（给下拉菜单当锚点），
+      // 真正跟返回按钮同一行的兄弟节点是那层容器，不是按钮本身。
+      const moreButtonWrapper = screen.getByRole("button", { name: "更多操作" }).parentElement;
+      expect(backButton.parentElement).toContainElement(moreButtonWrapper);
+    });
+
+    it("still renders the back button (with the row's right side empty) when '更多操作' is not shown, e.g. own profile", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "更多操作" })).not.toBeInTheDocument();
+    });
+
+    it("still renders the back button on a genuine fetch error, and on a not-found profile", () => {
+      usePublicProfileQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+      const { unmount } = renderPage();
+      expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+      unmount();
+
+      usePublicProfileQuery.mockReturnValue({ data: null, isPending: false, isError: false });
+      renderPage();
+      expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    });
+  });
+
   // 22 号卡验收标准："只有一个'发消息'按钮...没有'关注'按钮"。"屏蔽此人"
   // 和"更多操作"（举报用户的入口）都是任务卡完全没提到、但真实存在的
   // UGC 安全功能，跟用户确认过明确保留，不属于"关注"那种"暂时不放入口"
-  // 的按钮，所以按钮总数是 4 个：返回 + 发消息 + 屏蔽此人 + 更多操作。
-  it("renders '发消息'/'屏蔽此人'/'更多操作' as the only action buttons on someone else's profile — no follow button", () => {
+  // 的按钮。屏蔽此人/更多操作合并任务卡之后，"屏蔽此人"从独立按钮挪进了
+  // "更多操作"下拉菜单——菜单没打开之前顶层只有 3 个 <button>（返回 +
+  // 发消息 + 更多操作），打开菜单之后菜单里的"屏蔽此人"也是一个
+  // <button>（举报用户是 <Link>，不计入 button 数量），变成 4 个。
+  it("renders '发消息'/'更多操作' as the only top-level action buttons — '屏蔽此人' lives inside the more-menu, no follow button", () => {
     usePublicProfileQuery.mockReturnValue({
       data: samplePublicProfile,
       isPending: false,
@@ -435,9 +611,15 @@ describe("UserProfilePage", () => {
     renderPage();
 
     expect(screen.getByRole("button", { name: "发消息" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "屏蔽此人" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /关注/ })).not.toBeInTheDocument();
-    // 返回 + 发消息 + 屏蔽此人 + 更多操作，一共 4 个 <button>。
+    expect(screen.queryByRole("button", { name: "屏蔽此人" })).not.toBeInTheDocument();
+    // 返回 + 发消息 + 更多操作，一共 3 个 <button>。
+    expect(screen.getAllByRole("button")).toHaveLength(3);
+
+    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+
+    expect(screen.getByRole("button", { name: "屏蔽此人" })).toBeInTheDocument();
+    // 打开菜单之后：返回 + 发消息 + 更多操作 + 菜单里的屏蔽此人，共 4 个。
     expect(screen.getAllByRole("button")).toHaveLength(4);
   });
 
@@ -457,9 +639,14 @@ describe("UserProfilePage", () => {
     expect(screen.queryByText("TA 发起的搭子")).not.toBeInTheDocument();
   });
 
-  // UGC 安全功能补齐任务卡 1（屏蔽用户）。
-  describe("blocking", () => {
-    it("does not show a '屏蔽此人' button when viewing your own profile", () => {
+  // UGC 安全功能补齐任务卡 1（屏蔽用户）。屏蔽此人/更多操作合并任务卡：
+  // "屏蔽此人/取消屏蔽"从页面主体一个独立按钮挪进了"更多操作"下拉菜单，
+  // 下面这些测试都要先点开菜单才能找到这一项——isBlocking/
+  // isBlockActionPending/handleToggleBlock 这几个状态和函数本身、
+  // blockError 的展示位置、屏蔽生效的后端行为都没有变，只是触发它的
+  // 入口挪了地方。
+  describe("blocking (菜单里的'屏蔽此人/取消屏蔽'一项)", () => {
+    it("does not show a '更多操作' button (and therefore no '屏蔽此人' entry) when viewing your own profile", () => {
       useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
@@ -469,10 +656,11 @@ describe("UserProfilePage", () => {
 
       renderPage();
 
-      expect(screen.queryByRole("button", { name: /屏蔽/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "更多操作" })).not.toBeInTheDocument();
+      expect(screen.queryByText(/屏蔽/)).not.toBeInTheDocument();
     });
 
-    it("shows '屏蔽此人' for a visitor viewing someone else's profile when not currently blocking", () => {
+    it("shows '屏蔽此人' in the more-menu for a visitor viewing someone else's profile when not currently blocking", () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -480,11 +668,12 @@ describe("UserProfilePage", () => {
       });
 
       renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
       expect(screen.getByRole("button", { name: "屏蔽此人" })).toBeInTheDocument();
     });
 
-    it("shows '取消屏蔽' when useIsBlockingQuery reports the current user already blocks the target", () => {
+    it("shows '取消屏蔽' in the more-menu when useIsBlockingQuery reports the current user already blocks the target", () => {
       useIsBlockingQuery.mockReturnValue({ data: true });
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
@@ -493,12 +682,13 @@ describe("UserProfilePage", () => {
       });
 
       renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
       expect(screen.getByRole("button", { name: "取消屏蔽" })).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "屏蔽此人" })).not.toBeInTheDocument();
     });
 
-    it("navigates to /login when clicking the block button while logged out", () => {
+    it("navigates to /login when clicking the block menu item while logged out", () => {
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
         isPending: false,
@@ -506,13 +696,14 @@ describe("UserProfilePage", () => {
       });
 
       renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
       fireEvent.click(screen.getByRole("button", { name: "屏蔽此人" }));
 
       expect(navigateMock).toHaveBeenCalledWith("/login");
       expect(blockMutateAsyncMock).not.toHaveBeenCalled();
     });
 
-    it("calls blockUser with the current user as blocker and the profile owner as blocked on click", async () => {
+    it("calls blockUser with the current user as blocker and the profile owner as blocked on click, and closes the menu", async () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
       usePublicProfileQuery.mockReturnValue({
         data: samplePublicProfile,
@@ -521,6 +712,7 @@ describe("UserProfilePage", () => {
       });
 
       renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
       fireEvent.click(screen.getByRole("button", { name: "屏蔽此人" }));
 
       await waitFor(() => {
@@ -529,9 +721,12 @@ describe("UserProfilePage", () => {
           blockedId: "user-2"
         });
       });
+      // 点击后菜单应该自己收起——举报用户这个链接也是菜单内容的一部分，
+      // 菜单关闭之后它也不应该再出现在文档里。
+      expect(screen.queryByRole("link", { name: "举报用户" })).not.toBeInTheDocument();
     });
 
-    it("calls unblockUser instead when already blocking", async () => {
+    it("calls unblockUser instead when already blocking, and re-opening the menu afterwards shows '屏蔽此人' again", async () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
       useIsBlockingQuery.mockReturnValue({ data: true });
       usePublicProfileQuery.mockReturnValue({
@@ -541,6 +736,7 @@ describe("UserProfilePage", () => {
       });
 
       renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
       fireEvent.click(screen.getByRole("button", { name: "取消屏蔽" }));
 
       await waitFor(() => {
@@ -550,6 +746,13 @@ describe("UserProfilePage", () => {
         });
       });
       expect(blockMutateAsyncMock).not.toHaveBeenCalled();
+
+      // 状态切换是靠 useIsBlockingQuery 的返回值驱动的（mock 在这个测试
+      // 里维持 data: true，不会真的在点击之后自动变成 false——这里只
+      // 验证菜单重新打开之后还能正常渲染，不代表状态本身已经切换，状态
+      // 切换本身是 UGC 安全功能补齐任务卡 1 已经验证过的既有逻辑）。
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
+      expect(screen.getByRole("button", { name: "取消屏蔽" })).toBeInTheDocument();
     });
 
     it("shows a generic error message when the block action fails", async () => {
@@ -562,6 +765,7 @@ describe("UserProfilePage", () => {
       });
 
       renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
       fireEvent.click(screen.getByRole("button", { name: "屏蔽此人" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");

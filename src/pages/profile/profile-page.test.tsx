@@ -99,26 +99,70 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("28 岁")).toBeInTheDocument();
   });
 
-  // 公开主页 Facebook 风格头图改版（联动）：头像卡片右上角的图标按钮从
-  // "编辑资料"换成了"查看个人主页"，跳到跟头像本身（avatarHref）完全
-  // 相同的 /users/:自己的id——"编辑资料"这个入口本身没有消失，见下面
-  // "'账号与服务' group card"里新增的断言。
-  describe("avatar card: '查看个人主页' icon button (公开主页 Facebook 风格头图改版)", () => {
-    it("shows a small circular '查看个人主页' icon-button link to /users/<self id>, not a full-width list row", async () => {
+  // 整卡可点 + 铅笔编辑角标任务卡：头像卡片右上角原来的"查看个人主页"
+  // 圆形图标按钮整个去掉了（BARRY 反馈容易被误认成头像加载失败的占位
+  // 图标），改成整张卡片可点，跳到同一个 /users/:自己的id 地址；"编辑
+  // 资料"这个入口这次挪回了头像右下角的铅笔角标（不是这个 describe 块
+  // 断言的对象，见下面"头像右下角铅笔编辑角标"那组测试）。
+  describe("avatar card: 整卡可点 (整卡可点 + 铅笔编辑角标任务卡，取代原来右上角的'查看个人主页'图标按钮)", () => {
+    it("makes the whole avatar card a role=link that navigates to /users/<self id> on click, not a small icon button", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      expect(screen.getByRole("link", { name: "查看个人主页" })).toHaveAttribute(
+      const card = screen.getByRole("link", { name: "查看个人主页" });
+      // 现在是整张卡片（role="link" 的 <div>），不是一个真的 <a>，没有
+      // href 属性——点击之后触发 useNavigate()，断言导航目标即可。
+      expect(card).not.toHaveAttribute("href");
+      fireEvent.click(card);
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+
+    it("navigates when clicking the nickname text too (whole card is clickable, not just a small button)", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      fireEvent.click(screen.getByText("Alice"));
+
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+
+    it("navigates when clicking the avatar placeholder too", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      // getMyProfile 的默认 mock 没有 avatarUrl，退化成首字母占位"A"。
+      fireEvent.click(screen.getByText("A"));
+
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+  });
+
+  // 整卡可点 + 铅笔编辑角标任务卡：头像右下角新增的编辑角标，独立于整卡
+  // 点击目标，跳 /profile/edit。历史上 24 号卡曾经在这个位置放过一个
+  // "编辑资料"图标按钮、后来被公开主页 Facebook 风格头图改版换成了
+  // "查看个人主页"（见上面 avatar card 那组测试），这次铅笔角标"回归"到
+  // 头像右下角，是有意的行为，不是意外倒退——aria-label 沿用"编辑资料"
+  // 这个历史文案（跟下面"账号与服务"卡片里的"编辑个人信息"故意用不同
+  // 措辞区分，见 profile-summary.tsx 的注释）。
+  describe("头像右下角铅笔编辑角标 (整卡可点 + 铅笔编辑角标任务卡)", () => {
+    it("renders a '编辑资料' link pinned to the avatar, pointing to /profile/edit", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
         "href",
-        "/users/user-1"
+        "/profile/edit"
       );
     });
 
-    it("no longer shows a '编辑资料' icon button on the avatar card itself", async () => {
+    it("clicking the pencil badge does not also trigger the whole-card navigation", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
-      expect(screen.queryByRole("link", { name: "编辑资料" })).not.toBeInTheDocument();
+      navigateMock.mockClear();
+      fireEvent.click(screen.getByRole("link", { name: "编辑资料" }));
+
+      expect(navigateMock).not.toHaveBeenCalled();
     });
   });
 
@@ -147,17 +191,13 @@ describe("ProfilePage", () => {
     });
   });
 
-  describe("avatar links to the self public-profile preview (11 号卡 11.2)", () => {
-    it("wraps the avatar in a link to /users/<self id>", async () => {
-      renderWithProviders(<ProfilePage />);
-
-      await screen.findByText("Alice");
-      expect(screen.getByRole("link", { name: "预览我的主页" })).toHaveAttribute(
-        "href",
-        "/users/user-1"
-      );
-    });
-  });
+  // 11 号卡 11.2 曾经是"头像单独包一层 Link 跳自己的公开主页预览"
+  // （avatarHref），整卡可点任务卡把 avatarHref 这个 prop 整个删掉了——
+  // 整卡都跳同一个地址之后，头像单独再包一层 Link 已经没有必要，继续
+  // 保留还会导致"头像的 Link 嵌套在整卡可点击区域内部"这种问题，见
+  // profile-summary.tsx 的注释。点头像现在的效果被上面"avatar card:
+  // 整卡可点"那组测试覆盖（点头像所在区域会冒泡触发整卡的 onClick），
+  // 不再需要头像自己是一个独立的 <Link>。
 
   it("calls authService.signOut and navigates home when logging out", async () => {
     signOut.mockResolvedValue(undefined);

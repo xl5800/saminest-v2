@@ -1,4 +1,4 @@
-import { ArrowLeft, Flag, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, Ban, Flag, MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
@@ -15,33 +15,51 @@ const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
 const BLOCK_ERROR_MESSAGE = "操作失败，请稍后重试。";
 
-// 悬浮圆形图标按钮。原来是半透明黑底+白色图标（跟 22 号卡任务卡要求的
-// "跟 23 号卡详情页的关闭按钮同一个视觉语言"对齐），那套配色是专门给
-// 深色渐变头图设计的——去 Banner 改版把头图删掉之后，这两个按钮会浮在
-// 页面画布的浅灰背景上，半透明黑底+白图标在浅色背景上看起来像两个灰扑扑
-// 的色块、对比度也变得奇怪，这次改成浅色版本：bg-card 白底 + text-text
-// 深色图标 + border border-border 细边框（参照本文件"屏蔽此人"按钮已经
-// 在用的写法）+ shadow-settings-item 投影（项目里已有这个 token，
-// profile-page.tsx 退出登录卡片在用），撑出悬浮在内容上方的层次感，不是
-// 新引入一套配色语言。
-const FLOATING_ICON_BUTTON_CLASS_NAME =
-  "fixed top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text shadow-settings-item";
+// 返回/更多操作按钮共用的圆形图标样式。返回/更多同行任务卡：这两个按钮
+// 原来是 fixed 悬浮在内容上方，这次改成页面顶部一条普通的页内行（不再
+// fixed），按钮本身的配色（bg-card 白底 + text-text 深色图标 + border
+// border-border 细边框）沿用去 Banner 改版换过的浅色版本，不用再改一次；
+// shadow-settings-item 投影是给"悬浮在内容上方"这个视觉层次用的，现在
+// 是普通页内元素、不再悬浮在内容上方，这次一并去掉，视觉上更贴合"这就是
+// 页面顶部一条普通工具栏"的定位。
+const TOP_ROW_ICON_BUTTON_CLASS_NAME =
+  "flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text";
 
-interface FloatingMoreMenuProps {
+interface MoreMenuProps {
   userId: string;
+  /** 屏蔽此人/更多操作合并任务卡：菜单需要知道当前是不是已经屏蔽了这个
+   *  人，决定菜单项文案是"屏蔽此人"还是"取消屏蔽"——这个状态由
+   *  useIsBlockingQuery 在页面组件里查，菜单本身不重新查一次。 */
+  isBlocking: boolean | undefined;
+  /** mutation 进行中时禁用这一项，文案变成"处理中…"，跟原来独立按钮的
+   *  disabled/文案逻辑完全一致，只是挪到了菜单项上。 */
+  isBlockActionPending: boolean;
+  /** 点击后菜单先自己关闭，再调用页面组件传下来的 handleToggleBlock——
+   *  菜单不关心这个操作具体做了什么，只负责"点了就调这个回调、然后收起
+   *  自己"。 */
+  onToggleBlock: () => void;
 }
 
 /**
- * 悬浮的"更多操作"圆形图标按钮，点开一个只有"举报用户"一项的下拉菜单——
- * 交互（点击外部/Esc 关闭、点菜单项自动收起）照抄 top-bar.tsx 里 detail
- * 变体用的 MoreMenuButton，那个组件没有导出，这里在本文件内单独实现
- * 一份，不跨文件复用，见函数级注释第 5 点。
+ * "更多操作"圆形图标按钮，点开一个下拉菜单——交互（点击外部/Esc 关闭、
+ * 点菜单项自动收起）照抄 top-bar.tsx 里 detail 变体用的 MoreMenuButton，
+ * 那个组件没有导出，这里在本文件内单独实现一份，不跨文件复用，见函数级
+ * 注释第 5 点。
  *
- * 去 Banner 改版：按钮配色从半透明黑底+白图标换成浅色版本，理由跟左上角
- * 返回按钮（FLOATING_ICON_BUTTON_CLASS_NAME）完全一样，见那个常量上面的
- * 注释，这里不重复贴一遍。
+ * 返回/更多同行任务卡：这个按钮不再 fixed 悬浮，改成跟返回箭头一起放进
+ * 页面顶部一条普通的页内行，见下面 UserProfilePage 里的 <div
+ * className="flex items-center justify-between ...">，组件本身的交互
+ * 逻辑（开关状态、点击外部/Esc 关闭）完全没变。
+ *
+ * 屏蔽此人/更多操作合并任务卡：菜单里原来只有"举报用户"一项，这次把
+ * 页面主体那个独立的"屏蔽此人/取消屏蔽"按钮也挪进来，变成同一个菜单里
+ * 的两项——用 <button>（不是 <Link>，因为这是一个会触发 mutation 的
+ * 操作，不是纯导航）。isBlocking/isBlockActionPending/onToggleBlock 这
+ * 几个状态和函数还是定义在 UserProfilePage 里（跟 useIsBlockingQuery/
+ * useBlockUserMutation/useUnblockUserMutation 这几个 hook 绑在一起），
+ * 这个组件只是多几个 props 把它们接进来，不重复实现一遍屏蔽逻辑。
  */
-function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
+function MoreMenu({ userId, isBlocking, isBlockActionPending, onToggleBlock }: MoreMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -67,30 +85,42 @@ function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
   }, [open]);
 
   return (
-    <div ref={containerRef} className="fixed right-4 top-4 z-10">
+    <div ref={containerRef} className="relative">
       <button
         type="button"
         aria-label="更多操作"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text shadow-settings-item"
+        className={TOP_ROW_ICON_BUTTON_CLASS_NAME}
       >
         <MoreHorizontal size={18} aria-hidden="true" />
       </button>
       {open ? (
         <div
           role="menu"
-          onClick={() => setOpen(false)}
-          className="absolute right-0 top-11 min-w-[132px] overflow-hidden rounded-xl bg-card py-1 shadow-lg"
+          className="absolute right-0 top-11 z-10 min-w-[132px] overflow-hidden rounded-xl bg-card py-1 shadow-lg"
         >
           <Link
             to={`/users/${userId}/report`}
+            onClick={() => setOpen(false)}
             className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
           >
             <Flag size={16} aria-hidden="true" />
             举报用户
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              onToggleBlock();
+            }}
+            disabled={isBlockActionPending}
+            className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <Ban size={16} aria-hidden="true" />
+            {isBlockActionPending ? "处理中…" : isBlocking ? "取消屏蔽" : "屏蔽此人"}
+          </button>
         </div>
       ) : null}
     </div>
@@ -181,10 +211,45 @@ function FloatingMoreMenu({ userId }: FloatingMoreMenuProps) {
  * 是否存在），只是去掉了 -mt-12/ring-4 ring-card 这两条"悬浮在交界线上"
  * 专用的样式，不是重新设计一套判断分支。
  *
- * 悬浮返回/更多操作按钮的配色（FLOATING_ICON_BUTTON_CLASS_NAME、
- * FloatingMoreMenu 内部按钮）也跟着从半透明黑底+白图标换成浅色版本——
- * 那套配色是专门给深色渐变头图设计的，banner 去掉之后浮在浅色背景上会
- * 看起来像两个灰扑扑的色块，见这两处各自的注释。
+ * 返回/更多操作按钮的配色（TOP_ROW_ICON_BUTTON_CLASS_NAME、MoreMenu
+ * 内部按钮）在去 Banner 改版时就已经从半透明黑底+白图标换成了浅色版本，
+ * 这次没有再改一次颜色。
+ *
+ * 返回/更多同行 + 头像缩小 + 屏蔽移入更多菜单 + 发消息满宽任务卡（这次
+ * 改动）：
+ *   1. 返回箭头 + 更多操作从 fixed 悬浮在内容上方，改成页面顶部一条
+ *      普通的页内行（`<div className="flex items-center justify-between
+ *      px-4 pt-3">`），不再挡住下面的头像。返回按钮本身不能塞进按数据
+ *      加载状态才渲染的那个条件分支里——不管加载中/加载失败/用户不存在，
+ *      都应该能点这个箭头离开这个页面，这条约束没有变，所以这一整行在
+ *      最外层无条件渲染；"更多操作"继续维持
+ *      `{data && !isOwnProfile && userId ? <MoreMenu .../> : null}`
+ *      这个既有条件，允许"只有返回箭头、右边空着"这种状态。原来给悬浮
+ *      效果专门加的 shadow-settings-item 投影去掉了（现在是普通页内
+ *      元素，不需要那层"浮在内容上方"的层次感）。下面内容区原来的
+ *      pt-6（给悬浮按钮让出空间用的）也去掉了，改成 pt-4——按钮改成
+ *      页内元素之后不再需要专门空出这块高度，pt-4 只是跟顶部工具栏之间
+ *      留一点常规间距。
+ *   2. 头像从 h-24 w-24（96px）缩小到 h-[60px] w-[60px]（60px，项目
+ *      Tailwind 配置没有 h-15 这个档位，用任意值语法，跟 post-detail-page.tsx
+ *      h-[50dvh] 是同一个写法）。
+ *   3. 年龄从"昵称文字块里单独一行纯文字"改成跟昵称同一行的胶囊——视觉
+ *      上跟"我的"页身份卡（profile-summary.tsx）新加的年龄胶囊是同一套
+ *      样式（`rounded-full bg-bg px-2 py-0.5 text-xs font-medium
+ *      text-text-muted`），没有另起一套胶囊样式。简介保持在头像/昵称/
+ *      年龄这一整行下面独立一行，相对位置不变（这部分去 Banner 改版
+ *      时就已经是这样，这次不用改）。
+ *   4. "屏蔽此人/取消屏蔽"从页面主体一个独立的 `<button>` 挪进了"更多
+ *      操作"下拉菜单，变成跟"举报用户"同一个菜单里的两项——见 MoreMenu
+ *      组件的注释。isBlocking/isBlockActionPending/handleToggleBlock
+ *      这几个状态和函数本身、`blockError` 的展示位置、屏蔽生效的后端
+ *      行为，这次都没有改，只是触发这个操作的入口从按钮挪到了菜单项。
+ *   5. "发消息"按钮从"跟屏蔽按钮并排各占一半"改成独占一整行的满宽按钮
+ *      （屏蔽按钮已经挪进菜单，不再需要分一半空间给它）；`handleMessage`/
+ *      `createConversation` mutation/错误处理这些内部逻辑完全没有变，
+ *      只改了外观。按钮下面、"作品"标题上面新加一条分割线
+ *      （`border-t border-divider`，跟 profile-page.tsx GroupCard 用的
+ *      是同一个列表分割线 token，不新造一个）。
  *
  * "发消息"按钮结构照抄 contact-seller-button.tsx（同一个"未登录点击跳
  * /login、已登录调用 mutation、成功后跳转到会话详情页"的模式），区别是
@@ -286,22 +351,33 @@ export function UserProfilePage() {
 
   return (
     <main data-testid="user-profile-page">
-      {/* 悬浮返回箭头：不放进下面按数据加载状态才渲染的分支里——不管加载
-          中/加载失败/用户不存在，都应该能点这个箭头离开这个页面，跟改版
-          前 TopBar 一直渲染返回按钮是同一个行为，只是这次视觉上是悬浮在
-          内容上方的半透明圆形，不是一整条顶部栏。 */}
-      <button
-        type="button"
-        aria-label="返回"
-        onClick={() => navigate(-1)}
-        className={`${FLOATING_ICON_BUTTON_CLASS_NAME} left-4`}
-      >
-        <ArrowLeft size={18} aria-hidden="true" />
-      </button>
+      {/* 返回/更多同行任务卡：这一整行是页面顶部一条普通的页内行，不再
+          fixed 悬浮，不挡下面的头像。返回按钮不放进下面按数据加载状态
+          才渲染的分支里——不管加载中/加载失败/用户不存在，都应该能点这个
+          箭头离开这个页面，这条约束没有变；"更多操作"继续维持既有的
+          "自己主页不显示、数据没加载完不展示"判断，允许这一行只有返回
+          箭头、右边空着这种状态。 */}
+      <div className="flex items-center justify-between px-4 pt-3">
+        <button
+          type="button"
+          aria-label="返回"
+          onClick={() => navigate(-1)}
+          className={TOP_ROW_ICON_BUTTON_CLASS_NAME}
+        >
+          <ArrowLeft size={18} aria-hidden="true" />
+        </button>
 
-      {/* "更多操作"（举报用户）：跟"发消息"/"屏蔽此人"同一个"自己主页不
-          显示、数据没加载完不展示"的判断，见上面函数级注释第 5 点。 */}
-      {data && !isOwnProfile && userId ? <FloatingMoreMenu userId={userId} /> : null}
+        {/* "更多操作"（举报用户/屏蔽此人）：跟"发消息"同一个"自己主页不
+            显示、数据没加载完不展示"的判断，见上面函数级注释第 5 点。 */}
+        {data && !isOwnProfile && userId ? (
+          <MoreMenu
+            userId={userId}
+            isBlocking={isBlocking}
+            isBlockActionPending={isBlockActionPending}
+            onToggleBlock={() => void handleToggleBlock()}
+          />
+        ) : null}
+      </div>
 
       {isPending ? (
         <p role="status" className="p-4 text-sm text-text-muted">
@@ -337,40 +413,39 @@ export function UserProfilePage() {
         // （bg-card，之前是因为要跟渐变色块的深浅交界线对齐才单独给的
         // 背景，不是常规单张卡片样式）——现在直接用页面画布默认背景
         // （不显式设置 class，继承 body 的 bg-bg），跟站内其它页面一致，
-        // 不再是这个页面特有的处理。顶部补一个 pt-6，给内容留出不被悬浮
-        // 返回/更多操作按钮遮住的空间（改版前这块空间是渐变色块撑出来
-        // 的，现在需要显式加）。原来这里是一个 Fragment 包着渐变色块 +
+        // 不再是这个页面特有的处理。原来这里是一个 Fragment 包着渐变色块 +
         // 内容区两个 sibling，banner 删掉之后只剩这一个 div，不再需要
-        // Fragment 包裹。
-        <div className="mx-auto max-w-md px-4 pb-20 pt-6 text-left md:pb-6">
-          {/* 头像/昵称/年龄同一行：去掉了 -mt-12（压在深色/浅色交界线上的
-              悬浮效果，banner 没了这条就没有意义）和 ring-4 ring-card
-              （白色描边同理是给交界线上的头像用的），尺寸维持 h-24 w-24
-              不变。items-end 改成 items-center——原来靠"文字基线对齐头像
-              底部"制造头像和昵称并排的视觉效果，现在两者不再有 deliberate
-              的高度差，居中对齐更自然。年龄从原来紧跟在简介下面单独一行，
-              挪进昵称这个文字块里（昵称在上、年龄在下），简介保持在头像/
-              昵称/年龄这一整行下面、独立成一行，位置跟改版前相对关系
-              不变。 */}
+        // Fragment 包裹。返回/更多同行任务卡：顶部原来的 pt-6（给悬浮
+        // 按钮让出空间）改成 pt-4——按钮已经挪进上面那条页内工具栏，这里
+        // 不再需要专门空出高度，pt-4 只是跟工具栏之间留一点常规间距。
+        <div className="mx-auto max-w-md px-4 pb-20 pt-4 text-left md:pb-6">
+          {/* 头像/昵称/年龄同一行：头像从 h-24 w-24（96px）缩小到
+              h-[60px] w-[60px]（60px）。年龄从"昵称文字块里单独一行纯
+              文字"改成跟昵称同一行的胶囊（视觉上跟"我的"页身份卡
+              profile-summary.tsx 的年龄胶囊是同一套样式）。简介保持在
+              头像/昵称/年龄这一整行下面、独立成一行，位置跟改版前相对
+              关系不变。 */}
           <div className="flex items-center gap-4">
             {data.avatarUrl ? (
               <img
                 src={data.avatarUrl}
                 alt=""
-                className="h-24 w-24 shrink-0 rounded-full object-cover"
+                className="h-[60px] w-[60px] shrink-0 rounded-full object-cover"
               />
             ) : (
               <div
                 aria-hidden="true"
-                className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted"
+                className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full bg-bg text-2xl font-semibold text-text-muted"
               >
                 {avatarInitial}
               </div>
             )}
-            <div className="min-w-0">
-              <h1 className="truncate text-xl font-bold text-text">{data.displayName}</h1>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="min-w-0 truncate text-xl font-bold text-text">{data.displayName}</h1>
               {data.age !== null ? (
-                <p className="mt-0.5 text-sm text-text-muted">{data.age} 岁</p>
+                <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
+                  {data.age} 岁
+                </span>
               ) : null}
             </div>
           </div>
@@ -392,25 +467,26 @@ export function UserProfilePage() {
             </p>
           ) : null}
 
+          {/* 发消息满宽 + 屏蔽移入更多菜单任务卡："屏蔽此人/取消屏蔽"已经
+              挪进上面页面顶部的"更多操作"菜单（见 MoreMenu 组件），这里
+              只剩"发消息"一个按钮，改成撑满整行——handleMessage/
+              createConversation 这套逻辑完全没有变，只改了外观（从跟
+              屏蔽按钮并排各占一半，改成独占一整行）。按钮下面加一条
+              分割线再接"作品"标题，只在这个按钮真的渲染时才加（自己看
+              自己的主页不显示这个按钮，也就不需要这条只为它而加的分割
+              线，直接从简介/年龄区域过渡到"作品"标题）。 */}
           {!isOwnProfile ? (
-            <div className="mt-4 flex items-center gap-3">
+            <>
               <button
                 type="button"
                 onClick={handleMessage}
                 disabled={createConversation.isPending}
-                className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-full bg-primary text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {createConversation.isPending ? "创建会话中…" : "发消息"}
               </button>
-              <button
-                type="button"
-                onClick={() => void handleToggleBlock()}
-                disabled={isBlockActionPending}
-                className="rounded-full border border-border px-6 py-2 text-sm font-semibold text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isBlockActionPending ? "处理中…" : isBlocking ? "取消屏蔽" : "屏蔽此人"}
-              </button>
-            </div>
+              <div className="mt-6 border-t border-divider" />
+            </>
           ) : null}
 
           {/* "作品"（改版前是"发布的作品"，这次按任务卡要求精简成两个

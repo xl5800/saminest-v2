@@ -1,16 +1,36 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { navigateMock } = vi.hoisted(() => ({
+  navigateMock: vi.fn()
+}));
+
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 import { ProfileSummary } from "./profile-summary";
+
+// 整卡可点任务卡：ProfileSummary 现在无条件调用 useNavigate()（不管
+// profileHref 有没有传，这个 hook 本身都要在 Router 上下文里调用），所以
+// 这个文件里所有测试都要包一层 <MemoryRouter>，不再是"只有用到 Link 的
+// 测试才需要包"——跟这个文件之前的写法（只有 profileHref/avatarHref 这
+// 两组测试才手动包 MemoryRouter）不一样，这是整卡可点这个新实现方式带来
+// 的必然要求，不是随手加的。
+function renderSummary(ui: Parameters<typeof render>[0]) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 describe("ProfileSummary", () => {
   afterEach(() => {
     cleanup();
+    navigateMock.mockReset();
   });
 
   it("renders an <img> avatar when avatarUrl is present", () => {
-    const { container } = render(
+    const { container } = renderSummary(
       <ProfileSummary displayName="Bob" avatarUrl="https://example.com/bob.jpg" />
     );
 
@@ -21,60 +41,142 @@ describe("ProfileSummary", () => {
   });
 
   it("renders an uppercase nickname-initial placeholder (no <img>) when avatarUrl is null", () => {
-    const { container } = render(<ProfileSummary displayName="bob" avatarUrl={null} />);
+    const { container } = renderSummary(<ProfileSummary displayName="bob" avatarUrl={null} />);
 
     expect(container.querySelector("img")).not.toBeInTheDocument();
     expect(screen.getByText("B")).toBeInTheDocument();
   });
 
   it("falls back to a '?' placeholder initial when displayName is null/blank", () => {
-    render(<ProfileSummary displayName={null} avatarUrl={null} />);
+    renderSummary(<ProfileSummary displayName={null} avatarUrl={null} />);
 
     expect(screen.getByText("?")).toBeInTheDocument();
   });
 
   // 22 号卡（用户主页改版）清理掉不再有调用方的 "default" 变体之后，这个
   // 组件只剩"我的"页用的这一种横排卡片形态（24 号卡曾经去掉 bio、加回
-  // 简介+年龄任务卡又加回来了，见下面 bio/age 那组测试，这条断言跟
-  // 有没有 bio/age 无关）——那个页面的 <h1> 已经是 sr-only 的"我的"，这里
-  // 不应该再渲染出第二个 <h1>。
+  // 简介+年龄任务卡又加回来了，见下面 bio/age 那组测试）——那个页面的
+  // <h1> 已经是 sr-only 的"我的"，这里不应该再渲染出第二个 <h1>。
   it("does not render an <h1> — the caller's page already owns the single <h1>", () => {
-    render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
+    renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
-  describe("profileHref (公开主页 Facebook 风格头图改版：右上角'查看个人主页'图标，取代原来的 editHref)", () => {
-    it("does not render a profile icon-button when profileHref is not provided", () => {
-      render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
+  // 整卡可点任务卡：原来右上角的"查看个人主页"圆形图标按钮整个去掉了，
+  // 改成整张卡片可点（role="link"）+ 右侧一个纯装饰的箭头。
+  describe("整卡可点 (整卡可点 + 铅笔编辑角标任务卡，取代原来右上角的图标按钮)", () => {
+    it("is not clickable (no role=link, no chevron) when profileHref is not provided", () => {
+      const { container } = renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
       expect(screen.queryByRole("link", { name: "查看个人主页" })).not.toBeInTheDocument();
+      // 没有 profileHref 时最外层容器不应该带 role="link"。
+      expect(container.querySelector('[role="link"]')).not.toBeInTheDocument();
     });
 
-    it("renders a small circular '查看个人主页' icon-button link when profileHref is provided", () => {
-      render(
-        <MemoryRouter>
-          <ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />
-        </MemoryRouter>
+    it("makes the whole card a role=link that navigates to profileHref on click", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />);
+
+      const card = screen.getByRole("link", { name: "查看个人主页" });
+      fireEvent.click(card);
+
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+
+    it("navigates when the card is focused and Enter is pressed (keyboard access)", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />);
+
+      const card = screen.getByRole("link", { name: "查看个人主页" });
+      fireEvent.keyDown(card, { key: "Enter" });
+
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+
+    it("navigates when clicking the nickname text (whole card is clickable, not just the avatar)", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />);
+
+      fireEvent.click(screen.getByText("Alice"));
+
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+
+    it("navigates when clicking the bio text too", () => {
+      renderSummary(
+        <ProfileSummary
+          displayName="Alice"
+          avatarUrl={null}
+          profileHref="/users/user-1"
+          bio="Hi there, I like hiking."
+        />
       );
 
-      expect(screen.getByRole("link", { name: "查看个人主页" })).toHaveAttribute(
-        "href",
-        "/users/user-1"
+      fireEvent.click(screen.getByText("Hi there, I like hiking."));
+
+      expect(navigateMock).toHaveBeenCalledWith("/users/user-1");
+    });
+
+    it("renders a decorative chevron on the right when profileHref is provided", () => {
+      const { container } = renderSummary(
+        <ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />
       );
+
+      expect(container.querySelector("svg.lucide-chevron-right")).toBeInTheDocument();
+    });
+
+    it("does not render a chevron when profileHref is not provided", () => {
+      const { container } = renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} />);
+
+      expect(container.querySelector("svg.lucide-chevron-right")).not.toBeInTheDocument();
+    });
+  });
+
+  // 整卡可点 + 铅笔编辑角标任务卡：头像右下角新增的编辑角标，点击跳
+  // /profile/edit，且不能同时触发整卡跳转（事件不冒泡）。
+  describe("头像右下角铅笔编辑角标 (整卡可点 + 铅笔编辑角标任务卡)", () => {
+    // aria-label 用"编辑资料"而不是"编辑个人信息"——调用方 profile-page.tsx
+    // 下面"账号与服务"卡片里已经有一行同目标、文案是"编辑个人信息"的
+    // GroupRow，两个可访问名字不能撞在一起，见 profile-summary.tsx 的
+    // 注释。
+    it("renders a '编辑资料' link pinned to the avatar, pointing to /profile/edit", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} />);
+
+      expect(screen.getByRole("link", { name: "编辑资料" })).toHaveAttribute(
+        "href",
+        "/profile/edit"
+      );
+    });
+
+    it("renders the edit badge even when profileHref is not provided (card itself is not clickable)", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} />);
+
+      expect(screen.getByRole("link", { name: "编辑资料" })).toBeInTheDocument();
+    });
+
+    it("clicking the pencil badge does not also trigger the whole-card navigation (event does not bubble)", () => {
+      renderSummary(
+        <ProfileSummary displayName="Alice" avatarUrl={null} profileHref="/users/user-1" />
+      );
+
+      fireEvent.click(screen.getByRole("link", { name: "编辑资料" }));
+
+      // 铅笔本身是一个真的 <Link to="/profile/edit">，浏览器/jsdom 里
+      // 点击它不会真的触发 useNavigate() 的 navigate("/users/user-1")——
+      // 只要 navigateMock 没有被调用过，就说明事件确实没有冒泡到外层
+      // 整卡的 onClick。
+      expect(navigateMock).not.toHaveBeenCalled();
     });
   });
 
   describe("bio/age (加回简介+年龄任务卡)", () => {
     it("does not render a bio or age line when neither is provided", () => {
-      render(<ProfileSummary displayName="Alice" avatarUrl={null} />);
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} />);
 
       expect(screen.queryByText(/岁/)).not.toBeInTheDocument();
     });
 
     it("renders the bio text below the avatar/name row when bio is set", () => {
-      render(
+      renderSummary(
         <ProfileSummary displayName="Alice" avatarUrl={null} bio="Hi there, I like hiking." />
       );
 
@@ -84,38 +186,41 @@ describe("ProfileSummary", () => {
     it("does not render a bio line when bio is null", () => {
       // 没有具体文案可断言"不存在"，改断言卡片里只有昵称这一个 <p>
       // 段落，没有多出一个 bio 段落。
-      const { container } = render(<ProfileSummary displayName="Alice" avatarUrl={null} bio={null} />);
+      const { container } = renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} bio={null} />);
       expect(container.querySelectorAll("p")).toHaveLength(1);
     });
 
-    it("shows the age as 'N 岁' when age is a number", () => {
-      render(<ProfileSummary displayName="Alice" avatarUrl={null} age={28} />);
+    // 整卡可点任务卡：年龄从"简介下面单独一行纯文字"改成跟昵称同一行的
+    // 胶囊，不再是一个 <p>，这里改用 getByText 断言文案本身，不再依赖
+    // "是不是 <p> 标签"这件事。
+    it("shows the age as 'N 岁' in a pill next to the nickname when age is a number", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} age={28} />);
 
-      expect(screen.getByText("28 岁")).toBeInTheDocument();
+      const pill = screen.getByText("28 岁");
+      expect(pill).toBeInTheDocument();
+      // 胶囊跟昵称是同一个父容器的两个直接子元素（同一行）。
+      expect(pill.parentElement).toContainElement(screen.getByText("Alice"));
     });
 
-    it("does not render an age line when age is null", () => {
-      render(<ProfileSummary displayName="Alice" avatarUrl={null} age={null} />);
+    it("does not render an age pill when age is null", () => {
+      renderSummary(<ProfileSummary displayName="Alice" avatarUrl={null} age={null} />);
 
       expect(screen.queryByText(/岁/)).not.toBeInTheDocument();
     });
 
-    it("renders bio above age when both are provided", () => {
-      const { container } = render(
+    it("renders the bio line below the nickname/age row when both are provided", () => {
+      renderSummary(
         <ProfileSummary displayName="Alice" avatarUrl={null} bio="Hi there." age={28} />
       );
 
-      const paragraphs = Array.from(container.querySelectorAll("p")).map((p) => p.textContent);
-      const bioIndex = paragraphs.indexOf("Hi there.");
-      const ageIndex = paragraphs.indexOf("28 岁");
-      expect(bioIndex).toBeGreaterThanOrEqual(0);
-      expect(ageIndex).toBeGreaterThan(bioIndex);
+      expect(screen.getByText("Hi there.")).toBeInTheDocument();
+      expect(screen.getByText("28 岁")).toBeInTheDocument();
     });
   });
 
-  describe("children (24 号卡：入口紧跟在头像/昵称行下面，不加分割线)", () => {
-    it("renders children directly below the avatar/name/edit-icon row, with no border/divider element between them", () => {
-      const { container } = render(
+  describe("children (24 号卡：入口紧跟在卡片固定内容下面，不加分割线)", () => {
+    it("renders children directly below the card's fixed content, with no border/divider element between them", () => {
+      const { container } = renderSummary(
         <ProfileSummary displayName="Alice" avatarUrl={null}>
           <div data-testid="stats-row">我的发布 我的收藏</div>
         </ProfileSummary>
@@ -128,28 +233,6 @@ describe("ProfileSummary", () => {
       const card = container.firstElementChild;
       expect(card?.className).not.toMatch(/\bborder\b/);
       expect(card?.className).not.toMatch(/\bdivide-/);
-    });
-  });
-
-  describe("avatarHref (11 号卡：头像跳转到自己的公开主页预览)", () => {
-    it("does not wrap the avatar in a link when avatarHref is not provided", () => {
-      const { container } = render(<ProfileSummary displayName="Bob" avatarUrl={null} />);
-
-      expect(container.querySelector("a")).not.toBeInTheDocument();
-    });
-
-    it("wraps the avatar (only) in a link to avatarHref when provided", () => {
-      render(
-        <MemoryRouter>
-          <ProfileSummary displayName="Bob" avatarUrl={null} avatarHref="/users/user-1" />
-        </MemoryRouter>
-      );
-
-      const link = screen.getByRole("link", { name: "预览我的主页" });
-      expect(link).toHaveAttribute("href", "/users/user-1");
-      // 昵称本身不应该也被包进这个链接——只有头像可点击，卡片其余部分
-      // 视觉/结构不变。
-      expect(screen.getByText("Bob").closest("a")).toBeNull();
     });
   });
 });

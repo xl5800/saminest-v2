@@ -155,11 +155,21 @@ function GroupCard({ children }: { children: ReactNode }) {
  *
  * 公开主页 Facebook 风格头图改版（联动）：头像卡片右上角那个图标按钮的
  * 语义变了——原来是 editHref（编辑资料铅笔），这次换成 profileHref
- * （查看个人主页，指向跟 avatarHref 完全相同的 `/users/:currentUserId`，
- * 头像本身继续保留可点跳转，这是有意保留的双重入口，不是冲突）。"编辑
- * 资料"这个入口没有消失，只是从卡片右上角挪到了下面"账号与服务"分组
- * 卡片的第一行（GroupRow to="/profile/edit"）——路由、点击行为、目标
- * 页面都没变，纯粹是入口位置的调整。
+ * （查看个人主页，指向 `/users/:currentUserId`）。"编辑资料"这个入口
+ * 没有消失，只是从卡片右上角挪到了下面"账号与服务"分组卡片的第一行
+ * （GroupRow to="/profile/edit"）——路由、点击行为、目标页面都没变，
+ * 纯粹是入口位置的调整。
+ *
+ * 整卡可点 + 铅笔编辑角标任务卡：ProfileSummary 右上角那个"查看个人
+ * 主页"圆形图标按钮又被去掉了（BARRY 反馈容易被误认成头像加载失败的
+ * 占位图标），改成整张身份卡可点（还是跳同一个 profileHref），右侧换成
+ * 纯装饰的 `›` 箭头；"编辑资料"这次挪回了头像右下角的一个铅笔角标（跟
+ * 下面"账号与服务"卡片里的"编辑个人信息"行是同一个目标 /profile/edit
+ * 的两个入口，双重入口是有意保留，不是冲突，理由跟之前 avatarHref/
+ * profileHref 同指一个目标是同一个道理）——`avatarHref` 这个 prop 因此
+ * 被整个删掉了：整卡都跳 profileHref 之后，头像自己单独再包一层 Link
+ * 已经没有必要，继续保留还会导致头像的 Link 嵌套在整卡可点击区域内部
+ * 这种"可点击区域嵌套可点击区域"的问题，见 profile-summary.tsx 的注释。
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -201,7 +211,6 @@ export function ProfilePage() {
             <ProfileSummary
               displayName={profile?.displayName ?? null}
               avatarUrl={profile?.avatarUrl ?? null}
-              avatarHref={currentUserId ? `/users/${currentUserId}` : undefined}
               profileHref={currentUserId ? `/users/${currentUserId}` : undefined}
               bio={profile?.bio ?? null}
               age={profile?.age ?? null}
