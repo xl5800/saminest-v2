@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PostList } from "../../features/posts/post-list";
+import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { useCreateProfileConversationMutation } from "../../features/conversations/use-create-profile-conversation-mutation";
 import { useBlockUserMutation } from "../../features/blocks/use-block-user-mutation";
 import { useIsBlockingQuery } from "../../features/blocks/use-is-blocking-query";
@@ -287,6 +288,35 @@ function MoreMenu({ userId, isBlocking, isBlockActionPending, onToggleBlock }: M
  * 22 号卡那版"Facebook 风格头图"。首字母占位的字号跟着从 text-2xl 调到
  * text-3xl（按容器放大比例适当调大，不是硬性要求的数值）。只改这一处
  * 尺寸，"我的"页身份卡（profile-summary.tsx）的头像维持 56px 不变。
+ *
+ * 用户主页视觉改版任务卡（身份区卡片化 + "作品"区排除求租）：
+ *   1. 身份区（头像行/昵称年龄胶囊/简介/发消息按钮）从直接铺在页面背景上，
+ *      改成包进一张卡片（bg-card + rounded-card-lg + shadow-card +
+ *      border border-border），参考 BARRY 用 Claude Design 画的
+ *      variant-a mockup（跟页面背景 --color-bg 拉开层次）。内部四个元素
+ *      的结构/逻辑完全没变，只是外面套了一层卡片容器；"屏蔽此人/取消
+ *      屏蔽"点击失败的 blockError 提示、"发消息"失败的 error 提示，位置
+ *      还是原来夹在简介和发消息按钮之间那样，一起装进了卡片——它们视觉上
+ *      本来就是这个身份区的一部分。发消息按钮下面那条分割线（只在
+ *      !isOwnProfile 时渲染）不属于 mockup 列出的"要装进卡片"的四个元素，
+ *      留在卡片外面，继续起"身份区和作品区之间的过渡"这个作用。
+ *   2. "作品"标题维持纯文字 <h2>，没有加 mockup 里的"· N"数量计数，也没有
+ *      加"仅展示当前有效的租房/二手帖子"这行说明文字——这两处 BARRY 在
+ *      任务卡里明确排除在这次范围外，字重从 text-base font-semibold 调到
+ *      text-lg font-bold，视觉力度更接近 mockup，纯样式调整，不影响
+ *      "只是纯文字标题"这个结构判断。
+ *   3. <PostList authorId={userId} /> 新增 excludeCategoryId 参数，排除
+ *      求租分类——跟 home-page.tsx"推荐" Tab 排除求租用的是完全同一个
+ *      模式（categories?.find(slug === "wanted")?.id），不是新建一套查找
+ *      逻辑。这个页面没有"求租" Tab 需要放行求租帖子的场景（不像首页要
+ *      在 activeCategorySlug === "wanted" 时不排除），所以这里不需要
+ *      home-page.tsx 那个"只在未选中分类时排除"的条件分支，直接无条件把
+ *      wantedCategoryId 传给 PostList。PostList → usePostsInfiniteQuery →
+ *      listApprovedPosts 这条链路本身已经支持 excludeCategoryId（31 号卡
+ *      验证过），这次只是新增一个调用点传参，没有改这三层内部逻辑。
+ *   mockup 里头像旁边的"地区"信息行没有落地——现有 PublicProfile/
+ *   getPublicProfile() 没有查这个字段，是 mockup 阶段随手加的装饰，不在
+ *   这次范围内，不为了它去改查询或加字段。
  */
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -295,6 +325,12 @@ export function UserProfilePage() {
   const currentUserId = session?.user.id;
 
   const { data, isPending, isError } = usePublicProfileQuery(userId ?? "");
+  // 用户主页视觉改版任务卡：公开主页"作品"网格不展示求租帖子——跟
+  // home-page.tsx"推荐" Tab 排除求租用的是同一个 categories?.find(slug ===
+  // "wanted") 查找方式，不是另外发明一套；这个页面没有"求租" Tab 这种
+  // 需要放行的场景，直接无条件传给 PostList 的 excludeCategoryId。
+  const { data: categories } = useCategoriesQuery();
+  const wantedCategoryId = categories?.find((category) => category.slug === "wanted")?.id;
   const createConversation = useCreateProfileConversationMutation();
   const [error, setError] = useState<string | null>(null);
 
@@ -436,58 +472,60 @@ export function UserProfilePage() {
               profile-summary.tsx 的年龄胶囊是同一套样式）。简介保持在
               头像/昵称/年龄这一整行下面、独立成一行，位置跟改版前相对
               关系不变。 */}
-          <div className="flex items-center gap-4">
-            {data.avatarUrl ? (
-              <img
-                src={data.avatarUrl}
-                alt=""
-                className="h-[88px] w-[88px] shrink-0 rounded-full object-cover"
-              />
-            ) : (
-              <div
-                aria-hidden="true"
-                className="flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted"
-              >
-                {avatarInitial}
+          {/* 用户主页视觉改版任务卡：身份区（头像行/昵称年龄胶囊/简介/
+              发消息按钮）整块包进一张卡片，跟页面背景 --color-bg 拉开
+              层次——参考 mockup variant-a，bg-card + rounded-card-lg +
+              shadow-card 是这个仓库卡片容器的通用组合（跟
+              activity-card.tsx 同一套），这里额外加 border border-border
+              是因为验证要求明确写了"有边框+投影，跟背景区分开"，浅色
+              --color-bg 背景下只靠投影不够醒目。内边距 px-5（20px）/
+              py-[18px] 参照 mockup 大致的间距感，不是像素级精确数值。
+              内部结构（avatar-row / name+age pill / bio / 发消息按钮）
+              完全不变，只是外面套了这层卡片包装。 */}
+          <div className="rounded-card-lg border border-border bg-card px-5 py-[18px] shadow-card">
+            <div className="flex items-center gap-4">
+              {data.avatarUrl ? (
+                <img
+                  src={data.avatarUrl}
+                  alt=""
+                  className="h-[88px] w-[88px] shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <div
+                  aria-hidden="true"
+                  className="flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-full bg-bg text-3xl font-semibold text-text-muted"
+                >
+                  {avatarInitial}
+                </div>
+              )}
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="min-w-0 truncate text-xl font-bold text-text">{data.displayName}</h1>
+                {data.age !== null ? (
+                  <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
+                    {data.age} 岁
+                  </span>
+                ) : null}
               </div>
-            )}
-            <div className="flex min-w-0 items-center gap-2">
-              <h1 className="min-w-0 truncate text-xl font-bold text-text">{data.displayName}</h1>
-              {data.age !== null ? (
-                <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
-                  {data.age} 岁
-                </span>
-              ) : null}
             </div>
-          </div>
 
-          {data.bio ? (
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">
-              {data.bio}
-            </p>
-          ) : null}
+            {data.bio ? (
+              <p className="mt-3 whitespace-pre-wrap break-words text-sm text-text">
+                {data.bio}
+              </p>
+            ) : null}
 
-          {error ? (
-            <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-              {error}
-            </p>
-          ) : null}
-          {blockError ? (
-            <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-              {blockError}
-            </p>
-          ) : null}
+            {error ? (
+              <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {error}
+              </p>
+            ) : null}
+            {blockError ? (
+              <p role="alert" className="mt-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                {blockError}
+              </p>
+            ) : null}
 
-          {/* 发消息满宽 + 屏蔽移入更多菜单任务卡："屏蔽此人/取消屏蔽"已经
-              挪进上面页面顶部的"更多操作"菜单（见 MoreMenu 组件），这里
-              只剩"发消息"一个按钮，改成撑满整行——handleMessage/
-              createConversation 这套逻辑完全没有变，只改了外观（从跟
-              屏蔽按钮并排各占一半，改成独占一整行）。按钮下面加一条
-              分割线再接"作品"标题，只在这个按钮真的渲染时才加（自己看
-              自己的主页不显示这个按钮，也就不需要这条只为它而加的分割
-              线，直接从简介/年龄区域过渡到"作品"标题）。 */}
-          {!isOwnProfile ? (
-            <>
+            {!isOwnProfile ? (
               <button
                 type="button"
                 onClick={handleMessage}
@@ -496,9 +534,17 @@ export function UserProfilePage() {
               >
                 {createConversation.isPending ? "创建会话中…" : "发消息"}
               </button>
-              <div className="mt-6 border-t border-divider" />
-            </>
-          ) : null}
+            ) : null}
+          </div>
+
+          {/* 发消息满宽 + 屏蔽移入更多菜单任务卡："屏蔽此人/取消屏蔽"已经
+              挪进上面页面顶部的"更多操作"菜单（见 MoreMenu 组件），身份卡
+              下面这条分割线再接"作品"标题，只在"发消息"按钮真的渲染时才加
+              （自己看自己的主页不显示这个按钮，也就不需要这条只为它而加的
+              分割线，直接从身份卡过渡到"作品"标题）。用户主页视觉改版
+              任务卡：这条分割线本身不属于"头像/简介/发消息按钮"这一组要
+              装进卡片的元素，维持在卡片外面、身份卡和"作品"标题之间。 */}
+          {!isOwnProfile ? <div className="mt-6 border-t border-divider" /> : null}
 
           {/* "作品"（改版前是"发布的作品"，这次按任务卡要求精简成两个
               字）：去掉了"发布/搭子/收藏"三个切换标签（这个仓库里本来就
@@ -506,9 +552,9 @@ export function UserProfilePage() {
               数据请求和卡片组件，只是多传一个 authorId，不是重新做一套。
               不管是不是自己的主页都展示这个区块，纯展示内容，不是一个
               需要区分身份的操作入口。 */}
-          <h2 className="mt-6 text-base font-semibold text-text">作品</h2>
+          <h2 className="mt-6 text-lg font-bold text-text">作品</h2>
           <div className="mt-3">
-            <PostList authorId={userId} />
+            <PostList authorId={userId} excludeCategoryId={wantedCategoryId} />
           </div>
         </div>
       ) : null}

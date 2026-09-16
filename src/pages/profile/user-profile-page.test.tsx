@@ -11,7 +11,8 @@ const {
   useUnblockUserMutation,
   blockMutateAsyncMock,
   unblockMutateAsyncMock,
-  listApprovedPosts
+  listApprovedPosts,
+  listActiveCategories
 } = vi.hoisted(() => ({
   usePublicProfileQuery: vi.fn(),
   useCreateProfileConversationMutation: vi.fn(),
@@ -22,7 +23,8 @@ const {
   useUnblockUserMutation: vi.fn(),
   blockMutateAsyncMock: vi.fn(),
   unblockMutateAsyncMock: vi.fn(),
-  listApprovedPosts: vi.fn()
+  listApprovedPosts: vi.fn(),
+  listActiveCategories: vi.fn()
 }));
 
 vi.mock("../../features/profile/use-public-profile-query", () => ({
@@ -48,6 +50,13 @@ vi.mock("../../features/blocks/use-unblock-user-mutation", () => ({
 // "mock 网络边界，不 mock 组件树"的原则，见 post-list.test.tsx。
 vi.mock("../../repositories/posts-repository", () => ({
   listApprovedPosts
+}));
+// 用户主页视觉改版任务卡："作品"网格新增 excludeCategoryId 参数排除求租
+// 分类，取分类 id 用的是真实的 useCategoriesQuery，跟上面 listApprovedPosts
+// 同一个"mock 网络边界，不 mock 组件树"的原则，只 mock 它最终依赖的仓库
+// 函数——跟 home-page.test.tsx 里 31 号卡那组测试的 mock 方式一致。
+vi.mock("../../repositories/categories-repository", () => ({
+  listActiveCategories
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -94,6 +103,7 @@ describe("UserProfilePage", () => {
     blockMutateAsyncMock.mockReset();
     unblockMutateAsyncMock.mockReset();
     listApprovedPosts.mockReset();
+    listActiveCategories.mockReset();
 
     useCreateProfileConversationMutation.mockReturnValue({
       mutate: mutateMock,
@@ -105,6 +115,10 @@ describe("UserProfilePage", () => {
     // 这个文件里绝大多数测试不关心"作品"网格具体展示什么，默认给
     // 一个已解决的空结果，避免每个测试都要重复 mock 这一个查询。
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+    // 同理，大多数测试不关心求租分类排除逻辑，默认给空分类列表——
+    // wantedCategoryId 算出来是 undefined，excludeCategoryId 不生效，
+    // 不影响其它测试断言 listApprovedPosts 的调用参数。
+    listActiveCategories.mockResolvedValue([]);
   });
 
   it("shows a loading message while the query is pending", () => {
@@ -892,6 +906,112 @@ describe("UserProfilePage", () => {
           pageSize: 20
         });
       });
+    });
+
+    // 用户主页视觉改版任务卡：跟 home-page.tsx"推荐" Tab 排除求租用的是
+    // 同一个 categories?.find(slug === "wanted") 查找方式（见
+    // home-page.test.tsx"求租分类排除"那组用例），这里不需要区分"求租
+    // Tab"场景，直接无条件排除。
+    it("excludes the wanted category's posts from the grid", async () => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" },
+        { id: "cat-2", slug: "wanted", nameZh: "求租" }
+      ]);
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ excludeCategoryId: "cat-2" })
+        );
+      });
+    });
+
+    it("does not exclude anything when there is no category with a 'wanted' slug", async () => {
+      listActiveCategories.mockResolvedValue([{ id: "cat-1", slug: "rent", nameZh: "租房" }]);
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      await waitFor(() => {
+        expect(listApprovedPosts).toHaveBeenCalledWith(
+          expect.objectContaining({ excludeCategoryId: undefined })
+        );
+      });
+    });
+
+    it("does not render a '· N' post count next to the '作品' heading", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByRole("heading", { name: "作品" }).textContent).toBe("作品");
+    });
+
+    it("does not render the '仅展示当前有效的...' caption below the '作品' heading", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.queryByText(/仅展示/)).not.toBeInTheDocument();
+    });
+  });
+
+  // 用户主页视觉改版任务卡：身份区（头像行/昵称年龄胶囊/简介/发消息
+  // 按钮）包进一张卡片，跟页面背景拉开层次——只断言卡片容器本身的关键
+  // class（背景/圆角/投影/边框）和它包住了哪些元素，不重复断言卡片内部
+  // 已经有其它用例覆盖过的头像尺寸/年龄胶囊样式等细节。
+  describe("身份区卡片化 (用户主页视觉改版任务卡)", () => {
+    it("wraps the avatar row in a card container with the card background/radius/shadow/border classes", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const heading = screen.getByRole("heading", { name: "Bob" });
+      // 卡片容器是 avatar-row 的父元素（avatar-row 是 heading 再往上两层）。
+      const card = heading.parentElement?.parentElement?.parentElement;
+      expect(card?.className).toMatch(/\bbg-card\b/);
+      expect(card?.className).toMatch(/rounded-card-lg/);
+      expect(card?.className).toMatch(/shadow-card/);
+      expect(card?.className).toMatch(/\bborder\b/);
+    });
+
+    it("keeps the '发消息' button and bio inside the same card as the avatar row", () => {
+      usePublicProfileQuery.mockReturnValue({
+        data: samplePublicProfile,
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      const heading = screen.getByRole("heading", { name: "Bob" });
+      const card = heading.parentElement?.parentElement?.parentElement;
+      const messageButton = screen.getByRole("button", { name: "发消息" });
+      const bio = screen.getByText("Hi there, I like hiking.");
+      expect(card).toContainElement(messageButton);
+      expect(card).toContainElement(bio);
     });
   });
 });
