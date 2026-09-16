@@ -53,6 +53,7 @@ export type Database = {
         Row: {
           capacity: number | null
           channel: string
+          comment_count: number
           contact_method: string | null
           contact_value: string | null
           created_at: string
@@ -74,6 +75,7 @@ export type Database = {
         Insert: {
           capacity?: number | null
           channel?: string
+          comment_count?: number
           contact_method?: string | null
           contact_value?: string | null
           created_at?: string
@@ -95,6 +97,7 @@ export type Database = {
         Update: {
           capacity?: number | null
           channel?: string
+          comment_count?: number
           contact_method?: string | null
           contact_value?: string | null
           created_at?: string
@@ -210,36 +213,46 @@ export type Database = {
       }
       comments: {
         Row: {
+          activity_id: string | null
           content: string
           created_at: string
           deleted_at: string | null
           id: string
           parent_id: string | null
-          post_id: string
+          post_id: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          activity_id?: string | null
           content: string
           created_at?: string
           deleted_at?: string | null
           id?: string
           parent_id?: string | null
-          post_id: string
+          post_id?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          activity_id?: string | null
           content?: string
           created_at?: string
           deleted_at?: string | null
           id?: string
           parent_id?: string | null
-          post_id?: string
+          post_id?: string | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "comments_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "comments_parent_id_fkey"
             columns: ["parent_id"]
@@ -316,6 +329,7 @@ export type Database = {
           id: string
           last_message_at: string | null
           last_message_preview: string | null
+          last_message_sender_id: string | null
           origin_type: string
           post_id: string | null
           type: string
@@ -328,6 +342,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          last_message_sender_id?: string | null
           origin_type: string
           post_id?: string | null
           type?: string
@@ -340,6 +355,7 @@ export type Database = {
           id?: string
           last_message_at?: string | null
           last_message_preview?: string | null
+          last_message_sender_id?: string | null
           origin_type?: string
           post_id?: string | null
           type?: string
@@ -349,6 +365,13 @@ export type Database = {
           {
             foreignKeyName: "conversations_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_last_message_sender_id_fkey"
+            columns: ["last_message_sender_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -887,6 +910,7 @@ export type Database = {
           is_verified: boolean
           last_active_at: string | null
           location_id: string | null
+          phone: string | null
           role: string
           updated_at: string
         }
@@ -902,6 +926,7 @@ export type Database = {
           is_verified?: boolean
           last_active_at?: string | null
           location_id?: string | null
+          phone?: string | null
           role?: string
           updated_at?: string
         }
@@ -917,6 +942,7 @@ export type Database = {
           is_verified?: boolean
           last_active_at?: string | null
           location_id?: string | null
+          phone?: string | null
           role?: string
           updated_at?: string
         }
@@ -1080,12 +1106,13 @@ export type Database = {
       get_comment_snapshot: {
         Args: { target_id: string }
         Returns: {
+          activity_id: string | null
           content: string
           created_at: string
           deleted_at: string | null
           id: string
           parent_id: string | null
-          post_id: string
+          post_id: string | null
           updated_at: string
           user_id: string
         }
@@ -1146,6 +1173,8 @@ export type Database = {
           id: string
           location_id: string | null
           location_text: string | null
+          poster_age: number | null
+          poster_gender: string | null
           price_amount: number | null
           price_label: string | null
           published_at: string | null
@@ -1273,12 +1302,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1302,11 +1331,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1327,11 +1356,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1352,11 +1381,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -1369,11 +1398,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
