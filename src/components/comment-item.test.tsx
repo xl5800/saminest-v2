@@ -36,6 +36,7 @@ function makeNode(overrides: Partial<CommentNode> = {}): CommentNode {
   return {
     id: "c1",
     postId: "post-1",
+    activityId: null,
     userId: "user-2",
     parentId: null,
     content: "hello there",
@@ -46,6 +47,13 @@ function makeNode(overrides: Partial<CommentNode> = {}): CommentNode {
     children: [],
     ...overrides
   };
+}
+
+// 找搭子留言区任务卡：一个挂在活动下面（postId: null, activityId 非空）
+// 的节点夹具，用来验证回复/删除会正确切到 activityId 这个 target，不是
+// 硬编码 postId。
+function makeActivityNode(overrides: Partial<CommentNode> = {}): CommentNode {
+  return makeNode({ postId: null, activityId: "act-1", ...overrides });
 }
 
 // 33 号卡：必须跟 comment-item.tsx 里的同名常量保持一致——这里没有从源码
@@ -139,6 +147,30 @@ describe("CommentItem", () => {
     });
   });
 
+  // 找搭子留言区任务卡：节点挂在活动下面时，回复应该带 activityId 而不是
+  // postId（不能硬编码只认帖子）。
+  it("submits a reply with activityId (not postId) when the node belongs to an activity", async () => {
+    createCommentMutateAsync.mockResolvedValue({ id: "reply-2", createdAt: "now" });
+    const node = makeActivityNode({ id: "c1" });
+
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "回复" }));
+    fireEvent.change(screen.getByLabelText(/回复 Bob/), {
+      target: { value: "算我一个" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    await waitFor(() => {
+      expect(createCommentMutateAsync).toHaveBeenCalledWith({
+        activityId: "act-1",
+        userId: "user-1",
+        parentId: "c1",
+        content: "算我一个"
+      });
+    });
+  });
+
   it("shows a validation error and does not submit when the reply is empty", async () => {
     render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
 
@@ -166,6 +198,25 @@ describe("CommentItem", () => {
         commentId: "c1",
         userId: "user-1",
         postId: "post-1"
+      });
+    });
+  });
+
+  // 找搭子留言区任务卡：同一个道理，删除也要按节点实际挂的 target 走。
+  it("deletes with activityId (not postId) when the node belongs to an activity", async () => {
+    deleteCommentMutateAsync.mockResolvedValue(undefined);
+    const node = makeActivityNode({ id: "c1", userId: "user-1" });
+
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+    await waitFor(() => {
+      expect(deleteCommentMutateAsync).toHaveBeenCalledWith({
+        commentId: "c1",
+        userId: "user-1",
+        activityId: "act-1"
       });
     });
   });

@@ -6,6 +6,7 @@ import { buildCommentTree } from "./build-comment-tree";
 function makeComment(overrides: Partial<Comment> & Pick<Comment, "id">): Comment {
   return {
     postId: "post-1",
+    activityId: null,
     userId: "user-1",
     parentId: null,
     content: `content-${overrides.id}`,

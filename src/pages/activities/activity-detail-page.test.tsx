@@ -9,6 +9,9 @@ const {
   useActivityFavoriteIdsQuery,
   useToggleActivityFavoriteMutation,
   useCreateActivityConversationMutation,
+  useActivityCommentsQuery,
+  useCreateCommentMutation,
+  useDeleteCommentMutation,
   shareMock,
   mutateParticipationMock,
   mutateContactMock,
@@ -21,6 +24,9 @@ const {
   useActivityFavoriteIdsQuery: vi.fn(),
   useToggleActivityFavoriteMutation: vi.fn(),
   useCreateActivityConversationMutation: vi.fn(),
+  useActivityCommentsQuery: vi.fn(),
+  useCreateCommentMutation: vi.fn(),
+  useDeleteCommentMutation: vi.fn(),
   shareMock: vi.fn(),
   mutateParticipationMock: vi.fn(),
   mutateContactMock: vi.fn(),
@@ -55,6 +61,20 @@ vi.mock("../../features/activities/use-toggle-activity-favorite-mutation", () =>
 // hook，不 mock 更底层的 conversations-repository。
 vi.mock("../../features/activities/use-create-activity-conversation-mutation", () => ({
   useCreateActivityConversationMutation
+}));
+// 找搭子留言区任务卡：页面最下面接了 <CommentSection activityId={...} />，
+// 让它真实渲染（跟 post-detail-page.test.tsx mock CommentSection 依赖的
+// hook、而不是整个 mock 掉 CommentSection 组件是同一个模式），这个文件
+// 只关心 ActivityDetailPage 自己的渲染行为，留言区的详细行为由
+// comment-section.test.tsx/comment-item.test.tsx 覆盖。
+vi.mock("../../features/comments/use-activity-comments-query", () => ({
+  useActivityCommentsQuery
+}));
+vi.mock("../../features/comments/use-create-comment-mutation", () => ({
+  useCreateCommentMutation
+}));
+vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
+  useDeleteCommentMutation
 }));
 vi.mock("@capacitor/share", () => ({
   Share: { share: shareMock }
@@ -93,7 +113,8 @@ const sampleActivityDetail = {
   contactMethod: "wechat",
   contactValue: "abc123",
   status: "open",
-  requiresApproval: false
+  requiresApproval: false,
+  commentCount: 0
 };
 
 describe("ActivityDetailPage", () => {
@@ -110,6 +131,9 @@ describe("ActivityDetailPage", () => {
     useActivityFavoriteIdsQuery.mockReset();
     useToggleActivityFavoriteMutation.mockReset();
     useCreateActivityConversationMutation.mockReset();
+    useActivityCommentsQuery.mockReset();
+    useCreateCommentMutation.mockReset();
+    useDeleteCommentMutation.mockReset();
     shareMock.mockReset();
     mutateParticipationMock.mockReset();
     mutateContactMock.mockReset();
@@ -127,6 +151,11 @@ describe("ActivityDetailPage", () => {
       mutate: mutateContactMock,
       isPending: false
     });
+    // CommentSection 默认没有留言、不在加载中——这个文件的测试只关心
+    // ActivityDetailPage 自己的渲染行为，见上面 vi.mock 的注释。
+    useActivityCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    useCreateCommentMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+    useDeleteCommentMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
   });
 
   it("renders the TopBar detail variant's back button (page no longer relies on the global AppHeader for it)", () => {
@@ -1028,7 +1057,12 @@ describe("ActivityDetailPage", () => {
       });
 
       expect(screen.queryByRole("heading", { name: "已加入" })).not.toBeInTheDocument();
-      expect(screen.queryByText(/暂无/)).not.toBeInTheDocument();
+      // 用更精确的 role 查询代替笼统的 /暂无/ 文字匹配——页面下面的
+      // CommentSection 现在也有自己合法的"暂无评论"空态文案，笼统匹配会
+      // 误命中那个跟"已加入"名单完全无关的区块。
+      expect(
+        screen.queryByRole("list", { name: "已加入的参与者" })
+      ).not.toBeInTheDocument();
     });
 
     // 任务卡（"已加入"名单加头像/简介）：去掉分隔线，每行加头像/首字母
@@ -1152,6 +1186,82 @@ describe("ActivityDetailPage", () => {
         // 这一行只应该有昵称那一个 <p>，没有第二个 bio 段落。
         expect(item.querySelectorAll("p")).toHaveLength(1);
       });
+    });
+  });
+
+  // 找搭子留言区任务卡：这里只验证 CommentSection 接进了页面、并且传的是
+  // activityId 而不是 postId——留言区自己的详细行为（校验/加载态/评论树/
+  // 未登录提示）由 comment-section.test.tsx/comment-item.test.tsx 覆盖，
+  // 不在这里重复断言。
+  describe("留言区", () => {
+    it("renders the CommentSection heading, reading the count from activities.comment_count", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: { ...sampleActivityDetail, commentCount: 3 },
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByRole("heading", { name: "留言 (3)" })).toBeInTheDocument();
+    });
+
+    it("submits a top-level comment with activityId (not postId) from the activity detail page", async () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+      const createCommentMutateAsync = vi.fn().mockResolvedValue({
+        id: "c1",
+        createdAt: "now"
+      });
+      useCreateCommentMutation.mockReturnValue({
+        mutateAsync: createCommentMutateAsync,
+        isPending: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("写下你的评论…"), {
+        target: { value: "算我一个" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
+
+      await waitFor(() => {
+        expect(createCommentMutateAsync).toHaveBeenCalledWith({
+          activityId: "act-1",
+          userId: "user-2",
+          parentId: null,
+          content: "算我一个"
+        });
+      });
+    });
+
+    it("shows a 登录 link instead of the composer for a logged-out visitor", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.queryByPlaceholderText("写下你的评论…")).not.toBeInTheDocument();
+      // "登录" 链接在这个页面上不止一个入口（参加活动按钮那一块未登录时
+      // 也有），用 getAllByRole 只确认至少有一个指向 /login，不假设唯一。
+      const loginLinks = screen.getAllByRole("link", { name: "登录" });
+      expect(loginLinks.some((link) => link.getAttribute("href") === "/login")).toBe(true);
     });
   });
 });

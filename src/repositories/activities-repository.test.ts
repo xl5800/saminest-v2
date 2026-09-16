@@ -263,7 +263,7 @@ describe("getActivityDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, comment_count, location:locations(name), organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "act-1");
     expect(queryBuilder.eq).not.toHaveBeenCalledWith("status", expect.anything());
@@ -289,6 +289,7 @@ describe("getActivityDetail", () => {
         contact_value: "abc123",
         status: "open",
         requires_approval: true,
+        comment_count: 5,
         location: { name: "Rockville" },
         organizer: { display_name: "Alice", avatar_url: "https://img.example.com/alice.jpg" }
       },
@@ -316,7 +317,8 @@ describe("getActivityDetail", () => {
       contactMethod: "wechat",
       contactValue: "abc123",
       status: "open",
-      requiresApproval: true
+      requiresApproval: true,
+      commentCount: 5
     });
   });
 
@@ -339,6 +341,7 @@ describe("getActivityDetail", () => {
         contact_value: null,
         status: "open",
         requires_approval: false,
+        comment_count: 0,
         location: null,
         organizer: null
       },

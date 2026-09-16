@@ -9,6 +9,7 @@ import {
   ActivityParticipationButtonView,
   SECONDARY_BUTTON_CLASS_NAME
 } from "../../components/activity-participation-button";
+import { CommentSection } from "../../components/comment-section";
 import { PersonCard } from "../../components/person-card";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
@@ -165,6 +166,16 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  * 本人看的判断是同一个写法；未登录用户仍然能看到按钮（点击后跳
  * /login，不是隐藏，因为这时候还判断不出"是不是自己"）。
  *
+ * 找搭子留言区任务卡：页面最下面接入 `<CommentSection activityId={data.id} />`
+ * （参照 post-detail-page.tsx 接 `<CommentSection postId={id} />` 的同一个
+ * 位置——页面正文最下面），复用同一个 CommentSection 组件，只是传
+ * activityId 而不是 postId——见 comment-section.tsx 顶部注释里对这次
+ * 泛化的说明。这个页面本身除了多这一行渲染之外不需要任何改动：留言数量
+ * 从 activities.comment_count 来（这次顺带给 getActivityDetail 加了这一
+ * 列，见 activities-repository.ts），CommentSection 内部自己再查一次
+ * useActivityDetailQuery(activityId) 命中缓存，不会多发请求。
+ *
+
  * 任务卡（活动详情页——发起人不能报名自己的活动）：这个页面之前完全没有
  * 判断"当前登录用户是不是发起人"就允许点"参加活动"（唯一的例外是上面
  * 任务卡 4 加的那个纯前端的 isOrganizer 局部变量，只用来决定要不要展示
@@ -435,6 +446,8 @@ export function ActivityDetailPage() {
                 </div>
               )}
             </div>
+
+            <CommentSection activityId={data.id} />
           </div>
         ) : null}
       </div>

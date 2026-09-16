@@ -10,6 +10,7 @@ import {
 import { useCreateCommentMutation } from "../features/comments/use-create-comment-mutation";
 import { useDeleteCommentMutation } from "../features/comments/use-delete-comment-mutation";
 import { useCreateReportMutation } from "../features/reports/use-create-report-mutation";
+import type { CommentTarget } from "../repositories/comments-repository";
 import { REPORT_REASON_OPTIONS } from "../repositories/reports-repository";
 import { AppError } from "../utils/app-error";
 import type { CommentNode } from "../utils/build-comment-tree";
@@ -29,6 +30,20 @@ export interface CommentItemProps {
 // 编译不出对应的 CSS（见 CommentSection/CommentItem 的任务说明）。
 const MAX_INDENT_DEPTH = 4;
 const INDENT_PX_PER_LEVEL = 16;
+
+/**
+ * 找搭子留言区任务卡：从节点自己的 postId/activityId 反推出回复/删除这条
+ * 评论时该用哪个 target——comments_target_check 约束保证两者恰好一个非
+ * 空，postId 为 null 时 activityId 必然非空，这里的类型断言是安全的。
+ * 只写目标那一列（不带另一列 = null 的 key），这样传给
+ * createCommentMutation/deleteCommentMutation 的对象形状恰好是
+ * { postId } 或 { activityId } 之一，跟 comments-repository.ts 里
+ * createComment 的 payload 构造是同一个"只出现目标列，不显式带 null"的
+ * 约定。
+ */
+function targetFromNode(node: CommentNode): CommentTarget {
+  return node.postId !== null ? { postId: node.postId } : { activityId: node.activityId as string };
+}
 
 const REPORT_REASON_REQUIRED_MESSAGE = "请选择举报原因。";
 const REPORT_DEFAULT_ERROR_MESSAGE = "举报提交失败，请稍后重试。";
@@ -244,7 +259,7 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
 
     try {
       await createCommentMutation.mutateAsync({
-        postId: node.postId,
+        ...targetFromNode(node),
         userId: currentUserId,
         parentId: node.id,
         content: validation.content
@@ -272,7 +287,7 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
       await deleteCommentMutation.mutateAsync({
         commentId: node.id,
         userId: currentUserId,
-        postId: node.postId
+        ...targetFromNode(node)
       });
       setActiveAction(null);
     } catch {

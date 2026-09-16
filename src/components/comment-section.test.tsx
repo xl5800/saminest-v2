@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   usePostDetailQuery,
   usePostCommentsQuery,
+  useActivityDetailQuery,
+  useActivityCommentsQuery,
   useCreateCommentMutation,
   useDeleteCommentMutation,
   useCreateReportMutation,
@@ -11,6 +13,8 @@ const {
 } = vi.hoisted(() => ({
   usePostDetailQuery: vi.fn(),
   usePostCommentsQuery: vi.fn(),
+  useActivityDetailQuery: vi.fn(),
+  useActivityCommentsQuery: vi.fn(),
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
   useCreateReportMutation: vi.fn(),
@@ -19,6 +23,14 @@ const {
 
 vi.mock("../features/posts/use-post-detail-query", () => ({ usePostDetailQuery }));
 vi.mock("../features/comments/use-post-comments-query", () => ({ usePostCommentsQuery }));
+// 找搭子留言区任务卡：CommentSection 新增的活动分支依赖这两个 hook，
+// 同一个文件里一并 mock，跟帖子那两个是同一个模式。
+vi.mock("../features/activities/use-activity-detail-query", () => ({
+  useActivityDetailQuery
+}));
+vi.mock("../features/comments/use-activity-comments-query", () => ({
+  useActivityCommentsQuery
+}));
 vi.mock("../features/comments/use-create-comment-mutation", () => ({
   useCreateCommentMutation
 }));
@@ -59,6 +71,8 @@ describe("CommentSection", () => {
     useAuthStore.setState(initialAuthState, true);
     usePostDetailQuery.mockReset();
     usePostCommentsQuery.mockReset();
+    useActivityDetailQuery.mockReset();
+    useActivityCommentsQuery.mockReset();
     useCreateCommentMutation.mockReset();
     useDeleteCommentMutation.mockReset();
     useCreateReportMutation.mockReset();
@@ -66,6 +80,8 @@ describe("CommentSection", () => {
 
     usePostDetailQuery.mockReturnValue({ data: { commentCount: 0 } });
     usePostCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    useActivityDetailQuery.mockReturnValue({ data: { commentCount: 0 } });
+    useActivityCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
     useCreateCommentMutation.mockReturnValue({
       mutateAsync: createCommentMutateAsync,
       isPending: false
@@ -210,5 +226,127 @@ describe("CommentSection", () => {
 
     expect(screen.getByText("第一条评论")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
+  });
+});
+
+// 找搭子留言区任务卡：活动详情页留言区。跟上面帖子场景的测试是同一套
+// 覆盖方式，只是渲染 <CommentSection activityId="act-1" /> 并 mock 到
+// useActivityDetailQuery/useActivityCommentsQuery 这两个 hook——不是重新
+// 发明一套断言，验证的正是"两条路径共用同一个 CommentSectionBody"这件事。
+describe("CommentSection (activity target)", () => {
+  const activityRootComment = {
+    id: "c1",
+    postId: null,
+    activityId: "act-1",
+    userId: "user-2",
+    parentId: null,
+    content: "算我一个",
+    authorDisplayName: "Carol",
+    createdAt: "2026-08-04T00:00:00.000Z",
+    isDeleted: false
+  };
+
+  function renderActivitySection() {
+    return renderWithProviders(<CommentSection activityId="act-1" />);
+  }
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  // 这个 describe 跟上面的 "CommentSection" 是两个平级 block（不是嵌套在
+  // 它里面），vitest 的 beforeEach 不会跨平级 describe 生效——必须在这里
+  // 单独重置/设默认值，否则会读到上一个 describe 最后一个测试、或者本
+  // describe 上一条测试留下的 mock 状态（比如"7 条留言"那条测试设的
+  // commentCount: 7 会污染后面所有测试）。
+  beforeEach(() => {
+    useAuthStore.setState(initialAuthState, true);
+    useActivityDetailQuery.mockReset();
+    useActivityCommentsQuery.mockReset();
+    useCreateCommentMutation.mockReset();
+    createCommentMutateAsync.mockReset();
+
+    useActivityDetailQuery.mockReturnValue({ data: { commentCount: 0 } });
+    useActivityCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    useCreateCommentMutation.mockReturnValue({
+      mutateAsync: createCommentMutateAsync,
+      isPending: false
+    });
+  });
+
+  it("shows the comment count from useActivityDetailQuery, not comments.length", () => {
+    useActivityDetailQuery.mockReturnValue({ data: { commentCount: 7 } });
+    useActivityCommentsQuery.mockReturnValue({
+      data: [activityRootComment],
+      isPending: false,
+      isError: false
+    });
+
+    renderActivitySection();
+
+    expect(screen.getByRole("heading", { name: "留言 (7)" })).toBeInTheDocument();
+  });
+
+  it("does not show the composer textarea when there is no session, and shows a 登录 link instead", () => {
+    renderActivitySection();
+
+    expect(screen.queryByPlaceholderText("写下你的评论…")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
+  });
+
+  it("shows the composer textarea and submits a top-level comment with activityId (not postId) when logged in", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    createCommentMutateAsync.mockResolvedValue({ id: "new-comment", createdAt: "now" });
+
+    renderActivitySection();
+
+    fireEvent.change(screen.getByPlaceholderText("写下你的评论…"), {
+      target: { value: "这是一条新留言" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
+
+    await waitFor(() => {
+      expect(createCommentMutateAsync).toHaveBeenCalledWith({
+        activityId: "act-1",
+        userId: "user-1",
+        parentId: null,
+        content: "这是一条新留言"
+      });
+    });
+  });
+
+  it("shows a loading status while comments are being fetched", () => {
+    useActivityCommentsQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+    renderActivitySection();
+
+    expect(screen.getByRole("status")).toHaveTextContent("加载中…");
+  });
+
+  it("shows an error message when comments fail to load", () => {
+    useActivityCommentsQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+
+    renderActivitySection();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("评论加载失败，请稍后重试。");
+  });
+
+  it("shows an empty-state message when there are no comments", () => {
+    renderActivitySection();
+
+    expect(screen.getByText("暂无评论，来发表第一条评论吧。")).toBeInTheDocument();
+  });
+
+  it("builds and renders the comment tree from the flat list returned by useActivityCommentsQuery", () => {
+    useActivityCommentsQuery.mockReturnValue({
+      data: [activityRootComment],
+      isPending: false,
+      isError: false
+    });
+
+    renderActivitySection();
+
+    expect(screen.getByText("算我一个")).toBeInTheDocument();
+    expect(screen.getByText("Carol")).toBeInTheDocument();
   });
 });

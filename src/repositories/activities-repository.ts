@@ -253,6 +253,13 @@ export interface ActivityDetail {
   contactValue: string | null;
   status: string;
   requiresApproval: boolean;
+  /** 找搭子留言区任务卡：由 add_activity_comments_support 迁移新增的
+   *  activities.comment_count 列，数据库触发器（泛化过的
+   *  sync_post_comment_count()）在 comments 表 INSERT/软删除时自动维护，
+   *  跟 posts.comment_count 是同一个模式——见 posts-repository.ts 的
+   *  getPostDetail()。留言区标题的数量（comment-section.tsx）读的就是
+   *  这一列，不是前端自己数 comments.length。 */
+  commentCount: number;
 }
 
 interface ActivityDetailRow {
@@ -272,6 +279,7 @@ interface ActivityDetailRow {
   contact_value: string | null;
   status: string;
   requires_approval: boolean;
+  comment_count: number;
   location: { name: string } | null;
   organizer: { display_name: string; avatar_url: string | null } | null;
 }
@@ -294,7 +302,7 @@ export async function getActivityDetail(activityId: string): Promise<ActivityDet
   const { data, error } = await getSupabaseClient()
     .from("activities")
     .select(
-      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, location:locations(name), organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, description, location_id, landmark_text, is_online, start_at, capacity, participant_count, contact_method, contact_value, status, requires_approval, comment_count, location:locations(name), organizer:profiles(display_name, avatar_url)"
     )
     .eq("id", activityId)
     .maybeSingle()
@@ -327,7 +335,8 @@ export async function getActivityDetail(activityId: string): Promise<ActivityDet
     contactMethod: data.contact_method,
     contactValue: data.contact_value,
     status: data.status,
-    requiresApproval: data.requires_approval
+    requiresApproval: data.requires_approval,
+    commentCount: data.comment_count
   };
 }
 

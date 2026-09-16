@@ -21,7 +21,7 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { createComment, listPostComments, softDeleteComment } from "./comments-repository";
+import { createComment, listComments, softDeleteComment } from "./comments-repository";
 
 function resetAllMocks(): void {
   fromMock.mockClear();
@@ -33,20 +33,32 @@ function resetAllMocks(): void {
   maybeSingleMock.mockReset();
 }
 
-describe("listPostComments", () => {
+describe("listComments", () => {
   beforeEach(resetAllMocks);
 
   it("queries all comments for a post ordered by created_at ascending, with a nested author select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
-    await listPostComments("post-1");
+    await listComments({ postId: "post-1" });
 
     expect(fromMock).toHaveBeenCalledWith("comments");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
+      "id, post_id, activity_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("post_id", "post-1");
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
+  });
+
+  // 找搭子留言区任务卡：activity 版本，跟帖子版本除了 eq() 的列名，其它
+  // 完全一样——同一个函数、只是传了 activityId 而不是 postId。
+  it("queries all comments for an activity by activity_id instead of post_id", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listComments({ activityId: "act-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("comments");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("post_id", expect.anything());
   });
 
   it("returns both active and soft-deleted comments, mapping deleted_at !== null to isDeleted: true", async () => {
@@ -55,6 +67,7 @@ describe("listPostComments", () => {
         {
           id: "c1",
           post_id: "post-1",
+          activity_id: null,
           user_id: "user-1",
           parent_id: null,
           content: "hello",
@@ -65,6 +78,7 @@ describe("listPostComments", () => {
         {
           id: "c2",
           post_id: "post-1",
+          activity_id: null,
           user_id: "user-2",
           parent_id: "c1",
           content: "a deleted reply",
@@ -76,12 +90,13 @@ describe("listPostComments", () => {
       error: null
     });
 
-    const result = await listPostComments("post-1");
+    const result = await listComments({ postId: "post-1" });
 
     expect(result).toEqual([
       {
         id: "c1",
         postId: "post-1",
+        activityId: null,
         userId: "user-1",
         parentId: null,
         content: "hello",
@@ -93,6 +108,7 @@ describe("listPostComments", () => {
       {
         id: "c2",
         postId: "post-1",
+        activityId: null,
         userId: "user-2",
         parentId: "c1",
         content: "a deleted reply",
@@ -104,13 +120,49 @@ describe("listPostComments", () => {
     ]);
   });
 
+  it("maps an activity comment row with postId: null / activityId set", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "c3",
+          post_id: null,
+          activity_id: "act-1",
+          user_id: "user-1",
+          parent_id: null,
+          content: "算我一个",
+          created_at: "2026-08-04T00:00:00.000Z",
+          deleted_at: null,
+          author: { display_name: "Carol", avatar_url: null }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listComments({ activityId: "act-1" });
+
+    expect(result).toEqual([
+      {
+        id: "c3",
+        postId: null,
+        activityId: "act-1",
+        userId: "user-1",
+        parentId: null,
+        content: "算我一个",
+        authorDisplayName: "Carol",
+        authorAvatarUrl: null,
+        createdAt: "2026-08-04T00:00:00.000Z",
+        isDeleted: false
+      }
+    ]);
+  });
+
   it("throws an AppError when the query fails", async () => {
     overrideTypesMock.mockResolvedValue({
       data: null,
       error: { message: "network down", code: "500" }
     });
 
-    await expect(listPostComments("post-1")).rejects.toMatchObject({
+    await expect(listComments({ postId: "post-1" })).rejects.toMatchObject({
       code: "COMMENTS_LIST_FAILED"
     });
   });
@@ -140,6 +192,31 @@ describe("createComment", () => {
       content: "hello"
     });
     expect(result).toEqual({ id: "c1", createdAt: "2026-08-04T00:00:00.000Z" });
+  });
+
+  // 找搭子留言区任务卡：activityId 版本，insert payload 用 activity_id、
+  // 不带 post_id 这一列（不是显式传 null），跟上面帖子版本的 payload
+  // 形状对称。
+  it("inserts an activity comment with activity_id instead of post_id", async () => {
+    singleMock.mockResolvedValue({
+      data: { id: "c2", created_at: "2026-08-04T00:00:00.000Z" },
+      error: null
+    });
+
+    const result = await createComment({
+      activityId: "act-1",
+      userId: "user-1",
+      parentId: null,
+      content: "算我一个"
+    });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith({
+      activity_id: "act-1",
+      user_id: "user-1",
+      parent_id: null,
+      content: "算我一个"
+    });
+    expect(result).toEqual({ id: "c2", createdAt: "2026-08-04T00:00:00.000Z" });
   });
 
   it("maps a 42501 RLS failure to a generic COMMENT_CREATE_FORBIDDEN error", async () => {

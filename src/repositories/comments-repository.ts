@@ -2,9 +2,25 @@ import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 
+/**
+ * 找搭子留言区任务卡：评论现在挂在帖子还是活动下面，两者二选一——跟
+ * comments 表的 comments_target_check 约束（post_id/activity_id 恰好一个
+ * 非空）、favorites 表 post_id/activity_id 二选一是同一个模式。两个成员都
+ * 只声明各自那一个字段（不给另一个字段加 `?: never` 之类的排他标记）——
+ * 试过之后发现那种写法会让 TypeScript 的 `in` 窄化在某些调用点判断不出
+ * 具体分支（"postId" in target 之后 target.postId 仍然被推断成
+ * string | undefined），这个更朴素的两成员联合类型反而是 TypeScript 处理
+ * 得最可靠的写法，跟任务卡给出的 `listComments(target: { postId: string }
+ * | { activityId: string })` 签名逐字一致。
+ */
+export type CommentTarget = { postId: string } | { activityId: string };
+
 export interface Comment {
   id: string;
-  postId: string;
+  /** 二选一，跟 comments 表 comments_target_check 约束一致：帖子评论
+   *  postId 非空、activityId 为 null；活动留言反过来。 */
+  postId: string | null;
+  activityId: string | null;
   userId: string;
   parentId: string | null;
   content: string;
@@ -21,7 +37,8 @@ export interface Comment {
 
 interface CommentRow {
   id: string;
-  post_id: string;
+  post_id: string | null;
+  activity_id: string | null;
   user_id: string;
   parent_id: string | null;
   content: string;
@@ -31,9 +48,14 @@ interface CommentRow {
 }
 
 /**
- * 一次性拉出某个帖子下的全部评论（含已软删除的），前端自己用
+ * 一次性拉出某个帖子/活动下的全部评论（含已软删除的），前端自己用
  * build-comment-tree.ts 拼成树——这一轮不做分页、不做 Realtime，见任务
- * 范围说明。
+ * 范围说明。原来叫 listPostComments(postId)，只认帖子；找搭子留言区任务卡
+ * 泛化成按 target 决定查 post_id 还是 activity_id，两条查询路径除了
+ * eq() 的列名不同、其它完全一样，没有理由维护两份几乎相同的实现——
+ * usePostCommentsQuery(postId) 内部继续用同一个函数、传 { postId }，对
+ * 帖子详情页而言查询本身（select 列表、过滤条件、排序、返回形状）没有
+ * 任何变化，只是多选了一列 activity_id（帖子评论这一列恒为 null）。
  *
  * 故意不过滤 deleted_at：已删除的评论也要占着它在回复链里的位置（软删除
  * 是为了不让子回复变成孤儿，见 create_comments_table 迁移），这里老实把
@@ -41,21 +63,28 @@ interface CommentRow {
  * 至于"已删除的评论不展示真实 content/authorDisplayName"是组件层的展示
  * 逻辑，不应该在 repository 这一层就悄悄清空字段——那样会让这份数据在
  * 语义上变得不完整，也没有必要（真实内容本来就没有敏感到需要在网络层就
- * 藏起来，comments_select_of_approved_or_own_posts 这条 RLS 策略本身就
+ * 藏起来，comments_select_of_approved_or_own_posts/
+ * comments_select_of_approved_or_own_activities 这两条 RLS 策略本身就
  * 允许读到这一行的全部列）。
  *
  * 按 created_at 升序：评论是对话，读者预期从早到晚，跟
- * comments_post_id_created_at_idx 这个索引的排序方向一致。
+ * comments_post_id_created_at_idx 这个索引的排序方向一致（活动那边复用
+ * 同一个索引结构，见 add_activity_comments_support 迁移）。
  */
-export async function listPostComments(postId: string): Promise<Comment[]> {
-  const { data, error } = await getSupabaseClient()
+export async function listComments(target: CommentTarget): Promise<Comment[]> {
+  const baseQuery = getSupabaseClient()
     .from("comments")
     .select(
-      "id, post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
+      "id, post_id, activity_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
     )
-    .eq("post_id", postId)
-    .order("created_at", { ascending: true })
-    .overrideTypes<CommentRow[]>();
+    .order("created_at", { ascending: true });
+
+  const query =
+    "postId" in target
+      ? baseQuery.eq("post_id", target.postId)
+      : baseQuery.eq("activity_id", target.activityId);
+
+  const { data, error } = await query.overrideTypes<CommentRow[]>();
 
   if (error) {
     throw new AppError(error.message, "COMMENTS_LIST_FAILED", error);
@@ -64,6 +93,7 @@ export async function listPostComments(postId: string): Promise<Comment[]> {
   return (data ?? []).map((row) => ({
     id: row.id,
     postId: row.post_id,
+    activityId: row.activity_id,
     userId: row.user_id,
     parentId: row.parent_id,
     content: row.content,
@@ -74,12 +104,11 @@ export async function listPostComments(postId: string): Promise<Comment[]> {
   }));
 }
 
-export interface CreateCommentInput {
-  postId: string;
+export type CreateCommentInput = CommentTarget & {
   userId: string;
   parentId: string | null;
   content: string;
-}
+};
 
 export interface CreateCommentResult {
   id: string;
@@ -102,8 +131,11 @@ const COMMENT_FORBIDDEN_MESSAGE = "评论发表失败，请稍后重试。";
 export async function createComment(
   input: CreateCommentInput
 ): Promise<CreateCommentResult> {
+  // 只写目标那一列，另一列不出现在 payload 里（不是显式传 null）——
+  // 数据库列本身默认就是 null，插入时不带这一列跟显式传 null 效果一样，
+  // 这样写不需要每次都拼一个"另一半恒为 null"的对象字面量。
   const payload: TablesInsert<"comments"> = {
-    post_id: input.postId,
+    ...("postId" in input ? { post_id: input.postId } : { activity_id: input.activityId }),
     user_id: input.userId,
     parent_id: input.parentId,
     content: input.content
