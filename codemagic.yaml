@@ -63,6 +63,11 @@ workflows:
         script: |
           cd ios/App
           sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $BUILD_NUMBER;/g" App.xcodeproj/project.pbxproj
+      - name: Bump iOS marketing version (MARKETING_VERSION / CFBundleShortVersionString 之前一直硬编码 1.1，从没跟着 tag 走——v1.1.0 那次提交被苹果批准后记成了"已批准版本 1.1"，这次打 v1.2.0 tag 上传时因为 MARKETING_VERSION 还是没动过的 1.1，被 App Store Connect 用 90062/90186 拒绝："必须比已批准版本更高"。改成从触发这次构建的 git tag（$CM_TAG，例如 v1.2.0）算出这个值，去掉开头的 v 前缀，这样以后每次打新版本 tag 都会自动跟着更新，不用再手动改 Xcode 工程文件。)
+        script: |
+          cd ios/App
+          MARKETING_VERSION_VALUE="${CM_TAG#v}"
+          sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $MARKETING_VERSION_VALUE;/g" App.xcodeproj/project.pbxproj
       - name: Set up code signing (Codemagic 会用上面的 App Store Connect API Key 自动申请/下载证书和描述文件)
         script: |
           xcode-project use-profiles
