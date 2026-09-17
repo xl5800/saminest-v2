@@ -106,7 +106,7 @@ describe("CommentItem", () => {
   });
 
   it("shows author, content and no action buttons for a logged-out viewer", () => {
-    render(<CommentItem node={makeNode()} depth={0} currentUserId={null} />);
+    render(<CommentItem node={makeNode()} depth={0} currentUserId={null} ownerId={null} />);
 
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getByText("hello there")).toBeInTheDocument();
@@ -117,11 +117,11 @@ describe("CommentItem", () => {
 
   it("shows 删除 only when the viewer is the comment's own author", () => {
     const { rerender } = render(
-      <CommentItem node={makeNode({ userId: "user-1" })} depth={0} currentUserId="user-1" />
+      <CommentItem node={makeNode({ userId: "user-1" })} depth={0} currentUserId="user-1" ownerId={null} />
     );
     expect(screen.getByRole("button", { name: "删除" })).toBeInTheDocument();
 
-    rerender(<CommentItem node={makeNode({ userId: "user-2" })} depth={0} currentUserId="user-1" />);
+    rerender(<CommentItem node={makeNode({ userId: "user-2" })} depth={0} currentUserId="user-1" ownerId={null} />);
     expect(screen.queryByRole("button", { name: "删除" })).not.toBeInTheDocument();
   });
 
@@ -129,7 +129,7 @@ describe("CommentItem", () => {
     createCommentMutateAsync.mockResolvedValue({ id: "reply-1", createdAt: "now" });
     const node = makeNode({ id: "c1", postId: "post-1" });
 
-    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: "回复" }));
     fireEvent.change(screen.getByLabelText(/回复 Bob/), {
@@ -153,7 +153,7 @@ describe("CommentItem", () => {
     createCommentMutateAsync.mockResolvedValue({ id: "reply-2", createdAt: "now" });
     const node = makeActivityNode({ id: "c1" });
 
-    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: "回复" }));
     fireEvent.change(screen.getByLabelText(/回复 Bob/), {
@@ -172,7 +172,7 @@ describe("CommentItem", () => {
   });
 
   it("shows a validation error and does not submit when the reply is empty", async () => {
-    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: "回复" }));
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
@@ -185,7 +185,7 @@ describe("CommentItem", () => {
     deleteCommentMutateAsync.mockResolvedValue(undefined);
     const node = makeNode({ id: "c1", postId: "post-1", userId: "user-1" });
 
-    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
     expect(screen.getByText("确定删除这条评论吗？")).toBeInTheDocument();
@@ -207,7 +207,7 @@ describe("CommentItem", () => {
     deleteCommentMutateAsync.mockResolvedValue(undefined);
     const node = makeActivityNode({ id: "c1", userId: "user-1" });
 
-    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
     fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
@@ -227,6 +227,7 @@ describe("CommentItem", () => {
         node={makeNode({ userId: "user-1" })}
         depth={0}
         currentUserId="user-1"
+        ownerId={null}
       />
     );
 
@@ -240,7 +241,7 @@ describe("CommentItem", () => {
   it("shows a success confirmation after submitting a report (opened via a long-press on the comment content)", async () => {
     createReportMutateAsync.mockResolvedValue({ id: "report-1" });
 
-    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
     longPressCommentContent();
     fireEvent.click(screen.getByRole("button", { name: "举报" }));
@@ -262,7 +263,7 @@ describe("CommentItem", () => {
       new AppError("您已经举报过这条内容，正在处理中，请勿重复提交。", "REPORT_DUPLICATE")
     );
 
-    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
     longPressCommentContent();
     fireEvent.click(screen.getByRole("button", { name: "举报" }));
@@ -277,7 +278,7 @@ describe("CommentItem", () => {
   it("shows a generic error message for an unrecognized report failure", async () => {
     createReportMutateAsync.mockRejectedValue(new Error("network down"));
 
-    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
     longPressCommentContent();
     fireEvent.click(screen.getByRole("button", { name: "举报" }));
@@ -297,7 +298,7 @@ describe("CommentItem", () => {
       children: [makeNode({ id: "reply-1", content: "a visible reply", authorDisplayName: "Carol" })]
     });
 
-    render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
 
     const placeholder = screen.getByText("该评论已删除");
     expect(placeholder).toBeInTheDocument();
@@ -321,7 +322,7 @@ describe("CommentItem", () => {
       children: []
     });
 
-    const { container } = render(<CommentItem node={node} depth={0} currentUserId="user-1" />);
+    const { container } = render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
 
     expect(screen.queryByText("should not be shown")).not.toBeInTheDocument();
     expect(screen.queryByText("should not be shown either")).not.toBeInTheDocument();
@@ -335,6 +336,7 @@ describe("CommentItem", () => {
         node={makeNode({ userId: "user-1" })}
         depth={0}
         currentUserId="user-1"
+        ownerId={null}
       />
     );
 
@@ -359,6 +361,7 @@ describe("CommentItem", () => {
           node={makeNode({ authorAvatarUrl: "https://img.example.com/bob.jpg" })}
           depth={0}
           currentUserId="user-1"
+          ownerId={null}
         />
       );
 
@@ -379,6 +382,7 @@ describe("CommentItem", () => {
           node={makeNode({ authorDisplayName: "Bob", authorAvatarUrl: null })}
           depth={0}
           currentUserId="user-1"
+          ownerId={null}
         />
       );
 
@@ -389,16 +393,129 @@ describe("CommentItem", () => {
 
     it("uses a smaller avatar for a reply (depth > 0) than for a top-level comment (depth 0)", () => {
       const { rerender, container } = render(
-        <CommentItem node={makeNode({ authorAvatarUrl: null })} depth={0} currentUserId="user-1" />
+        <CommentItem node={makeNode({ authorAvatarUrl: null })} depth={0} currentUserId="user-1" ownerId={null} />
       );
       expect(container.querySelector(".h-8.w-8")).toBeInTheDocument();
       expect(container.querySelector(".h-6.w-6")).not.toBeInTheDocument();
 
       rerender(
-        <CommentItem node={makeNode({ authorAvatarUrl: null })} depth={1} currentUserId="user-1" />
+        <CommentItem node={makeNode({ authorAvatarUrl: null })} depth={1} currentUserId="user-1" ownerId={null} />
       );
       expect(container.querySelector(".h-6.w-6")).toBeInTheDocument();
       expect(container.querySelector(".h-8.w-8")).not.toBeInTheDocument();
+    });
+  });
+
+  // 评论区样式对齐小红书任务卡：视觉层级重排。
+  describe("视觉层级重排 (评论区样式对齐小红书任务卡)", () => {
+    it("styles the username as secondary text (muted color, normal weight) and the content as the visual focal point (base size, medium weight, primary color)", () => {
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
+
+      const username = screen.getByText("Bob");
+      expect(username.className).toMatch(/text-text-muted/);
+      expect(username.className).toMatch(/font-normal/);
+      expect(username.className).not.toMatch(/font-medium/);
+
+      const content = screen.getByText("hello there");
+      expect(content.className).toMatch(/text-base/);
+      expect(content.className).toMatch(/font-medium/);
+      expect(content.className).toMatch(/\btext-text\b/);
+    });
+
+    it("moves the date out of the header row into a new row below the content, alongside 回复/删除, styled with text-text-subtle", () => {
+      // 2000 年早就不会是"当前年份"，formatListingDate 稳定退化成完整的
+      // YYYY-MM-DD 格式，断言结果是确定性的，不用 mock Date.now()——照抄
+      // post-detail-page.test.tsx 断言 formatListingDate 输出的同一个技巧。
+      render(
+        <CommentItem
+          node={makeNode({ userId: "user-1", createdAt: "2000-07-01T00:00:00.000Z" })}
+          depth={0}
+          currentUserId="user-1"
+          ownerId={null}
+        />
+      );
+
+      const dateText = screen.getByText("2000-07-01");
+      const replyButton = screen.getByRole("button", { name: "回复" });
+      const deleteButton = screen.getByRole("button", { name: "删除" });
+      // 时间不再是"头像+昵称+正文"那个长按触发区域（comment-content）的
+      // 一部分，改成跟回复/删除同一个容器里的兄弟节点。
+      const metaRow = replyButton.parentElement;
+      expect(metaRow).toContainElement(dateText);
+      expect(metaRow).toContainElement(deleteButton);
+      expect(metaRow?.className).toMatch(/text-text-subtle/);
+      expect(metaRow?.className).toMatch(/text-xs/);
+      const contentArea = screen.getByTestId("comment-content");
+      expect(contentArea).not.toContainElement(dateText);
+    });
+
+    it("still shows the date for a logged-out viewer (only 回复/删除 depend on being logged in)", () => {
+      render(
+        <CommentItem
+          node={makeNode({ createdAt: "2000-07-01T00:00:00.000Z" })}
+          depth={0}
+          currentUserId={null}
+          ownerId={null}
+        />
+      );
+
+      expect(screen.getByText("2000-07-01")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "回复" })).not.toBeInTheDocument();
+    });
+  });
+
+  // 评论区样式对齐小红书任务卡：作者标签。
+  describe("作者标签 (评论区样式对齐小红书任务卡)", () => {
+    it("shows an '作者' pill next to the username when the comment's userId matches ownerId", () => {
+      render(
+        <CommentItem
+          node={makeNode({ userId: "owner-1" })}
+          depth={0}
+          currentUserId="user-1"
+          ownerId="owner-1"
+        />
+      );
+
+      const pill = screen.getByText("作者");
+      expect(pill.className).toMatch(/bg-primary-light/);
+      expect(pill.className).toMatch(/text-primary/);
+    });
+
+    it("does not show the '作者' pill when the comment's userId does not match ownerId", () => {
+      render(
+        <CommentItem
+          node={makeNode({ userId: "user-2" })}
+          depth={0}
+          currentUserId="user-1"
+          ownerId="owner-1"
+        />
+      );
+
+      expect(screen.queryByText("作者")).not.toBeInTheDocument();
+    });
+
+    it("does not show the '作者' pill when ownerId is null (owner not loaded yet)", () => {
+      render(
+        <CommentItem node={makeNode({ userId: "user-2" })} depth={0} currentUserId="user-1" ownerId={null} />
+      );
+
+      expect(screen.queryByText("作者")).not.toBeInTheDocument();
+    });
+
+    it("shows the '作者' pill even when the commenter is also the current viewer (owner commenting on their own post)", () => {
+      render(
+        <CommentItem
+          node={makeNode({ userId: "owner-1" })}
+          depth={0}
+          currentUserId="owner-1"
+          ownerId="owner-1"
+        />
+      );
+
+      expect(screen.getByText("作者")).toBeInTheDocument();
+      // 是自己发的评论，同时也应该正常显示"删除"——作者标签跟
+      // isOwnComment 是两个独立的判断，互不影响。
+      expect(screen.getByRole("button", { name: "删除" })).toBeInTheDocument();
     });
   });
 
@@ -406,14 +523,14 @@ describe("CommentItem", () => {
   describe("长按弹出举报入口", () => {
     it("does not render a persistent 举报 button in the actions row", () => {
       render(
-        <CommentItem node={makeNode({ userId: "user-1" })} depth={0} currentUserId="user-1" />
+        <CommentItem node={makeNode({ userId: "user-1" })} depth={0} currentUserId="user-1" ownerId={null} />
       );
 
       expect(screen.queryByRole("button", { name: "举报" })).not.toBeInTheDocument();
     });
 
     it("opens a report-entry prompt after a mouse long-press on the comment content, and opens the report form from it", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
       expect(screen.queryByRole("dialog", { name: "留言操作" })).not.toBeInTheDocument();
 
@@ -429,7 +546,7 @@ describe("CommentItem", () => {
     });
 
     it("also triggers via a touch long-press (mobile)", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
       const content = screen.getByTestId("comment-content");
 
       vi.useFakeTimers();
@@ -443,7 +560,7 @@ describe("CommentItem", () => {
     });
 
     it("does not open the prompt if the mouse is released before the long-press duration elapses", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
       const content = screen.getByTestId("comment-content");
 
       vi.useFakeTimers();
@@ -461,7 +578,7 @@ describe("CommentItem", () => {
     });
 
     it("does not open the prompt if the pointer moves too far before the long-press duration elapses (treated as a scroll, not a long-press)", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
       const content = screen.getByTestId("comment-content");
 
       vi.useFakeTimers();
@@ -476,7 +593,7 @@ describe("CommentItem", () => {
     });
 
     it("does not open the prompt for a logged-out viewer", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId={null} />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId={null} ownerId={null} />);
       const content = screen.getByTestId("comment-content");
 
       vi.useFakeTimers();
@@ -490,7 +607,7 @@ describe("CommentItem", () => {
     });
 
     it("dismisses the prompt without opening the report form when the backdrop is clicked", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
       longPressCommentContent();
       fireEvent.click(screen.getByRole("dialog", { name: "留言操作" }));
@@ -500,7 +617,7 @@ describe("CommentItem", () => {
     });
 
     it("dismisses the prompt without opening the report form when 取消 is clicked", () => {
-      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" />);
+      render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
       longPressCommentContent();
       fireEvent.click(screen.getByRole("button", { name: "取消" }));

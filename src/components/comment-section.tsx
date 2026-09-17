@@ -100,6 +100,11 @@ function PostCommentSection({ postId }: { postId: string }) {
       isPending={isPending}
       isError={isError}
       isSubmitting={createCommentMutation.isPending}
+      // 评论区样式对齐小红书任务卡：帖子作者 id 命中的是这个页面已经在查
+      // 的同一个 usePostDetailQuery 缓存，不是新发一次请求；详情还没加载
+      // 出来时是 undefined，归一化成 null，交给 CommentItem 的 ownerId
+      // 判断（ownerId 为 null 时不判定任何人是作者）。
+      ownerId={postDetail?.authorId ?? null}
       onSubmit={(content, userId) =>
         createCommentMutation.mutateAsync({ postId, userId, parentId: null, content })
       }
@@ -125,6 +130,9 @@ function ActivityCommentSection({ activityId }: { activityId: string }) {
       isPending={isPending}
       isError={isError}
       isSubmitting={createCommentMutation.isPending}
+      // 评论区样式对齐小红书任务卡：跟 PostCommentSection 对称，活动发起人
+      // id 命中的也是已经在查的 useActivityDetailQuery 缓存。
+      ownerId={activityDetail?.organizerId ?? null}
       onSubmit={(content, userId) =>
         createCommentMutation.mutateAsync({ activityId, userId, parentId: null, content })
       }
@@ -138,6 +146,10 @@ interface CommentSectionBodyProps {
   isPending: boolean;
   isError: boolean;
   isSubmitting: boolean;
+  /** 评论区样式对齐小红书任务卡新增：帖子作者 id / 活动发起人 id，原样
+   *  透传给每个顶层 CommentItem（CommentItem 自己再递归传给 children），
+   *  见 comment-item.tsx 里 ownerId 的注释。 */
+  ownerId: string | null;
   onSubmit: (content: string, userId: string) => Promise<unknown>;
 }
 
@@ -154,6 +166,7 @@ function CommentSectionBody({
   isPending,
   isError,
   isSubmitting,
+  ownerId,
   onSubmit
 }: CommentSectionBodyProps) {
   const session = useAuthStore((s) => s.session);
@@ -279,7 +292,13 @@ function CommentSectionBody({
 
       {!isPending && !isError
         ? tree.map((node) => (
-            <CommentItem key={node.id} node={node} depth={0} currentUserId={userId} />
+            <CommentItem
+              key={node.id}
+              node={node}
+              depth={0}
+              currentUserId={userId}
+              ownerId={ownerId}
+            />
           ))
         : null}
     </section>

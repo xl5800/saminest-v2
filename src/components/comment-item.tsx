@@ -21,6 +21,14 @@ export interface CommentItemProps {
   node: CommentNode;
   depth: number;
   currentUserId: string | null;
+  /** 评论区样式对齐小红书任务卡新增：帖子作者 id（PostCommentSection 传
+   *  postDetail.authorId）或活动发起人 id（ActivityCommentSection 传
+   *  activityDetail.organizerId），从 CommentSectionBody 顶层往下透传，
+   *  递归渲染 children 时原样继续往下传——不是每个节点自己去查一次"这条
+   *  评论的作者是不是帖子/活动的所有者"，帖子/活动的所有者只有一个，
+   *  在树的根部拿到一次就够了。为 null 表示帖子/活动详情还没加载出来，
+   *  这种情况下不判定任何人是作者，不提前假设某个特定用户就是作者。 */
+  ownerId: string | null;
 }
 
 // 视觉缩进用 Math.min(depth, MAX_INDENT_DEPTH) 封顶——数据结构本身仍然
@@ -123,8 +131,33 @@ type ActiveAction = "reply" | "delete" | "report" | null;
  *   一个按钮"的极简菜单来说影响很小。点击浮层背景或"取消"按钮关闭，不做
  *   Esc 键关闭（跟 my-posts-page.tsx 的删除确认弹窗一致，PublishActionSheet
  *   那种"选一项就导航离开当前页面"的场景才需要 Esc 快捷退出，这里不是）。
+ *
+ * 评论区样式对齐小红书任务卡（视觉层级重排 + 作者标签）：
+ * - 用户名弱化成次要信息（text-text-muted + font-normal，靠颜色不靠
+ *   字重弱化），正文升级成视觉重点（text-base + font-medium，颜色维持
+ *   主文字色 text-text 不变）。原来"昵称+时间同行、时间靠右对齐"的头部
+ *   行去掉了时间，现在只剩头像+昵称(+作者标签)。
+ * - 时间 + 回复(+删除，自己的评论才有) 合并成正文下方新的一行，左对齐，
+ *   顺序"时间 · 回复 · 删除"，用 "·" 分隔，颜色统一降到比
+ *   text-text-muted 更浅一档的 text-text-subtle，字号维持原来的
+ *   text-xs（这几个元素本来就是 text-xs，没有改字号）。时间不受 canAct
+ *   影响，始终展示；回复/删除的展示条件（canAct/isOwnComment）完全没变，
+ *   只是从各自原来的容器搬进了这同一行。
+ * - 作者标签：新增 ownerId prop（帖子作者 id 或活动发起人 id，见
+ *   CommentItemProps 上的注释），从 CommentSectionBody 顶层往下透传，
+ *   递归渲染 children 时原样继续传下去，不是每个节点自己查一次。
+ *   node.userId === ownerId 时在昵称右侧渲染一个 `rounded-full
+ *   bg-primary-light text-primary` 的"作者" pill——跟 isOwnComment
+ *   （"是不是当前登录用户自己"）是两个独立的判断，一条评论可能同时符合
+ *   两者（帖子作者在自己帖子底下评论），也可能只符合其中一个，不能合并
+ *   成同一个布尔值。
+ * - 长按弹出举报菜单的触发区域（data-testid="comment-content"）没有
+ *   跟着扩大——时间搬到正文下方新的一行之后，这块区域现在包住"头像+
+ *   昵称+作者标签+正文"，不包括时间/回复/删除那一行，理由跟改动前一样：
+ *   那一行本身是可点击按钮，混进长按区域会跟点击手势冲突，见 33 号卡
+ *   已经写好的那条注释。
  */
-export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
+export function CommentItem({ node, depth, currentUserId, ownerId }: CommentItemProps) {
   const [activeAction, setActiveAction] = useState<ActiveAction>(null);
 
   const [replyContent, setReplyContent] = useState("");
@@ -150,6 +183,11 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
 
   const canAct = currentUserId !== null;
   const isOwnComment = currentUserId !== null && node.userId === currentUserId;
+  // 评论区样式对齐小红书任务卡：评论者是帖子作者/活动发起人时，昵称旁边
+  // 加一个"作者"标签——跟 isOwnComment（"是不是当前登录用户自己"）是两个
+  // 独立的判断，不能合并，一条评论完全可能同时符合"是我发的"和"我是
+  // 作者"（帖子作者在自己帖子底下评论），也可能只符合其中一个。
+  const isAuthor = ownerId !== null && node.userId === ownerId;
 
   function toggleAction(action: Exclude<ActiveAction, null>): void {
     setActiveAction((current) => (current === action ? null : action));
@@ -352,11 +390,13 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
           <p className="text-xs text-text-muted">该评论已删除</p>
         ) : (
           <div>
-            {/* 33 号卡：这一整块（头像+昵称+时间+正文）是长按弹出举报入口的
-                触发区域，不含下面回复/删除按钮那一行——那一行本身就是可点击
-                按钮，混进长按区域会跟点击手势冲突。onContextMenu 拦掉移动端
-                长按时浏览器原生弹出的"复制/分享"上下文菜单，不然会跟这里
-                自定义的长按菜单打架。 */}
+            {/* 33 号卡：这一整块是长按弹出举报入口的触发区域，不含下面
+                时间/回复/删除那一行——那一行本身就是可点击按钮，混进长按
+                区域会跟点击手势冲突。onContextMenu 拦掉移动端长按时浏览器
+                原生弹出的"复制/分享"上下文菜单，不然会跟这里自定义的长按
+                菜单打架。评论区样式对齐小红书任务卡：时间从这一块搬到了
+                下面新的一行之后，这块区域现在是"头像+昵称+作者标签+正文"，
+                范围比改动前略小，但触发长按举报这条约束本身没变。 */}
             <div
               data-testid="comment-content"
               className="flex items-start gap-2"
@@ -382,30 +422,55 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                 </span>
               )}
               <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="break-words text-sm font-medium text-text">
+                {/* 评论区样式对齐小红书任务卡：用户名弱化成次要信息（颜色
+                    降到 text-text-muted，字重从 medium 降到 normal，靠
+                    颜色而不是字重弱化），原来跟它同行右对齐的时间挪到了
+                    下面新的一行，这里不再需要 justify-between。是帖子
+                    作者/活动发起人本人发的评论，昵称右边加一个蓝色"作者"
+                    标签。 */}
+                <div className="flex items-center gap-2">
+                  <span className="break-words text-sm font-normal text-text-muted">
                     {node.authorDisplayName}
                   </span>
-                  <span className="shrink-0 text-xs text-text-muted">
-                    {formatListingDate(node.createdAt)}
-                  </span>
+                  {isAuthor ? (
+                    <span className="shrink-0 rounded-full bg-primary-light px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                      作者
+                    </span>
+                  ) : null}
                 </div>
-                <p className="mt-1 whitespace-pre-wrap break-words text-sm text-text">
+                {/* 正文是这条评论视觉上最重的一行：字号从 text-sm 升到
+                    text-base，字重从默认升到 font-medium，颜色维持主
+                    文字色 text-text 不变。 */}
+                <p className="mt-1 whitespace-pre-wrap break-words text-base font-medium text-text">
                   {node.content}
                 </p>
               </div>
             </div>
 
-            {canAct ? (
-              <div className="mt-1 flex gap-3 text-xs text-text-muted">
-                <button
-                  type="button"
-                  onClick={() => toggleAction("reply")}
-                  className="hover:text-primary"
-                >
-                  回复
-                </button>
-                {isOwnComment ? (
+            {/* 评论区样式对齐小红书任务卡：时间 + 回复(+删除) 合并成正文
+                下方左对齐的一行，颜色统一降到比 text-text-muted 更浅一档
+                的 text-text-subtle，字号维持原来的 text-xs 不变，中间用
+                "·" 分隔。时间不受 canAct 影响，始终展示（未登录也应该能
+                看到评论发表时间）；"回复"只在能操作（已登录）时展示，
+                "删除"只在是自己发的评论时展示——这两条判断条件本身没有
+                变，只是从各自的容器搬进了同一行。 */}
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-text-subtle">
+              <span>{formatListingDate(node.createdAt)}</span>
+              {canAct ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    onClick={() => toggleAction("reply")}
+                    className="hover:text-primary"
+                  >
+                    回复
+                  </button>
+                </>
+              ) : null}
+              {isOwnComment ? (
+                <>
+                  <span aria-hidden="true">·</span>
                   <button
                     type="button"
                     onClick={() => toggleAction("delete")}
@@ -413,9 +478,9 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
                   >
                     删除
                   </button>
-                ) : null}
-              </div>
-            ) : null}
+                </>
+              ) : null}
+            </div>
 
             {activeAction === "reply" ? (
               <form onSubmit={handleReplySubmit} className="mt-2">
@@ -594,7 +659,13 @@ export function CommentItem({ node, depth, currentUserId }: CommentItemProps) {
       </div>
 
       {node.children.map((child) => (
-        <CommentItem key={child.id} node={child} depth={depth + 1} currentUserId={currentUserId} />
+        <CommentItem
+          key={child.id}
+          node={child}
+          depth={depth + 1}
+          currentUserId={currentUserId}
+          ownerId={ownerId}
+        />
       ))}
     </>
   );

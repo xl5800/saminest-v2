@@ -227,6 +227,39 @@ describe("CommentSection", () => {
     expect(screen.getByText("第一条评论")).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
+
+  // 评论区样式对齐小红书任务卡：帖子作者 id 来自 usePostDetailQuery，
+  // 不是新发一次请求——这里验证的是 PostCommentSection 把 authorId 正确
+  // 当成 ownerId 传给了 CommentItem（真实的 CommentItem，没有 mock 掉），
+  // 不是重复断言 CommentItem 自己的"作者" pill 渲染逻辑（那部分已经在
+  // comment-item.test.tsx 覆盖过）。
+  describe("作者标签（帖子场景，ownerId 透传自 postDetail.authorId）", () => {
+    it("shows the '作者' pill for the comment whose userId matches postDetail.authorId", () => {
+      usePostDetailQuery.mockReturnValue({ data: { commentCount: 1, authorId: "user-2" } });
+      usePostCommentsQuery.mockReturnValue({
+        data: [rootComment],
+        isPending: false,
+        isError: false
+      });
+
+      renderSection();
+
+      expect(screen.getByText("作者")).toBeInTheDocument();
+    });
+
+    it("does not show the '作者' pill when no comment's userId matches postDetail.authorId", () => {
+      usePostDetailQuery.mockReturnValue({ data: { commentCount: 1, authorId: "someone-else" } });
+      usePostCommentsQuery.mockReturnValue({
+        data: [rootComment],
+        isPending: false,
+        isError: false
+      });
+
+      renderSection();
+
+      expect(screen.queryByText("作者")).not.toBeInTheDocument();
+    });
+  });
 });
 
 // 找搭子留言区任务卡：活动详情页留言区。跟上面帖子场景的测试是同一套
@@ -348,5 +381,39 @@ describe("CommentSection (activity target)", () => {
 
     expect(screen.getByText("算我一个")).toBeInTheDocument();
     expect(screen.getByText("Carol")).toBeInTheDocument();
+  });
+
+  // 评论区样式对齐小红书任务卡：活动场景对称地验证 ownerId 透传自
+  // activityDetail.organizerId。
+  describe("作者标签（活动场景，ownerId 透传自 activityDetail.organizerId）", () => {
+    it("shows the '作者' pill for the comment whose userId matches activityDetail.organizerId", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: { commentCount: 1, organizerId: "user-2" }
+      });
+      useActivityCommentsQuery.mockReturnValue({
+        data: [activityRootComment],
+        isPending: false,
+        isError: false
+      });
+
+      renderActivitySection();
+
+      expect(screen.getByText("作者")).toBeInTheDocument();
+    });
+
+    it("does not show the '作者' pill when no comment's userId matches activityDetail.organizerId", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: { commentCount: 1, organizerId: "someone-else" }
+      });
+      useActivityCommentsQuery.mockReturnValue({
+        data: [activityRootComment],
+        isPending: false,
+        isError: false
+      });
+
+      renderActivitySection();
+
+      expect(screen.queryByText("作者")).not.toBeInTheDocument();
+    });
   });
 });
