@@ -249,7 +249,13 @@ export function TopBar(props: TopBarProps) {
               type="button"
               aria-label="发布"
               onClick={props.onCreateClick}
-              className={ICON_BUTTON_CLASS_NAME}
+              // 首页"＋发布"按钮改蓝色任务卡：只有这一个按钮单独换成
+              // bg-primary + text-white，不改 ICON_BUTTON_CLASS_NAME 本身
+              // （那个类还给返回/更多/搜索/关闭等其它图标按钮用，改了会
+              // 导致全站图标按钮都变蓝）。尺寸/圆角/间距（h-9 w-9
+              // rounded-full）照抄 ICON_BUTTON_CLASS_NAME，只换背景和
+              // 图标颜色这两处。
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white"
             >
               <Plus size={18} aria-hidden="true" />
             </button>

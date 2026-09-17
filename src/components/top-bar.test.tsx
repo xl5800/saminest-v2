@@ -138,6 +138,35 @@ describe("TopBar", () => {
       expect(onSearchClick).toHaveBeenCalledTimes(1);
     });
 
+    // 首页"＋发布"按钮改蓝色任务卡：只有这一个按钮单独换成
+    // bg-primary + text-white，其它图标按钮（这里断言"搜索"）继续用原来
+    // 的 bg-card + text-text，确认改动没有波及 ICON_BUTTON_CLASS_NAME
+    // 本身，也没有影响这个按钮的尺寸/圆角（h-9 w-9 rounded-full 不变）。
+    it("gives the '＋' create button a blue background with a white icon, without changing its size/shape or affecting the search button's styling", () => {
+      renderWithProviders(
+        <TopBar
+          variant="home"
+          regionLabel={null}
+          onRegionClick={vi.fn()}
+          onCreateClick={vi.fn()}
+          onSearchClick={vi.fn()}
+        />
+      );
+
+      const createButton = screen.getByRole("button", { name: "发布" });
+      expect(createButton.className).toMatch(/\bbg-primary\b/);
+      expect(createButton.className).toMatch(/\btext-white\b/);
+      expect(createButton.className).not.toMatch(/\bbg-card\b/);
+      expect(createButton.className).toMatch(/\bh-9\b/);
+      expect(createButton.className).toMatch(/\bw-9\b/);
+      expect(createButton.className).toMatch(/rounded-full/);
+
+      const searchButton = screen.getByRole("button", { name: "搜索" });
+      expect(searchButton.className).toMatch(/\bbg-card\b/);
+      expect(searchButton.className).toMatch(/\btext-text\b/);
+      expect(searchButton.className).not.toMatch(/bg-primary\b/);
+    });
+
     // 顶部栏拆分任务卡：把"Saminest + 地区"合并胶囊拆成三个独立元素
     // （品牌名文字、地区按钮、发布/搜索图标），这组测试专门覆盖拆分本身，
     // 跟上面几个测试覆盖的"拆分前后都不变的行为"分开。
