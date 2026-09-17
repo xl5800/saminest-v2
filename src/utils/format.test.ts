@@ -43,8 +43,8 @@ describe("isPriceUnset", () => {
 // 31 号卡（求租板块改版）：求租 Tab 文字卡片的发帖人信息行——"缺失字段
 // 优雅省略"，不产出 "undefined"/"null"/孤零零的分隔符。
 describe("formatWantedPosterMeta", () => {
-  it("joins gender and age with a Chinese enumeration comma when both are present", () => {
-    expect(formatWantedPosterMeta("女", 25)).toBe("女、25岁");
+  it("joins gender and age with a space when both are present", () => {
+    expect(formatWantedPosterMeta("女", 25)).toBe("女 25岁");
   });
 
   it("shows only the age when gender is missing", () => {

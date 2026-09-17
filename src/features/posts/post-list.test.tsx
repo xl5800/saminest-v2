@@ -474,7 +474,7 @@ describe("PostList variant='wanted'", () => {
     expect(link).toHaveTextContent("USD 1,200");
     expect(link).toHaveTextContent("Rockville");
     expect(link).toHaveTextContent("Alice");
-    expect(link).toHaveTextContent("女、25岁");
+    expect(link).toHaveTextContent("女 25岁");
   });
 
   it("does not render a cover image, a category chip, or a publish timestamp", async () => {
