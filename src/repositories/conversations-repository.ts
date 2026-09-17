@@ -463,6 +463,83 @@ export async function createProfileConversation(
 }
 
 /**
+ * 联系客服改成真聊天任务卡："联系客服"入口用——拿到（或建出）当前登录
+ * 用户自己专属的 system 会话 id，调用方直接跳转到
+ * `/messages/${conversationId}`，不再进 /feedback 那个一次性表单页。
+ *
+ * 唯一合法入口是数据库里的 get_or_create_own_system_conversation() 这个
+ * security definer 函数——目标用户固定是函数内部的 auth.uid()，这里不
+ * 接受、也不需要传任何参数，跟 createDirectConversation 等三个"目标身份
+ * 由数据库函数内部解析，不接受调用方指定"是同一个原则。这个函数内部
+ * 复用了 notify_user() 抽出来的共享逻辑（get_or_create_system_conversation），
+ * 找到已有 system 会话直接返回、没有就新建，见对应迁移文件的说明。
+ *
+ * 不做账号受限判断——账号受限/被封禁的用户尤其可能需要联系客服申诉，这
+ * 条不应该拦；数据库函数那侧也没有加 is_account_restricted() 检查，
+ * 前后端判断一致，见该函数迁移文件的说明。
+ */
+export async function getOrCreateOwnSystemConversation(): Promise<CreateDirectConversationResult> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "get_or_create_own_system_conversation"
+  );
+
+  if (error) {
+    throw new AppError(error.message, "SUPPORT_CONVERSATION_CREATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(
+      "创建会话后无法读取会话 ID。",
+      "SUPPORT_CONVERSATION_CREATE_ID_MISSING"
+    );
+  }
+
+  return { conversationId: data };
+}
+
+export interface AdminSupportConversationListItem {
+  conversationId: string;
+  userId: string;
+  displayName: string;
+  avatarUrl: string | null;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+}
+
+/**
+ * 管理员客服会话列表（/admin/support）——只列出"用户真的主动发起过对话"
+ * 的 system 会话，不是全部 system 会话（只收到过审核通知、从没联系过
+ * 客服的用户不应该出现在这里）。这条"有没有真的联系过"的业务判断放在
+ * 数据库函数 admin_list_support_conversations() 内部用 exists 子查询
+ * 表达（判断标准：这条会话下存在至少一条 sender_id 不为空的消息），不是
+ * 前端自己拼一个复杂查询再客户端过滤——理由和 admin_reply_to_support_
+ * conversation() 必须走 security definer 函数是同一个：管理员不是任何
+ * 一条 system 会话的 conversation_members 行，读取这些会话本身也需要
+ * 越过常规的"必须是会话成员"这条 RLS 限制（该函数内部已经绕过 RLS，
+ * 只在函数体内校验一次 is_admin()）。已经按 last_message_at 倒序排，
+ * 不需要在这里再排一次。
+ */
+export async function listSupportConversationsForAdmin(): Promise<
+  AdminSupportConversationListItem[]
+> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "admin_list_support_conversations"
+  );
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_SUPPORT_CONVERSATIONS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    conversationId: row.conversation_id,
+    userId: row.user_id,
+    displayName: row.display_name,
+    avatarUrl: row.avatar_url,
+    lastMessageAt: row.last_message_at,
+    lastMessagePreview: row.last_message_preview
+  }));
+}
+
+/**
  * 标记某个会话"已读"——conversation-page.tsx 挂载时对任意会话调用（不再
  * 限定系统通知会话，见该文件顶部注释），驱动会话列表每一行的 isUnread
  * 标记。conversation_members_update_self 这条已有 RLS 允许用户自己更新

@@ -26,9 +26,12 @@ describe("AdminNav", () => {
       "href",
       "/admin/reports"
     );
-    expect(screen.getByRole("link", { name: "联系客服" })).toHaveAttribute(
+    // 联系客服改成真聊天任务卡："联系客服"这一项换成了"客服"，指向
+    // /admin/support（客服会话列表）而不是 /admin/feedback，见
+    // admin-nav.tsx 顶部注释。
+    expect(screen.getByRole("link", { name: "客服" })).toHaveAttribute(
       "href",
-      "/admin/feedback"
+      "/admin/support"
     );
     expect(screen.getByRole("link", { name: "用户管理" })).toHaveAttribute(
       "href",
@@ -40,10 +43,10 @@ describe("AdminNav", () => {
     );
   });
 
-  it("marks '联系客服' as active with aria-current on /admin/feedback", () => {
-    renderWithProviders(<AdminNav />, { initialEntries: ["/admin/feedback"] });
+  it("marks '客服' as active with aria-current on /admin/support", () => {
+    renderWithProviders(<AdminNav />, { initialEntries: ["/admin/support"] });
 
-    expect(screen.getByRole("link", { name: "联系客服" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "客服" })).toHaveAttribute(
       "aria-current",
       "page"
     );

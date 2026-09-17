@@ -1,6 +1,5 @@
-import { Link } from "react-router-dom";
-
 import { TopBar } from "../../components/top-bar";
+import { useContactSupport } from "../../features/conversations/use-contact-support";
 
 const headingClassName = "mb-2 mt-6 text-lg font-semibold text-text";
 const subheadingClassName = "mb-1 mt-4 text-base font-medium text-text";
@@ -17,12 +16,22 @@ const listClassName = "mb-4 list-disc space-y-1 pl-5 text-base text-text";
  * "联系客服（Feedback）"——跟这个入口在"我的"页/反馈页本身改的名字保持
  * 一致，不是照抄法务原文的措辞（法务原文本来就不是这个项目写的）。
  *
+ * 联系客服改成真聊天任务卡：这里的"联系客服（Feedback）"从跳
+ * /feedback 表单页的静态 <Link>，换成 useContactSupport() 驱动的
+ * <button>（视觉上仍然是同一个"text-primary underline"文字链接样式，
+ * 只是不再是真的 <a> 标签——点击要先异步调用
+ * get_or_create_own_system_conversation() 拿到会话 id 才知道跳去哪，
+ * 不能用静态的 href）。这个页面本身不需要登录就能访问，未登录用户点击
+ * 会先跳 /login，见 useContactSupport 的注释。
+ *
  * 26 号卡（18 条旧 AppHeader 路由统一迁移到 TopBar）：改用 TopBar 的
  * nav-only 变体（带 title="隐私政策"），原来手写的 <h1> 删掉；"Last
  * Updated"这行是正文内容不是标题，继续保留，跟 terms-page.tsx 是同一处
  * 改动、同一个理由。
  */
 export function PrivacyPage() {
+  const { contactSupport, error: contactSupportError } = useContactSupport();
+
   return (
     <main>
       <TopBar variant="nav-only" title="隐私政策" />
@@ -161,11 +170,16 @@ export function PrivacyPage() {
       <h2 className={headingClassName}>十三、联系我们</h2>
       <p className={paragraphClassName}>
         如果您对本隐私政策有任何疑问、建议或请求，可通过网站内的
-        <Link to="/feedback" className="text-primary underline">
+        <button type="button" onClick={contactSupport} className="text-primary underline">
           联系客服（Feedback）
-        </Link>
+        </button>
         页面联系我们。
       </p>
+      {contactSupportError ? (
+        <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+          {contactSupportError}
+        </p>
+      ) : null}
 
       <p className="mb-4 text-base text-text">
         感谢您对 Saminest 的信任。我们将持续努力保护您的个人信息安全，并为您提供安全、可靠的租房、求租和二手交易平台。

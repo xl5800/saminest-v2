@@ -608,6 +608,7 @@ export type Database = {
           deleted_at: string | null
           edited_at: string | null
           id: string
+          image_path: string | null
           message_type: string
           notification_payload: Json | null
           ref_activity_id: string | null
@@ -622,6 +623,7 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          image_path?: string | null
           message_type?: string
           notification_payload?: Json | null
           ref_activity_id?: string | null
@@ -636,6 +638,7 @@ export type Database = {
           deleted_at?: string | null
           edited_at?: string | null
           id?: string
+          image_path?: string | null
           message_type?: string
           notification_payload?: Json | null
           ref_activity_id?: string | null
@@ -1061,6 +1064,25 @@ export type Database = {
         Args: { cancel_reason: string; target_activity_id: string }
         Returns: undefined
       }
+      admin_list_support_conversations: {
+        Args: never
+        Returns: {
+          avatar_url: string | null
+          conversation_id: string
+          display_name: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          user_id: string
+        }[]
+      }
+      admin_reply_to_support_conversation: {
+        Args: {
+          body: string | null
+          image_path?: string | null
+          target_conversation_id: string
+        }
+        Returns: undefined
+      }
       approve_activity_participant: {
         Args: { target_participant_id: string }
         Returns: undefined
@@ -1129,6 +1151,14 @@ export type Database = {
           p_new_origin_type: string
           p_other_user_id: string
         }
+        Returns: string
+      }
+      get_or_create_own_system_conversation: {
+        Args: never
+        Returns: string
+      }
+      get_or_create_system_conversation: {
+        Args: { target_user_id: string }
         Returns: string
       }
       get_post_image_snapshot: {

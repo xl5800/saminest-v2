@@ -54,8 +54,10 @@ import {
   createActivityConversation,
   createDirectConversation,
   createProfileConversation,
+  getOrCreateOwnSystemConversation,
   hasUnreadSystemNotification,
   listMyConversations,
+  listSupportConversationsForAdmin,
   markConversationAsRead
 } from "./conversations-repository";
 
@@ -217,6 +219,95 @@ describe("createProfileConversation", () => {
 
     await expect(createProfileConversation("user-2")).rejects.toMatchObject({
       code: "PROFILE_CONVERSATION_CREATE_ID_MISSING"
+    });
+  });
+});
+
+// 联系客服改成真聊天任务卡："联系客服"入口用。
+describe("getOrCreateOwnSystemConversation", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls get_or_create_own_system_conversation with no arguments and returns the conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: "conversation-1", error: null });
+
+    const result = await getOrCreateOwnSystemConversation();
+
+    expect(rpcMock).toHaveBeenCalledWith("get_or_create_own_system_conversation");
+    expect(result).toEqual({ conversationId: "conversation-1" });
+  });
+
+  it("throws a SUPPORT_CONVERSATION_CREATE_FAILED AppError when the RPC fails", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "not authenticated" }
+    });
+
+    await expect(getOrCreateOwnSystemConversation()).rejects.toMatchObject({
+      code: "SUPPORT_CONVERSATION_CREATE_FAILED"
+    });
+  });
+
+  it("throws an AppError when the RPC succeeds but returns no conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(getOrCreateOwnSystemConversation()).rejects.toMatchObject({
+      code: "SUPPORT_CONVERSATION_CREATE_ID_MISSING"
+    });
+  });
+});
+
+// 联系客服改成真聊天任务卡：管理员客服会话列表（/admin/support）。
+describe("listSupportConversationsForAdmin", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_list_support_conversations and maps rows to AdminSupportConversationListItem", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          conversation_id: "conversation-1",
+          user_id: "user-1",
+          display_name: "Alice",
+          avatar_url: null,
+          last_message_at: "2026-07-20T12:00:00.000Z",
+          last_message_preview: "你好，我想问一下我的帖子为什么被拒了"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listSupportConversationsForAdmin();
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_support_conversations");
+    expect(result).toEqual([
+      {
+        conversationId: "conversation-1",
+        userId: "user-1",
+        displayName: "Alice",
+        avatarUrl: null,
+        lastMessageAt: "2026-07-20T12:00:00.000Z",
+        lastMessagePreview: "你好，我想问一下我的帖子为什么被拒了"
+      }
+    ]);
+  });
+
+  it("returns an empty list without throwing when there are no support conversations", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(listSupportConversationsForAdmin()).resolves.toEqual([]);
+  });
+
+  it("throws an AppError when the RPC fails (e.g. caller is not an admin)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "only admins can list support conversations" }
+    });
+
+    await expect(listSupportConversationsForAdmin()).rejects.toMatchObject({
+      code: "ADMIN_SUPPORT_CONVERSATIONS_LIST_FAILED"
     });
   });
 });

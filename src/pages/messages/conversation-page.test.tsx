@@ -14,7 +14,9 @@ const {
   useBlockUserMutation,
   useUnblockUserMutation,
   blockMutateAsyncMock,
-  unblockMutateAsyncMock
+  unblockMutateAsyncMock,
+  uploadMessageImageMock,
+  removeMessageImageFileMock
 } = vi.hoisted(() => ({
   useMessagesQuery: vi.fn(),
   useSendMessageMutation: vi.fn(),
@@ -27,7 +29,9 @@ const {
   useBlockUserMutation: vi.fn(),
   useUnblockUserMutation: vi.fn(),
   blockMutateAsyncMock: vi.fn(),
-  unblockMutateAsyncMock: vi.fn()
+  unblockMutateAsyncMock: vi.fn(),
+  uploadMessageImageMock: vi.fn(),
+  removeMessageImageFileMock: vi.fn()
 }));
 
 vi.mock("../../features/messages/use-messages-query", () => ({
@@ -64,6 +68,15 @@ vi.mock("../../features/blocks/use-block-user-mutation", () => ({
 }));
 vi.mock("../../features/blocks/use-unblock-user-mutation", () => ({
   useUnblockUserMutation
+}));
+// 联系客服改成真聊天任务卡：图片上传服务单独 mock 掉，避免测试真的
+// 压缩/打到 Supabase Storage——跟这个文件里其它 hook/仓库函数是同一个
+// "mock 网络边界，不 mock 组件树"的原则。
+vi.mock("../../services/storage/message-image-storage-service", () => ({
+  messageImageStorageService: {
+    uploadMessageImage: uploadMessageImageMock,
+    removeMessageImageFile: removeMessageImageFileMock
+  }
 }));
 
 import { useAuthStore } from "../../store/auth-store";
@@ -102,6 +115,8 @@ describe("MessageConversationPage", () => {
     useUnblockUserMutation.mockReset();
     blockMutateAsyncMock.mockReset();
     unblockMutateAsyncMock.mockReset();
+    uploadMessageImageMock.mockReset();
+    removeMessageImageFileMock.mockReset();
 
     useMessagesQuery.mockReturnValue({
       data: [],
@@ -486,6 +501,211 @@ describe("MessageConversationPage", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
+  // 联系客服改成真聊天任务卡：composer 新增的"添加图片"入口。
+  describe("images (联系客服改成真聊天任务卡)", () => {
+    function createImageFile(
+      name = "screenshot.png",
+      type = "image/png",
+      sizeBytes = 1024
+    ): File {
+      return new File([new Uint8Array(sizeBytes)], name, { type });
+    }
+
+    function getImageInput(): HTMLInputElement {
+      return screen.getByLabelText("添加图片") as HTMLInputElement;
+    }
+
+    it("enables the send button when only an image is selected, with no text", () => {
+      renderPage();
+
+      const sendButton = screen.getByRole("button", { name: "发送" });
+      expect(sendButton).toBeDisabled();
+
+      fireEvent.change(getImageInput(), { target: { files: [createImageFile()] } });
+
+      expect(sendButton).toBeEnabled();
+    });
+
+    it("shows a local preview of the selected image with a way to remove it", () => {
+      renderPage();
+
+      fireEvent.change(getImageInput(), { target: { files: [createImageFile()] } });
+
+      const removeButton = screen.getByRole("button", { name: "移除图片" });
+      expect(removeButton).toBeInTheDocument();
+
+      fireEvent.click(removeButton);
+
+      expect(screen.queryByRole("button", { name: "移除图片" })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
+    });
+
+    it("rejects an unsupported image type with an inline error, and does not select the file", () => {
+      renderPage();
+
+      fireEvent.change(getImageInput(), {
+        target: { files: [createImageFile("photo.gif", "image/gif")] }
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "只支持 JPEG、PNG 或 WEBP 格式的图片。"
+      );
+      expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
+    });
+
+    it("uploads the image, then sends the message with the resulting imagePath", async () => {
+      uploadMessageImageMock.mockResolvedValue({ imagePath: "conversation-1/image-1.webp" });
+      mutateAsyncMock.mockResolvedValue({ id: "message-1" });
+
+      renderPage();
+      fireEvent.change(getImageInput(), { target: { files: [createImageFile()] } });
+      fireEvent.change(screen.getByLabelText("消息内容"), {
+        target: { value: "这是截图" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+      await waitFor(() => {
+        expect(uploadMessageImageMock).toHaveBeenCalledWith({
+          file: expect.any(File),
+          conversationId: "conversation-1"
+        });
+      });
+      await waitFor(() => {
+        expect(mutateAsyncMock).toHaveBeenCalledWith({
+          senderId: "user-1",
+          body: "这是截图",
+          imagePath: "conversation-1/image-1.webp"
+        });
+      });
+    });
+
+    it("allows sending an image with no text at all", async () => {
+      uploadMessageImageMock.mockResolvedValue({ imagePath: "conversation-1/image-1.webp" });
+      mutateAsyncMock.mockResolvedValue({ id: "message-1" });
+
+      renderPage();
+      fireEvent.change(getImageInput(), { target: { files: [createImageFile()] } });
+      fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+      await waitFor(() => {
+        expect(mutateAsyncMock).toHaveBeenCalledWith({
+          senderId: "user-1",
+          body: undefined,
+          imagePath: "conversation-1/image-1.webp"
+        });
+      });
+    });
+
+    it("shows an error and does not send when the image upload fails", async () => {
+      uploadMessageImageMock.mockRejectedValue(new Error("network down"));
+
+      renderPage();
+      fireEvent.change(getImageInput(), { target: { files: [createImageFile()] } });
+      fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "图片发送失败，请稍后重试。"
+      );
+      expect(mutateAsyncMock).not.toHaveBeenCalled();
+    });
+
+    it("cleans up the uploaded image when sending the message fails afterwards", async () => {
+      uploadMessageImageMock.mockResolvedValue({ imagePath: "conversation-1/image-1.webp" });
+      mutateAsyncMock.mockRejectedValue(new Error("network down"));
+      removeMessageImageFileMock.mockResolvedValue(undefined);
+
+      renderPage();
+      fireEvent.change(getImageInput(), { target: { files: [createImageFile()] } });
+      fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+      await waitFor(() => {
+        expect(removeMessageImageFileMock).toHaveBeenCalledWith("conversation-1/image-1.webp");
+      });
+      expect(await screen.findByRole("alert")).toHaveTextContent("发送失败，请稍后重试。");
+    });
+
+    it("renders an image thumbnail in a message bubble and opens it in the lightbox on click", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: "seller-1",
+            body: null,
+            notificationPayload: null,
+            imageUrl: "https://signed.example.com/image-1.webp",
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      const thumbnail = container.querySelector('img[src="https://signed.example.com/image-1.webp"]');
+      expect(thumbnail).toBeInTheDocument();
+      expect(screen.queryByRole("dialog", { name: "查看大图" })).not.toBeInTheDocument();
+
+      fireEvent.click(thumbnail as Element);
+
+      expect(screen.getByRole("dialog", { name: "查看大图" })).toBeInTheDocument();
+    });
+
+    it("does not render a text bubble for an image-only message", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: "seller-1",
+            body: null,
+            notificationPayload: null,
+            imageUrl: "https://signed.example.com/image-1.webp",
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      const bubble = container.querySelector('[data-message-owner="other"]');
+      // 这条消息只有图片、没有文字——气泡容器里除了缩略图之外不应该再有
+      // 一个空的文字气泡 <div>（文字气泡固定带 whitespace-pre-wrap 这个
+      // 类名，缩略图的 <img> 不会有）。
+      expect(bubble?.querySelectorAll(".whitespace-pre-wrap")).toHaveLength(0);
+    });
+  });
+
+  // 联系客服改成真聊天任务卡：管理员回复（sender_id 为 null、
+  // notification_payload 也为 null）不是结构化系统通知卡片，是正常的
+  // 聊天气泡。
+  describe("admin replies (联系客服改成真聊天任务卡)", () => {
+    it("renders an admin reply as a normal chat bubble on the 'other' side, labelled '官方客服', not a system notification card", () => {
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "你好，你的帖子因为包含联系方式被拒。",
+            notificationPayload: null,
+            imageUrl: null,
+            createdAt: "2026-07-20T12:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      expect(screen.getByText("你好，你的帖子因为包含联系方式被拒。")).toBeInTheDocument();
+      expect(screen.getByText("官方客服")).toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="other"]')).toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="system"]')).not.toBeInTheDocument();
+    });
+  });
+
   it("keeps the compact composer above the safe area and reserves message-list bottom space", () => {
     renderPage();
 
@@ -777,13 +997,17 @@ describe("MessageConversationPage", () => {
       expect(screen.queryByRole("link")).not.toBeInTheDocument();
     });
 
-    it("does not render the composer form for a system conversation", () => {
+    // 联系客服改成真聊天任务卡：system 会话现在也能双向聊天（用户可以
+    // 主动发起、客服可以回复），composer 不再对 system 会话特殊隐藏——
+    // 这条测试反过来断言"确实会渲染"，是上面这条历史行为的对立面，不是
+    // 遗漏。
+    it("renders the composer form for a system conversation too (联系客服改成真聊天任务卡)", () => {
       mockSystemConversation();
 
       renderPage();
 
-      expect(screen.queryByTestId("conversation-composer")).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("消息内容")).not.toBeInTheDocument();
+      expect(screen.getByTestId("conversation-composer")).toBeInTheDocument();
+      expect(screen.getByLabelText("消息内容")).toBeInTheDocument();
     });
 
     it("renders a system notification message as a card (icon + title + summary + time), not a chat bubble, and does not treat it as a consecutive message needing an avatar/spacer", () => {

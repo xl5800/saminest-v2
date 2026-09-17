@@ -1,8 +1,9 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Megaphone } from "lucide-react";
-import { Fragment, type FormEvent, useEffect, useRef, useState } from "react";
+import { Bell, Headset, ImagePlus, Megaphone } from "lucide-react";
+import { Fragment, type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { ImageLightbox } from "../../components/image-lightbox";
 import { useBlockUserMutation } from "../../features/blocks/use-block-user-mutation";
 import { useIsBlockedPairQuery } from "../../features/blocks/use-is-blocked-pair-query";
 import { useIsBlockingQuery } from "../../features/blocks/use-is-blocking-query";
@@ -13,12 +14,13 @@ import { useSendMessageMutation } from "../../features/messages/use-send-message
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { markConversationAsRead } from "../../repositories/conversations-repository";
 import type { NotificationPayload } from "../../repositories/messages-repository";
+import { messageImageStorageService } from "../../services/storage/message-image-storage-service";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
 
 const MESSAGE_MAX_LENGTH = 5000;
-const EMPTY_MESSAGE_ERROR = "请输入消息内容。";
+const EMPTY_MESSAGE_ERROR = "请输入文字或选一张图片再发送。";
 const MESSAGE_TOO_LONG_ERROR = `消息内容不能超过 ${MESSAGE_MAX_LENGTH} 字。`;
 const DEFAULT_ERROR_MESSAGE = "发送失败，请稍后重试。";
 const SESSION_EXPIRED_MESSAGE = "登录状态已失效，请重新登录后再发送消息。";
@@ -29,6 +31,15 @@ const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
 const SYSTEM_NOTIFICATION_SUBTITLE = "官方通知";
 const BLOCK_ACTION_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const BLOCKED_COMPOSER_MESSAGE = "你们之间存在屏蔽关系，无法互发消息。";
+// 联系客服改成真聊天任务卡：管理员回复（sender_id 为 null 但
+// notification_payload 也为 null，不是结构化通知卡片）在聊天气泡旁边
+// 显示的发送者标签，跟 SYSTEM_NOTIFICATION_LABEL（🔔通知卡片专用）是
+// 两回事，不要混用。
+const ADMIN_REPLY_SENDER_LABEL = "官方客服";
+const IMAGE_UPLOAD_ERROR_MESSAGE = "图片发送失败，请稍后重试。";
+const ACCEPTED_MESSAGE_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_MESSAGE_IMAGE_SIZE_BYTES = 20 * 1024 * 1024;
+const MAX_MESSAGE_IMAGE_SIZE_MB = MAX_MESSAGE_IMAGE_SIZE_BYTES / (1024 * 1024);
 
 interface AvatarProps {
   avatarUrl: string | null;
@@ -41,8 +52,12 @@ interface AvatarProps {
  * 头像通用展示逻辑：有图用 <img>，没有就用昵称首字母圆形占位——header
  * 和消息气泡旁边的头像共用这一份逻辑，只是尺寸不一样（sizeClassName 由
  * 调用方传入），不写两份几乎一样的 img/占位判断。
+ *
+ * 联系客服改成真聊天任务卡：这里加了 export——管理员后台的客服会话详情
+ * 页（admin-support-conversation-page.tsx）需要渲染用户真实头像/首字母
+ * 占位，跟这个页面是同一套展示逻辑，直接复用，不重写一份。
  */
-function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
+export function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
   return avatarUrl ? (
     <img
       src={avatarUrl}
@@ -61,7 +76,7 @@ function Avatar({ avatarUrl, initial, sizeClassName, testId }: AvatarProps) {
   );
 }
 
-interface SystemNotificationCardProps {
+export interface SystemNotificationCardProps {
   payload: NotificationPayload;
   createdAt: string;
 }
@@ -72,8 +87,12 @@ interface SystemNotificationCardProps {
  * 时间，整张卡片占满可用宽度（不是 75% 那种气泡宽度）。有 link 时整张
  * 卡片是一个 <Link>，点击跳转；没有 link 就是纯展示，不可点——用
  * `payload.link != null` 判断，跟 null/undefined 都不算"有链接"。
+ *
+ * 联系客服改成真聊天任务卡：这里加了 export，理由跟 Avatar 一样——管理员
+ * 后台的客服会话详情页也需要展示同一条会话里穿插的系统通知消息（比如
+ * "帖子审核通过"），用同一个组件保持视觉一致，不重新实现一份。
  */
-function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardProps) {
+export function SystemNotificationCard({ payload, createdAt }: SystemNotificationCardProps) {
   const content = (
     <div className="flex w-full items-start gap-3 rounded-2xl border border-border bg-card p-3">
       <div
@@ -304,6 +323,46 @@ function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCard
  * 保持 null（不需要审核的报名、或者退出，没有"查看申请"这回事），不会
  * 出现这行链接，判断依据就是 message.refActivityId 这一列本身有没有值，
  * 不解析 body 文本内容找活动。
+ *
+ * 联系客服改成真聊天任务卡（这次改动）："联系客服"从填一次性表单
+ * （/feedback）改成打开/新建自己的 origin_type = 'system' 会话，这个
+ * 页面因此要能支撑"system 会话也是一个真正能双向聊天的会话"：
+ *
+ * 1. 输入框（`<form data-testid="conversation-composer">`）和"屏蔽关系"
+ *    横幅原来都额外要求 `!isSystemConversation` 才渲染——之前的
+ *    system 会话是纯单向通知，"没有人会收到回复，不应该让用户以为可以
+ *    对系统说话"这条前提这次变了，system 会话现在可以双向聊天，这两处
+ *    的 `!isSystemConversation` 判断都去掉了。屏蔽关系本身依然不适用于
+ *    system 会话（没有"对方"），但不需要专门再判断一次——system 会话
+ *    的 otherUserId 恒为 undefined，useIsBlockedPairQuery 因此恒为
+ *    禁用查询（isBlockedPair 恒为 falsy 的 undefined），`!isBlockedPair`
+ *    对 system 会话自然成立，composer 会正常显示。
+ * 2. 消息分类新增第三种：`sender_id` 为 null 但 `notification_payload`
+ *    也为 null 的消息（isSystemMessage 已经是 false，不会被误判成
+ *    通知卡片）——这是 admin_reply_to_support_conversation() 插入的
+ *    客服聊天回复，isAdminReply 这个派生布尔值标记它，渲染上仍然走
+ *    "对方"气泡这条既有分支（isMine 天然是 false），只是头像换成
+ *    Headset 图标（区别于 header 的 Bell，避免用户把"人工客服在回复"
+ *    误认成"又一条自动通知"），气泡上方加一行"官方客服"标签。
+ * 3. 输入框旁边新增"添加图片"入口（ImagePlus 图标，label 包一个隐藏
+ *    input，照抄 feedback-image-picker.tsx 的模式），选中的图片先本地
+ *    预览，点"发送"时才用 messageImageStorageService 压缩+上传到私有的
+ *    message-images 桶，拿到 Storage 路径后随消息一起插入（body/图片
+ *    至少一个非空，两个都可以有，数据库层 messages_body_or_image_check
+ *    兜底）。消息气泡里如果有图片，缩略图显示在文字上面，点击用现成的
+ *    ImageLightbox 组件（帖子详情页图片查看器）打开大图，不新写一个
+ *    查看器。上传失败、或者上传成功但插入消息失败，分别有各自的错误
+ *    处理（后者会尝试补偿删除已经传上去的孤儿图片，失败只
+ *    console.error，不盖过发送失败这个更重要的提示），见 handleSubmit
+ *    的注释。
+ *
+ * Avatar / SystemNotificationCard 这两个组件加了 export——管理员后台新增
+ * 的客服会话详情页（admin-support-conversation-page.tsx）复用它们渲染
+ * 用户头像和穿插在对话里的系统通知消息，不重新实现一份视觉上本该一致
+ * 的东西。那个页面不是这个组件的另一个变体/参数化分支——管理员视角的
+ * "我方/对方"跟这里刚好相反（客服自己的回复才是"我方"），header 也完全
+ * 不需要屏蔽菜单/对方主页链接这些用户视角特有的东西，独立成一个页面
+ * 更清楚，不硬塞进这个文件用一堆 isAdminView 分支参数化。
  */
 export function MessageConversationPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -325,6 +384,18 @@ export function MessageConversationPage() {
   const [body, setBody] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // 联系客服改成真聊天任务卡：一次只能带一张图（不做多图消息），选好之后
+  // 先本地预览，真正的压缩+上传延迟到点"发送"那一刻才做——跟
+  // feedback-image-picker.tsx"选择/校验/预览"和"上传"分属两个不同阶段是
+  // 同一个模式，只是这里只有一张图，不需要一个数组。
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  // 点开的图片（聊天气泡里的缩略图或者对方/管理员发来的图）大图预览，
+  // 复用现成的 ImageLightbox 组件（帖子详情页图片查看器），null 表示
+  // 没有打开。
+  const [lightboxImageUrl, setLightboxImageUrl] = useState<string | null>(null);
 
   const conversation = conversations?.find((item) => item.id === conversationId);
   const isSystemConversation = conversation?.originType === "system";
@@ -390,6 +461,48 @@ export function MessageConversationPage() {
       });
   }, [conversationId, currentUserId, queryClient]);
 
+  // 每次选中的图片变化时重新生成预览地址，下一次变化/卸载时撤销上一个，
+  // 避免 URL.createObjectURL 造成的内存泄漏——照抄
+  // feedback-image-picker.tsx 同一段逻辑，这里只有一张图，不需要数组。
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(imageFile);
+    setImagePreviewUrl(url);
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [imageFile]);
+
+  function handleImageInputChange(event: ChangeEvent<HTMLInputElement>): void {
+    const file = event.target.files?.[0] ?? null;
+    // 允许再次选中同一个文件也能触发 change 事件。
+    event.target.value = "";
+    if (!file) return;
+
+    setImageError(null);
+    if (!ACCEPTED_MESSAGE_IMAGE_MIME_TYPES.includes(file.type)) {
+      setImageError("只支持 JPEG、PNG 或 WEBP 格式的图片。");
+      return;
+    }
+    if (file.size === 0) {
+      setImageError("文件是空的，无法上传。");
+      return;
+    }
+    if (file.size > MAX_MESSAGE_IMAGE_SIZE_BYTES) {
+      setImageError(`文件大小不能超过 ${MAX_MESSAGE_IMAGE_SIZE_MB}MB。`);
+      return;
+    }
+    setImageFile(file);
+  }
+
+  function handleRemoveImage(): void {
+    setImageFile(null);
+    setImageError(null);
+  }
+
   function handleBack(): void {
     if (location.key === "default") {
       navigate("/messages", { replace: true });
@@ -419,7 +532,7 @@ export function MessageConversationPage() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
-    if (sendMessageMutation.isPending) return;
+    if (sendMessageMutation.isPending || isUploadingImage) return;
 
     setValidationError(null);
     setSubmitError(null);
@@ -431,7 +544,9 @@ export function MessageConversationPage() {
     }
 
     const trimmedBody = body.trim();
-    if (!trimmedBody) {
+    // 联系客服改成真聊天任务卡：文字和图片可以只有其中一个，但不能两个
+    // 都没有——只有"两者都为空"才提示错误，不再要求文字必填。
+    if (!trimmedBody && !imageFile) {
       setValidationError(EMPTY_MESSAGE_ERROR);
       return;
     }
@@ -440,10 +555,45 @@ export function MessageConversationPage() {
       return;
     }
 
+    // 先压缩+上传图片（如果选了的话），拿到 Storage 路径之后再发消息——
+    // 跟 submit-feedback-page.tsx"先传图、再插入数据库行"是同一个顺序。
+    // 上传失败直接展示错误、不继续发消息，避免出现"消息发出去了，但图片
+    // 没传上去"这种半成品状态。
+    let imagePath: string | undefined;
+    if (imageFile) {
+      setIsUploadingImage(true);
+      try {
+        const result = await messageImageStorageService.uploadMessageImage({
+          file: imageFile,
+          conversationId: conversationId ?? ""
+        });
+        imagePath = result.imagePath;
+      } catch {
+        setIsUploadingImage(false);
+        setSubmitError(IMAGE_UPLOAD_ERROR_MESSAGE);
+        return;
+      }
+      setIsUploadingImage(false);
+    }
+
     try {
-      await sendMessageMutation.mutateAsync({ senderId, body: trimmedBody });
+      await sendMessageMutation.mutateAsync({
+        senderId,
+        body: trimmedBody || undefined,
+        imagePath
+      });
       setBody("");
+      handleRemoveImage();
     } catch (error) {
+      // 图片已经传到 Storage、但这条消息插进数据库失败——补偿清理这个
+      // 孤儿文件，跟 feedback-image-storage-service.ts 的
+      // removeFeedbackImageFiles 是同一个模式：清理失败只 console.error，
+      // 不能让"清理失败"盖过原本更重要的"发送失败"提示。
+      if (imagePath) {
+        messageImageStorageService.removeMessageImageFile(imagePath).catch((cleanupError) => {
+          console.error("清理发送失败后残留的聊天图片失败：", cleanupError);
+        });
+      }
       // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：
       // MESSAGE_SEND_FORBIDDEN 是一个明确、可操作的失败原因（重试没有
       // 用），跟其它未知失败原因共用一条"请稍后重试"文案会误导用户。见
@@ -474,7 +624,10 @@ export function MessageConversationPage() {
     container.scrollTop = container.scrollHeight;
   }, [conversationId, messagesPending, messageList.length]);
 
-  const sendDisabled = sendMessageMutation.isPending || body.trim().length === 0;
+  // 联系客服改成真聊天任务卡：只要有文字或者有图片就能发，两者都为空才
+  // 禁用——不再要求文字必填。
+  const hasComposerContent = body.trim().length > 0 || imageFile !== null;
+  const sendDisabled = sendMessageMutation.isPending || isUploadingImage || !hasComposerContent;
   // 28 号卡：我方消息气泡右侧头像的昵称首字母兜底——跟 otherPartyLabel
   // 用同一个"取首字母"规则（见 profile-summary.tsx 的 avatarInitial），
   // 没有昵称时兜底"我"而不是"?"，因为这里确定就是当前登录用户自己，不是
@@ -605,6 +758,15 @@ export function MessageConversationPage() {
               );
               const isMine = message.senderId === currentUserId;
               const isSystemMessage = message.notificationPayload !== null;
+              // 联系客服改成真聊天任务卡新增：sender_id 为 null 但
+              // notification_payload 也为 null 的消息——不是结构化系统
+              // 通知卡片（isSystemMessage 已经是 false），是
+              // admin_reply_to_support_conversation() 插入的客服聊天
+              // 回复。isMine 对这种消息天然是 false（null 不等于任何
+              // currentUserId），会正常落进下面的"对方"气泡分支，这里
+              // 只是额外标记一下，好换成"官方客服"的头像/标签，不需要
+              // 单独开一个新的渲染分支。
+              const isAdminReply = !isSystemMessage && message.senderId === null;
               return (
                 <Fragment key={message.id}>
                   {showTimeDivider ? (
@@ -657,14 +819,55 @@ export function MessageConversationPage() {
                           头像和气泡之间的间距如果还是 8px 显得略挤，加大
                           2px 更协调，数值以实际截图观感为准。 */}
                       {!isMine ? (
-                        <Avatar
-                          avatarUrl={conversation?.otherAvatarUrl ?? null}
-                          initial={otherPartyLabel.charAt(0)}
-                          sizeClassName="h-9 w-9"
-                          testId="message-avatar"
-                        />
+                        isAdminReply ? (
+                          // 联系客服改成真聊天任务卡：客服回复不是任何
+                          // 真实用户，没有头像可用，跟 header 的系统
+                          // 会话图标（Bell）区分开——这里用 Headset
+                          // 图标，视觉上表达"人工客服"而不是"系统通知"。
+                          <div
+                            aria-hidden="true"
+                            data-testid="message-avatar"
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+                          >
+                            <Headset size={18} />
+                          </div>
+                        ) : (
+                          <Avatar
+                            avatarUrl={conversation?.otherAvatarUrl ?? null}
+                            initial={otherPartyLabel.charAt(0)}
+                            sizeClassName="h-9 w-9"
+                            testId="message-avatar"
+                          />
+                        )
                       ) : null}
                       <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
+                        {/* 联系客服改成真聊天任务卡：客服回复的气泡上面
+                            加一行"官方客服"标签——系统会话的 header 固定
+                            显示"Saminest 通知"，如果不额外标注，用户没法
+                            从气泡本身分清"这是自动通知"还是"真人客服在
+                            回复"。 */}
+                        {isAdminReply ? (
+                          <span className="mb-1 text-xs font-medium text-text-muted">
+                            {ADMIN_REPLY_SENDER_LABEL}
+                          </span>
+                        ) : null}
+                        {/* 联系客服改成真聊天任务卡：图片缩略图放在文字
+                            气泡上面（跟大多数聊天 App 的排布一致），点击
+                            用 ImageLightbox 打开大图；body 为空（纯图片
+                            消息）时不渲染下面的文字气泡。 */}
+                        {message.imageUrl ? (
+                          <button
+                            type="button"
+                            onClick={() => setLightboxImageUrl(message.imageUrl)}
+                            className="mb-1 block overflow-hidden rounded-2xl"
+                          >
+                            <img
+                              src={message.imageUrl}
+                              alt=""
+                              className="h-40 w-40 object-cover"
+                            />
+                          </button>
+                        ) : null}
                         {/* 全 App 视觉 Token 体系（第二批）：现状核实过——
                             自己发的气泡已经是 bg-primary + text-white，
                             完全符合 BARRY 方案，没有改；对方气泡原来是
@@ -673,16 +876,21 @@ export function MessageConversationPage() {
                             灰背景没有边界会糊在一起——补上
                             border border-border，让气泡边界跟背景拉开，
                             对应 BARRY 方案"对方消息气泡 = bg-card 底 +
-                            border-border 边框 + text-text 深字"这条。 */}
-                        <div
-                          className={
-                            isMine
-                              ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3.5 py-2.5 text-base text-white [overflow-wrap:anywhere]"
-                              : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
-                          }
-                        >
-                          {message.body}
-                        </div>
+                            border-border 边框 + text-text 深字"这条。
+                            联系客服改成真聊天任务卡：body 现在可能为
+                            null（纯图片消息），这一整块改成条件渲染，
+                            不再无条件展示一个空气泡。 */}
+                        {message.body ? (
+                          <div
+                            className={
+                              isMine
+                                ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3.5 py-2.5 text-base text-white [overflow-wrap:anywhere]"
+                                : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
+                            }
+                          >
+                            {message.body}
+                          </div>
+                        ) : null}
                         {/* 30 号卡：只有"申请加入（需要审核）"这条通知消息带
                             ref_activity_id（见 notifyOrganizer() 的注释），
                             只在收到方（!isMine，也就是发起人自己）这一侧
@@ -721,6 +929,20 @@ export function MessageConversationPage() {
         ) : null}
       </section>
 
+      {/* 联系客服改成真聊天任务卡：composer 原来额外要求
+          !isSystemConversation 才渲染——system 会话之前是纯单向通知，
+          不需要输入框；现在系统会话本身也能双向聊天（用户可以主动发起、
+          客服可以回复），这个条件去掉了，composer 只看 !isBlockedPair
+          （system 会话没有"对方"，otherUserId 恒为 undefined，
+          useIsBlockedPairQuery 因此恒为禁用查询、data 恒为 undefined
+          这个 falsy 值，!isBlockedPair 对 system 会话天然为 true，正常
+          显示）。"屏蔽关系"横幅继续保留 !isSystemConversation 这个
+          判断——屏蔽这个概念对 system 会话本来就没有意义（没有"对方"可以
+          屏蔽），哪怕 isBlockedPair 因为某种异常变成了 true，也不应该
+          展示一条"你们之间存在屏蔽关系"这种在客服会话里完全说不通的
+          文案；这种异常情况下 composer 依然会因为 isBlockedPair 为
+          true 被 !isBlockedPair 挡住，只是不显示这条不适用的横幅去
+          "解释"，这是刻意的取舍，不是遗漏。 */}
       {!isSystemConversation && isBlockedPair ? (
         <div
           data-testid="conversation-blocked-banner"
@@ -731,7 +953,7 @@ export function MessageConversationPage() {
         </div>
       ) : null}
 
-      {!isSystemConversation && !isBlockedPair ? (
+      {!isBlockedPair ? (
         <form
           onSubmit={handleSubmit}
           noValidate
@@ -749,6 +971,31 @@ export function MessageConversationPage() {
               {submitError}
             </p>
           ) : null}
+          {imageError ? (
+            <p role="alert" className="rounded-xl border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {imageError}
+            </p>
+          ) : null}
+          {/* 联系客服改成真聊天任务卡：选好图片之后的本地预览，带一个
+              移除按钮——发送成功/取消都会清空，见 handleSubmit /
+              handleRemoveImage。 */}
+          {imagePreviewUrl ? (
+            <div className="relative w-fit">
+              <img
+                src={imagePreviewUrl}
+                alt=""
+                className="h-16 w-16 rounded-xl object-cover"
+              />
+              <button
+                type="button"
+                aria-label="移除图片"
+                onClick={handleRemoveImage}
+                className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-xs text-white"
+              >
+                ×
+              </button>
+            </div>
+          ) : null}
           {/* 全 App 视觉 Token 体系（第二批）：输入框 focus 态跟其它表单
               统一换成柔光（focus:ring-4 focus:ring-primary-light），
               bg-bg 这个底色是刻意保留的——输入框陷在白色 bg-card 工具栏
@@ -757,6 +1004,24 @@ export function MessageConversationPage() {
               rounded-xl（12px）换成新的 rounded-button（14px）——这是
               矩形主 CTA，不是圆形/胶囊按钮。 */}
           <div className="flex min-w-0 items-center gap-2">
+            {/* 联系客服改成真聊天任务卡新增："添加图片"入口，照抄
+                feedback-image-picker.tsx"可点击的 label 包一个隐藏
+                input"这个模式，不用额外的 ref/click() 触发。aria-label
+                直接放在 <input> 本身上，不是放在外层 <label> 上——外层
+                <label> 没有可见文字（只有一个图标），如果只在 <label>
+                上写 aria-label，那只是给这个 <label> 元素自己起了个
+                可访问名字，不会传导成里面这个 <input> 的可访问名字，
+                getByLabelText("添加图片") 会找不到它。 */}
+            <label className="flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full border border-border text-text-muted hover:bg-bg">
+              <ImagePlus size={20} aria-hidden="true" />
+              <input
+                type="file"
+                aria-label="添加图片"
+                accept={ACCEPTED_MESSAGE_IMAGE_MIME_TYPES.join(",")}
+                onChange={handleImageInputChange}
+                className="sr-only"
+              />
+            </label>
             <label className="min-w-0 flex-1">
               <span className="sr-only">消息内容</span>
               <textarea
@@ -772,10 +1037,18 @@ export function MessageConversationPage() {
               disabled={sendDisabled}
               className="h-12 shrink-0 rounded-button bg-primary px-4 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {sendMessageMutation.isPending ? "发送中…" : "发送"}
+              {isUploadingImage ? "上传中…" : sendMessageMutation.isPending ? "发送中…" : "发送"}
             </button>
           </div>
         </form>
+      ) : null}
+
+      {lightboxImageUrl ? (
+        <ImageLightbox
+          images={[lightboxImageUrl]}
+          initialIndex={0}
+          onClose={() => setLightboxImageUrl(null)}
+        />
       ) : null}
     </main>
   );

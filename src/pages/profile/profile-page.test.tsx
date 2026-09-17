@@ -1,16 +1,29 @@
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getCurrentUserRole, getMyProfile, signOut, navigateMock } = vi.hoisted(() => ({
+const {
+  getCurrentUserRole,
+  getMyProfile,
+  signOut,
+  navigateMock,
+  getOrCreateOwnSystemConversation
+} = vi.hoisted(() => ({
   getCurrentUserRole: vi.fn(),
   getMyProfile: vi.fn(),
   signOut: vi.fn(),
-  navigateMock: vi.fn()
+  navigateMock: vi.fn(),
+  getOrCreateOwnSystemConversation: vi.fn()
 }));
 
 vi.mock("../../repositories/profiles-repository", () => ({
   getCurrentUserRole,
   getMyProfile
+}));
+// 联系客服改成真聊天任务卡："帮助与客服"这一行改成调用这个仓库函数再
+// 跳转，见下面"帮助与客服"那组测试——单独 mock 掉，避免测试真的打到
+// Supabase。
+vi.mock("../../repositories/conversations-repository", () => ({
+  getOrCreateOwnSystemConversation
 }));
 vi.mock("../../services/auth/auth-service", () => ({
   authService: { signOut }
@@ -40,6 +53,7 @@ describe("ProfilePage", () => {
     getMyProfile.mockReset();
     signOut.mockReset();
     navigateMock.mockReset();
+    getOrCreateOwnSystemConversation.mockReset();
     getCurrentUserRole.mockResolvedValue("user");
     getMyProfile.mockResolvedValue({ displayName: "Alice" });
   });
@@ -310,24 +324,33 @@ describe("ProfilePage", () => {
   // 设置/后台管理（仅管理员）。公开主页 Facebook 风格头图改版（联动）
   // 又在最前面加了一行"编辑个人信息"（原来在头像卡片右上角的入口挪到
   // 这里，见上面 avatar card 那组测试）。
+  //
+  // 联系客服改成真聊天任务卡："帮助与客服"这一行不再是跳 /feedback 的
+  // <Link>，改成 <button onClick={contactSupport}>——下面的行序测试因此
+  // 改用 querySelectorAll("a, button") 按 DOM 顺序取这几行（不能再用
+  // getAllByRole("link")，那样会漏掉这一行，因为它现在不是链接）；这个
+  // 按钮的实际点击行为单独放进"帮助与客服"这组新测试里验证。
   describe("'账号与服务' group card (24.4 + 公开主页 Facebook 风格头图改版联动)", () => {
-    it("shows '编辑个人信息' as the first row, linking to /profile/edit, then '帮助与客服' (renamed from '联系客服') linking to /feedback, and '设置' linking to /settings, for a non-admin user (no 后台管理 row)", async () => {
+    it("shows '编辑个人信息' as the first row (a link to /profile/edit), then '帮助与客服' (a button, renamed from '联系客服'), and '设置' (a link) for a non-admin user (no 后台管理 row)", async () => {
       getCurrentUserRole.mockResolvedValue("user");
 
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
       const group = screen.getByRole("navigation", { name: "账号与服务" });
-      const links = within(group).getAllByRole("link");
-      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual([
+      const rows = group.querySelectorAll("a, button");
+      expect(Array.from(rows).map((row) => row.textContent?.replace("›", ""))).toEqual([
         "编辑个人信息",
         "帮助与客服",
         "设置"
       ]);
-      expect(links[0]).toHaveAttribute("href", "/profile/edit");
-      expect(links[1]).toHaveAttribute("href", "/feedback");
-      expect(links[2]).toHaveAttribute("href", "/settings");
+      expect(rows[0]).toHaveAttribute("href", "/profile/edit");
+      expect(rows[1].tagName).toBe("BUTTON");
+      expect(rows[2]).toHaveAttribute("href", "/settings");
       expect(screen.queryByText("联系客服")).not.toBeInTheDocument();
+      // /feedback 这个路由本身没有删，但这个按钮不再指向它——确认这一行
+      // 确实不是一个还带着旧 href 的 <a>。
+      expect(screen.queryByRole("link", { name: "帮助与客服" })).not.toBeInTheDocument();
     });
 
     it("shows '后台管理' as the fourth row, linking to /admin/posts, only for an admin account", async () => {
@@ -338,16 +361,16 @@ describe("ProfilePage", () => {
       const group = await screen.findByRole("navigation", { name: "账号与服务" });
       // isAdmin 是独立的一次异步查询（useIsAdminQuery），跟分组卡片本身
       // 的渲染时机不是同一个 tick——先等"后台管理"这一行真的出现，再取
-      // 整组链接顺序，避免在 isAdmin 还没回来之前就断言。
+      // 整组行序，避免在 isAdmin 还没回来之前就断言。
       await within(group).findByRole("link", { name: /后台管理/ });
-      const links = within(group).getAllByRole("link");
-      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual([
+      const rows = group.querySelectorAll("a, button");
+      expect(Array.from(rows).map((row) => row.textContent?.replace("›", ""))).toEqual([
         "编辑个人信息",
         "帮助与客服",
         "设置",
         "后台管理"
       ]);
-      expect(links[3]).toHaveAttribute("href", "/admin/posts");
+      expect(rows[3]).toHaveAttribute("href", "/admin/posts");
     });
 
     // 24.1 调查结论：这个权限判断（useIsAdminQuery，跟 RequireAdmin 路由
@@ -359,6 +382,41 @@ describe("ProfilePage", () => {
 
       await screen.findByText("Alice");
       expect(screen.queryByRole("link", { name: /后台管理/ })).not.toBeInTheDocument();
+    });
+  });
+
+  // 联系客服改成真聊天任务卡：这组测试是 useContactSupport() 这个共享
+  // hook 的主要覆盖点（其它调用方——privacy-page.tsx/terms-page.tsx——
+  // 只做浅层验证，不重复测一遍这套逻辑，见那两个文件的测试）。
+  describe("'帮助与客服' 按钮 (联系客服改成真聊天任务卡)", () => {
+    it("calls get_or_create_own_system_conversation and navigates to the resulting conversation on click", async () => {
+      getOrCreateOwnSystemConversation.mockResolvedValue({ conversationId: "conversation-1" });
+
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      fireEvent.click(screen.getByRole("button", { name: "帮助与客服" }));
+
+      await waitFor(() => {
+        expect(getOrCreateOwnSystemConversation).toHaveBeenCalled();
+      });
+      await waitFor(() => {
+        expect(navigateMock).toHaveBeenCalledWith("/messages/conversation-1");
+      });
+    });
+
+    it("shows a generic error message when the RPC fails, and does not navigate", async () => {
+      getOrCreateOwnSystemConversation.mockRejectedValue(new Error("network down"));
+
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      fireEvent.click(screen.getByRole("button", { name: "帮助与客服" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "打开客服会话失败，请稍后重试。"
+      );
+      expect(navigateMock).not.toHaveBeenCalledWith(expect.stringMatching(/^\/messages\//));
     });
   });
 

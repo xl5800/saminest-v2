@@ -4,7 +4,12 @@ import { sendMessage } from "../../repositories/messages-repository";
 
 export interface SendMessageMutationInput {
   senderId: string;
-  body: string;
+  /** 联系客服改成真聊天任务卡：改成可选——一条消息可以只有图片没有文字，
+   *  见 messages-repository.ts SendMessageInput.body 的注释。 */
+  body?: string;
+  /** 联系客服改成真聊天任务卡新增：可选，conversation-page.tsx 上传完
+   *  图片之后传这个字段的 Storage 路径进来。 */
+  imagePath?: string;
 }
 
 /**
@@ -17,7 +22,12 @@ export function useSendMessageMutation(conversationId: string) {
 
   return useMutation({
     mutationFn: (input: SendMessageMutationInput) =>
-      sendMessage({ conversationId, senderId: input.senderId, body: input.body }),
+      sendMessage({
+        conversationId,
+        senderId: input.senderId,
+        body: input.body,
+        imagePath: input.imagePath
+      }),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ["messages", conversationId]

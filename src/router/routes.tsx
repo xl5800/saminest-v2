@@ -10,6 +10,8 @@ import { AdminCategoriesPage } from "../pages/admin/categories-page";
 import { AdminFeedbackPage } from "../pages/admin/feedback-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
+import { AdminSupportConversationPage } from "../pages/admin/support-conversation-page";
+import { AdminSupportConversationsPage } from "../pages/admin/support-conversations-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
@@ -270,11 +272,36 @@ export const router = createBrowserRouter([
         )
       },
       {
+        // 联系客服改成真聊天任务卡：/admin/feedback 这个路由/页面本身
+        // 没有删（历史反馈数据继续留着），只是 AdminNav 不再有入口指向
+        // 它，见该组件的说明。
         path: "admin/feedback",
         element: (
           <RequireAuth>
             <RequireAdmin>
               <AdminFeedbackPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
+      {
+        path: "admin/support",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminSupportConversationsPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
+      {
+        // 会话详情页——照抄 messages/:conversationId 的沉浸式聊天页布局，
+        // 见该页面顶部注释。
+        path: "admin/support/:conversationId",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminSupportConversationPage />
             </RequireAdmin>
           </RequireAuth>
         )

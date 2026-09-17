@@ -23,17 +23,37 @@ export interface NotificationPayload {
   kind?: "activity_broadcast";
 }
 
+// 联系客服改成真聊天任务卡：message-images 是私有桶，图片列存的是 Storage
+// 路径（image_path），不是能直接用的地址——跟 feedback_images.public_url
+// 那次"存了一个私有桶生成不出来的公开地址，后台从此再也显示不出一张图"
+// 的坑不能再踩，这里按需用 createSignedUrl(s) 现签一个有时效的地址，
+// 1 小时足够看完一屏聊天记录，过期不影响历史消息本身，只是那张图片的
+// 显示地址需要重新签（下次重新加载这个会话时会话页会重新调一次
+// listMessages，自然会拿到新的签名地址，不需要专门的续签机制）。
+const MESSAGE_IMAGES_BUCKET = "message-images";
+const IMAGE_SIGNED_URL_EXPIRES_IN_SECONDS = 60 * 60;
+
 export interface MessageListItem {
   id: string;
   /** 系统通知消息（见 notify_user() 那份迁移）没有真实发送者，是 null——
    *  isMine 判断（conversation-page.tsx）和"连续消息头像分组"逻辑都要
-   *  排除这种消息，不能假设它一定是某个用户发的。 */
+   *  排除这种消息，不能假设它一定是某个用户发的。联系客服改成真聊天
+   *  任务卡新增：管理员回复（admin_reply_to_support_conversation() 插入
+   *  的那种）senderId 同样是 null，但 notificationPayload 也是
+   *  null——页面据此把它跟"系统通知卡片"区分开，渲染成正常的聊天气泡，
+   *  见 conversation-page.tsx 的 isAdminReply 判断。 */
   senderId: string | null;
   body: string | null;
   /** 只有 senderId 为 null 的系统通知消息才会有值（跟 messages 表的
    *  messages_sender_or_notification_check 约束一一对应），页面据此判断
    *  要不要渲染成通知卡片而不是聊天气泡。 */
   notificationPayload: NotificationPayload | null;
+  /** 联系客服改成真聊天任务卡新增：这条消息附带的图片，已经是能直接用
+   *  在 <img src> 上的签名地址（不是 image_path 原始 Storage 路径），
+   *  没有图片时是 null。跟 body 至多两者都有、至少一者非空（数据库层
+   *  messages_body_or_image_check 约束保证），页面不需要重复校验这条
+   *  规则，只需要按"有就展示缩略图"处理。 */
+  imageUrl: string | null;
   /** 30 号卡新增：这条消息关联的活动 id——目前只有
    *  use-toggle-activity-participation-mutation.ts 的 notifyOrganizer()
    *  在"申请加入（需要审核）"这一种情况下会填这一列，会话页据此判断"要不要
@@ -51,20 +71,56 @@ interface MessageRow {
   sender_id: string | null;
   body: string | null;
   notification_payload: NotificationPayload | null;
+  image_path: string | null;
   ref_activity_id: string | null;
   created_at: string;
+}
+
+/**
+ * 批量给这一批消息的 image_path 现签地址，按 path 建索引供调用方拼装
+ * MessageListItem.imageUrl——跟 conversations-repository.ts 里
+ * fetchConversationMemberInfo() 是同一个"批量查 + Map 拼装"模式，避免
+ * 每条消息各自现签一次（N+1）。单张图片签名失败（比如文件已经在
+ * Storage 里被删掉，DB 行还留着）不让整个列表查询失败，只是那一条的
+ * imageUrl 退回 null——聊天记录里一张图挂了不应该连累其它文字消息都
+ * 显示不出来；createSignedUrls() 这个批量调用本身失败（网络/权限问题）
+ * 才当成真正的失败往外抛。
+ */
+async function resolveImageUrls(imagePaths: string[]): Promise<Map<string, string>> {
+  const urlByPath = new Map<string, string>();
+  if (imagePaths.length === 0) {
+    return urlByPath;
+  }
+
+  const { data, error } = await getSupabaseClient()
+    .storage
+    .from(MESSAGE_IMAGES_BUCKET)
+    .createSignedUrls(imagePaths, IMAGE_SIGNED_URL_EXPIRES_IN_SECONDS);
+
+  if (error) {
+    throw new AppError(error.message, "MESSAGE_IMAGE_SIGN_FAILED", error);
+  }
+
+  for (const item of data ?? []) {
+    if (item.path && item.signedUrl && !item.error) {
+      urlByPath.set(item.path, item.signedUrl);
+    }
+  }
+  return urlByPath;
 }
 
 /**
  * 返回某个会话里未软删除的消息，按 created_at 升序（最早的在最前面），
  * 页面直接按这个顺序渲染即可，不需要在前端再排一次序。越权保护交给
  * messages 表自己的 SELECT 策略（messages_select_of_own_conversations），
- * 这里不重复判断调用者是不是会话成员。
+ * 这里不重复判断调用者是不是会话成员——联系客服改成真聊天任务卡之后，
+ * 这条策略额外放行了"管理员 + 这条消息所属会话是 system 类型"，管理员
+ * 后台的会话详情页复用的正是这同一个函数，不需要另外写一份。
  */
 export async function listMessages(conversationId: string): Promise<MessageListItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("messages")
-    .select("id, sender_id, body, notification_payload, ref_activity_id, created_at")
+    .select("id, sender_id, body, notification_payload, image_path, ref_activity_id, created_at")
     .eq("conversation_id", conversationId)
     .is("deleted_at", null)
     .order("created_at", { ascending: true })
@@ -74,11 +130,18 @@ export async function listMessages(conversationId: string): Promise<MessageListI
     throw new AppError(error.message, "MESSAGES_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => ({
+  const rows = data ?? [];
+  const imagePaths = rows
+    .map((row) => row.image_path)
+    .filter((path): path is string => path !== null);
+  const urlByPath = await resolveImageUrls([...new Set(imagePaths)]);
+
+  return rows.map((row) => ({
     id: row.id,
     senderId: row.sender_id,
     body: row.body,
     notificationPayload: row.notification_payload ?? null,
+    imageUrl: row.image_path ? (urlByPath.get(row.image_path) ?? null) : null,
     refActivityId: row.ref_activity_id,
     createdAt: row.created_at
   }));
@@ -87,7 +150,16 @@ export async function listMessages(conversationId: string): Promise<MessageListI
 export interface SendMessageInput {
   conversationId: string;
   senderId: string;
-  body: string;
+  /** 联系客服改成真聊天任务卡：body 改成可选——一条消息可以只有图片没有
+   *  文字（数据库层 messages_body_or_image_check 要求 body/imagePath
+   *  至少一个非空，这里不重复校验这条规则，交给数据库层兜底；
+   *  conversation-page.tsx 的发送按钮本身也不会在两者都为空时启用）。 */
+  body?: string;
+  /** 联系客服改成真聊天任务卡新增：这条消息附带图片的 Storage 路径
+   *  （不是地址），由 conversation-page.tsx 先调用
+   *  messageImageStorageService.uploadMessageImage() 上传成功后再传
+   *  进来。一条消息最多一张图，不做多图消息。 */
+  imagePath?: string;
   /** 30 号卡新增：可选，只有 notifyOrganizer() 发"申请加入（需要审核）"
    *  这条通知时会传，见 MessageListItem.refActivityId 的注释。不传时列
    *  为 null，跟改版前完全一样。 */
@@ -99,16 +171,18 @@ export interface SendMessageResult {
 }
 
 /**
- * 发送一条文本消息。message_type 不在这里传——数据库列默认就是 'text'，
- * 且 messages_message_type_check 目前也只允许这一个取值，不需要前端显式
- * 指定。RLS（messages_insert_own_as_active_member）要求 sender_id 必须是
- * 当前登录用户、且当前仍是该会话的有效成员，这里不重复判断，交给数据库层。
+ * 发送一条消息（文字/图片，至少一个非空）。message_type 不在这里传——
+ * 数据库列默认就是 'text'，且 messages_message_type_check 目前也只允许
+ * 这一个取值，不需要前端显式指定。RLS（messages_insert_own_as_active_member）
+ * 要求 sender_id 必须是当前登录用户、且当前仍是该会话的有效成员，这里
+ * 不重复判断，交给数据库层。
  */
 export async function sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
   const payload: TablesInsert<"messages"> = {
     conversation_id: input.conversationId,
     sender_id: input.senderId,
-    body: input.body,
+    body: input.body ?? null,
+    image_path: input.imagePath ?? null,
     ref_activity_id: input.refActivityId ?? null
   };
 
@@ -155,4 +229,32 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   }
 
   return { id: data.id };
+}
+
+/**
+ * 联系客服改成真聊天任务卡：管理员回复某个客服会话，唯一合法入口是
+ * admin_reply_to_support_conversation() 这个 security definer 函数——
+ * 不能直接对 messages 表 insert：普通的 sendMessage() 走
+ * messages_insert_own_as_active_member 这条 RLS，要求 sender_id =
+ * auth.uid() 且当前是会话的活跃成员，管理员两条都不满足（管理员从来
+ * 不是任何一条客服会话的 conversation_members 行）。函数内部会校验
+ * 调用者是不是管理员、目标会话是不是 system 来源，这里不重复判断。
+ */
+export async function adminReplyToSupportConversation(
+  conversationId: string,
+  body: string | null,
+  imagePath: string | null
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc(
+    "admin_reply_to_support_conversation",
+    {
+      target_conversation_id: conversationId,
+      body,
+      image_path: imagePath
+    }
+  );
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_SUPPORT_REPLY_FAILED", error);
+  }
 }

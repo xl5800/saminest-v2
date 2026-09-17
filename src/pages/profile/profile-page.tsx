@@ -15,6 +15,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ProfileSummary } from "../../components/profile-summary";
 import { useIsAdminQuery } from "../../features/admin/use-is-admin-query";
+import { useContactSupport } from "../../features/conversations/use-contact-support";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { authService } from "../../services/auth/auth-service";
 import { useAuthStore } from "../../store/auth-store";
@@ -37,17 +38,29 @@ const SETTINGS_PATH = "/settings";
  * 加 border-bottom。
  */
 interface GroupRowProps {
-  to: string;
+  /** 静态路由目标，跟 onClick 二选一——传了 to 就渲染成 <Link>（原有的
+   *  唯一形态，行为不变）。 */
+  to?: string;
+  /** 联系客服改成真聊天任务卡新增：传了 onClick 就渲染成 <button>，给
+   *  "帮助与客服"这一行用——目标不再是一个固定路由，要先调用
+   *  get_or_create_own_system_conversation() 拿到会话 id 再跳转，不能用
+   *  静态的 <Link to="...">。这个组件只有这两种调用方式，不强制用 TS
+   *  联合类型把 to/onClick 做成互斥（多加一层类型体操换来的安全性对
+   *  两个调用方来说不值得），调用方自己保证传且只传其中一个。 */
+  onClick?: () => void;
   icon: LucideIcon;
   label: string;
 }
 
-function GroupRow({ to, icon: Icon, label }: GroupRowProps) {
-  return (
-    <Link
-      to={to}
-      className="flex h-14 items-center justify-between px-4 text-base font-medium text-text transition-opacity hover:opacity-90"
-    >
+function GroupRow({ to, onClick, icon: Icon, label }: GroupRowProps) {
+  // <Link>/<button> 共用同一个 className——两者都用了 Tailwind 的 flex
+  // 工具类（display: flex），会把默认 inline-level 的 <a>/<button> 都变成
+  // block-level 的 flex 容器，天然撑满父级宽度，不需要额外补 w-full，跟
+  // 原来纯 <Link> 版本的视觉效果逐像素一致。
+  const className =
+    "flex h-14 items-center justify-between px-4 text-base font-medium text-text transition-opacity hover:opacity-90";
+  const content = (
+    <>
       <span className="flex items-center gap-3">
         <Icon aria-hidden="true" size={20} className="shrink-0 text-text-muted" />
         <span>{label}</span>
@@ -55,7 +68,20 @@ function GroupRow({ to, icon: Icon, label }: GroupRowProps) {
       <span aria-hidden="true" className="text-[18px] leading-none text-chevron">
         ›
       </span>
-    </Link>
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link to={to} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
   );
 }
 
@@ -170,6 +196,16 @@ function GroupCard({ children }: { children: ReactNode }) {
  * 被整个删掉了：整卡都跳 profileHref 之后，头像自己单独再包一层 Link
  * 已经没有必要，继续保留还会导致头像的 Link 嵌套在整卡可点击区域内部
  * 这种"可点击区域嵌套可点击区域"的问题，见 profile-summary.tsx 的注释。
+ *
+ * 联系客服改成真聊天任务卡："帮助与客服"这一行不再是跳 /feedback 表单页
+ * 的静态 <Link>，改成 <GroupRow onClick={contactSupport}>——contactSupport
+ * （useContactSupport() 这个共享 hook，见该文件注释）负责调用
+ * get_or_create_own_system_conversation() 拿到/建出自己的客服会话 id，
+ * 再跳到 /messages/:conversationId，直接进聊天界面。GroupRow 因此新增了
+ * 一个 onClick 可选 prop（跟 to 二选一），这次是唯一的 onClick 调用方，
+ * 其它所有行都还是原来的静态 <Link to="...">，行为完全不变。/feedback
+ * 这个路由/页面本身没有删——只是从此没有任何入口指向它了，历史提交的
+ * 反馈数据继续留着，不影响现有代码。
  */
 export function ProfilePage() {
   const navigate = useNavigate();
@@ -177,6 +213,7 @@ export function ProfilePage() {
 
   const { data: profile, isPending, isError } = useMyProfileQuery();
   const { data: isAdmin } = useIsAdminQuery();
+  const { contactSupport, error: contactSupportError } = useContactSupport();
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -239,13 +276,21 @@ export function ProfilePage() {
         <nav aria-label="账号与服务">
           <GroupCard>
             <GroupRow to="/profile/edit" icon={Pencil} label="编辑个人信息" />
-            <GroupRow to="/feedback" icon={MessageSquare} label="帮助与客服" />
+            <GroupRow onClick={contactSupport} icon={MessageSquare} label="帮助与客服" />
             <GroupRow to={SETTINGS_PATH} icon={Settings} label="设置" />
             {isAdmin === true ? (
               <GroupRow to="/admin/posts" icon={Shield} label="后台管理" />
             ) : null}
           </GroupCard>
         </nav>
+        {/* 联系客服改成真聊天任务卡：contactSupport 失败时的错误提示——
+            正常路径下这个 mutation 几乎不会失败（只是拿/建一条属于自己的
+            会话），这里跟其它入口一样兜底展示一条通用错误，不留静默失败。 */}
+        {contactSupportError ? (
+          <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+            {contactSupportError}
+          </p>
+        ) : null}
 
         {logoutError ? (
           <p role="alert" className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">

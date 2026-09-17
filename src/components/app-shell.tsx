@@ -41,7 +41,14 @@ const NO_CHROME_PATTERNS = [
   // 也从 BottomNav 换成页面自己的常驻"咨询"大按钮——AppHeader、BottomNav
   // 现在都不需要，这个页面自己就是唯一的 chrome，语义上跟发布表单这类
   // 沉浸式页面是同一类，不是"顶部栏换了、底部 Tab 栏还在"那种了。
-  "/post/:id"
+  "/post/:id",
+  // 联系客服改成真聊天任务卡：管理员客服会话详情页照抄
+  // /messages/:conversationId 那套全屏聊天布局（自己的返回按钮+输入框，
+  // 没有 TopBar/AppHeader/BottomNav 的容身之处），归进完全沉浸式——跟
+  // /messages/:conversationId 是同一类，不是"顶部栏换了、底部 Tab 栏
+  // 还在"。/admin/support 那张列表页不在这里，它是常规的 TopBar
+  // nav-only + AdminNav 页面，见下面 TOPBAR_MIGRATED_PATTERNS。
+  "/admin/support/:conversationId"
 ];
 
 /**
@@ -155,6 +162,11 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/admin/posts/all",
   "/admin/reports",
   "/admin/feedback",
+  // 联系客服改成真聊天任务卡：客服会话列表页，普通的 TopBar nav-only +
+  // AdminNav 页面（跟这个数组里其它 admin 页面同一类）。会话详情页
+  // （/admin/support/:conversationId）不在这里，是全屏沉浸式聊天布局，
+  // 见 NO_CHROME_PATTERNS 的说明。
+  "/admin/support",
   "/admin/users",
   "/admin/categories",
   "/terms",
