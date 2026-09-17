@@ -438,10 +438,19 @@ export function CommentItem({ node, depth, currentUserId, ownerId }: CommentItem
                     </span>
                   ) : null}
                 </div>
-                {/* 正文是这条评论视觉上最重的一行：字号从 text-sm 升到
-                    text-base，字重从默认升到 font-medium，颜色维持主
-                    文字色 text-text 不变。 */}
-                <p className="mt-1 whitespace-pre-wrap break-words text-base font-medium text-text">
+                {/* 任务卡 B（正文字重回调）：正文字号仍然维持 text-sm 升级
+                    到 text-base 这一档、颜色维持主文字色 text-text 不变——
+                    真实核对过一个小红书帖子详情页的评论区 DOM（对照
+                    computed style）：正文是 font-weight: 400、color 是
+                    rgb(51,51,51)（不透明/满色），用户名反而是同一个颜色值
+                    但打了 60% 透明度、时间/点赞数字号更小——层级关系是靠
+                    "正文满色、其它信息降透明度/缩小字号"做出来的，不是靠
+                    加粗正文实现的。之前那版 font-medium 加粗让正文视觉上
+                    比小红书真实效果更重更黑，这次改回 font-normal 更贴近
+                    参照对象；颜色维持 text-text 不变（不需要再降到中间色
+                    调，小红书正文本身就是满色，跟用户名/时间的区别只在
+                    这两处更淡，不在正文变淡）。 */}
+                <p className="mt-1 whitespace-pre-wrap break-words text-base font-normal text-text">
                   {node.content}
                 </p>
               </div>

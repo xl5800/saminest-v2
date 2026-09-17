@@ -408,7 +408,7 @@ describe("CommentItem", () => {
 
   // 评论区样式对齐小红书任务卡：视觉层级重排。
   describe("视觉层级重排 (评论区样式对齐小红书任务卡)", () => {
-    it("styles the username as secondary text (muted color, normal weight) and the content as the visual focal point (base size, medium weight, primary color)", () => {
+    it("styles the username as secondary text (muted color, normal weight) and the content as the visual focal point (base size, normal weight, primary color)", () => {
       render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
       const username = screen.getByText("Bob");
@@ -416,9 +416,15 @@ describe("CommentItem", () => {
       expect(username.className).toMatch(/font-normal/);
       expect(username.className).not.toMatch(/font-medium/);
 
+      // 任务卡 B（正文字重回调）：正文字重从 font-medium 降回
+      // font-normal——加粗让正文看起来比小红书真实评论区更黑更重，见
+      // comment-item.tsx 里这一行上面的注释（附了真实核对小红书 DOM
+      // computed style 的依据）。颜色/字号不变，视觉焦点仍然靠满色
+      // text-text + 比用户名更大的 text-base 撑出来，不是靠加粗。
       const content = screen.getByText("hello there");
       expect(content.className).toMatch(/text-base/);
-      expect(content.className).toMatch(/font-medium/);
+      expect(content.className).toMatch(/font-normal/);
+      expect(content.className).not.toMatch(/font-medium/);
       expect(content.className).toMatch(/\btext-text\b/);
     });
 
