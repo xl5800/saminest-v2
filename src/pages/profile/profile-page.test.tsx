@@ -389,6 +389,20 @@ describe("ProfilePage", () => {
   // hook 的主要覆盖点（其它调用方——privacy-page.tsx/terms-page.tsx——
   // 只做浅层验证，不重复测一遍这套逻辑，见那两个文件的测试）。
   describe("'帮助与客服' 按钮 (联系客服改成真聊天任务卡)", () => {
+    // 修复"帮助与客服"chevron 贴字/分隔线变短任务卡：<button> 表单控件
+    // 不会像 <div>/<a> 那样自动撑满 flex 父容器的宽度，之前共用的
+    // className 缺一个 w-full，导致这一行比其它 <Link> 行窄——chevron
+    // 贴着文字、下面 divide-y 分隔线也跟着变短。这里断言 w-full/text-left
+    // 两个 class 确实挂在这个按钮上，锁定这条修复。
+    it("stretches to the full row width (w-full text-left), matching the <Link> rows instead of shrinking to its content", async () => {
+      renderWithProviders(<ProfilePage />);
+
+      await screen.findByText("Alice");
+      const helpButton = screen.getByRole("button", { name: "帮助与客服" });
+      expect(helpButton.className).toMatch(/\bw-full\b/);
+      expect(helpButton.className).toMatch(/text-left/);
+    });
+
     it("calls get_or_create_own_system_conversation and navigates to the resulting conversation on click", async () => {
       getOrCreateOwnSystemConversation.mockResolvedValue({ conversationId: "conversation-1" });
 

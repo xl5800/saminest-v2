@@ -53,12 +53,19 @@ interface GroupRowProps {
 }
 
 function GroupRow({ to, onClick, icon: Icon, label }: GroupRowProps) {
-  // <Link>/<button> 共用同一个 className——两者都用了 Tailwind 的 flex
-  // 工具类（display: flex），会把默认 inline-level 的 <a>/<button> 都变成
-  // block-level 的 flex 容器，天然撑满父级宽度，不需要额外补 w-full，跟
-  // 原来纯 <Link> 版本的视觉效果逐像素一致。
+  // 修复"帮助与客服"chevron 贴字/分隔线变短任务卡：上面那条"两者都是 flex
+  // 天然撑满父级宽度"的假设对 <button> 不成立——表单控件（<button>/
+  // <input>/<select>）有一条特殊的尺寸规则，即使设了 display: flex，宽度
+  // 依然按内容算（intrinsic sizing），不会像 <div>/<a> 那样自动撑满父容器。
+  // <button> 分支（"帮助与客服"这一行）因此比其它 <Link> 行窄，chevron
+  // 贴着文字、下面 divide-y 画出的分隔线也跟着变短。补上 w-full 让
+  // <button> 真正撑满卡片宽度；text-left 是保险起见一起加的（部分浏览器
+  // <button> 默认 text-align: center，这里内容是两个 flex 子元素理论上不
+  // 受影响，顺手加上不会有副作用）。两个 class 加在共用的 className 里
+  // 对 <Link> 分支是 no-op——<Link> 本来就已经是撑满宽度的块级元素、
+  // 默认左对齐，不会改变它现在的视觉效果。
   const className =
-    "flex h-14 items-center justify-between px-4 text-base font-medium text-text transition-opacity hover:opacity-90";
+    "flex h-14 w-full items-center justify-between px-4 text-left text-base font-medium text-text transition-opacity hover:opacity-90";
   const content = (
     <>
       <span className="flex items-center gap-3">
