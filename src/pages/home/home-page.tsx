@@ -78,6 +78,25 @@ const REGION_SELECT_PATH = "/region-select";
  * - 求租 Tab 下 PostList 换成单列纯文字卡片（variant="wanted"），其它
  *   三个 Tab（推荐/租房/二手）继续用默认的两列图片网格，见 post-list.tsx
  *   顶部注释。
+ *
+ * 顶栏+分类 Chips 固定成一张卡片任务卡：TopBar 和 CategoryNav 原来是两个
+ * 独立的 <header>/<nav>，各自随内容一起滚动走；这次要合并成同一张固定在
+ * 屏幕最顶端的卡片，卡片底部只有一条横线（不能顶栏和分类 Chips 之间也画
+ * 一条）。改法是把 CategoryNav（连同下面这个搜索输入框）一起传给 TopBar
+ * 新增的 bottomSlot prop，渲染在 TopBar 自己的固定卡片内部——不是在外面
+ * 再包一层单独的 sticky 容器：TopBar 组件本身已经是"自带 sticky+背景+
+ * 底部横线+状态栏安全区处理"的完整卡片（见 top-bar.tsx 的
+ * STICKY_CARD_CLASS_NAME），bottomSlot 只是让这张卡片在首页这个场景下
+ * 多渲染一块内容，底部横线因此自然落在 bottomSlot 的最下面，不需要额外
+ * 判断"要不要隐藏 TopBar 自己的那条线"。这个 prop 不传时 TopBar 的行为
+ * （包括被找搭子列表页复用的那次）完全不变，不会因为这次改动变成"必须
+ * 配合外层容器才能正确显示"。
+ *
+ * 搜索输入框（isSearchOpen 为真时展开的那个 <input>）这次也一并挪进了
+ * bottomSlot，跟分类 Chips 视觉上属于同一张卡片，而不是留在卡片外面单独
+ * 悬空一段——开合搜索框只是让这张卡片自己的高度变化（sticky 元素会自动
+ * 占住自己的实际高度，下面的 PostList 内容跟着一起挪动），不会导致卡片
+ * 本身的定位或者已经在卡片下面的内容出现跳动/撕裂的效果。
  */
 export function HomePage() {
   const navigate = useNavigate();
@@ -115,22 +134,25 @@ export function HomePage() {
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={handleToggleSearch}
+        bottomSlot={
+          <>
+            {isSearchOpen ? (
+              <div className="px-4 pb-2">
+                <input
+                  type="search"
+                  autoFocus
+                  placeholder="搜租房、求租、二手物品…"
+                  value={inputValue}
+                  onChange={(event) => setInputValue(event.target.value)}
+                  className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
+                />
+              </div>
+            ) : null}
+            <CategoryNav activeSlug={activeCategorySlug} />
+          </>
+        }
       />
 
-      {isSearchOpen ? (
-        <div className="px-4 pb-2">
-          <input
-            type="search"
-            autoFocus
-            placeholder="搜租房、求租、二手物品…"
-            value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
-            className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
-          />
-        </div>
-      ) : null}
-
-      <CategoryNav activeSlug={activeCategorySlug} />
       <PostList
         key={activeCategoryId ?? "all"}
         categoryId={activeCategoryId}

@@ -189,6 +189,15 @@
      --color-border 刻意区分成两个不同数值——分割线要更淡，这批新增，见
      conversation-list-page.tsx 的改动。 */
   --color-divider: #e9ecf2;
+  /* 顶栏+分类 Chips 固定成一张卡片任务卡新增——固定卡片底部的分隔线，
+     跟下面滚动过去的内容区分开（BARRY 明确要求用一条细线，不是靠阴影）。
+     卡片背景复用已有的 --color-bg-secondary（#f0f3f8），页面背景是
+     --color-bg（#ebedf3）——这条线自己的数值（#d7dbe3）比这两者都更深
+     一点，保证卡片贴着页面背景时依然能看出清晰的分界，不跟 --color-border
+     （#e7eaf0，卡片描边用）或 --color-divider（#e9ecf2，列表行分割线用）
+     这两个已经存在但太浅、无法在这个具体场景下拉开足够对比度的 token
+     复用。 */
+  --color-topbar-line: #d7dbe3;
   --color-chevron: #c7c7cc;
   --color-success: #2e9b62;
   /* 成功态浅底色，这批新增，这一批四个页面暂时没有用到。 */

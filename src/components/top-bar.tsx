@@ -44,6 +44,45 @@ import { useNavigate } from "react-router-dom";
 const ICON_BUTTON_CLASS_NAME =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card text-text";
 
+/**
+ * 顶栏+分类 Chips 固定成一张卡片任务卡：五个 variant 各自的最外层
+ * `<header>` 现在统一套上这一份"固定卡片"处理，不再是普通的、随内容一起
+ * 滚动走的一段 flex 行——BARRY 已经确认过效果图，四个角都不要圆角（这几个
+ * `<header>` 本来就没有设过 rounded-*，不用额外清零）。
+ *
+ * `sticky`（不是 `fixed`）：整站没有给 `<main>` 单独包一层可滚动容器，
+ * 滚动的一直是 `body`/视口本身（`bottom-nav.tsx` 用 `fixed` 是因为它是
+ * `AppShell` 在页面外层单独渲染的常驻元素，不在任何页面自己的文档流里，
+ * 需要自己占住底部；这个组件是每个页面 `<main>` 内部的第一个子元素，
+ * 用 `sticky` 能让它自动在文档流里占住自己的高度，下面的内容天然从它
+ * 下边界开始排布，不需要每个页面自己再手动算一个 padding-top 去让开
+ * 顶栏——首页这次还要在顶栏下面追加不定高的分类 Chips/搜索框，如果改用
+ * `fixed` 就必须由每个页面自己精确算出当前顶栏总高度当 padding-top，
+ * 首页那个高度还会随搜索框开合变化，`sticky` 完全不需要关心这些）。
+ * `z-10` 跟 `bottom-nav.tsx`/（未使用的）`app-header.tsx` 这两个"常驻
+ * chrome"用的层级一致，仍然低于 Modal/BottomSheet/Lightbox 这类真正需要
+ * 盖住一切的浮层（`z-20`/`z-30`，见 `publish-action-sheet.tsx`/
+ * `image-lightbox.tsx`）。
+ *
+ * 状态栏区域：`body` 上有全站通用的 `padding-top: env(safe-area-inset-top)`
+ * 把包括这个顶栏在内的所有内容往下推开状态栏——这次不能动这条全局规则
+ * （"我的"页、还没迁移到 TopBar 的旧页面都还依赖它），所以只在这个组件
+ * 自己身上局部抵消：`-mt-[env(safe-area-inset-top)]` 把顶栏自己"拉"回
+ * 真正的屏幕顶端（背景/描边因此能铺满状态栏那段区域，不会露出一条
+ * `body` 背景色的缝），再用 `pt-[env(safe-area-inset-top)]` 把顶栏内部
+ * 真正的文字/按钮内容重新推回状态栏下面——两者数值相等、方向相反，净效果
+ * 是"卡片顶到屏幕最顶边，卡片里的内容位置跟改之前视觉上完全一样"。
+ * 内部这层 `h-14 flex ...` 保留在一个独立的 `<div>` 里而不是直接放在
+ * `<header>` 上：`<header>` 现在的高度要跟随 `padding-top` 动态变化
+ * （状态栏高度 + 这一行的高度），如果 `h-14` 这个固定高度直接套在
+ * `<header>` 上，加上 `padding-top` 之后（Tailwind Preflight 全局
+ * `box-sizing: border-box`）会把状态栏的高度也算进这固定的 56px 里，
+ * 把内容行反而挤扁。
+ */
+const STICKY_CARD_CLASS_NAME =
+  "sticky top-0 z-10 -mt-[env(safe-area-inset-top)] border-b border-topbar-line bg-bg-secondary pt-[env(safe-area-inset-top)]";
+const HEADER_ROW_CLASS_NAME = "flex h-14 items-center justify-between px-4";
+
 function EmptySlot() {
   return <span aria-hidden="true" className="w-9 shrink-0" />;
 }
@@ -149,6 +188,15 @@ interface TopBarHomeProps {
    *  顺手改成跟实际渲染位置一致的"右侧"，跟这次改动本身无关。） */
   onCreateClick?: () => void;
   onSearchClick: () => void;
+  /** 顶栏+分类 Chips 固定成一张卡片任务卡新增——只有首页需要在固定卡片
+   *  里，紧跟着品牌名那一行，再追加渲染分类 Chips（以及搜索框展开时的
+   *  搜索输入框），让它们和顶栏合并成同一张卡片，卡片底部的分隔线只出现
+   *  在这一整块的最下面，不会在顶栏和分类 Chips 之间多出一条线。不传就
+   *  是原来的样子（只有品牌名那一行），其它 variant 完全没有这个 prop——
+   *  `TopBar` 本身不因为这次改动而变得"必须配合外层容器才能正确显示"，
+   *  其它没有分类 Chips 的页面（包括复用 home 变体的找搭子列表页）不用
+   *  改自己的调用代码。 */
+  bottomSlot?: ReactNode;
 }
 
 interface TopBarTabProps {
@@ -219,65 +267,148 @@ export function TopBar(props: TopBarProps) {
 
   if (props.variant === "home") {
     return (
-      <header className="flex h-14 items-center justify-between px-4">
-        {/* 顶部栏拆分任务卡：08 号卡把"州名 · Saminest 单行文字"合并成一个
-            两行堆叠的圆角胶囊按钮（品牌名+地区都在同一个 <button> 里）；这次
-            按产品确认过的找搭子列表页 mockup 拆回三个独立元素——品牌名是
-            纯文字 <span>，不再可点击；地区是它自己独立的圆角按钮（保留
-            onRegionClick 行为和"选择地区"占位文案不变，新增一个下拉箭头
-            图标暗示"这是可点选项"）；最右侧的"＋"发布/搜索图标完全不变，
-            只是不再跟品牌名共享同一个 flex 容器，各自在自己的分组里，见下面
-            两个 <div>。 */}
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <span className="shrink-0 text-base font-bold leading-tight text-primary">
-            Saminest
-          </span>
-          <button
-            type="button"
-            onClick={props.onRegionClick}
-            className="flex min-w-0 shrink-0 items-center gap-0.5 rounded-full border border-border bg-card px-3 py-1.5 text-left"
-          >
-            <span className="truncate text-xs font-medium leading-tight text-text-muted">
-              {props.regionLabel ?? "选择地区"}
+      <header className={STICKY_CARD_CLASS_NAME}>
+        <div className={HEADER_ROW_CLASS_NAME}>
+          {/* 顶部栏拆分任务卡：08 号卡把"州名 · Saminest 单行文字"合并成一个
+              两行堆叠的圆角胶囊按钮（品牌名+地区都在同一个 <button> 里）；这次
+              按产品确认过的找搭子列表页 mockup 拆回三个独立元素——品牌名是
+              纯文字 <span>，不再可点击；地区是它自己独立的圆角按钮（保留
+              onRegionClick 行为和"选择地区"占位文案不变，新增一个下拉箭头
+              图标暗示"这是可点选项"）；最右侧的"＋"发布/搜索图标完全不变，
+              只是不再跟品牌名共享同一个 flex 容器，各自在自己的分组里，见下面
+              两个 <div>。 */}
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
+            <span className="shrink-0 text-base font-bold leading-tight text-primary">
+              Saminest
             </span>
-            <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-text-muted" />
-          </button>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {props.onCreateClick ? (
             <button
               type="button"
-              aria-label="发布"
-              onClick={props.onCreateClick}
-              // 首页"＋发布"按钮改蓝色任务卡：只有这一个按钮单独换成
-              // bg-primary + text-white，不改 ICON_BUTTON_CLASS_NAME 本身
-              // （那个类还给返回/更多/搜索/关闭等其它图标按钮用，改了会
-              // 导致全站图标按钮都变蓝）。尺寸/圆角/间距（h-9 w-9
-              // rounded-full）照抄 ICON_BUTTON_CLASS_NAME，只换背景和
-              // 图标颜色这两处。
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white"
+              onClick={props.onRegionClick}
+              className="flex min-w-0 shrink-0 items-center gap-0.5 rounded-full border border-border bg-card px-3 py-1.5 text-left"
             >
-              <Plus size={18} aria-hidden="true" />
+              <span className="truncate text-xs font-medium leading-tight text-text-muted">
+                {props.regionLabel ?? "选择地区"}
+              </span>
+              <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-text-muted" />
             </button>
-          ) : null}
-          <button
-            type="button"
-            aria-label="搜索"
-            onClick={props.onSearchClick}
-            className={ICON_BUTTON_CLASS_NAME}
-          >
-            <Search size={18} aria-hidden="true" />
-          </button>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {props.onCreateClick ? (
+              <button
+                type="button"
+                aria-label="发布"
+                onClick={props.onCreateClick}
+                // 首页"＋发布"按钮改蓝色任务卡：只有这一个按钮单独换成
+                // bg-primary + text-white，不改 ICON_BUTTON_CLASS_NAME 本身
+                // （那个类还给返回/更多/搜索/关闭等其它图标按钮用，改了会
+                // 导致全站图标按钮都变蓝）。尺寸/圆角/间距（h-9 w-9
+                // rounded-full）照抄 ICON_BUTTON_CLASS_NAME，只换背景和
+                // 图标颜色这两处。
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white"
+              >
+                <Plus size={18} aria-hidden="true" />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              aria-label="搜索"
+              onClick={props.onSearchClick}
+              className={ICON_BUTTON_CLASS_NAME}
+            >
+              <Search size={18} aria-hidden="true" />
+            </button>
+          </div>
         </div>
+        {props.bottomSlot}
       </header>
     );
   }
 
   if (props.variant === "tab") {
     return (
-      <header className="flex h-14 items-center justify-between px-4">
-        <EmptySlot />
-        <h1 className="flex-1 truncate text-center text-xl font-bold text-text">{props.title}</h1>
+      <header className={STICKY_CARD_CLASS_NAME}>
+        <div className={HEADER_ROW_CLASS_NAME}>
+          <EmptySlot />
+          <h1 className="flex-1 truncate text-center text-xl font-bold text-text">{props.title}</h1>
+          {props.right ? (
+            <button
+              type="button"
+              aria-label={props.right.label}
+              onClick={props.right.onClick}
+              className={ICON_BUTTON_CLASS_NAME}
+            >
+              {props.right.icon}
+            </button>
+          ) : (
+            <EmptySlot />
+          )}
+        </div>
+      </header>
+    );
+  }
+
+  if (props.variant === "detail") {
+    return (
+      <header className={STICKY_CARD_CLASS_NAME}>
+        <div className={HEADER_ROW_CLASS_NAME}>
+          <BackButton onBack={props.onBack} />
+          {props.title ? (
+            <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+              {props.title}
+            </h1>
+          ) : (
+            <span className="flex-1" />
+          )}
+          {props.moreMenu ? (
+            <MoreMenuButton label={props.moreMenu.label} content={props.moreMenu.content} />
+          ) : (
+            <EmptySlot />
+          )}
+        </div>
+      </header>
+    );
+  }
+
+  if (props.variant === "create") {
+    return (
+      <header className={STICKY_CARD_CLASS_NAME}>
+        <div className={HEADER_ROW_CLASS_NAME}>
+          <button
+            type="button"
+            aria-label="关闭"
+            onClick={props.onClose ?? (() => navigate(-1))}
+            className={ICON_BUTTON_CLASS_NAME}
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+            {props.title}
+          </h1>
+          <button
+            type="button"
+            onClick={props.onSubmit}
+            disabled={props.submitDisabled}
+            className="shrink-0 px-1 text-base font-bold text-primary disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {props.submitLabel ?? "发布"}
+          </button>
+        </div>
+      </header>
+    );
+  }
+
+  // variant === "nav-only"
+  return (
+    <header className={STICKY_CARD_CLASS_NAME}>
+      <div className={HEADER_ROW_CLASS_NAME}>
+        <BackButton onBack={props.onBack} />
+        {props.title ? (
+          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+            {props.title}
+          </h1>
+        ) : (
+          <span className="flex-1" />
+        )}
         {props.right ? (
           <button
             type="button"
@@ -290,79 +421,7 @@ export function TopBar(props: TopBarProps) {
         ) : (
           <EmptySlot />
         )}
-      </header>
-    );
-  }
-
-  if (props.variant === "detail") {
-    return (
-      <header className="flex h-14 items-center justify-between px-4">
-        <BackButton onBack={props.onBack} />
-        {props.title ? (
-          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
-            {props.title}
-          </h1>
-        ) : (
-          <span className="flex-1" />
-        )}
-        {props.moreMenu ? (
-          <MoreMenuButton label={props.moreMenu.label} content={props.moreMenu.content} />
-        ) : (
-          <EmptySlot />
-        )}
-      </header>
-    );
-  }
-
-  if (props.variant === "create") {
-    return (
-      <header className="flex h-14 items-center justify-between px-4">
-        <button
-          type="button"
-          aria-label="关闭"
-          onClick={props.onClose ?? (() => navigate(-1))}
-          className={ICON_BUTTON_CLASS_NAME}
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
-        <h1 className="flex-1 truncate text-center text-base font-bold text-text">
-          {props.title}
-        </h1>
-        <button
-          type="button"
-          onClick={props.onSubmit}
-          disabled={props.submitDisabled}
-          className="shrink-0 px-1 text-base font-bold text-primary disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {props.submitLabel ?? "发布"}
-        </button>
-      </header>
-    );
-  }
-
-  // variant === "nav-only"
-  return (
-    <header className="flex h-14 items-center justify-between px-4">
-      <BackButton onBack={props.onBack} />
-      {props.title ? (
-        <h1 className="flex-1 truncate text-center text-base font-bold text-text">
-          {props.title}
-        </h1>
-      ) : (
-        <span className="flex-1" />
-      )}
-      {props.right ? (
-        <button
-          type="button"
-          aria-label={props.right.label}
-          onClick={props.right.onClick}
-          className={ICON_BUTTON_CLASS_NAME}
-        >
-          {props.right.icon}
-        </button>
-      ) : (
-        <EmptySlot />
-      )}
+      </div>
     </header>
   );
 }
