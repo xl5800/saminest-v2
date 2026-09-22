@@ -114,6 +114,28 @@ describe("ConversationListPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("加载中…");
   });
 
+  // 高频页面骨架屏任务卡：原来这里是一行纯文字"加载中…"，现在换成贴近
+  // 真实扁平通栏行形状（圆形头像+两行文字）的骨架块，sr-only 播报文字
+  // 保留、骨架块本身是纯视觉装饰。
+  it("renders skeleton placeholder rows, not a plain 加载中 paragraph, while pending", () => {
+    useMyConversationsQuery.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false
+    });
+
+    const { container } = renderWithProviders(<ConversationListPage />);
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("shows an error state when the query fails", () => {
     useMyConversationsQuery.mockReturnValue({
       data: undefined,

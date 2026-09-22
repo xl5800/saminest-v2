@@ -11,6 +11,7 @@ import { FavoriteButton } from "../../components/favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
 import { PersonCard } from "../../components/person-card";
 import { PostShareActionSheet } from "../../components/post-share-action-sheet";
+import { Skeleton } from "../../components/skeleton";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
@@ -335,6 +336,17 @@ export function PostDetailPage() {
           </div>
         ) : null}
 
+        {/* 高频页面骨架屏任务卡：头图占位——data 还没回来时不知道这条帖子
+            到底有没有图片（真实头图是 data && data.images.length > 0 才
+            渲染的），骨架屏没法在加载完成前预判这一点，统一先展示一块
+            h-[50dvh] 的占位（跟下面沉浸式头图同一个高度/同一个位置，紧贴
+            视口顶部、不带左右内边距），加载完成后如果这条帖子确实没有
+            图片，占位会被替换成没有头图的真实布局——这是骨架屏"形状不能
+            100% 预知真实内容"的固有局限，不是遗漏。剩下的标题/价格/地区/
+            "描述"/发帖人卡片占位在下面 role="status" 容器里，跟头图占位
+            共用同一个 sr-only 播报文字，不重复播报两次。 */}
+        {isPending ? <Skeleton className="h-[50dvh] w-full rounded-none" /> : null}
+
         <div className="mx-auto max-w-2xl px-4 py-6">
           <WechatBrowserBanner />
 
@@ -344,7 +356,32 @@ export function PostDetailPage() {
             </p>
           ) : null}
 
-          {isPending ? <p role="status">加载中…</p> : null}
+          {/* 按真实内容加载完成后的顺序给对应占位——标题/价格 → 地区 →
+              "描述"小节 → 发帖人卡片（头像尺寸照抄下面 PersonCard 实际
+              用的 h-10 w-10/40px）。sr-only 文字保留原来的无障碍播报，
+              骨架块本身是纯视觉装饰。 */}
+          {isPending ? (
+            <div role="status">
+              <span className="sr-only">加载中…</span>
+              <div className="space-y-4">
+                <div>
+                  <Skeleton className="h-5 w-4/5" />
+                  <Skeleton className="mt-2 h-7 w-1/3" />
+                </div>
+                <Skeleton className="h-4 w-1/4" />
+                <div>
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="mt-2 h-4 w-full" />
+                  <Skeleton className="mt-1.5 h-4 w-full" />
+                  <Skeleton className="mt-1.5 h-4 w-2/3" />
+                </div>
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                  <Skeleton className="h-4 w-1/3" />
+                </div>
+              </div>
+            </div>
+          ) : null}
 
           {isError ? <p role="alert">帖子加载失败，请稍后重试。</p> : null}
 

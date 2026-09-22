@@ -14,6 +14,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { ProfileSummary } from "../../components/profile-summary";
+import { Skeleton } from "../../components/skeleton";
 import { useIsAdminQuery } from "../../features/admin/use-is-admin-query";
 import { useContactSupport } from "../../features/conversations/use-contact-support";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
@@ -243,7 +244,26 @@ export function ProfilePage() {
       <h1 className="sr-only">我的</h1>
 
       <div className="mx-auto max-w-md px-4 pb-6 pt-3.5">
-        {isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+        {/* 高频页面骨架屏任务卡：这个页面不是列表，是 ProfileSummary 渲染
+            的个人资料头部——占位给同一种"资料头部"形状，不是列表行。外层
+            卡片 class 照抄 profile-summary.tsx 真实用的
+            rounded-profile-card bg-card p-3.5，头像占位尺寸跟 ProfileSummary
+            实际用的 h-14 w-14/56px 一致，旁边昵称行占位 + 下方 1-2 行简介
+            占位。sr-only 文字保留原来的无障碍播报，骨架块本身是纯视觉
+            装饰。 */}
+        {isPending ? (
+          <div role="status" className="mb-6">
+            <span className="sr-only">加载中…</span>
+            <div className="rounded-profile-card bg-card p-3.5">
+              <div className="flex items-center">
+                <Skeleton className="h-14 w-14 shrink-0 rounded-full" />
+                <Skeleton className="ml-3.5 h-4 w-1/3" />
+              </div>
+              <Skeleton className="mt-3 h-4 w-full" />
+              <Skeleton className="mt-1.5 h-4 w-2/3" />
+            </div>
+          </div>
+        ) : null}
         {isError ? (
           <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
             用户信息加载失败，请稍后重试。

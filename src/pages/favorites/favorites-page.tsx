@@ -2,10 +2,15 @@ import { Link } from "react-router-dom";
 
 import { FavoriteButton } from "../../components/favorite-button";
 import { PostThumbnail } from "../../components/post-thumbnail";
+import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useFavoritedPostsQuery } from "../../features/favorites/use-favorited-posts-query";
 import { formatListingDate, formatPrice } from "../../utils/format";
+
+// 高频页面骨架屏任务卡：占位行数量，纯视觉估算（大致铺满一屏），不是
+// 任务卡强制的精确值。
+const FAVORITES_SKELETON_COUNT = 4;
 
 /**
  * 收藏列表页（/favorites，路由已在 routes.tsx 用 RequireAuth 包裹）。
@@ -48,12 +53,35 @@ export function FavoritesPage() {
   const { data: posts, isPending, isError } = useFavoritedPostsQuery();
 
   if (isPending) {
+    // 高频页面骨架屏任务卡：任务卡原文描述这个页面"复用首页同一套
+    // PostThumbnail 卡片视觉"，让骨架屏直接复用 post-list.tsx 两列网格
+    // 那一套占位——读代码确认现在的 favorites-page.tsx 实际是单列横排
+    // 行（跟 my-posts-page.tsx 同一个 rounded-2xl border border-border
+    // bg-card p-3 shadow-card + 左侧 80×80 缩略图的布局），不是两列网格；
+    // 这次骨架屏按实际渲染出来的单列行形状做占位，不是按任务卡这一句
+    // 描述硬套两列网格——完工报告里已经把这处任务卡描述和当前代码的
+    // 差异单独指出来。
     return (
       <main>
         <TopBar variant="nav-only" />
         <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
           <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
-          <p role="status" className="text-sm text-text-muted">加载中…</p>
+          <div role="status">
+            <span className="sr-only">加载中…</span>
+            <ul className="flex flex-col gap-2">
+              {Array.from({ length: FAVORITES_SKELETON_COUNT }).map((_, index) => (
+                <li key={index} className="flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-card">
+                  <Skeleton className="h-20 w-20 shrink-0 rounded-xl" />
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-4/5" />
+                    <Skeleton className="mt-1.5 h-4 w-1/3" />
+                    <Skeleton className="mt-1.5 h-3 w-1/2" />
+                    <Skeleton className="mt-1.5 h-3 w-1/4" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       </main>
     );

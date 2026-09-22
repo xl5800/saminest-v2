@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
+import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useCancelActivityMutation } from "../../features/activities/use-cancel-activity-mutation";
@@ -23,6 +24,9 @@ import {
 } from "../../utils/format";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
+// 高频页面骨架屏任务卡：占位卡片数量，纯视觉估算（大致铺满一屏），不是
+// 任务卡强制的精确值。两个 tab 共用同一套占位，不用为每个 tab 单独调数字。
+const MY_ACTIVITIES_SKELETON_COUNT = 3;
 
 // 面向用户自己的状态文案 + 配色，四档映射逻辑照抄 my-posts-page.tsx 的
 // statusBadgeClassName（success/warning/danger/中性四档），同一个"状态
@@ -510,7 +514,29 @@ export function MyActivitiesPage() {
         <h1 className="mb-4 text-xl font-bold text-text">我的活动</h1>
         {tabNav}
 
-        {activeQuery.isPending ? <p role="status" className="text-sm text-text-muted">加载中…</p> : null}
+        {/* 高频页面骨架屏任务卡：两个 tab（我发起的/我报名的）共用同一套
+            占位，不按 tab 区分形状——占位卡片外层容器 class 照抄这个文件
+            里本地 ActivityCard 组件真实用的
+            rounded-2xl border border-border bg-card p-3 shadow-card，
+            内部给标题（两行，模拟 line-clamp-2）+ 频道/地点、时间两行
+            次要信息 + 一行人数汇总占位。sr-only 文字保留原来的无障碍
+            播报，骨架块本身是纯视觉装饰。 */}
+        {activeQuery.isPending ? (
+          <div role="status">
+            <span className="sr-only">加载中…</span>
+            <ul className="flex flex-col gap-3">
+              {Array.from({ length: MY_ACTIVITIES_SKELETON_COUNT }).map((_, index) => (
+                <li key={index} className="rounded-2xl border border-border bg-card p-3 shadow-card">
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="mt-1.5 h-5 w-2/3" />
+                  <Skeleton className="mt-2 h-3 w-1/2" />
+                  <Skeleton className="mt-1.5 h-3 w-1/3" />
+                  <Skeleton className="mt-1.5 h-3 w-1/4" />
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
 
         {activeQuery.isError ? (
           <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">

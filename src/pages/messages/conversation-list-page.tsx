@@ -2,6 +2,7 @@ import { Bell } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { useMyConversationsQuery } from "../../features/conversations/use-my-conversations-query";
 import { useAuthStore } from "../../store/auth-store";
@@ -10,6 +11,9 @@ import { ConversationSwipeRow } from "./conversation-swipe-row";
 
 const EMPTY_LIST_MESSAGE = "暂无消息";
 const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
+// 高频页面骨架屏任务卡：占位行数量，纯视觉估算（大致铺满一屏），不是
+// 任务卡强制的精确值。
+const CONVERSATION_SKELETON_COUNT = 5;
 
 /**
  * 顶部栏通知铃铛的目标路径——06 号卡只要求"消息"Tab 顶部右侧有一个通知
@@ -100,8 +104,27 @@ export function ConversationListPage() {
           容器的责任，跟改版前的 max-w-2xl 宽度限制保持一致（仍然套在
           最外层）。 */}
       <div className="mx-auto max-w-2xl py-2">
+        {/* 高频页面骨架屏任务卡：容器/每行的布局照抄 conversation-swipe-row.tsx
+            真实一行的结构——divide-y divide-divider 扁平通栏 + 每行
+            flex items-center gap-3 px-4 py-3，左侧圆形头像（40px，跟
+            真实头像 h-10 w-10 一致）+ 右侧昵称（较短）/预览文字（较长）
+            两行占位。sr-only 文字保留原来的无障碍播报，骨架块本身是纯
+            视觉装饰。 */}
         {isPending ? (
-          <p role="status" className="px-4 text-sm text-text-muted">加载中…</p>
+          <div role="status">
+            <span className="sr-only">加载中…</span>
+            <ul className="divide-y divide-divider">
+              {Array.from({ length: CONVERSATION_SKELETON_COUNT }).map((_, index) => (
+                <li key={index} className="flex items-center gap-3 px-4 py-3">
+                  <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-1/3" />
+                    <Skeleton className="mt-1.5 h-3.5 w-4/5" />
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
         {isError ? (
           <p role="alert" className="mx-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">

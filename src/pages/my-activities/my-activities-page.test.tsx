@@ -164,6 +164,24 @@ describe("MyActivitiesPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("加载中");
   });
 
+  // 高频页面骨架屏任务卡：原来这里是一行纯文字"加载中…"，现在换成贴近
+  // 真实活动卡片形状的骨架块，sr-only 播报文字保留、骨架块本身是纯视觉
+  // 装饰。
+  it("renders skeleton placeholder cards, not a plain 加载中 paragraph, while pending", () => {
+    listMyOrganizedActivities.mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderWithProviders(<MyActivitiesPage />);
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("shows an error state when the organized-activities query fails", async () => {
     listMyOrganizedActivities.mockRejectedValue(new Error("network down"));
 

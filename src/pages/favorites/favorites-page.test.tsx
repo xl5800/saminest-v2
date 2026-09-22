@@ -60,6 +60,24 @@ describe("FavoritesPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("加载中");
   });
 
+  // 高频页面骨架屏任务卡：原来这里是一行纯文字"加载中…"，现在换成贴近
+  // 真实列表项形状（缩略图+标题+价格+地区+时间）的骨架块，sr-only 播报
+  // 文字保留、骨架块本身是纯视觉装饰。
+  it("renders skeleton placeholder list items, not a plain 加载中 paragraph, while pending", () => {
+    listFavoritedPosts.mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderWithProviders(<FavoritesPage />);
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("shows an error message when the favorites request fails", async () => {
     listFavoritedPosts.mockRejectedValue(new Error("network down"));
 

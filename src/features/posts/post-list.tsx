@@ -3,9 +3,17 @@ import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { PostThumbnail } from "../../components/post-thumbnail";
+import { Skeleton } from "../../components/skeleton";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { formatPrice, formatWantedPosterMeta, isPriceUnset } from "../../utils/format";
 import { usePostsInfiniteQuery } from "./use-posts-query";
+
+// 高频页面骨架屏任务卡：占位卡片数量——网格 6 个（两列 x 3 行，铺满一屏
+// 常见视口高度）、求租单列 4 个（文字行更高，同样大致铺满一屏）。这两个
+// 数字只是"看起来像正常加载出来的一屏内容"的估算，不是任务卡强制的精确
+// 值，纯视觉占位，多一个少一个都不影响功能。
+const GRID_SKELETON_COUNT = 6;
+const WANTED_SKELETON_COUNT = 4;
 
 export interface PostListProps {
   categoryId?: string;
@@ -159,8 +167,51 @@ export function PostList({
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
+  // 高频页面骨架屏任务卡：全站曝光最高的位置，优先接入。原来这里不分
+  // variant 统一渲染一行"加载中…"文字，改成按 variant 给对应形状的骨架
+  // 卡片——网格卡片（推荐/租房/二手）和求租单列文字卡片的真实形状差很多，
+  // 不能共用同一套占位。role="status" + sr-only 文字保留原来的无障碍
+  // 播报，骨架块本身是纯视觉装饰（aria-hidden，Skeleton 组件已内置）。
   if (isPending) {
-    return <p role="status">加载中…</p>;
+    if (variant === "wanted") {
+      return (
+        <div role="status">
+          <span className="sr-only">加载中…</span>
+          <div className="flex flex-col gap-3 px-4">
+            {Array.from({ length: WANTED_SKELETON_COUNT }).map((_, index) => (
+              <div key={index} className="rounded-card-lg border border-border bg-card p-4 shadow-card">
+                <Skeleton className="h-5 w-full" />
+                <Skeleton className="mt-1.5 h-5 w-3/5" />
+                <Skeleton className="mt-2 h-6 w-1/3" />
+                <div className="mt-3 flex items-center gap-2">
+                  <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div role="status">
+        <span className="sr-only">加载中…</span>
+        <div className="grid grid-cols-2 gap-3">
+          {Array.from({ length: GRID_SKELETON_COUNT }).map((_, index) => (
+            <div
+              key={index}
+              className="overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
+            >
+              <Skeleton className="aspect-[4/5] w-full" />
+              <div className="space-y-0.5 p-2.5">
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-4 w-2/5" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   if (isError) {

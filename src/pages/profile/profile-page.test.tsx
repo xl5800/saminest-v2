@@ -64,6 +64,24 @@ describe("ProfilePage", () => {
     expect(await screen.findByText("Alice")).toBeInTheDocument();
   });
 
+  // 高频页面骨架屏任务卡：原来这里是一行纯文字"加载中…"，这个页面不是
+  // 列表，是资料头部形状——占位换成圆形头像+昵称行+简介行的骨架块，
+  // sr-only 播报文字保留、骨架块本身是纯视觉装饰。
+  it("renders a profile-header-shaped skeleton, not a plain 加载中 paragraph, while the profile query is pending", () => {
+    getMyProfile.mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderWithProviders(<ProfilePage />);
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   // 24 号卡当时把头像卡片精简成不展示邮箱这一行——邮箱以前是靠
   // ProfileSummary 的 tertiaryText 传的，这个 prop 已经整个删掉了，这条
   // 这次没有变。locationName 也从来不是 ProfileSummary 的真实 prop

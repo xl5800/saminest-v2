@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { PostThumbnail } from "../../components/post-thumbnail";
 import { PublishActionSheet } from "../../components/publish-action-sheet";
+import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useArchivePostMutation } from "../../features/my-posts/use-archive-post-mutation";
@@ -14,6 +15,9 @@ import type { MyPostListItem } from "../../repositories/posts-repository";
 import { formatPublishedAt } from "../../utils/format";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
+// 高频页面骨架屏任务卡：占位行数量，纯视觉估算（大致铺满一屏），不是
+// 任务卡强制的精确值。
+const MY_POSTS_SKELETON_COUNT = 4;
 
 // 面向作者本人的状态文案，跟后台管理页（all-posts-page.tsx）用给管理员看
 // 的技术性状态名（待审核/已通过/已驳回/已归档）故意不一样——那边是内部
@@ -211,8 +215,36 @@ export function MyPostsPage() {
     return (
       <main>
         {topBar}
+        {/* 高频页面骨架屏任务卡：外壳（topBar/容器/publishSheet）不变，
+            只把中间内容换成贴近真实列表项形状的占位——<ul
+            className="flex flex-col gap-3"> 包裹，跟真实列表一致；每个
+            <li> 外层容器 class 照抄真实行的 rounded-2xl border
+            border-border bg-card p-3 shadow-card，左侧 h-20 w-20
+            缩略图占位（真实用 PostThumbnail，这里直接用同尺寸的
+            Skeleton 矩形代替，不引入 PostThumbnail 本身）+ 右侧标题两行
+            占位 + 状态徽章占位（小圆角矩形）+ 一行次要信息占位。sr-only
+            文字保留原来的无障碍播报，骨架块本身是纯视觉装饰。 */}
         <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-          <p role="status" className="text-sm text-text-muted">加载中…</p>
+          <div role="status">
+            <span className="sr-only">加载中…</span>
+            <ul className="flex flex-col gap-3">
+              {Array.from({ length: MY_POSTS_SKELETON_COUNT }).map((_, index) => (
+                <li key={index} className="rounded-2xl border border-border bg-card p-3 shadow-card">
+                  <div className="flex gap-3">
+                    <Skeleton className="h-20 w-20 shrink-0 rounded-xl" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2">
+                        <Skeleton className="h-4 w-4/5" />
+                        <Skeleton className="h-4 w-12 shrink-0 rounded-full" />
+                      </div>
+                      <Skeleton className="mt-1.5 h-4 w-2/3" />
+                      <Skeleton className="mt-1.5 h-3 w-1/3" />
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
         {publishSheet}
       </main>

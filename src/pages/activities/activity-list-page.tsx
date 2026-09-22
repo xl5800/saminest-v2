@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 import { ActivityCard } from "../../components/activity-card";
 import { Fab } from "../../components/fab";
+import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatSelectedRegionLabel } from "../../data/us-states";
 import { useActivitiesQuery } from "../../features/activities/use-activities-query";
@@ -16,6 +17,9 @@ const REGION_SELECT_PATH = "/region-select";
 // 跟 home-page.tsx 的 SEARCH_DEBOUNCE_MS 用同一个值——18 号卡明确要求"复用
 // 首页同款的 debounce 模式"，这里没有理由取一个不同的延迟数字。
 const SEARCH_DEBOUNCE_MS = 400;
+// 高频页面骨架屏任务卡：占位卡片数量，纯视觉估算（大致铺满一屏），不是
+// 任务卡强制的精确值。
+const ACTIVITY_SKELETON_COUNT = 4;
 
 /**
  * "找搭子"活动列表页（/activities，公开，不需要登录，游客也能刷）。
@@ -177,7 +181,38 @@ export function ActivityListPage() {
           ))}
         </nav>
 
-        {isPending ? <p role="status">加载中…</p> : null}
+        {/* 高频页面骨架屏任务卡：占位卡片外层容器 class 照抄
+            components/activity-card.tsx 真实卡片的
+            overflow-hidden rounded-card-lg border border-border bg-card
+            shadow-card，内部给标题（两行，模拟 line-clamp-2）+ 地点/时间
+            两行次要信息占位（真实卡片的 p-5 pt-3 pb-2 文字区）。sr-only
+            文字保留原来的无障碍播报，骨架块本身是纯视觉装饰。 */}
+        {/* 高频页面骨架屏任务卡：占位卡片外层容器 class 照抄
+            components/activity-card.tsx 真实卡片的
+            overflow-hidden rounded-card-lg border border-border bg-card
+            shadow-card，内部给标题（两行，模拟 line-clamp-2）+ 地点/时间
+            两行次要信息占位（真实卡片的 p-5 pt-3 pb-2 文字区）。sr-only
+            文字保留原来的无障碍播报，骨架块本身是纯视觉装饰。 */}
+        {isPending ? (
+          <div role="status">
+            <span className="sr-only">加载中…</span>
+            <div className="flex flex-col gap-3">
+              {Array.from({ length: ACTIVITY_SKELETON_COUNT }).map((_, index) => (
+                <div
+                  key={index}
+                  className="overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
+                >
+                  <div className="p-5 pt-3 pb-2">
+                    <Skeleton className="h-5 w-full" />
+                    <Skeleton className="mt-1.5 h-5 w-2/3" />
+                    <Skeleton className="mt-2 h-3 w-1/3" />
+                    <Skeleton className="mt-1.5 h-3 w-1/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {isError ? <p role="alert">活动加载失败，请稍后重试。</p> : null}
 
         {isRegionEmptyState ? (

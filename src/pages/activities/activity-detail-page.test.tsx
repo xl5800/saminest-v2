@@ -180,6 +180,27 @@ describe("ActivityDetailPage", () => {
     expect(screen.getByRole("status")).toHaveTextContent("加载中…");
   });
 
+  // 高频页面骨架屏任务卡：原来这里是一行纯文字"加载中…"，现在换成贴近
+  // 真实布局（标题/地点框/时间/活动描述）的骨架块，sr-only 播报文字保留、
+  // 骨架块本身是纯视觉装饰。
+  it("renders skeleton placeholder blocks, not a plain 加载中 paragraph, while pending", () => {
+    useActivityDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+    const { container } = renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("shows a plain error message on a genuine fetch failure", () => {
     useActivityDetailQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
 

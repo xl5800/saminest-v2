@@ -50,6 +50,24 @@ describe("PostList", () => {
     expect(screen.getByRole("status")).toHaveTextContent("加载中…");
   });
 
+  // 高频页面骨架屏任务卡：默认 grid variant 的"加载中"从一行纯文字换成
+  // 贴近真实两列卡片形状的骨架屏——sr-only 播报文字保留，视觉上是骨架块。
+  it("renders grid-shaped skeleton placeholder cards (not a plain 加载中 paragraph) while pending", () => {
+    listApprovedPosts.mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderWithProviders(<PostList />);
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    expect(container.querySelector(".grid.grid-cols-2")).toBeInTheDocument();
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   it("shows an empty state instead of crashing when there are no posts", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
@@ -457,6 +475,20 @@ describe("PostList variant='wanted'", () => {
     posterAge: 25,
     posterGender: "女"
   };
+
+  // 高频页面骨架屏任务卡：求租单列文字卡片的"加载中"也换成骨架屏——形状
+  // 跟网格 variant 不一样（单列、更高的文字行占位），不能共用同一套。
+  it("renders wanted-shaped (single-column) skeleton placeholder cards while pending, not the grid shape", () => {
+    listApprovedPosts.mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderWithProviders(<PostList variant="wanted" />);
+
+    const status = screen.getByRole("status");
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    expect(container.querySelector(".grid.grid-cols-2")).not.toBeInTheDocument();
+    expect(container.querySelector(".flex.flex-col.gap-3.px-4")).toBeInTheDocument();
+    expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(0);
+  });
 
   it("renders a single-column text card (not the two-column image grid) with title, price, location and poster info", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [sampleWantedPost], hasNextPage: false });

@@ -11,6 +11,7 @@ import {
 } from "../../components/activity-participation-button";
 import { CommentSection } from "../../components/comment-section";
 import { PersonCard } from "../../components/person-card";
+import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
@@ -296,7 +297,29 @@ export function ActivityDetailPage() {
       />
 
       <div className="mx-auto max-w-2xl px-4 pb-20 md:pb-6">
-        {isPending ? <p role="status">加载中…</p> : null}
+        {/* 高频页面骨架屏任务卡：这个页面没有帖子详情页那种大图轮播，占位
+            按真实内容顺序给标题行 → 地点框（容器 class 照抄下面真实地点框
+            的 rounded-lg border border-border bg-bg p-3）→ 时间行（较短）→
+            "活动描述"小节（短标题+2-3 行正文）。sr-only 文字保留原来的
+            无障碍播报，骨架块本身是纯视觉装饰。 */}
+        {isPending ? (
+          <div role="status">
+            <span className="sr-only">加载中…</span>
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-4/5" />
+              <div className="rounded-lg border border-border bg-bg p-3">
+                <Skeleton className="h-4 w-2/3" />
+              </div>
+              <Skeleton className="h-4 w-1/4" />
+              <div>
+                <Skeleton className="h-4 w-20" />
+                <Skeleton className="mt-2 h-4 w-full" />
+                <Skeleton className="mt-1.5 h-4 w-full" />
+                <Skeleton className="mt-1.5 h-4 w-1/2" />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         {isError ? <p role="alert">活动加载失败，请稍后重试。</p> : null}
 

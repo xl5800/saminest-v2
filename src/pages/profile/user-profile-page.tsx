@@ -2,6 +2,7 @@ import { ArrowLeft, Ban, Flag, MoreHorizontal } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
+import { Skeleton } from "../../components/skeleton";
 import { PostList } from "../../features/posts/post-list";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import { useCreateProfileConversationMutation } from "../../features/conversations/use-create-profile-conversation-mutation";
@@ -422,10 +423,25 @@ export function UserProfilePage() {
         ) : null}
       </div>
 
+      {/* 高频页面骨架屏任务卡：跟"我的"页同样是资料头部形状（这个页面比
+          自己主页多了发消息/更多操作按钮，但那些按钮在 data 加载完之前
+          本来就不显示，骨架屏不需要模拟按钮）。外层卡片 class 照抄下面
+          真实内容用的 rounded-card-lg border border-border bg-card
+          px-5 py-[18px] shadow-card，头像占位尺寸跟下面真实头像一致
+          （h-[88px] w-[88px]）。sr-only 文字保留原来的无障碍播报，骨架块
+          本身是纯视觉装饰。 */}
       {isPending ? (
-        <p role="status" className="p-4 text-sm text-text-muted">
-          加载中…
-        </p>
+        <div role="status" className="mx-auto max-w-md px-4 pt-4">
+          <span className="sr-only">加载中…</span>
+          <div className="rounded-card-lg border border-border bg-card px-5 py-[18px] shadow-card">
+            <div className="flex items-center gap-4">
+              <Skeleton className="h-[88px] w-[88px] shrink-0 rounded-full" />
+              <Skeleton className="h-5 w-1/3" />
+            </div>
+            <Skeleton className="mt-3 h-4 w-full" />
+            <Skeleton className="mt-1.5 h-4 w-2/3" />
+          </div>
+        </div>
       ) : null}
 
       {isError ? (

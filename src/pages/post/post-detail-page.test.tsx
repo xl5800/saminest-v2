@@ -171,6 +171,27 @@ describe("PostDetailPage", () => {
     expect(screen.getAllByRole("status")[0]).toHaveTextContent("加载中…");
   });
 
+  // 高频页面骨架屏任务卡：原来这里是一行纯文字"加载中…"，现在换成贴近
+  // 真实布局（头图/标题/价格/地区/描述/发帖人卡片）的骨架块，sr-only
+  // 播报文字保留、骨架块本身是纯视觉装饰。
+  it("renders skeleton placeholder blocks (image + text shapes), not a plain 加载中 paragraph, while pending", () => {
+    usePostDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+    const { container } = renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    const status = screen.getAllByRole("status")[0];
+    expect(status.querySelector("p")).not.toBeInTheDocument();
+    expect(status.querySelector(".sr-only")).toHaveTextContent("加载中…");
+    const pulsingBlocks = container.querySelectorAll(".animate-pulse");
+    expect(pulsingBlocks.length).toBeGreaterThan(0);
+    for (const block of pulsingBlocks) {
+      expect(block).toHaveAttribute("aria-hidden", "true");
+    }
+  });
+
   // 23 号卡：顶部栏整个换掉了——21 号卡的 TopBar nav-only（一条常规返回
   // 箭头顶栏）不再使用，改成页面自己渲染的悬浮"关闭"圆形按钮，不再有
   // TopBar 组件、不再有"返回"这个可访问名称的按钮。
