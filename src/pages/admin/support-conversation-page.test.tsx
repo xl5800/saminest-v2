@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   useAdminSupportConversationsQuery,
-  useMessagesQuery,
+  useAdminSupportConversationMessagesQuery,
   useAdminReplyToSupportConversationMutation,
   mutateAsyncMock,
   navigateMock,
@@ -11,7 +11,7 @@ const {
   removeMessageImageFileMock
 } = vi.hoisted(() => ({
   useAdminSupportConversationsQuery: vi.fn(),
-  useMessagesQuery: vi.fn(),
+  useAdminSupportConversationMessagesQuery: vi.fn(),
   useAdminReplyToSupportConversationMutation: vi.fn(),
   mutateAsyncMock: vi.fn(),
   navigateMock: vi.fn(),
@@ -22,8 +22,8 @@ const {
 vi.mock("../../features/admin/use-admin-support-conversations-query", () => ({
   useAdminSupportConversationsQuery
 }));
-vi.mock("../../features/messages/use-messages-query", () => ({
-  useMessagesQuery
+vi.mock("../../features/admin/use-admin-support-conversation-messages-query", () => ({
+  useAdminSupportConversationMessagesQuery
 }));
 vi.mock("../../features/admin/use-admin-reply-to-support-conversation-mutation", () => ({
   useAdminReplyToSupportConversationMutation
@@ -72,7 +72,7 @@ describe("AdminSupportConversationPage", () => {
     uploadMessageImageMock.mockReset();
     removeMessageImageFileMock.mockReset();
     useAdminSupportConversationsQuery.mockReset();
-    useMessagesQuery.mockReset();
+    useAdminSupportConversationMessagesQuery.mockReset();
     useAdminReplyToSupportConversationMutation.mockReset();
 
     useAdminSupportConversationsQuery.mockReturnValue({
@@ -89,7 +89,7 @@ describe("AdminSupportConversationPage", () => {
       isPending: false,
       isError: false
     });
-    useMessagesQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    useAdminSupportConversationMessagesQuery.mockReturnValue({ data: [], isPending: false, isError: false });
     useAdminReplyToSupportConversationMutation.mockReturnValue({
       mutateAsync: mutateAsyncMock,
       isPending: false
@@ -115,7 +115,7 @@ describe("AdminSupportConversationPage", () => {
   });
 
   it("shows a loading indicator while messages are pending", () => {
-    useMessagesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    useAdminSupportConversationMessagesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
     renderPage();
 
@@ -123,7 +123,7 @@ describe("AdminSupportConversationPage", () => {
   });
 
   it("shows an error message when messages fail to load", () => {
-    useMessagesQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    useAdminSupportConversationMessagesQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
 
     renderPage();
 
@@ -137,7 +137,7 @@ describe("AdminSupportConversationPage", () => {
   });
 
   it("renders the user's message on the 'other' side and an admin reply on the 'self' side, without mixing them into a system notification card", () => {
-    useMessagesQuery.mockReturnValue({
+    useAdminSupportConversationMessagesQuery.mockReturnValue({
       data: [
         {
           id: "message-1",
@@ -172,7 +172,7 @@ describe("AdminSupportConversationPage", () => {
   });
 
   it("still renders a genuine system notification (notification_payload present) as a notification card, not a chat bubble", () => {
-    useMessagesQuery.mockReturnValue({
+    useAdminSupportConversationMessagesQuery.mockReturnValue({
       data: [
         {
           id: "message-1",
@@ -194,7 +194,7 @@ describe("AdminSupportConversationPage", () => {
   });
 
   it("renders an image thumbnail in a message bubble and opens it in the lightbox on click", () => {
-    useMessagesQuery.mockReturnValue({
+    useAdminSupportConversationMessagesQuery.mockReturnValue({
       data: [
         {
           id: "message-1",

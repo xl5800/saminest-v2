@@ -113,23 +113,17 @@ async function resolveImageUrls(imagePaths: string[]): Promise<Map<string, strin
  * 返回某个会话里未软删除的消息，按 created_at 升序（最早的在最前面），
  * 页面直接按这个顺序渲染即可，不需要在前端再排一次序。越权保护交给
  * messages 表自己的 SELECT 策略（messages_select_of_own_conversations，
- * 只允许当前用户是这条会话的成员）。
+ * 只允许当前用户是这条会话的成员）。这是普通用户读自己会话消息的正确
+ * 路径，不需要、也不应该绕过这条 RLS。
  *
- * 已知缺口（把"联系客服"拆成独立会话类型任务卡发现，不在这次任务范围
- * 内、没有修）：这条策略曾经短暂加过一个"管理员 + 会话是 system 类型"的
- * 例外（20260916120200_admin_support_conversations.sql），但那次改动
- * 导致管理员账号能通过普通的"消息"tab 看到别的用户的系统通知会话——一次
- * 真实的生产数据泄漏，已经在
- * 20260921040500_remove_admin_exception_from_conversation_rls.sql 里改
- * 回去了，且这条策略被明确禁止再开任何管理员例外（见本次新迁移文件顶部
- * 的"硬约束"说明）。这意味着管理员后台的会话详情页
- * （admin-support-conversation-page.tsx）复用这个函数读消息列表时，
- * 实际上拿不到任何一条消息（RLS 静默过滤成 0 行，不是报错）——列表页
- * （admin_list_support_conversations()）和回复
- * （admin_reply_to_support_conversation()）都是 security definer 函数，
- * 天然绕过 RLS，不受影响，唯独"读消息内容"这一步依赖的还是这个走常规
- * RLS 的 listMessages()，需要另一张任务卡补一个类似的 security definer
- * 消息读取函数才能修好，这次不做。
+ * 管理员后台的客服会话详情页（admin-support-conversation-page.tsx）不再
+ * 复用这个函数——管理员从来不是任何一条客服会话的 conversation_members
+ * 行，这条 RLS 对管理员必然不成立（曾经短暂给它开过例外，但那导致了一次
+ * 真实的生产数据泄漏，已经撤销且被禁止再开，见
+ * 20260921040500_remove_admin_exception_from_conversation_rls.sql）。
+ * 管理员改用 adminListSupportConversationMessages()，走
+ * admin_list_support_conversation_messages() 这个 security definer
+ * 函数，天然绕过 RLS，不依赖、也不需要这条策略给管理员开任何例外。
  */
 export async function listMessages(conversationId: string): Promise<MessageListItem[]> {
   const { data, error } = await getSupabaseClient()
@@ -274,4 +268,45 @@ export async function adminReplyToSupportConversation(
   if (error) {
     throw new AppError(error.message, "ADMIN_SUPPORT_REPLY_FAILED", error);
   }
+}
+
+/**
+ * 修复管理员客服会话详情页读不到消息内容的 RLS 缺口任务卡：管理员读取
+ * 某个客服会话（origin_type = 'support'）的消息列表，唯一合法入口是
+ * admin_list_support_conversation_messages() 这个 security definer
+ * 函数——不能直接查 messages 表：普通的 listMessages() 走
+ * messages_select_of_own_conversations 这条 RLS，要求当前用户是该会话
+ * 的成员，管理员不满足（管理员从来不是任何一条客服会话的
+ * conversation_members 行）。函数内部会校验调用者是不是管理员、目标
+ * 会话是不是 support 来源，这里不重复判断。跟 listMessages() 返回同一个
+ * MessageListItem 形状（同样批量签图片地址），不另建一套返回类型——
+ * 页面据此可以直接复用现成的消息渲染逻辑，不需要区分数据来源。
+ */
+export async function adminListSupportConversationMessages(
+  conversationId: string
+): Promise<MessageListItem[]> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "admin_list_support_conversation_messages",
+    { target_conversation_id: conversationId }
+  );
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_SUPPORT_MESSAGES_LIST_FAILED", error);
+  }
+
+  const rows = data ?? [];
+  const imagePaths = rows
+    .map((row) => row.image_path)
+    .filter((path): path is string => path !== null);
+  const urlByPath = await resolveImageUrls([...new Set(imagePaths)]);
+
+  return rows.map((row) => ({
+    id: row.id,
+    senderId: row.sender_id,
+    body: row.body,
+    notificationPayload: (row.notification_payload as NotificationPayload | null) ?? null,
+    imageUrl: row.image_path ? (urlByPath.get(row.image_path) ?? null) : null,
+    refActivityId: row.ref_activity_id,
+    createdAt: row.created_at
+  }));
 }

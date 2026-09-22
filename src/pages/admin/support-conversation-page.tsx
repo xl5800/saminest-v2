@@ -4,8 +4,8 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { ImageLightbox } from "../../components/image-lightbox";
 import { useAdminReplyToSupportConversationMutation } from "../../features/admin/use-admin-reply-to-support-conversation-mutation";
+import { useAdminSupportConversationMessagesQuery } from "../../features/admin/use-admin-support-conversation-messages-query";
 import { useAdminSupportConversationsQuery } from "../../features/admin/use-admin-support-conversations-query";
-import { useMessagesQuery } from "../../features/messages/use-messages-query";
 import type { NotificationPayload } from "../../repositories/messages-repository";
 import { messageImageStorageService } from "../../services/storage/message-image-storage-service";
 import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
@@ -45,10 +45,17 @@ const MAX_MESSAGE_IMAGE_SIZE_MB = MAX_MESSAGE_IMAGE_SIZE_BYTES / (1024 * 1024);
  *   那份列表数据大概率已经在 React Query 缓存里，不需要重复查询。如果
  *   直接用 URL 打开这个页面（列表还没加载过），头像/昵称会短暂显示占位
  *   兜底，不影响下面消息列表本身的加载。
- * - 消息列表：复用 useMessagesQuery()，跟用户自己那边用的是同一个
- *   hook/同一份 RLS（messages_select_of_own_conversations 这次新增了
- *   "管理员 + 这条消息所属会话是 system 类型"的例外，见对应迁移文件），
- *   不需要为管理员另外写一份查询。
+ * - 消息列表：useAdminSupportConversationMessagesQuery()，走
+ *   admin_list_support_conversation_messages() 这个 security definer
+ *   函数——不能复用用户自己那边的 useMessagesQuery()/listMessages()，
+ *   那个查询受 messages_select_of_own_conversations 这条 RLS 限制，只
+ *   认"当前用户是这条会话的成员"，管理员永远不满足这个条件（管理员从来
+ *   不是任何一条客服会话的 conversation_members 行）。这条 RLS 策略被
+ *   明确禁止再给管理员开任何例外（曾经开过一次，导致管理员能看到别的
+ *   用户的系统通知会话，是一次真实的生产数据泄漏，已撤销，见
+ *   20260921040500_remove_admin_exception_from_conversation_rls.sql），
+ *   所以管理员读消息内容不依赖、也不需要 RLS 层面的任何例外，完全通过
+ *   这个专门的 security definer 函数绕过 RLS。
  * - 发送回复：useAdminReplyToSupportConversationMutation()，唯一合法
  *   入口是 admin_reply_to_support_conversation() 这个数据库函数——不能
  *   用 useSendMessageMutation()/sendMessage()，那个要求发送者是会话
@@ -74,7 +81,7 @@ export function AdminSupportConversationPage() {
     data: messages,
     isPending: messagesPending,
     isError: messagesError
-  } = useMessagesQuery(conversationId ?? "");
+  } = useAdminSupportConversationMessagesQuery(conversationId ?? "");
   const replyMutation = useAdminReplyToSupportConversationMutation();
 
   const [body, setBody] = useState("");

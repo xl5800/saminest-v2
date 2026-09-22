@@ -1068,6 +1068,18 @@ export type Database = {
         Args: { delete_reason: string; target_activity_id: string }
         Returns: undefined
       }
+      admin_list_support_conversation_messages: {
+        Args: { target_conversation_id: string }
+        Returns: {
+          body: string | null
+          created_at: string
+          id: string
+          image_path: string | null
+          notification_payload: Json | null
+          ref_activity_id: string | null
+          sender_id: string | null
+        }[]
+      }
       admin_list_support_conversations: {
         Args: never
         Returns: {

@@ -30,7 +30,12 @@ vi.mock("../integrations/supabase/client", () => ({
   })
 }));
 
-import { adminReplyToSupportConversation, listMessages, sendMessage } from "./messages-repository";
+import {
+  adminListSupportConversationMessages,
+  adminReplyToSupportConversation,
+  listMessages,
+  sendMessage
+} from "./messages-repository";
 
 describe("listMessages", () => {
   beforeEach(() => {
@@ -511,5 +516,123 @@ describe("adminReplyToSupportConversation", () => {
     await expect(
       adminReplyToSupportConversation("conversation-1", "不应该能发", null)
     ).rejects.toMatchObject({ code: "ADMIN_SUPPORT_REPLY_FAILED" });
+  });
+});
+
+// 修复管理员客服会话详情页读不到消息内容的 RLS 缺口任务卡：管理员读取
+// 某个客服会话的消息内容，唯一合法入口是
+// admin_list_support_conversation_messages() 这个 RPC，不是直接查
+// messages 表（那条路径受 RLS 限制，管理员不是会话成员，会被静默过滤成
+// 0 行）。
+describe("adminListSupportConversationMessages", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+    storageFromMock.mockClear();
+    createSignedUrlsMock.mockReset();
+    createSignedUrlsMock.mockResolvedValue({ data: [], error: null });
+  });
+
+  it("calls the admin_list_support_conversation_messages RPC with the given conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await adminListSupportConversationMessages("conversation-1");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_support_conversation_messages", {
+      target_conversation_id: "conversation-1"
+    });
+  });
+
+  it("maps rows to MessageListItem, same shape as listMessages", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          id: "message-1",
+          sender_id: "user-1",
+          body: "你好，我需要帮助",
+          notification_payload: null,
+          image_path: null,
+          ref_activity_id: null,
+          created_at: "2026-07-17T00:00:00.000Z"
+        },
+        {
+          id: "message-2",
+          sender_id: null,
+          body: "你好，我是客服，有什么可以帮你的？",
+          notification_payload: null,
+          image_path: null,
+          ref_activity_id: null,
+          created_at: "2026-07-17T00:01:00.000Z"
+        }
+      ],
+      error: null
+    });
+
+    const result = await adminListSupportConversationMessages("conversation-1");
+
+    expect(result).toEqual([
+      {
+        id: "message-1",
+        senderId: "user-1",
+        body: "你好，我需要帮助",
+        notificationPayload: null,
+        imageUrl: null,
+        refActivityId: null,
+        createdAt: "2026-07-17T00:00:00.000Z"
+      },
+      {
+        id: "message-2",
+        senderId: null,
+        body: "你好，我是客服，有什么可以帮你的？",
+        notificationPayload: null,
+        imageUrl: null,
+        refActivityId: null,
+        createdAt: "2026-07-17T00:01:00.000Z"
+      }
+    ]);
+  });
+
+  it("batch-signs image_path rows the same way listMessages does", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          id: "message-1",
+          sender_id: "user-1",
+          body: null,
+          notification_payload: null,
+          image_path: "conversation-1/image-1.webp",
+          ref_activity_id: null,
+          created_at: "2026-07-17T00:00:00.000Z"
+        }
+      ],
+      error: null
+    });
+    createSignedUrlsMock.mockResolvedValue({
+      data: [
+        { path: "conversation-1/image-1.webp", signedUrl: "https://signed.example.com/image-1.webp", error: null }
+      ],
+      error: null
+    });
+
+    const result = await adminListSupportConversationMessages("conversation-1");
+
+    expect(storageFromMock).toHaveBeenCalledWith("message-images");
+    expect(result[0].imageUrl).toBe("https://signed.example.com/image-1.webp");
+  });
+
+  it("throws an AppError when the RPC fails (e.g. caller is not an admin, or the conversation is not a support conversation)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "only admins can read support conversation messages" }
+    });
+
+    await expect(
+      adminListSupportConversationMessages("conversation-1")
+    ).rejects.toMatchObject({ code: "ADMIN_SUPPORT_MESSAGES_LIST_FAILED" });
+  });
+
+  it("returns an empty list without throwing when there are no messages", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await expect(adminListSupportConversationMessages("conversation-1")).resolves.toEqual([]);
   });
 });
