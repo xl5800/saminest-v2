@@ -1055,3 +1055,68 @@ export async function notifyActivityParticipants(
     throw new AppError(error.message, "ACTIVITY_NOTIFY_PARTICIPANTS_FAILED", error);
   }
 }
+
+export interface AdminActivityListItem {
+  id: string;
+  title: string;
+  createdAt: string;
+  organizerName: string;
+  status: string;
+}
+
+interface AdminActivityRow {
+  id: string;
+  title: string;
+  created_at: string;
+  status: string;
+  organizer: { display_name: string } | null;
+}
+
+/**
+ * 管理员"全部帖子"管理页扩展成能管理所有内容任务卡：让管理员在同一个
+ * /admin/posts/all 页面里，切到"找搭子"分类时管理所有活动。结构逐字照抄
+ * posts-repository.ts 的 listAllPosts——按 created_at 降序、可选
+ * searchQuery 按标题模糊匹配、嵌套 select 把发起人昵称一起带出来（活动
+ * 对 profiles 只有 organizer_id 这一个外键，不需要 fkey 消歧写法，跟
+ * listAllPosts 的 author:profiles(display_name) 是同一个情况）。
+ *
+ * 不加 `.is("deleted_at", null)` 之外的任何 status 过滤——这次任务卡明确
+ * 不做活动的状态筛选（open/full/cancelled/ended 跟帖子的状态完全不是一回
+ * 事，不在这次范围内），管理员需要在这个列表里看到包括已经 cancelled 的
+ * 活动（"下架"不等于"删除"，被下架的活动仍然需要在这个管理列表里能找到、
+ * 必要时再真正删除）。
+ *
+ * 读权限完全靠 activities_select_admin 这条已有的独立 RLS 策略
+ * （`using (is_admin())`，见
+ * supabase/migrations/20260816192239_add_activities_select_admin_policy.sql），
+ * 不需要走任何 RPC——这条策略本身就是只给管理员开的、允许读到任意状态
+ * 活动的策略，不是这次任务卡要处理的越权类型，见
+ * 20260921090000_admin_delete_activity_function.sql 顶部的说明。
+ */
+export async function listAllActivitiesForAdmin(
+  searchQuery?: string
+): Promise<AdminActivityListItem[]> {
+  let query = getSupabaseClient()
+    .from("activities")
+    .select("id, title, created_at, status, organizer:profiles(display_name)")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+
+  if (searchQuery) {
+    query = query.ilike("title", `%${searchQuery}%`);
+  }
+
+  const { data, error } = await query.overrideTypes<AdminActivityRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_ALL_ACTIVITIES_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    createdAt: row.created_at,
+    organizerName: row.organizer?.display_name ?? "未知用户",
+    status: row.status
+  }));
+}

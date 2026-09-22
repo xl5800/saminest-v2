@@ -24,6 +24,7 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock }
     "is",
     "in",
     "gte",
+    "ilike",
     "order",
     "insert",
     "update"
@@ -59,6 +60,7 @@ import {
   listActivities,
   listActivityParticipantPreviews,
   listActivityParticipants,
+  listAllActivitiesForAdmin,
   listMyJoinedActivities,
   listMyOrganizedActivities,
   listPendingActivityParticipants,
@@ -1317,6 +1319,89 @@ describe("notifyActivityParticipants", () => {
 
     await expect(notifyActivityParticipants("act-1", "内容")).rejects.toMatchObject({
       code: "ACTIVITY_NOTIFY_PARTICIPANTS_FAILED"
+    });
+  });
+});
+
+describe("listAllActivitiesForAdmin", () => {
+  beforeEach(resetAllMocks);
+
+  it("excludes soft-deleted activities, orders by created_at descending, and does not filter by search by default", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listAllActivitiesForAdmin();
+
+    expect(fromMock).toHaveBeenCalledWith("activities");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, title, created_at, status, organizer:profiles(display_name)"
+    );
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(queryBuilder.ilike).not.toHaveBeenCalled();
+  });
+
+  it("also filters by title when searchQuery is provided", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listAllActivitiesForAdmin("烧烤");
+
+    expect(queryBuilder.ilike).toHaveBeenCalledWith("title", "%烧烤%");
+  });
+
+  it("maps rows to AdminActivityListItem including status and organizer name, including cancelled activities", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "act-1",
+          title: "周末吃火锅",
+          created_at: "2026-07-01T00:00:00.000Z",
+          status: "cancelled",
+          organizer: { display_name: "Alice" }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listAllActivitiesForAdmin();
+
+    expect(result).toEqual([
+      {
+        id: "act-1",
+        title: "周末吃火锅",
+        createdAt: "2026-07-01T00:00:00.000Z",
+        organizerName: "Alice",
+        status: "cancelled"
+      }
+    ]);
+  });
+
+  it("falls back to a placeholder organizer name when the joined organizer is missing", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "act-1",
+          title: "周末吃火锅",
+          created_at: "2026-07-01T00:00:00.000Z",
+          status: "open",
+          organizer: null
+        }
+      ],
+      error: null
+    });
+
+    const result = await listAllActivitiesForAdmin();
+
+    expect(result[0].organizerName).toBe("未知用户");
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(listAllActivitiesForAdmin()).rejects.toMatchObject({
+      code: "ADMIN_ALL_ACTIVITIES_LIST_FAILED"
     });
   });
 });

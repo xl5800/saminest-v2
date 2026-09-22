@@ -1064,6 +1064,10 @@ export type Database = {
         Args: { cancel_reason: string; target_activity_id: string }
         Returns: undefined
       }
+      admin_delete_activity: {
+        Args: { delete_reason: string; target_activity_id: string }
+        Returns: undefined
+      }
       admin_list_support_conversations: {
         Args: never
         Returns: {

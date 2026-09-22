@@ -9,6 +9,7 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
     "select",
     "eq",
     "is",
+    "ilike",
     "order",
     "range",
     "insert",
@@ -886,6 +887,31 @@ describe("listAllPosts", () => {
     await listAllPosts("approved");
 
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+  });
+
+  // "全部帖子"管理页扩展成能管理所有内容任务卡：新增的两个可选参数。
+  it("also filters by category_id when categoryId is provided", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listAllPosts(undefined, "cat-1");
+
+    expect(queryBuilder.eq).toHaveBeenCalledWith("category_id", "cat-1");
+  });
+
+  it("also filters by title (ilike) when searchQuery is provided", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listAllPosts(undefined, undefined, "sunny");
+
+    expect(queryBuilder.ilike).toHaveBeenCalledWith("title", "%sunny%");
+  });
+
+  it("does not filter by category or title when those params are omitted", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listAllPosts();
+
+    expect(queryBuilder.ilike).not.toHaveBeenCalled();
   });
 
   it("maps rows to AdminPostListItem including status, author, and category names", async () => {

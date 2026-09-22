@@ -632,8 +632,17 @@ interface AdminAllPostRow {
  * 有两个外键（reporter_id / reviewer_id）导致嵌套 select 必须写
  * `profiles!reports_reporter_id_fkey(...)` 消歧的情况不同，这里没有那个坑，
  * 沿用不带外键提示的写法是安全的。
+ *
+ * "全部帖子"管理页扩展成能管理所有内容任务卡：新增 categoryId/searchQuery
+ * 两个可选参数——categoryId 按 posts.category_id 精确匹配（下拉选的是
+ * categories 表里真实存在的一行，不需要模糊匹配）；searchQuery 按标题
+ * ilike 模糊匹配，大小写不敏感。两个参数都不传时行为跟改动前逐字一致。
  */
-export async function listAllPosts(statusFilter?: string): Promise<AdminPostListItem[]> {
+export async function listAllPosts(
+  statusFilter?: string,
+  categoryId?: string,
+  searchQuery?: string
+): Promise<AdminPostListItem[]> {
   let query = getSupabaseClient()
     .from("posts")
     .select(
@@ -644,6 +653,12 @@ export async function listAllPosts(statusFilter?: string): Promise<AdminPostList
 
   if (statusFilter) {
     query = query.eq("status", statusFilter);
+  }
+  if (categoryId) {
+    query = query.eq("category_id", categoryId);
+  }
+  if (searchQuery) {
+    query = query.ilike("title", `%${searchQuery}%`);
   }
 
   const { data, error } = await query.overrideTypes<AdminAllPostRow[]>();

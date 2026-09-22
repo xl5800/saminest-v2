@@ -140,6 +140,31 @@ export async function adminCancelActivity(
 }
 
 /**
+ * 真正删除活动（软删除：设置 activities.deleted_at + 记一条
+ * moderation_actions 日志，原子性由 admin_delete_activity 这个 security
+ * definer 函数保证，见
+ * supabase/migrations/20260921090000_admin_delete_activity_function.sql）。
+ * "全部帖子"管理页扩展成能管理所有内容任务卡：跟 adminCancelActivity 是
+ * 两个独立的操作，不是同一个操作的两种参数——下架（status='cancelled'）
+ * 和删除（deleted_at）分开保留，页面上是两个各自独立的按钮/表单。参数名
+ * target_activity_id / delete_reason 跟该迁移文件里函数签名完全一致，
+ * 跟 deletePost 是同一个模式。
+ */
+export async function adminDeleteActivity(
+  activityId: string,
+  deleteReason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_delete_activity", {
+    target_activity_id: activityId,
+    delete_reason: deleteReason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_DELETE_ACTIVITY_FAILED", error);
+  }
+}
+
+/**
  * 设置某个用户的 account_status（active/restricted/suspended），走
  * set_account_status 这个 security definer 函数（见
  * supabase/migrations/20260717000700_account_status_enforcement.sql）。

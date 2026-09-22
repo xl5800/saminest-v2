@@ -8,6 +8,7 @@ vi.mock("../integrations/supabase/client", () => ({
 
 import {
   adminCancelActivity,
+  adminDeleteActivity,
   approvePost,
   deleteComment,
   deletePost,
@@ -210,6 +211,34 @@ describe("adminCancelActivity", () => {
 
     await expect(adminCancelActivity("act-1", "")).rejects.toMatchObject({
       code: "ADMIN_CANCEL_ACTIVITY_FAILED"
+    });
+  });
+});
+
+describe("adminDeleteActivity", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_delete_activity with target_activity_id and delete_reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminDeleteActivity("act-1", "违反平台规则");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_delete_activity", {
+      target_activity_id: "act-1",
+      delete_reason: "违反平台规则"
+    });
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. empty reason or already deleted)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "delete_reason is required" }
+    });
+
+    await expect(adminDeleteActivity("act-1", "")).rejects.toMatchObject({
+      code: "ADMIN_DELETE_ACTIVITY_FAILED"
     });
   });
 });
