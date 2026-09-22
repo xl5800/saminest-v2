@@ -997,17 +997,17 @@ describe("MessageConversationPage", () => {
       expect(screen.queryByRole("link")).not.toBeInTheDocument();
     });
 
-    // 联系客服改成真聊天任务卡：system 会话现在也能双向聊天（用户可以
-    // 主动发起、客服可以回复），composer 不再对 system 会话特殊隐藏——
-    // 这条测试反过来断言"确实会渲染"，是上面这条历史行为的对立面，不是
-    // 遗漏。
-    it("renders the composer form for a system conversation too (联系客服改成真聊天任务卡)", () => {
+    // 把"联系客服"拆成独立会话类型任务卡：双向聊天已经整个搬到新的
+    // support 会话，system 会话重新变回纯单向自动通知，composer 重新
+    // 隐藏——这条测试反过来断言"不会渲染"，是"联系客服改成真聊天"那次
+    // 历史行为（"渲染"）的对立面，不是遗漏，见 conversation-page.tsx
+    // 顶部注释里"把联系客服拆成独立会话类型任务卡"那一段。
+    it("does not render the composer form for a system conversation (把联系客服拆成独立会话类型任务卡)", () => {
       mockSystemConversation();
 
       renderPage();
 
-      expect(screen.getByTestId("conversation-composer")).toBeInTheDocument();
-      expect(screen.getByLabelText("消息内容")).toBeInTheDocument();
+      expect(screen.queryByTestId("conversation-composer")).not.toBeInTheDocument();
     });
 
     it("renders a system notification message as a card (icon + title + summary + time), not a chat bubble, and does not treat it as a consecutive message needing an avatar/spacer", () => {
@@ -1105,6 +1105,106 @@ describe("MessageConversationPage", () => {
       await waitFor(() => {
         expect(markConversationAsRead).toHaveBeenCalledWith("conversation-1", "user-1");
       });
+    });
+  });
+
+  // 把"联系客服"拆成独立会话类型任务卡新增：support 会话是独立于 system
+  // 会话的第三种 header 分支，跟"system notification conversations"那组
+  // 测试是并列关系，结构照抄。
+  describe("support conversations (originType: 'support', 把联系客服拆成独立会话类型任务卡)", () => {
+    function mockSupportConversation() {
+      useMyConversationsQuery.mockReturnValue({
+        data: [
+          {
+            id: "conversation-1",
+            postId: null,
+            postTitle: null,
+            originType: "support",
+            otherUserId: null,
+            otherDisplayName: null,
+            otherAvatarUrl: null,
+            lastActivityAt: "2026-09-21T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+    }
+
+    it("shows '客服' + '我们会尽快回复' in the header instead of otherDisplayName/postTitle, with a Headset icon (not Bell, not an avatar/initial)", () => {
+      mockSupportConversation();
+
+      const { container } = renderPage();
+
+      expect(screen.getByRole("heading", { name: "客服" })).toBeInTheDocument();
+      expect(screen.getByText("我们会尽快回复")).toBeInTheDocument();
+      expect(container.querySelector("header svg.lucide-headset")).toBeInTheDocument();
+      expect(container.querySelector("header svg.lucide-bell")).not.toBeInTheDocument();
+      expect(container.querySelector("header img")).not.toBeInTheDocument();
+    });
+
+    it("renders the composer form for a support conversation (unlike a system conversation)", () => {
+      mockSupportConversation();
+
+      renderPage();
+
+      expect(screen.getByTestId("conversation-composer")).toBeInTheDocument();
+      expect(screen.getByLabelText("消息内容")).toBeInTheDocument();
+    });
+
+    // 客服欢迎语（get_or_create_own_support_conversation() 新建会话时
+    // 自动插入的那一条）是 sender_id 为 null、notification_payload 也为
+    // null 的消息——跟 admin_reply_to_support_conversation() 插入的客服
+    // 聊天回复是同一种消息形状，天然满足既有的 isAdminReply 判断，不需要
+    // 新的渲染分支，这条测试确认这一点在 support 会话里确实生效。
+    it("renders the auto-inserted welcome message as a normal 'other' chat bubble labelled '官方客服', not a system notification card", () => {
+      mockSupportConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "你好，欢迎联系 Saminest 客服，请详细描述你遇到的问题，方便的话可以附上截图，我们会尽快查看并回复~",
+            notificationPayload: null,
+            imageUrl: null,
+            createdAt: "2026-09-21T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      expect(
+        screen.getByText(
+          "你好，欢迎联系 Saminest 客服，请详细描述你遇到的问题，方便的话可以附上截图，我们会尽快查看并回复~"
+        )
+      ).toBeInTheDocument();
+      expect(screen.getByText("官方客服")).toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="other"]')).toBeInTheDocument();
+      expect(container.querySelector('[data-message-owner="system"]')).not.toBeInTheDocument();
+    });
+
+    // canManageBlock（!isSystemConversation && !!otherUserId）不需要新增
+    // isSupportConversation 判断——support 会话的 otherUserId 天然是
+    // undefined，这条测试确认"…"菜单确实退回禁用占位按钮，不是只凭推理
+    // 假设，见 conversation-page.tsx 顶部注释里的说明。
+    it("falls back to the disabled '更多会话选项（暂不可用）' placeholder for a support conversation (no otherUserId to block)", () => {
+      mockSupportConversation();
+
+      renderPage();
+
+      expect(screen.getByRole("button", { name: "更多会话选项（暂不可用）" })).toBeDisabled();
+      expect(screen.queryByRole("button", { name: "更多会话选项" })).not.toBeInTheDocument();
+    });
+
+    it("does not render a /users/:id profile link in the header for a support conversation", () => {
+      mockSupportConversation();
+
+      renderPage();
+
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
     });
   });
 

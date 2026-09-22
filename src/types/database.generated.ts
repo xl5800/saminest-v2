@@ -1153,6 +1153,10 @@ export type Database = {
         }
         Returns: string
       }
+      get_or_create_own_support_conversation: {
+        Args: never
+        Returns: string
+      }
       get_or_create_own_system_conversation: {
         Args: never
         Returns: string

@@ -6,13 +6,13 @@ const {
   getMyProfile,
   signOut,
   navigateMock,
-  getOrCreateOwnSystemConversation
+  getOrCreateOwnSupportConversation
 } = vi.hoisted(() => ({
   getCurrentUserRole: vi.fn(),
   getMyProfile: vi.fn(),
   signOut: vi.fn(),
   navigateMock: vi.fn(),
-  getOrCreateOwnSystemConversation: vi.fn()
+  getOrCreateOwnSupportConversation: vi.fn()
 }));
 
 vi.mock("../../repositories/profiles-repository", () => ({
@@ -23,7 +23,7 @@ vi.mock("../../repositories/profiles-repository", () => ({
 // 跳转，见下面"帮助与客服"那组测试——单独 mock 掉，避免测试真的打到
 // Supabase。
 vi.mock("../../repositories/conversations-repository", () => ({
-  getOrCreateOwnSystemConversation
+  getOrCreateOwnSupportConversation
 }));
 vi.mock("../../services/auth/auth-service", () => ({
   authService: { signOut }
@@ -53,7 +53,7 @@ describe("ProfilePage", () => {
     getMyProfile.mockReset();
     signOut.mockReset();
     navigateMock.mockReset();
-    getOrCreateOwnSystemConversation.mockReset();
+    getOrCreateOwnSupportConversation.mockReset();
     getCurrentUserRole.mockResolvedValue("user");
     getMyProfile.mockResolvedValue({ displayName: "Alice" });
   });
@@ -422,7 +422,7 @@ describe("ProfilePage", () => {
     });
 
     it("calls get_or_create_own_system_conversation and navigates to the resulting conversation on click", async () => {
-      getOrCreateOwnSystemConversation.mockResolvedValue({ conversationId: "conversation-1" });
+      getOrCreateOwnSupportConversation.mockResolvedValue({ conversationId: "conversation-1" });
 
       renderWithProviders(<ProfilePage />);
 
@@ -430,7 +430,7 @@ describe("ProfilePage", () => {
       fireEvent.click(screen.getByRole("button", { name: "帮助与客服" }));
 
       await waitFor(() => {
-        expect(getOrCreateOwnSystemConversation).toHaveBeenCalled();
+        expect(getOrCreateOwnSupportConversation).toHaveBeenCalled();
       });
       await waitFor(() => {
         expect(navigateMock).toHaveBeenCalledWith("/messages/conversation-1");
@@ -438,7 +438,7 @@ describe("ProfilePage", () => {
     });
 
     it("shows a generic error message when the RPC fails, and does not navigate", async () => {
-      getOrCreateOwnSystemConversation.mockRejectedValue(new Error("network down"));
+      getOrCreateOwnSupportConversation.mockRejectedValue(new Error("network down"));
 
       renderWithProviders(<ProfilePage />);
 

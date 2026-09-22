@@ -112,10 +112,24 @@ async function resolveImageUrls(imagePaths: string[]): Promise<Map<string, strin
 /**
  * 返回某个会话里未软删除的消息，按 created_at 升序（最早的在最前面），
  * 页面直接按这个顺序渲染即可，不需要在前端再排一次序。越权保护交给
- * messages 表自己的 SELECT 策略（messages_select_of_own_conversations），
- * 这里不重复判断调用者是不是会话成员——联系客服改成真聊天任务卡之后，
- * 这条策略额外放行了"管理员 + 这条消息所属会话是 system 类型"，管理员
- * 后台的会话详情页复用的正是这同一个函数，不需要另外写一份。
+ * messages 表自己的 SELECT 策略（messages_select_of_own_conversations，
+ * 只允许当前用户是这条会话的成员）。
+ *
+ * 已知缺口（把"联系客服"拆成独立会话类型任务卡发现，不在这次任务范围
+ * 内、没有修）：这条策略曾经短暂加过一个"管理员 + 会话是 system 类型"的
+ * 例外（20260916120200_admin_support_conversations.sql），但那次改动
+ * 导致管理员账号能通过普通的"消息"tab 看到别的用户的系统通知会话——一次
+ * 真实的生产数据泄漏，已经在
+ * 20260921040500_remove_admin_exception_from_conversation_rls.sql 里改
+ * 回去了，且这条策略被明确禁止再开任何管理员例外（见本次新迁移文件顶部
+ * 的"硬约束"说明）。这意味着管理员后台的会话详情页
+ * （admin-support-conversation-page.tsx）复用这个函数读消息列表时，
+ * 实际上拿不到任何一条消息（RLS 静默过滤成 0 行，不是报错）——列表页
+ * （admin_list_support_conversations()）和回复
+ * （admin_reply_to_support_conversation()）都是 security definer 函数，
+ * 天然绕过 RLS，不受影响，唯独"读消息内容"这一步依赖的还是这个走常规
+ * RLS 的 listMessages()，需要另一张任务卡补一个类似的 security definer
+ * 消息读取函数才能修好，这次不做。
  */
 export async function listMessages(conversationId: string): Promise<MessageListItem[]> {
   const { data, error } = await getSupabaseClient()
@@ -238,7 +252,10 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
  * messages_insert_own_as_active_member 这条 RLS，要求 sender_id =
  * auth.uid() 且当前是会话的活跃成员，管理员两条都不满足（管理员从来
  * 不是任何一条客服会话的 conversation_members 行）。函数内部会校验
- * 调用者是不是管理员、目标会话是不是 system 来源，这里不重复判断。
+ * 调用者是不是管理员、目标会话是不是 support 来源（把"联系客服"拆成
+ * 独立会话类型任务卡之后，这个函数只认 support，对 system 会话调用会
+ * 报错——system 会话已经不再是双向聊天，见对应迁移文件的说明），这里
+ * 不重复判断。
  */
 export async function adminReplyToSupportConversation(
   conversationId: string,

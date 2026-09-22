@@ -311,4 +311,41 @@ describe("ConversationSwipeRow", () => {
       expect(screen.queryByRole("button", { name: "已屏蔽" })).not.toBeInTheDocument();
     });
   });
+
+  // 把"联系客服"拆成独立会话类型任务卡新增：support 会话在会话列表这一行
+  // 的展示，跟上面"system-notification conversation"那条测试是同一类，
+  // 结构照抄。
+  describe("support conversations (originType: 'support', 把联系客服拆成独立会话类型任务卡)", () => {
+    it("shows the '客服' label with a Headset icon instead of the other party's nickname/avatar", () => {
+      const { container } = renderRow({
+        conversation: {
+          ...sampleConversation,
+          originType: "support",
+          otherUserId: null,
+          otherDisplayName: null,
+          otherAvatarUrl: null
+        }
+      });
+
+      expect(screen.getByText("客服")).toBeInTheDocument();
+      expect(screen.queryByText("Bob")).not.toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-headset")).toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-bell")).not.toBeInTheDocument();
+      expect(container.querySelector("img")).not.toBeInTheDocument();
+    });
+
+    it("does not render a 屏蔽/已屏蔽 button for a support conversation (no otherUserId to block)", () => {
+      renderRow({
+        conversation: {
+          ...sampleConversation,
+          originType: "support",
+          otherUserId: null,
+          otherDisplayName: null
+        }
+      });
+
+      expect(screen.queryByRole("button", { name: "屏蔽" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "已屏蔽" })).not.toBeInTheDocument();
+    });
+  });
 });

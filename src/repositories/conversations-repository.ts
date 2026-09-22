@@ -33,8 +33,12 @@ export interface ConversationListItem {
    *  'system' 这一种没有"对方"（otherUserId 恒为 null，但原因跟"对方已
    *  退出会话"完全不同）——页面侧必须靠这个字段识别系统通知会话，不能
    *  沿用"otherUserId 为 null 就显示'对方'"那条兜底逻辑，两者是不同的
-   *  产品含义。 */
-  originType: "post" | "activity" | "profile" | "system";
+   *  产品含义。把"联系客服"拆成独立会话类型任务卡新增 'support'——跟
+   *  'system' 一样没有"对方"（同样只有当前用户自己一个成员），但语义
+   *  完全独立：'system' 只承载自动通知，纯单向；'support' 是用户主动
+   *  发起的客服聊天，双向，见 conversation-page.tsx/conversation-swipe-
+   *  row.tsx 里各自新增的 isSupportConversation 分支。 */
+  originType: "post" | "activity" | "profile" | "system" | "support";
   /** 对方的 user_id；正常情况下（direct 会话恰好两个活跃成员）能唯一
    *  确定，找不到（比如对方已经退出会话，或者本来就是 originType ===
    *  'system' 这种没有对方的会话）时是 null。 */
@@ -463,9 +467,18 @@ export async function createProfileConversation(
 }
 
 /**
- * 联系客服改成真聊天任务卡："联系客服"入口用——拿到（或建出）当前登录
- * 用户自己专属的 system 会话 id，调用方直接跳转到
- * `/messages/${conversationId}`，不再进 /feedback 那个一次性表单页。
+ * "联系客服"改成真聊天任务卡——拿到（或建出）当前登录用户自己专属的
+ * system 会话 id。
+ *
+ * 把"联系客服"拆成独立会话类型任务卡之后：这个函数不再是"联系客服"的
+ * 入口了（那个入口换成了下面的 getOrCreateOwnSupportConversation()，见
+ * use-contact-support.ts 的改动）——system 会话现在只承载纯单向的自动
+ * 通知，这个函数只在还需要拿到/建出用户自己那条通知会话的场景下才会被
+ * 调用（目前没有前端调用点，保留是因为它是通用的会话查找/创建能力，
+ * 数据库侧 notify_user() 也在用同一套逻辑）。错误码因此从历史遗留的
+ * SUPPORT_CONVERSATION_* 改成更准确的 SYSTEM_CONVERSATION_*——当初取
+ * "SUPPORT"这个名字是因为 system 会话那时候本身就是"客服"，这次连同
+ * 函数职责一起改名对齐，不留一个名不副实的错误码。
  *
  * 唯一合法入口是数据库里的 get_or_create_own_system_conversation() 这个
  * security definer 函数——目标用户固定是函数内部的 auth.uid()，这里不
@@ -481,6 +494,37 @@ export async function createProfileConversation(
 export async function getOrCreateOwnSystemConversation(): Promise<CreateDirectConversationResult> {
   const { data, error } = await getSupabaseClient().rpc(
     "get_or_create_own_system_conversation"
+  );
+
+  if (error) {
+    throw new AppError(error.message, "SYSTEM_CONVERSATION_CREATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(
+      "创建会话后无法读取会话 ID。",
+      "SYSTEM_CONVERSATION_CREATE_ID_MISSING"
+    );
+  }
+
+  return { conversationId: data };
+}
+
+/**
+ * 把"联系客服"拆成独立会话类型任务卡——"联系客服"真正的入口，拿到（或
+ * 建出）当前登录用户自己专属的 support 会话 id，调用方直接跳转到
+ * `/messages/${conversationId}`。结构照抄 getOrCreateOwnSystemConversation
+ * （同一个"目标身份固定是 auth.uid()、不接受调用方指定任何参数"的模式），
+ * 唯一合法入口是数据库里的 get_or_create_own_support_conversation() 这个
+ * security definer 函数——第一次调用会新建一条 support 会话并自动插入一
+ * 条客服欢迎语消息，之后每次调用都会返回同一条已有会话（不会重复插入
+ * 欢迎语），见该函数迁移文件的说明。
+ *
+ * 不做账号受限判断，理由跟 getOrCreateOwnSystemConversation 一致——账号
+ * 受限/被封禁的用户尤其可能需要联系客服申诉。
+ */
+export async function getOrCreateOwnSupportConversation(): Promise<CreateDirectConversationResult> {
+  const { data, error } = await getSupabaseClient().rpc(
+    "get_or_create_own_support_conversation"
   );
 
   if (error) {
@@ -506,17 +550,23 @@ export interface AdminSupportConversationListItem {
 }
 
 /**
- * 管理员客服会话列表（/admin/support）——只列出"用户真的主动发起过对话"
- * 的 system 会话，不是全部 system 会话（只收到过审核通知、从没联系过
- * 客服的用户不应该出现在这里）。这条"有没有真的联系过"的业务判断放在
- * 数据库函数 admin_list_support_conversations() 内部用 exists 子查询
- * 表达（判断标准：这条会话下存在至少一条 sender_id 不为空的消息），不是
- * 前端自己拼一个复杂查询再客户端过滤——理由和 admin_reply_to_support_
- * conversation() 必须走 security definer 函数是同一个：管理员不是任何
- * 一条 system 会话的 conversation_members 行，读取这些会话本身也需要
- * 越过常规的"必须是会话成员"这条 RLS 限制（该函数内部已经绕过 RLS，
- * 只在函数体内校验一次 is_admin()）。已经按 last_message_at 倒序排，
- * 不需要在这里再排一次。
+ * 管理员客服会话列表（/admin/support）——列出全部 support 会话（不是
+ * system 会话，见"把联系客服拆成独立会话类型"任务卡：support 会话只有
+ * 在用户主动点"联系客服"时才会被创建，会话存在本身就已经是"用户主动
+ * 联系过"的证据，不需要再像以前那样额外过滤"是否真的发过消息"——那条
+ * exists 子查询过滤这次已经从 admin_list_support_conversations() 里删掉，
+ * 见对应迁移文件的说明，这里不重复）。
+ *
+ * 只走 admin_list_support_conversations() 这个 security definer 函数、
+ * 不直接 select 表——理由跟 admin_reply_to_support_conversation() 必须走
+ * security definer 函数是同一个：管理员不是任何一条 support 会话的
+ * conversation_members 行，读取这些会话本身需要越过常规的"必须是会话
+ * 成员"这条 RLS 限制，而这条限制（conversations_select_member /
+ * messages_select_of_own_conversations）明确不允许在 RLS 策略层面给
+ * 管理员开任何例外（上一次这么做导致过真实的生产数据泄漏，见
+ * 20260921040500_remove_admin_exception_from_conversation_rls.sql），
+ * 只能靠这两个函数内部校验一次 is_admin() 之后绕过 RLS。已经按
+ * last_message_at 倒序排，不需要在这里再排一次。
  */
 export async function listSupportConversationsForAdmin(): Promise<
   AdminSupportConversationListItem[]

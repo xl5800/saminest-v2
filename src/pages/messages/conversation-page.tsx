@@ -29,6 +29,13 @@ const LOAD_ERROR_MESSAGE = "消息加载失败，请刷新页面重试。";
 const DEFAULT_OTHER_PARTY_LABEL = "对方";
 const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
 const SYSTEM_NOTIFICATION_SUBTITLE = "官方通知";
+// 把"联系客服"拆成独立会话类型任务卡：support 会话的 header 标题/副标题，
+// 跟 SYSTEM_NOTIFICATION_LABEL/SYSTEM_NOTIFICATION_SUBTITLE 是两组独立的
+// 文案——support 会话是真正的客服聊天（拼多多"意见反馈"那种干净聊天界面），
+// 不是系统通知，标题不用"Saminest 通知"这种自动通知的措辞。这个项目没有
+// 电话客服，副标题不照抄参考截图里的客服热线号码格式。
+const SUPPORT_CONVERSATION_LABEL = "客服";
+const SUPPORT_CONVERSATION_SUBTITLE = "我们会尽快回复";
 const BLOCK_ACTION_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const BLOCKED_COMPOSER_MESSAGE = "你们之间存在屏蔽关系，无法互发消息。";
 // 联系客服改成真聊天任务卡：管理员回复（sender_id 为 null 但
@@ -324,15 +331,18 @@ function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCard
  * 出现这行链接，判断依据就是 message.refActivityId 这一列本身有没有值，
  * 不解析 body 文本内容找活动。
  *
- * 联系客服改成真聊天任务卡（这次改动）："联系客服"从填一次性表单
- * （/feedback）改成打开/新建自己的 origin_type = 'system' 会话，这个
- * 页面因此要能支撑"system 会话也是一个真正能双向聊天的会话"：
+ * 联系客服改成真聊天任务卡（历史改动，第 1 点已经被下面"把联系客服拆成
+ * 独立会话类型任务卡"取代，保留原文只是为了留下改动脉络，不代表当前
+ * 行为）："联系客服"从填一次性表单（/feedback）改成打开/新建自己的
+ * origin_type = 'system' 会话，这个页面因此要能支撑"system 会话也是一
+ * 个真正能双向聊天的会话"：
  *
- * 1. 输入框（`<form data-testid="conversation-composer">`）和"屏蔽关系"
- *    横幅原来都额外要求 `!isSystemConversation` 才渲染——之前的
- *    system 会话是纯单向通知，"没有人会收到回复，不应该让用户以为可以
- *    对系统说话"这条前提这次变了，system 会话现在可以双向聊天，这两处
- *    的 `!isSystemConversation` 判断都去掉了。屏蔽关系本身依然不适用于
+ * 1.（已被取代，见下面新任务卡的说明）输入框（`<form
+ *    data-testid="conversation-composer">`）和"屏蔽关系"横幅原来都额外
+ *    要求 `!isSystemConversation` 才渲染——之前的 system 会话是纯单向
+ *    通知，"没有人会收到回复，不应该让用户以为可以对系统说话"这条前提
+ *    这次变了，system 会话现在可以双向聊天，这两处的
+ *    `!isSystemConversation` 判断都去掉了。屏蔽关系本身依然不适用于
  *    system 会话（没有"对方"），但不需要专门再判断一次——system 会话
  *    的 otherUserId 恒为 undefined，useIsBlockedPairQuery 因此恒为
  *    禁用查询（isBlockedPair 恒为 falsy 的 undefined），`!isBlockedPair`
@@ -355,6 +365,36 @@ function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCard
  *    处理（后者会尝试补偿删除已经传上去的孤儿图片，失败只
  *    console.error，不盖过发送失败这个更重要的提示），见 handleSubmit
  *    的注释。
+ *
+ * 把"联系客服"拆成独立会话类型任务卡（这次改动）："联系客服"和"系统
+ * 通知"这次彻底拆成两种独立的会话类型——origin_type = 'system' 只保留
+ * 纯单向自动通知（不再承载双向聊天），origin_type = 'support' 是全新
+ * 类型，专门给"联系客服"用（第一次创建时数据库函数自动插入一条客服
+ * 欢迎语，见 get_or_create_own_support_conversation() 迁移文件）：
+ *
+ * 1. header 新增 isSupportConversation 分支，跟 isSystemConversation
+ *    是并列的三选一（system / support / 其它）——头像换 Headset 图标，
+ *    标题固定"客服"，副标题"我们会尽快回复"，不复用"Saminest 通知"那套
+ *    文案（那是系统通知专属，语义上不是客服聊天）。
+ * 2. composer（`<form data-testid="conversation-composer">`）重新加回了
+ *    `!isSystemConversation` 这个条件——上面第 1 点"历史改动"里去掉的
+ *    这个判断，这次原样加回来了：双向聊天已经整个搬到 support 会话，
+ *    system 会话没有理由再显示一个没有人会回复的输入框。isSupportConversation
+ *    不需要额外判断——它天然不是 isSystemConversation，
+ *    !isSystemConversation 对它恒为 true，输入框正常显示。"屏蔽关系"
+ *    横幅这次没有变化，一直保留着 !isSystemConversation 这个判断（历史
+ *    改动那次没有动过它）。
+ * 3. 消息渲染分支完全不用改——support 会话的欢迎语和管理员后续的聊天
+ *    回复，都是 sender_id = null、notification_payload = null 这同一种
+ *    消息形状，天然满足既有的 isAdminReply 判断（`!isSystemMessage &&
+ *    message.senderId === null`），自动套用"Headset 头像 + 官方客服
+ *    标签 + 对方气泡"这套已有渲染。
+ * 4. canManageBlock（`!isSystemConversation && !!otherUserId`）不用改——
+ *    support 会话的 otherUserId 天然是 undefined（跟 system 会话一样，
+ *    没有"对方"这个成员），`!!otherUserId` 自然是 false，退回原来那个
+ *    禁用占位按钮，不需要新增 isSupportConversation 判断。这一点已经
+ *    在本地实际起了一条 support 会话验证过"…"菜单确实退回禁用占位状态，
+ *    不是只凭这段推理假设。
  *
  * Avatar / SystemNotificationCard 这两个组件加了 export——管理员后台新增
  * 的客服会话详情页（admin-support-conversation-page.tsx）复用它们渲染
@@ -399,14 +439,22 @@ export function MessageConversationPage() {
 
   const conversation = conversations?.find((item) => item.id === conversationId);
   const isSystemConversation = conversation?.originType === "system";
+  // 把"联系客服"拆成独立会话类型任务卡新增：support 会话是独立于
+  // system 会话的第三种 header 分支——顶栏固定显示"客服"，不是"Saminest
+  // 通知"，见上面两个新常量的注释。
+  const isSupportConversation = conversation?.originType === "support";
   const otherPartyLabel = isSystemConversation
     ? SYSTEM_NOTIFICATION_LABEL
-    : conversation?.otherDisplayName ?? DEFAULT_OTHER_PARTY_LABEL;
+    : isSupportConversation
+      ? SUPPORT_CONVERSATION_LABEL
+      : conversation?.otherDisplayName ?? DEFAULT_OTHER_PARTY_LABEL;
   const conversationContext = isSystemConversation
     ? SYSTEM_NOTIFICATION_SUBTITLE
-    : conversation?.postTitle
-      ? `关于 ${conversation.postTitle}`
-      : "私信会话";
+    : isSupportConversation
+      ? SUPPORT_CONVERSATION_SUBTITLE
+      : conversation?.postTitle
+        ? `关于 ${conversation.postTitle}`
+        : "私信会话";
 
   const otherUserId = conversation?.otherUserId ?? undefined;
   const canManageBlock = !isSystemConversation && !!otherUserId;
@@ -639,6 +687,16 @@ export function MessageConversationPage() {
       className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
     >
       <Bell size={18} />
+    </div>
+  ) : isSupportConversation ? (
+    // 把"联系客服"拆成独立会话类型任务卡：support 会话的 header 头像换成
+    // Headset 图标（跟聊天气泡里管理员回复用的是同一个图标，视觉一致），
+    // 不是 Bell——用户一眼就能看出这是"人工客服"而不是"自动通知"。
+    <div
+      aria-hidden="true"
+      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+    >
+      <Headset size={18} />
     </div>
   ) : (
     <Avatar
@@ -929,20 +987,24 @@ export function MessageConversationPage() {
         ) : null}
       </section>
 
-      {/* 联系客服改成真聊天任务卡：composer 原来额外要求
-          !isSystemConversation 才渲染——system 会话之前是纯单向通知，
-          不需要输入框；现在系统会话本身也能双向聊天（用户可以主动发起、
-          客服可以回复），这个条件去掉了，composer 只看 !isBlockedPair
-          （system 会话没有"对方"，otherUserId 恒为 undefined，
-          useIsBlockedPairQuery 因此恒为禁用查询、data 恒为 undefined
-          这个 falsy 值，!isBlockedPair 对 system 会话天然为 true，正常
-          显示）。"屏蔽关系"横幅继续保留 !isSystemConversation 这个
-          判断——屏蔽这个概念对 system 会话本来就没有意义（没有"对方"可以
-          屏蔽），哪怕 isBlockedPair 因为某种异常变成了 true，也不应该
-          展示一条"你们之间存在屏蔽关系"这种在客服会话里完全说不通的
-          文案；这种异常情况下 composer 依然会因为 isBlockedPair 为
-          true 被 !isBlockedPair 挡住，只是不显示这条不适用的横幅去
-          "解释"，这是刻意的取舍，不是遗漏。 */}
+      {/* 把"联系客服"拆成独立会话类型任务卡：composer 这次重新加回了
+          !isSystemConversation 这个条件——"联系客服改成真聊天"那张任务卡
+          曾经把这个条件去掉过（当时 system 会话本身承载双向聊天），但这
+          次拆分之后双向聊天已经整个搬到新的 support 会话，system 会话
+          重新变回纯单向自动通知，没有人会去回复它，不应该再显示一个看起
+          来能发消息、实际上没有客服会看的输入框。support 会话不需要
+          额外判断——它天然不是 isSystemConversation，
+          !isSystemConversation 对它恒为 true，输入框正常显示，只看
+          !isBlockedPair 这一个条件（support 会话跟 system 会话一样没有
+          "对方"，otherUserId 恒为 undefined，useIsBlockedPairQuery 因此
+          恒为禁用查询，!isBlockedPair 天然为 true）。"屏蔽关系"横幅继续
+          保留 !isSystemConversation 这个判断——屏蔽这个概念对 system/
+          support 会话本来就没有意义（都没有"对方"可以屏蔽），哪怕
+          isBlockedPair 因为某种异常变成了 true，也不应该展示一条"你们
+          之间存在屏蔽关系"这种在这两类会话里完全说不通的文案；这种异常
+          情况下 composer 依然会因为 isBlockedPair 为 true 被下面的条件
+          挡住，只是不显示这条不适用的横幅去"解释"，这是刻意的取舍，不是
+          遗漏。 */}
       {!isSystemConversation && isBlockedPair ? (
         <div
           data-testid="conversation-blocked-banner"
@@ -953,7 +1015,7 @@ export function MessageConversationPage() {
         </div>
       ) : null}
 
-      {!isBlockedPair ? (
+      {!isSystemConversation && !isBlockedPair ? (
         <form
           onSubmit={handleSubmit}
           noValidate

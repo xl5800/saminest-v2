@@ -54,6 +54,7 @@ import {
   createActivityConversation,
   createDirectConversation,
   createProfileConversation,
+  getOrCreateOwnSupportConversation,
   getOrCreateOwnSystemConversation,
   hasUnreadSystemNotification,
   listMyConversations,
@@ -223,7 +224,11 @@ describe("createProfileConversation", () => {
   });
 });
 
-// 联系客服改成真聊天任务卡："联系客服"入口用。
+// 联系客服改成真聊天任务卡（历史）：这个函数曾经是"联系客服"的入口。
+// 把"联系客服"拆成独立会话类型任务卡之后，这个函数不再是"联系客服"的
+// 入口了（换成了下面的 getOrCreateOwnSupportConversation），错误码同步
+// 从历史遗留的 SUPPORT_CONVERSATION_* 改成 SYSTEM_CONVERSATION_*，见
+// conversations-repository.ts 该函数的注释。
 describe("getOrCreateOwnSystemConversation", () => {
   beforeEach(() => {
     rpcMock.mockReset();
@@ -238,14 +243,14 @@ describe("getOrCreateOwnSystemConversation", () => {
     expect(result).toEqual({ conversationId: "conversation-1" });
   });
 
-  it("throws a SUPPORT_CONVERSATION_CREATE_FAILED AppError when the RPC fails", async () => {
+  it("throws a SYSTEM_CONVERSATION_CREATE_FAILED AppError when the RPC fails", async () => {
     rpcMock.mockResolvedValue({
       data: null,
       error: { message: "not authenticated" }
     });
 
     await expect(getOrCreateOwnSystemConversation()).rejects.toMatchObject({
-      code: "SUPPORT_CONVERSATION_CREATE_FAILED"
+      code: "SYSTEM_CONVERSATION_CREATE_FAILED"
     });
   });
 
@@ -253,6 +258,42 @@ describe("getOrCreateOwnSystemConversation", () => {
     rpcMock.mockResolvedValue({ data: null, error: null });
 
     await expect(getOrCreateOwnSystemConversation()).rejects.toMatchObject({
+      code: "SYSTEM_CONVERSATION_CREATE_ID_MISSING"
+    });
+  });
+});
+
+// 把"联系客服"拆成独立会话类型任务卡新增："联系客服"真正的入口，结构
+// 照抄上面 getOrCreateOwnSystemConversation 的测试模式。
+describe("getOrCreateOwnSupportConversation", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls get_or_create_own_support_conversation with no arguments and returns the conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: "conversation-1", error: null });
+
+    const result = await getOrCreateOwnSupportConversation();
+
+    expect(rpcMock).toHaveBeenCalledWith("get_or_create_own_support_conversation");
+    expect(result).toEqual({ conversationId: "conversation-1" });
+  });
+
+  it("throws a SUPPORT_CONVERSATION_CREATE_FAILED AppError when the RPC fails", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "not authenticated" }
+    });
+
+    await expect(getOrCreateOwnSupportConversation()).rejects.toMatchObject({
+      code: "SUPPORT_CONVERSATION_CREATE_FAILED"
+    });
+  });
+
+  it("throws an AppError when the RPC succeeds but returns no conversation id", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(getOrCreateOwnSupportConversation()).rejects.toMatchObject({
       code: "SUPPORT_CONVERSATION_CREATE_ID_MISSING"
     });
   });

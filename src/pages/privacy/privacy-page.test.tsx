@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getOrCreateOwnSystemConversation, navigateMock } = vi.hoisted(() => ({
-  getOrCreateOwnSystemConversation: vi.fn(),
+const { getOrCreateOwnSupportConversation, navigateMock } = vi.hoisted(() => ({
+  getOrCreateOwnSupportConversation: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -11,7 +11,7 @@ const { getOrCreateOwnSystemConversation, navigateMock } = vi.hoisted(() => ({
 // 本身的成功/失败分支逻辑（那套已经在 profile-page.test.tsx 里覆盖过），
 // 这里只验证"点击这个按钮确实触发了它、且样式/位置符合预期"。
 vi.mock("../../repositories/conversations-repository", () => ({
-  getOrCreateOwnSystemConversation
+  getOrCreateOwnSupportConversation
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -39,9 +39,9 @@ describe("PrivacyPage", () => {
     useAuthStore.getState().setSession({
       user: { id: "user-1", email: "alice@example.com" }
     } as never);
-    getOrCreateOwnSystemConversation.mockReset();
+    getOrCreateOwnSupportConversation.mockReset();
     navigateMock.mockReset();
-    getOrCreateOwnSystemConversation.mockResolvedValue({ conversationId: "conversation-1" });
+    getOrCreateOwnSupportConversation.mockResolvedValue({ conversationId: "conversation-1" });
   });
 
   it("renders the title and last-updated date", () => {
@@ -62,7 +62,7 @@ describe("PrivacyPage", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(getOrCreateOwnSystemConversation).toHaveBeenCalled();
+      expect(getOrCreateOwnSupportConversation).toHaveBeenCalled();
     });
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/messages/conversation-1");

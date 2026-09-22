@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { getOrCreateOwnSystemConversation, navigateMock } = vi.hoisted(() => ({
-  getOrCreateOwnSystemConversation: vi.fn(),
+const { getOrCreateOwnSupportConversation, navigateMock } = vi.hoisted(() => ({
+  getOrCreateOwnSupportConversation: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -11,7 +11,7 @@ const { getOrCreateOwnSystemConversation, navigateMock } = vi.hoisted(() => ({
 // 底层仓库函数，不重复测 useContactSupport 本身的成功/失败分支（那套已经
 // 在 profile-page.test.tsx 里覆盖过）。
 vi.mock("../../repositories/conversations-repository", () => ({
-  getOrCreateOwnSystemConversation
+  getOrCreateOwnSupportConversation
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -37,9 +37,9 @@ describe("TermsPage", () => {
     useAuthStore.getState().setSession({
       user: { id: "user-1", email: "alice@example.com" }
     } as never);
-    getOrCreateOwnSystemConversation.mockReset();
+    getOrCreateOwnSupportConversation.mockReset();
     navigateMock.mockReset();
-    getOrCreateOwnSystemConversation.mockResolvedValue({ conversationId: "conversation-1" });
+    getOrCreateOwnSupportConversation.mockResolvedValue({ conversationId: "conversation-1" });
   });
 
   it("renders the title and last-updated date", () => {
@@ -60,7 +60,7 @@ describe("TermsPage", () => {
     fireEvent.click(button);
 
     await waitFor(() => {
-      expect(getOrCreateOwnSystemConversation).toHaveBeenCalled();
+      expect(getOrCreateOwnSupportConversation).toHaveBeenCalled();
     });
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/messages/conversation-1");

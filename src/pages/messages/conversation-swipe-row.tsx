@@ -1,4 +1,4 @@
-import { Bell } from "lucide-react";
+import { Bell, Headset } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type TouchEvent as ReactTouchEvent,
@@ -15,6 +15,10 @@ import type { ConversationListItem } from "../../repositories/conversations-repo
 import { formatPublishedAt } from "../../utils/format";
 
 const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
+// 把"联系客服"拆成独立会话类型任务卡新增——support 会话在会话列表这一行
+// 的标签/图标，跟 SYSTEM_NOTIFICATION_LABEL（系统通知专属）是两回事，见
+// nickname/avatarElement 里新增的 isSupportConversation 分支。
+const SUPPORT_CONVERSATION_LABEL = "客服";
 const BLOCK_ACTION_ERROR_MESSAGE = "操作失败，请稍后重试。";
 
 // 四个左滑操作各占的宽度，跟 MENU_WIDTH_PX 一起决定滑开之后露出多少——
@@ -127,6 +131,10 @@ export function ConversationSwipeRow({
   const [dragX, setDragX] = useState<number | null>(null);
 
   const isSystemConversation = conversation.originType === "system";
+  // 把"联系客服"拆成独立会话类型任务卡新增——不需要在 canBlock 里额外
+  // 排除 support 会话：它的 otherUserId 天然是 undefined（没有"对方"这个
+  // 成员，跟 system 会话一样），`!!otherUserId` 已经自然是 false。
+  const isSupportConversation = conversation.originType === "support";
   const otherUserId = conversation.otherUserId ?? undefined;
   const canBlock = !isSystemConversation && !!otherUserId;
 
@@ -282,13 +290,22 @@ export function ConversationSwipeRow({
   const avatarInitial = conversation.otherDisplayName?.trim().charAt(0).toUpperCase() || "?";
   const nickname = isSystemConversation
     ? SYSTEM_NOTIFICATION_LABEL
-    : conversation.otherDisplayName ?? "对方";
+    : isSupportConversation
+      ? SUPPORT_CONVERSATION_LABEL
+      : conversation.otherDisplayName ?? "对方";
   const avatarElement = isSystemConversation ? (
     <div
       aria-hidden="true"
       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
     >
       <Bell size={18} />
+    </div>
+  ) : isSupportConversation ? (
+    <div
+      aria-hidden="true"
+      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-text-muted"
+    >
+      <Headset size={18} />
     </div>
   ) : conversation.otherAvatarUrl ? (
     <img
