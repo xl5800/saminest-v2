@@ -296,7 +296,13 @@ export function ActivityDetailPage() {
         }
       />
 
-      <div className="mx-auto max-w-2xl px-4 pb-20 md:pb-6">
+      {/* BARRY 反馈"顶栏分隔线跟标题贴太近"任务卡：这个容器原来没有任何顶部
+          内边距，标题 <h1> 直接贴着 TopBar 卡片底部那条 border-b 分隔线。
+          补一个 pt-4（16px），数值取跟下面 `space-y-4` 区块间距相同的档
+          位——让标题看起来是"内容区的第一项"、跟下面各区块节奏一致，而不是
+          被顶栏挤出来的。只加这一个页面自己的内边距，不动 TopBar 组件本身
+          （TopBar 的 detail 变体目前只有这一个页面在用，不会影响别处）。 */}
+      <div className="mx-auto max-w-2xl px-4 pt-4 pb-20 md:pb-6">
         {/* 高频页面骨架屏任务卡：这个页面没有帖子详情页那种大图轮播，占位
             按真实内容顺序给标题行 → 地点框（容器 class 照抄下面真实地点框
             的 rounded-lg border border-border bg-bg p-3）→ 时间行（较短）→

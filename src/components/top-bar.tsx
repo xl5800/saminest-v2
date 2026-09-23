@@ -72,16 +72,24 @@ const ICON_BUTTON_CLASS_NAME =
  * `body` 背景色的缝），再用 `pt-[env(safe-area-inset-top)]` 把顶栏内部
  * 真正的文字/按钮内容重新推回状态栏下面——两者数值相等、方向相反，净效果
  * 是"卡片顶到屏幕最顶边，卡片里的内容位置跟改之前视觉上完全一样"。
- * 内部这层 `h-14 flex ...` 保留在一个独立的 `<div>` 里而不是直接放在
+ * 内部这层 `h-11 flex ...` 保留在一个独立的 `<div>` 里而不是直接放在
  * `<header>` 上：`<header>` 现在的高度要跟随 `padding-top` 动态变化
- * （状态栏高度 + 这一行的高度），如果 `h-14` 这个固定高度直接套在
+ * （状态栏高度 + 这一行的高度），如果这个固定高度直接套在
  * `<header>` 上，加上 `padding-top` 之后（Tailwind Preflight 全局
- * `box-sizing: border-box`）会把状态栏的高度也算进这固定的 56px 里，
+ * `box-sizing: border-box`）会把状态栏的高度也算进这固定高度里，
  * 把内容行反而挤扁。
+ *
+ * 顶栏行高（BARRY 反馈"返回箭头/更多菜单/分隔线整体偏低，想往上收"任务卡）：
+ * 从 `h-14`（56px）改成 `h-11`（44px，iOS 原生导航栏的标准高度）——五个
+ * variant 共用这同一个 `HEADER_ROW_CLASS_NAME`，改这一个值全站顶栏统一
+ * 变矮，不是只影响某一个页面；全仓库搜索过没有别的地方硬编码依赖旧的
+ * 56px/`h-14`这个具体数值（比如拿它算别的元素的 `top`/`padding`），改这里
+ * 不需要连带改别处。内部图标按钮（`ICON_BUTTON_CLASS_NAME`，36px）比新的
+ * 44px 行高小，`items-center` 依然能垂直居中，不会被撑破或裁切。
  */
 const STICKY_CARD_CLASS_NAME =
   "sticky top-0 z-10 -mt-[env(safe-area-inset-top)] border-b border-topbar-line bg-bg-secondary pt-[env(safe-area-inset-top)]";
-const HEADER_ROW_CLASS_NAME = "flex h-14 items-center justify-between px-4";
+const HEADER_ROW_CLASS_NAME = "flex h-11 items-center justify-between px-4";
 
 function EmptySlot() {
   return <span aria-hidden="true" className="w-9 shrink-0" />;
