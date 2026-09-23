@@ -90,4 +90,19 @@ describe("ImageLightbox", () => {
 
     expect(screen.getByText("2 / 3")).toBeInTheDocument();
   });
+
+  // 真实 bug 修复 + 关闭按钮位置调整任务卡：关闭按钮要叠在图片本身左上角
+  // （跟 img 共享同一个 relative 容器），不是挂在最外层浮层（dialog）上，
+  // 防止以后不小心又挪回页面级别的固定栏，重蹈这次任务卡诊断出的安全区
+  // 定位缺失覆辙。
+  it("renders the close button as an overlay on the image itself (same parent as the img), not directly on the outer dialog", () => {
+    render(<ImageLightbox images={images} initialIndex={0} onClose={vi.fn()} />);
+
+    const closeButton = screen.getByRole("button", { name: "关闭" });
+    const img = screen.getByRole("img");
+    const dialog = screen.getByRole("dialog");
+
+    expect(closeButton.parentElement).toBe(img.parentElement);
+    expect(closeButton.parentElement).not.toBe(dialog);
+  });
 });
