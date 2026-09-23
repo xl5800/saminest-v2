@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>卡片颜色对比 · 纯白 vs 微灰白</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fff;
+    color: #1c1c1e;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .intro {
+    font-size: 14px;
+    color: #8a8a8e;
+    margin: 0 0 24px;
+    max-width: 680px;
+    line-height: 1.6;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    max-width: 1160px;
+  }
+  .swatch {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid #ececef;
+  }
+  .swatch-label {
+    padding: 12px 16px 10px;
+    background: #fff;
+    border-bottom: 1px solid #ececef;
+  }
+  .swatch-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1c1c1e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch-hex {
+    font-size: 12px;
+    color: #8a8a8e;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .swatch-desc {
+    font-size: 12px;
+    color: #8a8a8e;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: #8a8a8e;
+    border-radius: 9999px;
+    padding: 2px 8px;
+  }
+  .pill.rec {
+    background: #3457e8;
+  }
+  .stage {
+    padding: 18px 16px 20px;
+    background: #f5f5f5;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .card {
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  .card-img {
+    aspect-ratio: 4/5;
+    background: linear-gradient(135deg, #dfe6f9, #c9d5fb);
+  }
+  .card-body {
+    padding: 10px;
+  }
+  .card-title {
+    font-size: 13px;
+    color: #1c1c1e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-price {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1c1c1e;
+    margin-top: 2px;
+  }
+  .row-card {
+    margin-top: 10px;
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .row-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: #eef1fd;
+    flex-shrink: 0;
+  }
+  .row-title {
+    font-size: 13px;
+    color: #1c1c1e;
+  }
+  .row-sub {
+    font-size: 11px;
+    color: #8a8a8e;
+    margin-top: 2px;
+  }
+  .footer-note {
+    max-width: 1160px;
+    margin-top: 28px;
+    font-size: 13px;
+    color: #8a8a8e;
+    line-height: 1.75;
+  }
+  .footer-note b {
+    color: #1c1c1e;
+  }
+</style>
+</head>
+<body>
+  <h1>卡片颜色对比 — 纯白 vs 三档微灰白</h1>
+  <p class="intro">
+    背景统一用现在定下来的 #F5F5F5，只改卡片本身的颜色。纯白 (#FFFFFF) 是最亮的
+    像素值，在手机屏幕（尤其是高亮度/OLED）上大面积铺开确实容易显得"刺眼"——
+    很多 App 会故意把卡片调成一个几乎看不出来、但亮度稍微收一点的"米白/灰白"，
+    既保持"这是一张卡片"的辨识度，又不会像纯白屏幕那样扎眼。
+  </p>
+  <div class="grid">
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">现状 <span class="swatch-hex">#FFFFFF</span> <span class="pill">当前</span></div>
+        <div class="swatch-desc">纯白，255/255/255，屏幕能显示的最亮像素值。</div>
+      </div>
+      <div class="stage">
+        <div class="cards">
+          <div class="card" style="background:#ffffff;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#ffffff;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#ffffff;">
+          <div class="row-thumb"></div>
+          <div>
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">微灰白 <span class="swatch-hex">#FCFCFC</span></div>
+        <div class="swatch-desc">几乎看不出差别，亮度只降了一点点，最保守的调整。</div>
+      </div>
+      <div class="stage">
+        <div class="cards">
+          <div class="card" style="background:#fcfcfc;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#fcfcfc;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#fcfcfc;">
+          <div class="row-thumb"></div>
+          <div>
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">米白 <span class="swatch-hex">#FAF9F7</span> <span class="pill rec">推荐</span></div>
+        <div class="swatch-desc">带一点点暖调的米白，跟背景灰有轻微呼应，比纯白柔和，卡片轮廓依然清楚。</div>
+      </div>
+      <div class="stage">
+        <div class="cards">
+          <div class="card" style="background:#faf9f7;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#faf9f7;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#faf9f7;">
+          <div class="row-thumb"></div>
+          <div>
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">冷调灰白 <span class="swatch-hex">#F9FAFB</span></div>
+        <div class="swatch-desc">带一点点冷调（极轻微蓝灰），跟蓝色主色调更呼应，柔和程度跟米白接近。</div>
+      </div>
+      <div class="stage">
+        <div class="cards">
+          <div class="card" style="background:#f9fafb;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#f9fafb;">
+            <div class="card-img"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#f9fafb;">
+          <div class="row-thumb"></div>
+          <div>
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer-note">
+    有个技术上的前提要提醒你：卡片颜色和背景颜色如果调得太接近（比如都在
+    #F5F5F5 附近），"卡片 vs 背景"的边界感会变弱，又要重新靠边框/投影去撑——
+    上面几个候选亮度都还留了跟 #F5F5F5 背景至少 4~5% 的差距，保证卡片轮廓
+    依然一眼可辨。选定之后这个改动只需要改 <b>--color-card</b> 这一个 token，
+    全站所有用 bg-card 的地方（帖子卡片、活动卡片、收藏页、我的发布/活动等）
+    会统一生效，不用逐个页面改。
+  </p>
+</body>
+</html>

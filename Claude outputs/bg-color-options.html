@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>背景色对比</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fff;
+    color: #1c1c1e;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .intro {
+    font-size: 14px;
+    color: #8a8a8e;
+    margin: 0 0 24px;
+    max-width: 640px;
+    line-height: 1.6;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    max-width: 1100px;
+  }
+  .swatch {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid #ececef;
+  }
+  .swatch-label {
+    padding: 12px 16px 10px;
+    background: #fff;
+    border-bottom: 1px solid #ececef;
+  }
+  .swatch-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1c1c1e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch-hex {
+    font-size: 12px;
+    color: #8a8a8e;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .swatch-desc {
+    font-size: 12px;
+    color: #8a8a8e;
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: #3457e8;
+    border-radius: 9999px;
+    padding: 2px 8px;
+  }
+  .stage {
+    padding: 20px 16px 24px;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .card {
+    background: #ffffff;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  .card-img {
+    aspect-ratio: 4/5;
+    background: #eef1fd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #3457e8;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .card-img.photo {
+    background: linear-gradient(135deg, #dfe6f9, #c9d5fb);
+  }
+  .card-body {
+    padding: 10px;
+  }
+  .card-title {
+    font-size: 13px;
+    color: #1c1c1e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-price {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1c1c1e;
+    margin-top: 2px;
+  }
+  .row-card {
+    margin-top: 10px;
+    background: #ffffff;
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .row-thumb {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: #eef1fd;
+    flex-shrink: 0;
+  }
+  .row-text {
+    flex: 1;
+    min-width: 0;
+  }
+  .row-title {
+    font-size: 13px;
+    color: #1c1c1e;
+  }
+  .row-sub {
+    font-size: 11px;
+    color: #8a8a8e;
+    margin-top: 2px;
+  }
+  .footer-note {
+    max-width: 1100px;
+    margin-top: 28px;
+    font-size: 13px;
+    color: #8a8a8e;
+    line-height: 1.7;
+  }
+  .footer-note b {
+    color: #1c1c1e;
+  }
+</style>
+</head>
+<body>
+  <h1>背景色对比 — 4 个候选</h1>
+  <p class="intro">
+    左上角是现在实际在用的颜色，其它三个是候选。每一块的"页面背景"颜色不一样，
+    卡片、文字、按钮颜色都跟 App 里完全一致，方便直接对比"背景到底白不白"。
+    在自己手机/电脑屏幕上看效果最准，截图可能因为压缩/色彩管理有点失真。
+  </p>
+  <div class="grid">
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">现状 <span class="swatch-hex">#F3F5FA</span></div>
+        <div class="swatch-desc">偏冷的浅蓝灰，跟白色卡片的亮度差只有约 4%，屏幕上基本看不出区别，这是"感觉太白"的直接原因。</div>
+      </div>
+      <div class="stage" style="background:#f3f5fa;">
+        <div class="cards">
+          <div class="card">
+            <div class="card-img photo"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-img"><span>🏠 租房</span></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-thumb"></div>
+          <div class="row-text">
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">中性浅灰 <span class="swatch-hex">#F5F5F5</span> <span class="pill">推荐</span></div>
+        <div class="swatch-desc">不偏冷不偏暖的纯中性灰，亮度比现状再深一点，卡片的白色轮廓一眼就能看出来，是很多"简洁高级感"App 的常用基调。</div>
+      </div>
+      <div class="stage" style="background:#f5f5f5;">
+        <div class="cards">
+          <div class="card">
+            <div class="card-img photo"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-img"><span>🏠 租房</span></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-thumb"></div>
+          <div class="row-text">
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">暖调米灰 <span class="swatch-hex">#F7F6F3</span></div>
+        <div class="swatch-desc">带一点点暖调的米白色，像纸张的颜色，不是屏幕冷光的白，很多强调"温暖/有质感"的品牌（包括 Airbnb 的一部分页面）会用这种调子。</div>
+      </div>
+      <div class="stage" style="background:#f7f6f3;">
+        <div class="cards">
+          <div class="card">
+            <div class="card-img photo"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-img"><span>🏠 租房</span></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-thumb"></div>
+          <div class="row-text">
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">深一档浅灰 <span class="swatch-hex">#EFEFEF</span></div>
+        <div class="swatch-desc">比"中性浅灰"再深一点，卡片和背景的层次感最强、最不容易被误认成"没加载出来的白屏"，但如果本来就喜欢清淡的感觉，这个可能会显得偏"闷"。</div>
+      </div>
+      <div class="stage" style="background:#efefef;">
+        <div class="cards">
+          <div class="card">
+            <div class="card-img photo"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-img"><span>🏠 租房</span></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card">
+          <div class="row-thumb"></div>
+          <div class="row-text">
+            <div class="row-title">我的收藏 · 二手沙发</div>
+            <div class="row-sub">Rockville · 2 天前</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer-note">
+    题外话：Airbnb 官网其实大部分区域也是纯白背景，"看起来不那么白"主要靠卡片的细边框+阴影、大量留白和真实图片撑出来的，不是靠把整个背景涂成灰色。
+    如果你想要的是这种"靠留白和阴影而不是靠调灰"的效果，也可以告诉我，那是另一种改法（P1 里那条 <b>bg-white 全站统一成 bg-card token</b> 顺带能一起解决），
+    跟这次"换个背景色"是两回事，看你想要哪种。
+  </p>
+</body>
+</html>

@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>朴素方向对比 · 现状 vs 柔和调</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #fff;
+    color: #1c1c1e;
+  }
+  h1 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .intro {
+    font-size: 14px;
+    color: #8a8a8e;
+    margin: 0 0 24px;
+    max-width: 700px;
+    line-height: 1.6;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    max-width: 1160px;
+  }
+  .swatch {
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid #ececef;
+  }
+  .swatch-label {
+    padding: 12px 16px 10px;
+    background: #fff;
+    border-bottom: 1px solid #ececef;
+  }
+  .swatch-name {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1c1c1e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .swatch-desc {
+    font-size: 12px;
+    color: #8a8a8e;
+    margin-top: 4px;
+    line-height: 1.6;
+  }
+  .swatch-desc code {
+    background: #f5f5f5;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  .pill {
+    font-size: 11px;
+    font-weight: 600;
+    color: #fff;
+    background: #8a8a8e;
+    border-radius: 9999px;
+    padding: 2px 8px;
+  }
+  .pill.rec {
+    background: #3457e8;
+  }
+  .stage {
+    padding: 18px 16px 20px;
+  }
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .topbar-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: #1c1c1e;
+  }
+  .btn-primary {
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 9999px;
+    padding: 6px 14px;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .card {
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+  }
+  .card-img {
+    aspect-ratio: 4/5;
+  }
+  .card-body {
+    padding: 10px;
+  }
+  .card-title {
+    font-size: 13px;
+    color: #1c1c1e;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .card-price {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1c1c1e;
+    margin-top: 2px;
+  }
+  .row-card {
+    margin-top: 10px;
+    border: 1px solid #ececef;
+    border-radius: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+    padding: 12px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .row-thumb {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+  .row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .row-title {
+    font-size: 13px;
+    color: #1c1c1e;
+  }
+  .tab {
+    font-size: 11px;
+    font-weight: 600;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    display: inline-block;
+    margin-top: 10px;
+  }
+  .footer-note {
+    max-width: 1160px;
+    margin-top: 28px;
+    font-size: 13px;
+    color: #8a8a8e;
+    line-height: 1.75;
+  }
+  .footer-note b {
+    color: #1c1c1e;
+  }
+</style>
+</head>
+<body>
+  <h1>朴素方向对比 — 现状 vs 两档柔和调</h1>
+  <p class="intro">
+    Craigslist 那种"完全没有设计感"的极简（纯文字列表、零卡片零投影）跟这次
+    确认的方向不一样——保留现在的卡片+图片布局，只是把颜色调得更沉稳、
+    不那么"扎眼"：卡片从纯白换成微米白，主蓝色调淡一档，背景不变。
+  </p>
+  <div class="grid">
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">现状 <span class="pill">当前</span></div>
+        <div class="swatch-desc">背景 <code>#F5F5F5</code> · 卡片 <code>#FFFFFF</code> · 主色 <code>#3457E8</code></div>
+      </div>
+      <div class="stage" style="background:#f5f5f5;">
+        <div class="topbar">
+          <span class="topbar-title">首页</span>
+          <span class="btn-primary" style="background:#3457e8;">发布</span>
+        </div>
+        <div class="cards">
+          <div class="card" style="background:#ffffff;">
+            <div class="card-img" style="background:linear-gradient(135deg,#dfe6f9,#c9d5fb);"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#ffffff;">
+            <div class="card-img" style="background:linear-gradient(135deg,#dfe6f9,#c9d5fb);"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#ffffff;">
+          <div class="row-text">
+            <div class="row-thumb" style="background:#eef1fd;"></div>
+            <div class="row-title">找搭子周末爬山</div>
+          </div>
+          <span class="btn-primary" style="background:#3457e8;">报名</span>
+        </div>
+        <span class="tab" style="background:#eef1fd;color:#3457e8;">分类：租房</span>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">柔和调 A <span class="pill rec">推荐</span></div>
+        <div class="swatch-desc">背景 <code>#F5F5F5</code> · 卡片 <code>#FAF9F7</code> 米白 · 主色 <code>#4C6FC7</code> 柔和蓝</div>
+      </div>
+      <div class="stage" style="background:#f5f5f5;">
+        <div class="topbar">
+          <span class="topbar-title">首页</span>
+          <span class="btn-primary" style="background:#4c6fc7;">发布</span>
+        </div>
+        <div class="cards">
+          <div class="card" style="background:#faf9f7;">
+            <div class="card-img" style="background:linear-gradient(135deg,#e4e9f3,#cfd8ea);"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#faf9f7;">
+            <div class="card-img" style="background:linear-gradient(135deg,#e4e9f3,#cfd8ea);"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#faf9f7;">
+          <div class="row-text">
+            <div class="row-thumb" style="background:#eef1f7;"></div>
+            <div class="row-title">找搭子周末爬山</div>
+          </div>
+          <span class="btn-primary" style="background:#4c6fc7;">报名</span>
+        </div>
+        <span class="tab" style="background:#eef1f7;color:#4c6fc7;">分类：租房</span>
+      </div>
+    </div>
+
+    <div class="swatch">
+      <div class="swatch-label">
+        <div class="swatch-name">柔和调 B（更沉一档）</div>
+        <div class="swatch-desc">背景 <code>#F5F5F5</code> · 卡片 <code>#FAF9F7</code> 米白 · 主色 <code>#5578A8</code> 更灰调的蓝</div>
+      </div>
+      <div class="stage" style="background:#f5f5f5;">
+        <div class="topbar">
+          <span class="topbar-title">首页</span>
+          <span class="btn-primary" style="background:#5578a8;">发布</span>
+        </div>
+        <div class="cards">
+          <div class="card" style="background:#faf9f7;">
+            <div class="card-img" style="background:linear-gradient(135deg,#e6eaef,#d4dde4);"></div>
+            <div class="card-body">
+              <div class="card-title">整租一居室 近地铁</div>
+              <div class="card-price">$1,450/月</div>
+            </div>
+          </div>
+          <div class="card" style="background:#faf9f7;">
+            <div class="card-img" style="background:linear-gradient(135deg,#e6eaef,#d4dde4);"></div>
+            <div class="card-body">
+              <div class="card-title">合租主卧 拎包入住</div>
+              <div class="card-price">$800/月</div>
+            </div>
+          </div>
+        </div>
+        <div class="row-card" style="background:#faf9f7;">
+          <div class="row-text">
+            <div class="row-thumb" style="background:#eef1f3;"></div>
+            <div class="row-title">找搭子周末爬山</div>
+          </div>
+          <span class="btn-primary" style="background:#5578a8;">报名</span>
+        </div>
+        <span class="tab" style="background:#eef1f3;color:#5578a8;">分类：租房</span>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="footer-note">
+    "柔和调 A"是我倾向推荐的——蓝色调淡了但辨识度还在（按钮/链接一眼能看出
+    是可点击的），"柔和调 B"更进一步，蓝色接近灰蓝，最"低调"但也最容易让人
+    分不清"这是不是个按钮"，属于风险稍高一点的选择。如果这次要动，
+    <b>--color-primary/--color-accent</b>（主蓝）、<b>--color-card</b>（卡片白）
+    两个 token 各改一处数值，全站会统一生效，不用逐页面改；但因为
+    <b>--color-primary</b> 这个 token 在站内几十处复用（按钮、选中态、链接、
+    进度指示等），调这个之前建议先看清楚、拍板一次到位，不太适合改完再反复
+    微调。
+  </p>
+</body>
+</html>
