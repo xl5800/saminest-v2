@@ -1106,7 +1106,7 @@ export async function listAllActivitiesForAdmin(
   searchQuery?: string
 ): Promise<AdminActivityListItem[]> {
   const { data, error } = await getSupabaseClient().rpc("admin_list_activities", {
-    search_term: searchQuery ?? null
+    search_term: searchQuery
   });
 
   if (error) {

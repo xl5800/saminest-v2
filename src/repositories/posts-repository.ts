@@ -646,9 +646,9 @@ export async function listAllPosts(
   searchQuery?: string
 ): Promise<AdminPostListItem[]> {
   const { data, error } = await getSupabaseClient().rpc("admin_list_posts", {
-    status_filter: statusFilter ?? null,
-    category_id_filter: categoryId ?? null,
-    search_term: searchQuery ?? null
+    status_filter: statusFilter,
+    category_id_filter: categoryId,
+    search_term: searchQuery
   });
 
   if (error) {

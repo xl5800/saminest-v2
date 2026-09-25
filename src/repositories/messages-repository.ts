@@ -265,9 +265,10 @@ export async function adminReplyToSupportConversation(
       // 表达不出"可以传 null"，这里按实际库函数签名转换类型，不改变运行时
       // 传的值（null 就是 null，原样传给数据库）。
       body: body as string,
-      // image_path 在 SQL 里 default null，生成类型是可选的 string；把
-      // null 转成 undefined 是等价的（不传等同传 null），避免类型报错。
-      image_path: imagePath ?? undefined
+      // image_path 同理：SQL 里是 text default null，生成类型只能表达成
+      // 可选的 string，表达不出"可以传 null"，这里同样按实际签名转换类型，
+      // 原样传 null，不改成 undefined（避免悄悄改变实际传给数据库的值）。
+      image_path: imagePath as string | undefined
     }
   );
 
