@@ -173,6 +173,16 @@ function mapActivityListRow(row: ActivityListRow): ActivityListItem {
   };
 }
 
+/**
+ * "找搭子"公开列表页（activity-list-page.tsx）用。显式加
+ * `.is("deleted_at", null)`，不是只靠 RLS 兜底——activities_select_own
+ * 这条策略允许发起人查自己任意状态（含已删除）的活动，如果这里不显式
+ * 过滤，当前登录用户刷这个公开列表时会看到自己已经删除的活动（因为
+ * activities_select_own 跟 activities_select_public 这两条 SELECT 策略
+ * 是 OR 组合，只要有一条放行就能读到），管理员自己的账号尤其容易踩到，
+ * 因为管理员既能发活动又能删活动。公开列表任何时候都不应该出现软删除的
+ * 内容，不管查看者是谁，所以显式过滤，不依赖 RLS 的默认行为。
+ */
 export async function listActivities(
   input: ListActivitiesInput = {}
 ): Promise<ActivityListItem[]> {
@@ -184,6 +194,7 @@ export async function listActivities(
   let query = getSupabaseClient()
     .from("activities")
     .select(selectColumns)
+    .is("deleted_at", null)
     .in("status", ["open", "full"])
     .gte("start_at", nowIso)
     .order("start_at", { ascending: true });
@@ -1064,59 +1075,49 @@ export interface AdminActivityListItem {
   status: string;
 }
 
-interface AdminActivityRow {
+interface AdminActivityRpcRow {
   id: string;
   title: string;
   created_at: string;
   status: string;
-  organizer: { display_name: string } | null;
+  organizer_name: string;
 }
 
 /**
  * 管理员"全部帖子"管理页扩展成能管理所有内容任务卡：让管理员在同一个
- * /admin/posts/all 页面里，切到"找搭子"分类时管理所有活动。结构逐字照抄
- * posts-repository.ts 的 listAllPosts——按 created_at 降序、可选
- * searchQuery 按标题模糊匹配、嵌套 select 把发起人昵称一起带出来（活动
- * 对 profiles 只有 organizer_id 这一个外键，不需要 fkey 消歧写法，跟
- * listAllPosts 的 author:profiles(display_name) 是同一个情况）。
+ * /admin/posts/all 页面里，切到"找搭子"分类时管理所有活动。
  *
- * 不加 `.is("deleted_at", null)` 之外的任何 status 过滤——这次任务卡明确
- * 不做活动的状态筛选（open/full/cancelled/ended 跟帖子的状态完全不是一回
- * 事，不在这次范围内），管理员需要在这个列表里看到包括已经 cancelled 的
- * 活动（"下架"不等于"删除"，被下架的活动仍然需要在这个管理列表里能找到、
- * 必要时再真正删除）。
+ * 不加任何 status 过滤——这次任务卡明确不做活动的状态筛选（open/full/
+ * cancelled/ended 跟帖子的状态完全不是一回事，不在这次范围内），管理员
+ * 需要在这个列表里看到包括已经 cancelled 的活动（"下架"不等于"删除"，
+ * 被下架的活动仍然需要在这个管理列表里能找到、必要时再真正删除）。
  *
- * 读权限完全靠 activities_select_admin 这条已有的独立 RLS 策略
- * （`using (is_admin())`，见
- * supabase/migrations/20260816192239_add_activities_select_admin_policy.sql），
- * 不需要走任何 RPC——这条策略本身就是只给管理员开的、允许读到任意状态
- * 活动的策略，不是这次任务卡要处理的越权类型，见
- * 20260921090000_admin_delete_activity_function.sql 顶部的说明。
+ * 改走 admin_list_activities() 这个 SECURITY DEFINER 函数，不再直接查表。
+ * 原来读权限靠 activities_select_admin 这条 RLS 策略（`using (is_admin())`）
+ * 兜底，但这条策略是"只要是管理员，在任何页面查 activities 表都放行"，
+ * 副作用是管理员用自己的账号刷真实的"找搭子"公开列表页时，也会看到自己
+ * 在后台删除过的活动（deleted_at 有值，但因为查询者是管理员，RLS 照样
+ * 放行）。20260925 迁移（admin_list_functions_remove_admin_select_bypass）
+ * 把这条 RLS 策略删掉了，改成这个专门函数——函数内部自己校验
+ * is_admin()，只给管理员后台这一个调用点用，不会再影响管理员在其它页面
+ * 的正常浏览权限，见该迁移文件顶部的说明。
  */
 export async function listAllActivitiesForAdmin(
   searchQuery?: string
 ): Promise<AdminActivityListItem[]> {
-  let query = getSupabaseClient()
-    .from("activities")
-    .select("id, title, created_at, status, organizer:profiles(display_name)")
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
-  if (searchQuery) {
-    query = query.ilike("title", `%${searchQuery}%`);
-  }
-
-  const { data, error } = await query.overrideTypes<AdminActivityRow[]>();
+  const { data, error } = await getSupabaseClient().rpc("admin_list_activities", {
+    search_term: searchQuery ?? null
+  });
 
   if (error) {
     throw new AppError(error.message, "ADMIN_ALL_ACTIVITIES_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as AdminActivityRpcRow[]).map((row) => ({
     id: row.id,
     title: row.title,
     createdAt: row.created_at,
-    organizerName: row.organizer?.display_name ?? "未知用户",
+    organizerName: row.organizer_name,
     status: row.status
   }));
 }

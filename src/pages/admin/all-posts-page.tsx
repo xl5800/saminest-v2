@@ -8,8 +8,6 @@ import { useAdminDeleteActivityMutation } from "../../features/admin/use-admin-d
 import { useAllPostsQuery } from "../../features/admin/use-all-posts-query";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
-import type { AdminActivityListItem } from "../../repositories/activities-repository";
-import type { AdminPostListItem } from "../../repositories/posts-repository";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 import { formatPublishedAt } from "../../utils/format";
 
@@ -86,9 +84,21 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * 取值（open/full/cancelled/ended）跟帖子完全不是一回事，这次不做活动的
  * 状态筛选。
  *
- * 两套本地列表状态（posts/activities）分开维护，同一时刻只有一个在用——
- * 跟原来"服务端数据只在第一次拿到时同步进本地 state"的模式一致，只是现在
- * 按当前数据源分别同步。行内操作共用一套"删除"表单状态
+ * 列表内容直接从 useAllPostsQuery/useAllActivitiesForAdminQuery 的
+ * data 派生（visiblePosts/visibleActivities = data ?? []），不再复制一份
+ * 到本地 state 里维护。早期版本用过"服务端数据只在本地 state 是 null 时
+ * 才同步一次"的模式，问题是行内删除/下架成功后本地 state 会被改写成一个
+ * 非 null 的数组（哪怕删空成 []），从那一刻起"只在 null 时同步"这个守卫
+ * 条件永远不会再成立——不管后面切换筛选条件、切页面来回、还是数据库里
+ * 真的有了新内容，这份本地列表都不会再更新，页面卡死在删除后的那个瞬间
+ * （这正是"删除/下架之后再切一次页面，列表显示空白"这个 bug 的根因）。
+ * 现在删除/下架成功后由 mutation 自己直接更新 react-query 缓存（见
+ * use-delete-post-mutation.ts / use-admin-delete-activity-mutation.ts /
+ * use-admin-cancel-activity-mutation.ts 各自的 onSuccess），这里只负责
+ * 渲染 useAllPostsQuery/useAllActivitiesForAdminQuery 的 data，不再有一份
+ * 可能过期的本地副本。
+ *
+ * 行内操作共用一套"删除"表单状态
  * （openDeleteRowId/deleteReasons/deleteValidationErrors/actioningId）——
  * 帖子的删除和活动的删除虽然背后是两个不同的 mutation，但同一时刻只会
  * 展示其中一种行，不会有 id 冲突或"分不清是哪种删除"的问题。活动行
@@ -97,9 +107,8 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * "下架"和"删除"共享同一个 openDeleteRowId，否则没法同时看清一行现在
  * 展开的到底是哪个表单。
  *
- * 切换分类/搜索词都要把本地列表状态、两套行内表单状态一并重置——照抄现有
- * handleStatusFilterChange 的模式（切换过滤器相当于切到一份新的查询缓存，
- * 不重置的话会在新条件下继续展示上一个条件下的旧行/旧表单）。
+ * 切换分类/搜索词都要把两套行内表单状态重置——避免在新条件下继续展示上
+ * 一个条件下展开到一半的表单。
  */
 export function AdminAllPostsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -133,9 +142,6 @@ export function AdminAllPostsPage() {
   const deleteActivityMutation = useAdminDeleteActivityMutation();
   const cancelActivityMutation = useAdminCancelActivityMutation();
 
-  const [posts, setPosts] = useState<AdminPostListItem[] | null>(null);
-  const [activities, setActivities] = useState<AdminActivityListItem[] | null>(null);
-
   const [actioningId, setActioningId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
 
@@ -153,29 +159,11 @@ export function AdminAllPostsPage() {
     Record<string, string>
   >({});
 
-  useEffect(() => {
-    if (postsData && posts === null) {
-      setPosts(postsData);
-    }
-  }, [postsData, posts]);
-
-  useEffect(() => {
-    if (activitiesData && activities === null) {
-      setActivities(activitiesData);
-    }
-  }, [activitiesData, activities]);
-
-  // 防抖后的搜索词真正变化时（不是每次敲键），把两份本地列表状态都重置
-  // 回 null——理由跟 handleCategoryFilterChange 一样：posts/activities
-  // 一旦被同步过一次就不会再自动跟着新的查询结果更新（见上面两个
-  // useEffect 的"只在本地列表是 null 时才同步"这个守卫条件），如果不在
-  // 这里也重置一次，搜索框防抖生效、真的发出了新的过滤请求之后，本地列表
-  // 却会一直停留在过滤之前的旧结果上，页面显示跟请求实际返回的数据对
-  // 不上。这个 effect 依赖 trimmedSearchQuery（防抖后的值），不是
+  // 防抖后的搜索词真正变化时（不是每次敲键）重置两套行内表单状态——避免
+  // 搜索结果换了一批之后，页面上还展开着上一批结果里某一行的删除/下架
+  // 表单。这个 effect 依赖 trimmedSearchQuery（防抖后的值），不是
   // searchInput（每次敲键都变的即时值），所以不会在打字过程中反复触发。
   useEffect(() => {
-    setPosts(null);
-    setActivities(null);
     resetRowLevelState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trimmedSearchQuery]);
@@ -192,32 +180,16 @@ export function AdminAllPostsPage() {
 
   function handleStatusFilterChange(nextStatus: string): void {
     setStatusFilter(nextStatus);
-    setPosts(null);
     resetRowLevelState();
   }
 
   function handleCategoryFilterChange(nextCategory: string): void {
     setCategoryFilter(nextCategory);
-    // 分类切换的方向可能是"帖子分类 -> 找搭子""找搭子 -> 帖子分类""帖子
-    // 分类 -> 另一个帖子分类"——不管哪个方向，两份本地列表都重置最简单、
-    // 最不容易漏：切走的那一份反正也用不上了，切回来时会因为对应的
-    // queryKey 没变、posts/activities 已经是 null 而重新从 data 同步一次
-    // （如果 TanStack Query 缓存还在，直接命中缓存，不会多发请求）。
-    setPosts(null);
-    setActivities(null);
     resetRowLevelState();
   }
 
   function handleSearchInputChange(nextValue: string): void {
     setSearchInput(nextValue);
-  }
-
-  function removePost(postId: string): void {
-    setPosts((prev) => (prev ?? []).filter((post) => post.id !== postId));
-  }
-
-  function removeActivity(activityId: string): void {
-    setActivities((prev) => (prev ?? []).filter((activity) => activity.id !== activityId));
   }
 
   function openDeleteForm(id: string): void {
@@ -253,10 +225,8 @@ export function AdminAllPostsPage() {
     try {
       if (isActivitiesView) {
         await deleteActivityMutation.mutateAsync({ activityId: id, deleteReason: reason });
-        removeActivity(id);
       } else {
         await deletePostMutation.mutateAsync({ postId: id, deleteReason: reason });
-        removePost(id);
       }
       setOpenDeleteRowId((current) => (current === id ? null : current));
       setDeleteReasons((prev) => withoutKey(prev, id));
@@ -285,11 +255,6 @@ export function AdminAllPostsPage() {
     setActioningId(activityId);
     try {
       await cancelActivityMutation.mutateAsync({ activityId, cancelReason: reason });
-      setActivities((prev) =>
-        (prev ?? []).map((activity) =>
-          activity.id === activityId ? { ...activity, status: "cancelled" } : activity
-        )
-      );
       setOpenCancelRowId((current) => (current === activityId ? null : current));
       setCancelReasons((prev) => withoutKey(prev, activityId));
     } catch {
@@ -383,8 +348,8 @@ export function AdminAllPostsPage() {
     );
   }
 
-  const visiblePosts = posts ?? [];
-  const visibleActivities = activities ?? [];
+  const visiblePosts = postsData ?? [];
+  const visibleActivities = activitiesData ?? [];
   const isEmpty = isActivitiesView ? visibleActivities.length === 0 : visiblePosts.length === 0;
 
   return (

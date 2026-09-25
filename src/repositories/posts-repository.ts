@@ -608,13 +608,13 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   return { id: data.id };
 }
 
-interface AdminAllPostRow {
+interface AdminAllPostRpcRow {
   id: string;
   title: string;
   created_at: string;
   status: string;
-  author: { display_name: string } | null;
-  category: { name_zh: string } | null;
+  author_name: string;
+  category_name: string;
 }
 
 /**
@@ -626,53 +626,41 @@ interface AdminAllPostRow {
  * 什么"，跟 listApprovedPosts 面向访客的公开列表、listPendingPosts 审核
  * 队列的排序方向都一致。
  *
- * 嵌套 select 复用 listPendingPosts 那一套（author:profiles(display_name)、
- * category:categories(name_zh)）：posts 对 profiles 只有 author_id 这一个
- * 外键，对 categories 只有 category_id 这一个外键，跟 reports 表对 profiles
- * 有两个外键（reporter_id / reviewer_id）导致嵌套 select 必须写
- * `profiles!reports_reporter_id_fkey(...)` 消歧的情况不同，这里没有那个坑，
- * 沿用不带外键提示的写法是安全的。
- *
  * "全部帖子"管理页扩展成能管理所有内容任务卡：新增 categoryId/searchQuery
  * 两个可选参数——categoryId 按 posts.category_id 精确匹配（下拉选的是
  * categories 表里真实存在的一行，不需要模糊匹配）；searchQuery 按标题
- * ilike 模糊匹配，大小写不敏感。两个参数都不传时行为跟改动前逐字一致。
+ * ilike 模糊匹配，大小写不敏感。
+ *
+ * 改走 admin_list_posts() 这个 SECURITY DEFINER 函数，不再直接查表。原来
+ * 读权限靠 posts_select_public_or_own_or_admin 这条 RLS 策略里的
+ * `or is_admin()` 兜底，但这个兜底是无差别的：管理员在任何页面查 posts
+ * 表都会连带看到别人未审核/被驳回/已删除的帖子，越权范围比"后台管理需要
+ * 看到全部帖子"这个单一目的大得多。20260925 迁移
+ * （admin_list_functions_remove_admin_select_bypass）把 RLS 里的
+ * `or is_admin()` 去掉了，改成这个专门函数——函数内部自己校验
+ * is_admin()，只给管理员后台这一个调用点用。
  */
 export async function listAllPosts(
   statusFilter?: string,
   categoryId?: string,
   searchQuery?: string
 ): Promise<AdminPostListItem[]> {
-  let query = getSupabaseClient()
-    .from("posts")
-    .select(
-      "id, title, created_at, status, author:profiles(display_name), category:categories(name_zh)"
-    )
-    .is("deleted_at", null)
-    .order("created_at", { ascending: false });
-
-  if (statusFilter) {
-    query = query.eq("status", statusFilter);
-  }
-  if (categoryId) {
-    query = query.eq("category_id", categoryId);
-  }
-  if (searchQuery) {
-    query = query.ilike("title", `%${searchQuery}%`);
-  }
-
-  const { data, error } = await query.overrideTypes<AdminAllPostRow[]>();
+  const { data, error } = await getSupabaseClient().rpc("admin_list_posts", {
+    status_filter: statusFilter ?? null,
+    category_id_filter: categoryId ?? null,
+    search_term: searchQuery ?? null
+  });
 
   if (error) {
     throw new AppError(error.message, "ADMIN_ALL_POSTS_LIST_FAILED", error);
   }
 
-  return (data ?? []).map((row) => ({
+  return ((data ?? []) as AdminAllPostRpcRow[]).map((row) => ({
     id: row.id,
     title: row.title,
     createdAt: row.created_at,
-    authorName: row.author?.display_name ?? "未知用户",
-    categoryName: row.category?.name_zh ?? "未知分类",
+    authorName: row.author_name,
+    categoryName: row.category_name,
     status: row.status
   }));
 }

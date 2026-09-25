@@ -83,7 +83,7 @@ function resetAllMocks(): void {
 describe("listActivities", () => {
   beforeEach(resetAllMocks);
 
-  it("filters to open/full status with start_at in the future, ordered by start_at ascending, with a nested location/organizer select", async () => {
+  it("filters to open/full status with start_at in the future, excludes soft-deleted activities, ordered by start_at ascending, with a nested location/organizer select", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listActivities();
@@ -92,6 +92,10 @@ describe("listActivities", () => {
     expect(queryBuilder.select).toHaveBeenCalledWith(
       "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
+    // 显式过滤 deleted_at，不只靠 RLS——发起人/管理员自己查这个公开列表
+    // 时，activities_select_own 这条策略会让他们看到自己已经删除的活动，
+    // 这里必须显式排除，见 activities-repository.ts 里这个函数的说明。
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.in).toHaveBeenCalledWith("status", ["open", "full"]);
     expect(queryBuilder.gte).toHaveBeenCalledWith("start_at", expect.any(String));
     expect(queryBuilder.order).toHaveBeenCalledWith("start_at", { ascending: true });
@@ -1326,37 +1330,37 @@ describe("notifyActivityParticipants", () => {
 describe("listAllActivitiesForAdmin", () => {
   beforeEach(resetAllMocks);
 
-  it("excludes soft-deleted activities, orders by created_at descending, and does not filter by search by default", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  // 改走 admin_list_activities() 这个 SECURITY DEFINER 函数（见
+  // supabase/migrations/20260925..._admin_list_functions_remove_admin_select_bypass.sql），
+  // 不再直接查表，所以这里断言的是 rpc 调用，不是 from/select 链式调用。
+  // deleted_at 过滤、排除条件、按 created_at 降序排列、按标题模糊搜索这些
+  // 逻辑都搬进了数据库函数内部，不再是这一层能观察到的行为。
+
+  it("calls the admin_list_activities RPC with a null search_term by default", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllActivitiesForAdmin();
 
-    expect(fromMock).toHaveBeenCalledWith("activities");
-    expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, created_at, status, organizer:profiles(display_name)"
-    );
-    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
-    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
-    expect(queryBuilder.ilike).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_activities", { search_term: null });
   });
 
-  it("also filters by title when searchQuery is provided", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  it("passes the search term through to the RPC when provided", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllActivitiesForAdmin("烧烤");
 
-    expect(queryBuilder.ilike).toHaveBeenCalledWith("title", "%烧烤%");
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_activities", { search_term: "烧烤" });
   });
 
   it("maps rows to AdminActivityListItem including status and organizer name, including cancelled activities", async () => {
-    overrideTypesMock.mockResolvedValue({
+    rpcMock.mockResolvedValue({
       data: [
         {
           id: "act-1",
           title: "周末吃火锅",
           created_at: "2026-07-01T00:00:00.000Z",
           status: "cancelled",
-          organizer: { display_name: "Alice" }
+          organizer_name: "Alice"
         }
       ],
       error: null
@@ -1375,27 +1379,8 @@ describe("listAllActivitiesForAdmin", () => {
     ]);
   });
 
-  it("falls back to a placeholder organizer name when the joined organizer is missing", async () => {
-    overrideTypesMock.mockResolvedValue({
-      data: [
-        {
-          id: "act-1",
-          title: "周末吃火锅",
-          created_at: "2026-07-01T00:00:00.000Z",
-          status: "open",
-          organizer: null
-        }
-      ],
-      error: null
-    });
-
-    const result = await listAllActivitiesForAdmin();
-
-    expect(result[0].organizerName).toBe("未知用户");
-  });
-
-  it("throws an AppError when the query fails", async () => {
-    overrideTypesMock.mockResolvedValue({
+  it("throws an AppError when the RPC fails", async () => {
+    rpcMock.mockResolvedValue({
       data: null,
       error: { message: "network down", code: "500" }
     });

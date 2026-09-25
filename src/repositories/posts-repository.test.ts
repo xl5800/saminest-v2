@@ -27,9 +27,10 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
 });
 
 const fromMock = vi.fn(() => queryBuilder);
+const rpcMock = vi.fn();
 
 vi.mock("../integrations/supabase/client", () => ({
-  getSupabaseClient: () => ({ from: fromMock })
+  getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
 import {
@@ -865,65 +866,74 @@ describe("listAllPosts", () => {
     overrideTypesMock.mockReset();
     singleMock.mockReset();
     maybeSingleMock.mockReset();
+    rpcMock.mockReset();
   });
 
-  it("excludes soft-deleted posts, orders by created_at descending, and does not filter by status by default", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  // 改走 admin_list_posts() 这个 SECURITY DEFINER 函数（见
+  // supabase/migrations/20260925..._admin_list_functions_remove_admin_select_bypass.sql），
+  // 不再直接查表，所以这里断言的是 rpc 调用，不是 from/select 链式调用。
+  // deleted_at 过滤、status/category/搜索过滤、按 created_at 降序排列这些
+  // 逻辑都搬进了数据库函数内部，不再是这一层能观察到的行为。
+
+  it("calls the admin_list_posts RPC with all filters null by default", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllPosts();
 
-    expect(fromMock).toHaveBeenCalledWith("posts");
-    expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, created_at, status, author:profiles(display_name), category:categories(name_zh)"
-    );
-    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
-    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
-    expect(queryBuilder.eq).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
+      status_filter: null,
+      category_id_filter: null,
+      search_term: null
+    });
   });
 
-  it("also filters by status when statusFilter is provided", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  it("passes statusFilter through to the RPC when provided", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllPosts("approved");
 
-    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
+      status_filter: "approved",
+      category_id_filter: null,
+      search_term: null
+    });
   });
 
   // "全部帖子"管理页扩展成能管理所有内容任务卡：新增的两个可选参数。
-  it("also filters by category_id when categoryId is provided", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  it("passes categoryId through to the RPC when provided", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllPosts(undefined, "cat-1");
 
-    expect(queryBuilder.eq).toHaveBeenCalledWith("category_id", "cat-1");
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
+      status_filter: null,
+      category_id_filter: "cat-1",
+      search_term: null
+    });
   });
 
-  it("also filters by title (ilike) when searchQuery is provided", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  it("passes searchQuery through to the RPC when provided", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllPosts(undefined, undefined, "sunny");
 
-    expect(queryBuilder.ilike).toHaveBeenCalledWith("title", "%sunny%");
-  });
-
-  it("does not filter by category or title when those params are omitted", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
-
-    await listAllPosts();
-
-    expect(queryBuilder.ilike).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
+      status_filter: null,
+      category_id_filter: null,
+      search_term: "sunny"
+    });
   });
 
   it("maps rows to AdminPostListItem including status, author, and category names", async () => {
-    overrideTypesMock.mockResolvedValue({
+    rpcMock.mockResolvedValue({
       data: [
         {
           id: "post-1",
           title: "Sunny room",
           created_at: "2026-07-01T00:00:00.000Z",
           status: "approved",
-          author: { display_name: "Alice" },
-          category: { name_zh: "租房" }
+          author_name: "Alice",
+          category_name: "租房"
         }
       ],
       error: null
@@ -943,35 +953,14 @@ describe("listAllPosts", () => {
     ]);
   });
 
-  it("falls back to placeholder text when the joined author or category is missing", async () => {
-    overrideTypesMock.mockResolvedValue({
-      data: [
-        {
-          id: "post-1",
-          title: "Sunny room",
-          created_at: "2026-07-01T00:00:00.000Z",
-          status: "rejected",
-          author: null,
-          category: null
-        }
-      ],
-      error: null
-    });
-
-    const result = await listAllPosts();
-
-    expect(result[0].authorName).toBe("未知用户");
-    expect(result[0].categoryName).toBe("未知分类");
-  });
-
   it("returns an empty list without throwing when there are no posts", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+    rpcMock.mockResolvedValue({ data: [], error: null });
 
     await expect(listAllPosts()).resolves.toEqual([]);
   });
 
-  it("throws an AppError when the Supabase query fails", async () => {
-    overrideTypesMock.mockResolvedValue({
+  it("throws an AppError when the RPC fails", async () => {
+    rpcMock.mockResolvedValue({
       data: null,
       error: { message: "network down", code: "500" }
     });
