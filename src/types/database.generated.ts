@@ -1068,33 +1068,58 @@ export type Database = {
         Args: { delete_reason: string; target_activity_id: string }
         Returns: undefined
       }
+      admin_list_activities: {
+        Args: { search_term?: string }
+        Returns: {
+          created_at: string
+          id: string
+          organizer_name: string
+          status: string
+          title: string
+        }[]
+      }
+      admin_list_posts: {
+        Args: {
+          category_id_filter?: string
+          search_term?: string
+          status_filter?: string
+        }
+        Returns: {
+          author_name: string
+          category_name: string
+          created_at: string
+          id: string
+          status: string
+          title: string
+        }[]
+      }
       admin_list_support_conversation_messages: {
         Args: { target_conversation_id: string }
         Returns: {
-          body: string | null
+          body: string
           created_at: string
           id: string
-          image_path: string | null
-          notification_payload: Json | null
-          ref_activity_id: string | null
-          sender_id: string | null
+          image_path: string
+          notification_payload: Json
+          ref_activity_id: string
+          sender_id: string
         }[]
       }
       admin_list_support_conversations: {
         Args: never
         Returns: {
-          avatar_url: string | null
+          avatar_url: string
           conversation_id: string
           display_name: string
-          last_message_at: string | null
-          last_message_preview: string | null
+          last_message_at: string
+          last_message_preview: string
           user_id: string
         }[]
       }
       admin_reply_to_support_conversation: {
         Args: {
-          body: string | null
-          image_path?: string | null
+          body: string
+          image_path?: string
           target_conversation_id: string
         }
         Returns: undefined
@@ -1169,14 +1194,8 @@ export type Database = {
         }
         Returns: string
       }
-      get_or_create_own_support_conversation: {
-        Args: never
-        Returns: string
-      }
-      get_or_create_own_system_conversation: {
-        Args: never
-        Returns: string
-      }
+      get_or_create_own_support_conversation: { Args: never; Returns: string }
+      get_or_create_own_system_conversation: { Args: never; Returns: string }
       get_or_create_system_conversation: {
         Args: { target_user_id: string }
         Returns: string
@@ -1458,7 +1477,7 @@ export type CompositeTypes<
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    ? DefaultSchema["CompositeTypes"][CompositeTypeName]
     : never
 
 export const Constants = {
