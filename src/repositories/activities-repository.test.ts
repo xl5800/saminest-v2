@@ -1336,12 +1336,12 @@ describe("listAllActivitiesForAdmin", () => {
   // deleted_at 过滤、排除条件、按 created_at 降序排列、按标题模糊搜索这些
   // 逻辑都搬进了数据库函数内部，不再是这一层能观察到的行为。
 
-  it("calls the admin_list_activities RPC with a null search_term by default", async () => {
+  it("calls the admin_list_activities RPC with an undefined search_term by default", async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllActivitiesForAdmin();
 
-    expect(rpcMock).toHaveBeenCalledWith("admin_list_activities", { search_term: null });
+    expect(rpcMock).toHaveBeenCalledWith("admin_list_activities", { search_term: undefined });
   });
 
   it("passes the search term through to the RPC when provided", async () => {

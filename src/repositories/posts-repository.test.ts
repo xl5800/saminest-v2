@@ -875,15 +875,15 @@ describe("listAllPosts", () => {
   // deleted_at 过滤、status/category/搜索过滤、按 created_at 降序排列这些
   // 逻辑都搬进了数据库函数内部，不再是这一层能观察到的行为。
 
-  it("calls the admin_list_posts RPC with all filters null by default", async () => {
+  it("calls the admin_list_posts RPC with all filters undefined by default", async () => {
     rpcMock.mockResolvedValue({ data: [], error: null });
 
     await listAllPosts();
 
     expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
-      status_filter: null,
-      category_id_filter: null,
-      search_term: null
+      status_filter: undefined,
+      category_id_filter: undefined,
+      search_term: undefined
     });
   });
 
@@ -894,8 +894,8 @@ describe("listAllPosts", () => {
 
     expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
       status_filter: "approved",
-      category_id_filter: null,
-      search_term: null
+      category_id_filter: undefined,
+      search_term: undefined
     });
   });
 
@@ -906,9 +906,9 @@ describe("listAllPosts", () => {
     await listAllPosts(undefined, "cat-1");
 
     expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
-      status_filter: null,
+      status_filter: undefined,
       category_id_filter: "cat-1",
-      search_term: null
+      search_term: undefined
     });
   });
 
@@ -918,8 +918,8 @@ describe("listAllPosts", () => {
     await listAllPosts(undefined, undefined, "sunny");
 
     expect(rpcMock).toHaveBeenCalledWith("admin_list_posts", {
-      status_filter: null,
-      category_id_filter: null,
+      status_filter: undefined,
+      category_id_filter: undefined,
       search_term: "sunny"
     });
   });
