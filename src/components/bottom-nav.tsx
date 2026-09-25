@@ -30,8 +30,9 @@ function isActivePath(pathname: string, to: string): boolean {
 }
 
 /**
- * 移动端底部导航栏，由 AppShell 包在每一个路由外层渲染，md 以上隐藏
- * （桌面端导航走 AppHeader）。
+ * 底部导航栏，由 AppShell 包在每一个路由外层渲染，移动端和桌面端宽度下
+ * 都显示（目前没有单独的桌面端导航替代方案，之前 md 以上隐藏会导致桌面
+ * 浏览器访问时完全看不到导航栏，这里去掉宽度限制，统一显示）。
  *
  * 5 个平级目的地，没有中间的"发布"圆形按钮——全局发布入口已经统一收到
  * AppHeader 右上角（点开 Action Sheet 选发布类型，见 publish-action-sheet.tsx），
@@ -85,7 +86,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="底部导航"
-      className="fixed inset-x-0 bottom-0 z-10 flex items-center border-t border-border bg-card pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5 md:hidden"
+      className="fixed inset-x-0 bottom-0 z-10 flex items-center border-t border-border bg-card pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5"
     >
       {NAV_ITEMS.map(({ to, label, Icon }) => {
         const active = isActivePath(location.pathname, to);
