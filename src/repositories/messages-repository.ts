@@ -260,8 +260,14 @@ export async function adminReplyToSupportConversation(
     "admin_reply_to_support_conversation",
     {
       target_conversation_id: conversationId,
-      body,
-      image_path: imagePath
+      // admin_reply_to_support_conversation 的 body 参数在 SQL 里没有默认值
+      // （必须传），但类型是可为 null 的 text——生成的类型只能表达"必传"，
+      // 表达不出"可以传 null"，这里按实际库函数签名转换类型，不改变运行时
+      // 传的值（null 就是 null，原样传给数据库）。
+      body: body as string,
+      // image_path 在 SQL 里 default null，生成类型是可选的 string；把
+      // null 转成 undefined 是等价的（不传等同传 null），避免类型报错。
+      image_path: imagePath ?? undefined
     }
   );
 
