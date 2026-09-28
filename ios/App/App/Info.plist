@@ -18,6 +18,13 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<!-- 修复 App Store 审核拒绝（2.1(a) 性能：点击"拍照"崩溃）：发帖页/头像
+	     编辑页的"拍照"按钮用的是 <input type="file" capture="environment">，
+	     这会触发系统相机。iOS 规定 App 只要调起相机，Info.plist 里就必须有
+	     这个用途说明字符串，系统才会弹隐私授权提示；没有这个字段的话系统
+	     不会弹提示，而是直接把 App 强制终止（表现为"一点拍照就崩溃"）。 -->
+	<key>NSCameraUsageDescription</key>
+	<string>用于拍照并上传图片到发布内容或头像</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
