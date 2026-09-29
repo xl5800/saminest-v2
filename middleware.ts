@@ -1,12 +1,27 @@
 import { next } from "@vercel/functions";
 
 /**
- * 只拦截帖子详情页这一条路由（真实路径见 src/router/routes.tsx 的
- * `path: "post/:id"`）。matcher 精确到 `/post/:id`（单层路径段），不会
- * 命中 `/post/:id/report` 这种子路径。
+ * 拦截帖子详情页和找搭子活动详情页这两条路由（真实路径见
+ * src/router/routes.tsx 的 `path: "post/:id"` / `path: "activities/:id"`,
+ * 注意活动这条是复数 `activities`）。两条 matcher 都精确到单层路径段，
+ * 不会命中 `/post/:id/report`、`/activities/:id/report`、
+ * `/activities/:id/notify` 这些子路径。
  */
 export const config = {
-  matcher: "/post/:id"
+  // 显式切到 Node.js Routing Middleware 运行时（Vercel 官方文档
+  // /docs/routing-middleware#runtime-options：`middleware.ts` 文件约定
+  // 默认走 Edge 运行时，可以通过这里的 runtime: 'nodejs' 改成 Node.js
+  // 运行时）。原因：Edge 运行时对「未支持模块」有一份很严格的白名单，
+  // 部署这个功能时反复遇到 "Edge Function 'middleware' is referencing
+  // unsupported modules" ——即使 middleware.ts 和 api/og/activity.tsx
+  // 之间已经不再共享任何 src/ 源文件（各自本地复制了一份），Vercel 仍然
+  // 在某种构建产物层面把两者关联在了一起，报错信息本身已经退化成
+  // 语焉不详的 "- @vercel: module"，没法再针对具体某个包做排查。改成
+  // Node.js 运行时后，Middleware 不再受 Edge 那份模块白名单限制（可以
+  // 使用完整的 Node.js API/生态），middleware 和 api/og/activity.tsx
+  // 从此在两个完全不同的运行时构建产物里，不可能再互相牵连。
+  runtime: "nodejs",
+  matcher: ["/post/:id", "/activities/:id"]
 };
 
 const DESCRIPTION_MAX_LENGTH = 200;
@@ -67,6 +82,165 @@ function truncate(text: string, maxLength: number): string {
   return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
 }
 
+// ============================================================
+// 找搭子活动分享卡片任务卡：/activities/:id 的 OG 标签注入
+// ============================================================
+
+interface ActivityRow {
+  channel: string;
+  title: string;
+  start_at: string;
+  is_online: boolean;
+  capacity: number | null;
+  participant_count: number;
+  location: { name: string } | null;
+  landmark_text: string | null;
+}
+
+/**
+ * 频道 emoji/文案：跟 api/og/activity.tsx 里的 ACTIVITY_CHANNEL_META 是
+ * 逐字重复的两份，不是漏改——两个文件都是独立的 Vercel Edge
+ * Function/Middleware，都不能 import
+ * src/repositories/activities-repository.ts 的 ACTIVITY_CHANNEL_OPTIONS
+ * （那个文件顶部 import 了 getSupabaseClient，会拉进 Vite 专属的
+ * import.meta.env 链路，构建期直接失败，理由跟上面 resolveCoverImageUrl
+ * 的注释一致），也不能互相 import 对方（middleware.ts 如果 import
+ * api/og/activity.tsx，会把那边的 @vercel/og 整个依赖树一起拉进
+ * Middleware 的打包体积——Middleware 的体积预算比普通 Edge Function 更紧，
+ * 不值得为了少写十行文案换来这个风险）。以后如果要改频道文案，需要
+ * 同时改 api/og/activity.tsx 和这里两处。
+ */
+const ACTIVITY_CHANNEL_META: Record<string, { label: string; emoji: string }> = {
+  food: { label: "吃饭搭子", emoji: "🍜" },
+  carpool: { label: "拼车/一起采购", emoji: "🚗" },
+  fitness: { label: "健身搭子", emoji: "🏋️" },
+  game: { label: "游戏搭子", emoji: "🎮" },
+  study: { label: "学习搭子", emoji: "📚" },
+  travel: { label: "旅游搭子", emoji: "✈️" },
+  entertainment: { label: "娱乐搭子", emoji: "🎬" },
+  other: { label: "其他", emoji: "🔖" }
+};
+
+function getActivityChannelMeta(channel: string): { label: string; emoji: string } {
+  return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, emoji: "🔖" };
+}
+
+/**
+ * 下面两个函数原来是直接 import src/utils/format.ts 的
+ * formatActivityStartAt/formatActivityParticipantSummary——那个文件确实
+ * 零 import，但实测部署后仍然报错：api/og/activity.tsx 也 import 了同一个
+ * 文件，Vercel 给 Middleware + 这个 Edge Function 构建时会把共同依赖打进
+ * 同一个共享 chunk，这个共享 chunk 的产物又把 api/og/activity.tsx 独有的
+ * @vercel/og / react 一起带进了 middleware 的产物列表，触发"Edge Function
+ * 'middleware' is referencing unsupported modules"（Middleware 的运行时
+ * 限制比普通 Edge Function 更严）。结论：跟 api/og/activity.tsx 之间哪怕
+ * 共享的是零依赖纯函数文件也不能共用同一个 src/ 源文件，这里改成逐字
+ * 复制的独立副本（详细说明见 api/og/activity.tsx 顶部注释）。
+ */
+function formatActivityStartAt(startAt: string): string {
+  const date = new Date(startAt);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatActivityParticipantSummary(participantCount: number, capacity: number | null): string {
+  const joinedCount = participantCount + 1; // +1：发起人本人
+  if (capacity === null) {
+    return `已有 ${joinedCount} 人报名`;
+  }
+  const remaining = Math.max(capacity - joinedCount, 0);
+  return remaining > 0
+    ? `还差 ${remaining} 人（${joinedCount}/${capacity}）`
+    : `已满员（${joinedCount}/${capacity}）`;
+}
+
+/**
+ * og:description 这一行文字——任务卡明确"跟卡片图片上的信息一致即可，
+ * 不需要一字不差"。地点这里故意不做 formatLocationDisplayName 那个
+ * "裸州代码转中文州名"的转换（比如线下活动地点是裸的 "VA"，这里就直接显示
+ * "VA"，不会转成"VA 弗吉尼亚州"）——原因同上：那个转换需要 51 州对照表，
+ * 这份对照表已经在 api/og/activity.tsx 里复制了一份给卡片图片（真正对外
+ * 展示、访客会看到的部分）用，og:description 是次要的辅助文字，不值得为了
+ * 这一处也复制一份 51 州数据，接受这个小的文案差异。
+ */
+function buildActivityDescription(row: ActivityRow): string {
+  const { emoji, label } = getActivityChannelMeta(row.channel);
+  const timeText = formatActivityStartAt(row.start_at);
+  const locationOrParticipants = row.is_online
+    ? "线上活动"
+    : `${row.landmark_text ?? row.location?.name ?? "地点待定"} · ${formatActivityParticipantSummary(row.participant_count, row.capacity)}`;
+  return `${emoji} ${label} · ${timeText} · ${locationOrParticipants}`;
+}
+
+async function handleActivityRequest(
+  request: Request,
+  activityId: string,
+  supabaseUrl: string,
+  supabaseAnonKey: string
+): Promise<Response> {
+  const restUrl =
+    `${supabaseUrl}/rest/v1/activities` +
+    `?id=eq.${encodeURIComponent(activityId)}` +
+    "&select=channel,title,start_at,is_online,capacity,participant_count,location:locations(name),landmark_text";
+
+  let activities: ActivityRow[];
+  try {
+    const restResponse = await fetch(restUrl, {
+      headers: {
+        apikey: supabaseAnonKey,
+        Authorization: `Bearer ${supabaseAnonKey}`
+      }
+    });
+    if (!restResponse.ok) {
+      return next();
+    }
+    activities = (await restResponse.json()) as ActivityRow[];
+  } catch {
+    return next();
+  }
+
+  // 走 anon 角色，不存在/被软删除/被 activities_select_public 挡掉（比如
+  // cancelled）都会让这里查不到任何行——跟帖子那边"查不到就 return next()"
+  // 是同一个原则。这里不额外判断 status === 'ended'：已结束的活动本来就
+  // 应该能被公开看到详情，标题/描述这两个 OG 标签对已结束的活动仍然是
+  // 准确、有意义的文字，不需要跟着退化；卡片图片本身要不要为已结束的
+  // 活动展示通用兜底图，是 api/og/activity.tsx 单独的判断，这里不重复。
+  const activity = activities[0];
+  if (!activity) {
+    return next();
+  }
+
+  const originHtml = await fetch(new URL("/index.html", request.url)).then((response) =>
+    response.text()
+  );
+
+  const title = escapeHtml(activity.title);
+  const description = escapeHtml(truncate(buildActivityDescription(activity), DESCRIPTION_MAX_LENGTH));
+  const ogImageUrl = new URL("/api/og/activity", request.url);
+  ogImageUrl.searchParams.set("id", activityId);
+
+  const metaTags = [
+    `<title>${title}</title>`,
+    `<meta property="og:title" content="${title}">`,
+    `<meta property="og:description" content="${description}">`,
+    `<meta property="og:image" content="${escapeHtml(ogImageUrl.toString())}">`,
+    `<meta property="og:url" content="${escapeHtml(request.url)}">`,
+    `<meta property="og:type" content="website">`
+  ].join("\n    ");
+
+  const html = originHtml
+    .replace(/<title>[^<]*<\/title>/, "")
+    .replace("</head>", `    ${metaTags}\n  </head>`);
+
+  return new Response(html, {
+    headers: { "content-type": "text/html; charset=utf-8" }
+  });
+}
+
 // 原来这里有一道"只认微信/Facebook/Twitter/WhatsApp 这几个 User-Agent
 // 关键字才查数据库注入 OG 标签，其余请求直接放行"的前置判断，是为了给
 // 普通用户请求省一次数据库查询。但这个判断依赖一份人工维护的关键字名单
@@ -80,6 +254,22 @@ function truncate(text: string, maxLength: number): string {
 // "省一次查询但可能漏掉没见过的爬虫"。
 export default async function middleware(request: Request): Promise<Response> {
   const url = new URL(request.url);
+
+  // 找搭子活动分享卡片任务卡：`/activities/:id` 单独分支，跟 `/post/:id`
+  // 走原有逻辑完全不变——这条分支只是插在最前面，post 那部分下面的代码
+  // 逐字没有改动。
+  const activityId = url.pathname.match(/^\/activities\/([^/]+)\/?$/)?.[1];
+  if (activityId) {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) {
+      // 跟帖子那边同一个理由：环境变量读不到就放行，不连累详情页整体
+      // 不可用。
+      return next();
+    }
+    return handleActivityRequest(request, activityId, supabaseUrl, supabaseAnonKey);
+  }
+
   const postId = url.pathname.match(/^\/post\/([^/]+)\/?$/)?.[1];
   if (!postId) {
     return next();
