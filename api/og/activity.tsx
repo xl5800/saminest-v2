@@ -1,21 +1,31 @@
 import { ImageResponse } from "@vercel/og";
 import React from "react";
 
-import { formatLocationDisplayName } from "../../src/data/us-states";
-import { formatActivityParticipantSummary } from "../../src/utils/format";
-
 /**
  * 找搭子活动分享卡片任务卡：这个文件跟 middleware.ts 一样是独立的 Vercel
- * Edge Function，不经过 Vite 打包（Vercel 自己的 esbuild 流水线）。这里
- * 因此只能 import 那些不依赖 import.meta.env / DOM 的纯逻辑文件——
- * ../../src/utils/format.ts 和 ../../src/data/us-states.ts 都是零 import
- * 的纯函数文件（已核实过，不会拉进 src/integrations/supabase/client.ts
- * 那条 Vite 专属链路），可以放心直接复用；activities-repository.ts 的
- * ACTIVITY_CHANNEL_OPTIONS/getActivityChannelMeta 则不行——那个文件顶部
- * 就 import 了 getSupabaseClient，跟 middleware.ts 顶部注释警告的问题
- * 一样，这里选择跟 middleware.ts 的 resolveCoverImageUrl 同一个做法：
- * 把频道 emoji/文案单独复制一份到这个文件里（见下面
- * ACTIVITY_CHANNEL_META），不是没注意到已经有一份，是不能 import。
+ * Edge Function，不经过 Vite 打包（Vercel 自己的 esbuild 流水线）。
+ *
+ * 这里之前直接 import 过 ../../src/utils/format.ts 和
+ * ../../src/data/us-states.ts——理由是"两个都是零 import 的纯函数文件，
+ * 不会拉进 Vite 专属链路"，这个判断本身没错（两个文件确实零 import），
+ * 但实测部署到 Vercel 后仍然失败：`middleware.ts` 也 import 了同样这两个
+ * 文件，Vercel 给这两个独立的 Edge 入口（Middleware + 这个 Edge
+ * Function）构建时会把共同依赖的文件打进同一个共享 chunk，而这个共享
+ * chunk 的产物又把这个文件自己独有的 @vercel/og / react 一起带进了
+ * middleware 的产物列表，导致部署报错"Edge Function 'middleware' is
+ * referencing unsupported modules"（Middleware 的运行时限制比普通 Edge
+ * Function 更严，不允许 @vercel/og/react 这类模块）。
+ *
+ * 结论：Middleware 和普通 Edge Function 之间，哪怕共享的是完全零依赖的
+ * 纯函数文件，也不能共用同一个 src/ 源文件——必须两边各自复制一份。跟
+ * activities-repository.ts 的 ACTIVITY_CHANNEL_OPTIONS 不能 import 的
+ * 原因不一样（那个文件顶部 import 了 getSupabaseClient，会拉进 Vite 专属
+ * 链路），这里是纯粹的构建期 chunk 归属问题，不是代码本身有依赖问题。
+ * 下面 STATE_LABELS_BY_CODE / formatLocationDisplayName /
+ * formatActivityParticipantSummary 都是从 src/data/us-states.ts /
+ * src/utils/format.ts 逐字复制过来的独立副本，跟 middleware.ts 里的同名
+ * 复制品各自维护，以后要改这几个函数的逻辑，需要同时改 src/ 原版 +
+ * middleware.ts + 这个文件三处。
  */
 export const config = {
   runtime: "edge"
@@ -48,6 +58,85 @@ const ACTIVITY_CHANNEL_META: Record<string, { label: string; emoji: string }> = 
 
 function getActivityChannelMeta(channel: string): { label: string; emoji: string } {
   return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, emoji: "🔖" };
+}
+
+/**
+ * 从 src/data/us-states.ts 的 US_STATES + formatStateLabelByCode 逐字
+ * 复制的精简版——只保留 formatLocationDisplayName 真正用到的 code/nameZh
+ * 两个字段（原版 UsState 还有一个 name 英文全名字段，这里用不到，不复制）。
+ * 不能 import 原文件的原因见本文件顶部注释（Middleware/Edge Function 共享
+ * chunk 的构建期问题，不是代码依赖问题）。
+ */
+const STATE_LABELS_BY_CODE: Record<string, string> = {
+  AL: "AL 阿拉巴马州",
+  AK: "AK 阿拉斯加州",
+  AZ: "AZ 亚利桑那州",
+  AR: "AR 阿肯色州",
+  CA: "CA 加利福尼亚州",
+  CO: "CO 科罗拉多州",
+  CT: "CT 康涅狄格州",
+  DE: "DE 特拉华州",
+  DC: "DC 哥伦比亚特区",
+  FL: "FL 佛罗里达州",
+  GA: "GA 佐治亚州",
+  HI: "HI 夏威夷州",
+  ID: "ID 爱达荷州",
+  IL: "IL 伊利诺伊州",
+  IN: "IN 印第安纳州",
+  IA: "IA 艾奥瓦州",
+  KS: "KS 堪萨斯州",
+  KY: "KY 肯塔基州",
+  LA: "LA 路易斯安那州",
+  ME: "ME 缅因州",
+  MD: "MD 马里兰州",
+  MA: "MA 马萨诸塞州",
+  MI: "MI 密歇根州",
+  MN: "MN 明尼苏达州",
+  MS: "MS 密西西比州",
+  MO: "MO 密苏里州",
+  MT: "MT 蒙大拿州",
+  NE: "NE 内布拉斯加州",
+  NV: "NV 内华达州",
+  NH: "NH 新罕布什尔州",
+  NJ: "NJ 新泽西州",
+  NM: "NM 新墨西哥州",
+  NY: "NY 纽约州",
+  NC: "NC 北卡罗来纳州",
+  ND: "ND 北达科他州",
+  OH: "OH 俄亥俄州",
+  OK: "OK 俄克拉荷马州",
+  OR: "OR 俄勒冈州",
+  PA: "PA 宾夕法尼亚州",
+  RI: "RI 罗德岛州",
+  SC: "SC 南卡罗来纳州",
+  SD: "SD 南达科他州",
+  TN: "TN 田纳西州",
+  TX: "TX 得克萨斯州",
+  UT: "UT 犹他州",
+  VT: "VT 佛蒙特州",
+  VA: "VA 弗吉尼亚州",
+  WA: "WA 华盛顿州",
+  WV: "WV 西弗吉尼亚州",
+  WI: "WI 威斯康星州",
+  WY: "WY 怀俄明州"
+};
+
+/** 逐字对应原版 formatLocationDisplayName 的行为：裸两字母州代码换成
+ *  "缩写 中文州名"，其余原样返回。 */
+function formatLocationDisplayName(name: string): string {
+  return STATE_LABELS_BY_CODE[name] ?? name;
+}
+
+/** 从 src/utils/format.ts 的 formatActivityParticipantSummary 逐字复制。 */
+function formatActivityParticipantSummary(participantCount: number, capacity: number | null): string {
+  const joinedCount = participantCount + 1; // +1：发起人本人
+  if (capacity === null) {
+    return `已有 ${joinedCount} 人报名`;
+  }
+  const remaining = Math.max(capacity - joinedCount, 0);
+  return remaining > 0
+    ? `还差 ${remaining} 人（${joinedCount}/${capacity}）`
+    : `已满员（${joinedCount}/${capacity}）`;
 }
 
 interface ActivityRow {

@@ -1,8 +1,5 @@
 import { next } from "@vercel/functions";
 
-import { formatLocationDisplayName } from "./src/data/us-states";
-import { formatActivityParticipantSummary, formatActivityStartAt } from "./src/utils/format";
-
 /**
  * 拦截帖子详情页和找搭子活动详情页这两条路由（真实路径见
  * src/router/routes.tsx 的 `path: "post/:id"` / `path: "activities/:id"`,
@@ -116,21 +113,53 @@ function getActivityChannelMeta(channel: string): { label: string; emoji: string
 }
 
 /**
+ * 下面两个函数原来是直接 import src/utils/format.ts 的
+ * formatActivityStartAt/formatActivityParticipantSummary——那个文件确实
+ * 零 import，但实测部署后仍然报错：api/og/activity.tsx 也 import 了同一个
+ * 文件，Vercel 给 Middleware + 这个 Edge Function 构建时会把共同依赖打进
+ * 同一个共享 chunk，这个共享 chunk 的产物又把 api/og/activity.tsx 独有的
+ * @vercel/og / react 一起带进了 middleware 的产物列表，触发"Edge Function
+ * 'middleware' is referencing unsupported modules"（Middleware 的运行时
+ * 限制比普通 Edge Function 更严）。结论：跟 api/og/activity.tsx 之间哪怕
+ * 共享的是零依赖纯函数文件也不能共用同一个 src/ 源文件，这里改成逐字
+ * 复制的独立副本（详细说明见 api/og/activity.tsx 顶部注释）。
+ */
+function formatActivityStartAt(startAt: string): string {
+  const date = new Date(startAt);
+  if (Number.isNaN(date.getTime())) return "时间未知";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatActivityParticipantSummary(participantCount: number, capacity: number | null): string {
+  const joinedCount = participantCount + 1; // +1：发起人本人
+  if (capacity === null) {
+    return `已有 ${joinedCount} 人报名`;
+  }
+  const remaining = Math.max(capacity - joinedCount, 0);
+  return remaining > 0
+    ? `还差 ${remaining} 人（${joinedCount}/${capacity}）`
+    : `已满员（${joinedCount}/${capacity}）`;
+}
+
+/**
  * og:description 这一行文字——任务卡明确"跟卡片图片上的信息一致即可，
- * 不需要一字不差"，所以这里没有跟 api/og/activity.tsx 的卡片视觉那样
- * 特地写一个"M月D日 周X HH:mm"格式的时间（那个格式是为了匹配
- * docs/share-card-design/og-card.html 这份已经产品认可的视觉稿样例文案，
- * 见那个文件里的详细说明），而是直接复用 src/utils/format.ts 现成的
- * formatActivityStartAt()（app 内其它地方展示活动时间统一用的格式）——
- * 这个函数是零 import 的纯函数文件，可以放心直接 import，不需要重新
- * 实现一份。
+ * 不需要一字不差"。地点这里故意不做 formatLocationDisplayName 那个
+ * "裸州代码转中文州名"的转换（比如线下活动地点是裸的 "VA"，这里就直接显示
+ * "VA"，不会转成"VA 弗吉尼亚州"）——原因同上：那个转换需要 51 州对照表，
+ * 这份对照表已经在 api/og/activity.tsx 里复制了一份给卡片图片（真正对外
+ * 展示、访客会看到的部分）用，og:description 是次要的辅助文字，不值得为了
+ * 这一处也复制一份 51 州数据，接受这个小的文案差异。
  */
 function buildActivityDescription(row: ActivityRow): string {
   const { emoji, label } = getActivityChannelMeta(row.channel);
   const timeText = formatActivityStartAt(row.start_at);
   const locationOrParticipants = row.is_online
     ? "线上活动"
-    : `${row.landmark_text ?? (row.location?.name ? formatLocationDisplayName(row.location.name) : "地点待定")} · ${formatActivityParticipantSummary(row.participant_count, row.capacity)}`;
+    : `${row.landmark_text ?? row.location?.name ?? "地点待定"} · ${formatActivityParticipantSummary(row.participant_count, row.capacity)}`;
   return `${emoji} ${label} · ${timeText} · ${locationOrParticipants}`;
 }
 
