@@ -103,6 +103,14 @@ export interface PostListProps {
  * grid/wanted 两个 variant 都改，检查过这个文件没有跟这批新 token 语义
  * 重复的硬编码十六进制颜色，没有需要额外改的场景。
  *
+ * BARRY 明确要求：全站其它原来纯白的 bg-card 背景这次统一改成米白色
+ * （见 index.css `--color-card` 这次改动的注释），但帖子卡片本身是这次
+ * 明确要求保留白色的两个例外之一——全站曝光最高的主力内容，需要跟周围
+ * 米白背景拉开对比。这里（含上面骨架屏）用新增的 `bg-card-white` token
+ * 而不是 `bg-card`，其它没有改这个 class 的地方（比如这个文件之外的
+ * TopBar/找搭子卡片/表单输入框等）颜色会跟着 `--color-card` 的新数值
+ * 自动变成米白色，不需要逐个排查。
+ *
  * 分页：用"哨兵元素 + IntersectionObserver"实现无限滚动：列表底部放一个
  * 不可见的哨兵 div，它进入视口时触发 fetchNextPage()。哨兵只在
  * hasNextPage 为真时渲染——没有下一页时彻底不挂这个元素，而不是渲染出来
@@ -179,7 +187,7 @@ export function PostList({
           <span className="sr-only">加载中…</span>
           <div className="flex flex-col gap-3 px-4">
             {Array.from({ length: WANTED_SKELETON_COUNT }).map((_, index) => (
-              <div key={index} className="rounded-card-lg border border-border bg-card p-4 shadow-card">
+              <div key={index} className="rounded-card-lg border border-border bg-card-white p-4 shadow-card">
                 <Skeleton className="h-5 w-full" />
                 <Skeleton className="mt-1.5 h-5 w-3/5" />
                 <Skeleton className="mt-2 h-6 w-1/3" />
@@ -200,7 +208,7 @@ export function PostList({
           {Array.from({ length: GRID_SKELETON_COUNT }).map((_, index) => (
             <div
               key={index}
-              className="overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
+              className="overflow-hidden rounded-card-lg border border-border bg-card-white shadow-card"
             >
               <Skeleton className="aspect-[4/5] w-full" />
               <div className="space-y-0.5 p-2.5">
@@ -260,7 +268,7 @@ export function PostList({
               <Link
                 key={post.id}
                 to={`/post/${post.id}`}
-                className="block rounded-card-lg border border-border bg-card p-4 shadow-card"
+                className="block rounded-card-lg border border-border bg-card-white p-4 shadow-card"
               >
                 <p className="line-clamp-2 break-words text-base font-medium text-text">
                   {post.title}
@@ -315,7 +323,7 @@ export function PostList({
             <Link
               key={post.id}
               to={`/post/${post.id}`}
-              className="block overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
+              className="block overflow-hidden rounded-card-lg border border-border bg-card-white shadow-card"
             >
               {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/分类色底
                   占位这段展示逻辑抽成了共享组件 PostThumbnail（见该文件顶部

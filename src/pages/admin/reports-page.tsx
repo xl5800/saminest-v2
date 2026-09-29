@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { AdminNav } from "../../components/admin-nav";
+import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
+import { useAdminArchivePostMutation } from "../../features/admin/use-admin-archive-post-mutation";
 import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
+import { useAdminDeleteActivityMutation } from "../../features/admin/use-admin-delete-activity-mutation";
 import { useDeleteCommentMutation } from "../../features/admin/use-delete-comment-mutation";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
@@ -82,6 +85,70 @@ function getDeleteActionCopy(targetType: string): DeleteActionCopy | null {
   return null;
 }
 
+/**
+ * 功能改动清单第 7 项："帖子/活动类新增「下架帖子」「删除帖子」（或「下架
+ * 活动」「删除活动」）两个直接操作"——README 原文明确这是"直接操作"，
+ * 跟上面 DeleteActionCopy 驱动的"标记已处理时顺便勾选同时删除"是两件不同
+ * 的事：这两个新按钮不经过 resolveReport/dismissReport，点了立刻下架/
+ * 删除对应的帖子或活动，举报本身的处理状态（pending/reviewing/...）不受
+ * 影响，这一行也不会因为点了这两个按钮就从列表消失——管理员可能还要继续
+ * 走"标记已处理"把举报本身也处理掉。只对 post/activity 两种 targetType
+ * 显示，user/comment 举报没有对应的"下架/删除"目标（评论有独立的删除，
+ * 但 README 这次只列了"帖子"和"活动"）。
+ */
+interface DirectActionCopy {
+  archiveTitle: string;
+  archiveReasonLabel: string;
+  archiveReasonRequiredMessage: string;
+  archiveConfirmLabel: string;
+  archiveTriggerLabel: string;
+  archiveSuccessTag: string;
+  deleteTitle: string;
+  deleteReasonLabel: string;
+  deleteReasonRequiredMessage: string;
+  deleteConfirmLabel: string;
+  deleteTriggerLabel: string;
+  deleteSuccessTag: string;
+}
+
+const POST_DIRECT_ACTION_COPY: DirectActionCopy = {
+  archiveTitle: "下架帖子",
+  archiveReasonLabel: "下架原因",
+  archiveReasonRequiredMessage: "请填写下架原因。",
+  archiveConfirmLabel: "确认下架",
+  archiveTriggerLabel: "下架帖子",
+  archiveSuccessTag: "帖子已下架",
+  deleteTitle: "删除帖子",
+  deleteReasonLabel: "删除原因",
+  deleteReasonRequiredMessage: "请填写删除原因。",
+  deleteConfirmLabel: "确认删除",
+  deleteTriggerLabel: "删除帖子",
+  deleteSuccessTag: "帖子已删除"
+};
+
+const ACTIVITY_DIRECT_ACTION_COPY: DirectActionCopy = {
+  archiveTitle: "下架活动",
+  archiveReasonLabel: "下架原因",
+  archiveReasonRequiredMessage: "请填写下架原因。",
+  archiveConfirmLabel: "确认下架",
+  archiveTriggerLabel: "下架活动",
+  archiveSuccessTag: "活动已下架",
+  deleteTitle: "删除活动",
+  deleteReasonLabel: "删除原因",
+  deleteReasonRequiredMessage: "请填写删除原因。",
+  deleteConfirmLabel: "确认删除",
+  deleteTriggerLabel: "删除活动",
+  deleteSuccessTag: "活动已删除"
+};
+
+function getDirectActionCopy(targetType: string): DirectActionCopy | null {
+  if (targetType === "post") return POST_DIRECT_ACTION_COPY;
+  if (targetType === "activity") return ACTIVITY_DIRECT_ACTION_COPY;
+  return null;
+}
+
+type DirectActionKind = "archive" | "delete";
+
 // 跟 reports.status 的 check 约束（reports_status_check）取值一致，默认
 // "pending"——这是"如果复杂就先只做 pending 列表"里判断下来的低成本可选项，
 // 一个 <select> 驱动查询的 status 参数，不做更复杂的东西。
@@ -98,6 +165,20 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
   const next = { ...record };
   delete next[key];
   return next;
+}
+
+// ReasonSheet 的 targetLabel 需要"这次操作的到底是哪一条"这一句话，跟上面
+// 目标那一列（<span> 里那段 report.targetType === "post" ? ... : ...）
+// 展示的是同一份信息，只是那边要渲染链接/组件，这里只要纯文本，所以单独
+// 抽一个函数，不共用 JSX。评论举报优先展示所属帖子标题（跟目标列一致），
+// 其它类型退回 targetTitle，再退回 "targetType / targetId" 兜底。
+function getReportTargetLabel(report: AdminReportListItem): string {
+  if (report.targetType === "comment" && report.commentPreview) {
+    return (
+      report.commentPreview.postTitle ?? `post / ${report.commentPreview.postId}`
+    );
+  }
+  return report.targetTitle ?? `${report.targetType} / ${report.targetId}`;
 }
 
 /**
@@ -165,6 +246,15 @@ export function AdminReportsPage() {
   const deletePostMutation = useDeletePostMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const adminCancelActivityMutation = useAdminCancelActivityMutation();
+  // 功能改动清单第 7 项："下架帖子"/"删除帖子"/"下架活动"/"删除活动"这两对
+  // 直接操作用的 mutation，跟上面几个是同一批但服务不同的交互（见
+  // getDirectActionCopy 的注释）。adminCancelActivityMutation/
+  // deletePostMutation 两个已经在用了，这里只需要再引入
+  // adminArchivePostMutation（帖子下架，功能改动清单第 7 项新增）和
+  // adminDeleteActivityMutation（活动删除，之前只有 all-posts-page.tsx
+  // 在用）。
+  const archivePostMutation = useAdminArchivePostMutation();
+  const adminDeleteActivityMutation = useAdminDeleteActivityMutation();
 
   const [reports, setReports] = useState<AdminReportListItem[] | null>(null);
   const [actioningReportId, setActioningReportId] = useState<string | null>(null);
@@ -183,6 +273,33 @@ export function AdminReportsPage() {
   const [partialFailureMessage, setPartialFailureMessage] = useState<string | null>(
     null
   );
+
+  // "下架帖子"/"删除帖子"/"下架活动"/"删除活动"独立的一套表单状态——不跟
+  // 上面"标记已处理/驳回举报"共享 openFormRowId，这是完全独立的第二类
+  // 操作（见 getDirectActionCopy 顶部注释），同一时刻一行最多只展开其中
+  // 一种表单（openFormRowId 和 openDirectActionRowId 互斥，由
+  // openForm/openDirectActionForm 各自清掉对方，见下面的实现）。
+  // directActionResultTags 记这一行最近一次直接操作成功之后应该显示的
+  // 标签（"帖子已下架"/"帖子已删除"...），只是本地展示用的临时状态，不
+  // 需要跟任何缓存同步——这一行本身不会因为点了这两个按钮就消失。
+  const [openDirectActionRowId, setOpenDirectActionRowId] = useState<string | null>(
+    null
+  );
+  const [directActionKind, setDirectActionKind] = useState<DirectActionKind | null>(
+    null
+  );
+  const [directActioningReportId, setDirectActioningReportId] = useState<string | null>(
+    null
+  );
+  const [directActionReasons, setDirectActionReasons] = useState<Record<string, string>>(
+    {}
+  );
+  const [directActionValidationErrors, setDirectActionValidationErrors] = useState<
+    Record<string, string>
+  >({});
+  const [directActionResultTags, setDirectActionResultTags] = useState<
+    Record<string, string>
+  >({});
 
   useEffect(() => {
     if (data && reports === null) {
@@ -204,6 +321,11 @@ export function AdminReportsPage() {
     setDeleteReasonDrafts({});
     setDeleteValidationErrors({});
     setPartialFailureMessage(null);
+    setOpenDirectActionRowId(null);
+    setDirectActionKind(null);
+    setDirectActionValidationErrors({});
+    setDirectActionReasons({});
+    setDirectActionResultTags({});
   }
 
   function removeReport(reportId: string): void {
@@ -216,11 +338,92 @@ export function AdminReportsPage() {
     setValidationErrors((prev) => withoutKey(prev, reportId));
     setDeleteValidationErrors((prev) => withoutKey(prev, reportId));
     setPartialFailureMessage(null);
+    // 跟"下架/删除"那套表单状态互斥——同一行不能同时展开两种表单，见
+    // openDirectActionForm 里对称的清理。
+    setOpenDirectActionRowId((current) => (current === reportId ? null : current));
+    setDirectActionKind(null);
   }
 
   function cancelForm(reportId: string): void {
     setOpenFormRowId((current) => (current === reportId ? null : current));
     setOpenFormAction(null);
+  }
+
+  function openDirectActionForm(reportId: string, kind: DirectActionKind): void {
+    setOpenDirectActionRowId(reportId);
+    setDirectActionKind(kind);
+    setDirectActionValidationErrors((prev) => withoutKey(prev, reportId));
+    setRowErrors((prev) => withoutKey(prev, reportId));
+    // 跟"标记已处理/驳回举报"那套表单状态互斥，见 openForm 里对称的清理。
+    setOpenFormRowId((current) => (current === reportId ? null : current));
+    setOpenFormAction(null);
+  }
+
+  function cancelDirectActionForm(reportId: string): void {
+    setOpenDirectActionRowId((current) => (current === reportId ? null : current));
+    setDirectActionKind(null);
+  }
+
+  /**
+   * "下架帖子"/"删除帖子"/"下架活动"/"删除活动"——独立于 handleConfirm
+   * （标记已处理/驳回举报）的一条单独提交路径，不调用
+   * resolveMutation/dismissMutation，这一行处理完之后还留在列表里（见
+   * getDirectActionCopy 顶部注释）。
+   */
+  async function handleConfirmDirectAction(
+    report: AdminReportListItem,
+    kind: DirectActionKind
+  ): Promise<void> {
+    const copy = getDirectActionCopy(report.targetType);
+    if (!copy) return;
+
+    const reason = (directActionReasons[report.id] ?? "").trim();
+    const requiredMessage =
+      kind === "archive" ? copy.archiveReasonRequiredMessage : copy.deleteReasonRequiredMessage;
+
+    if (!reason) {
+      setDirectActionValidationErrors((prev) => ({ ...prev, [report.id]: requiredMessage }));
+      return;
+    }
+
+    setDirectActionValidationErrors((prev) => withoutKey(prev, report.id));
+    setRowErrors((prev) => withoutKey(prev, report.id));
+    setDirectActioningReportId(report.id);
+    try {
+      if (report.targetType === "post") {
+        if (kind === "archive") {
+          await archivePostMutation.mutateAsync({ postId: report.targetId, archiveNote: reason });
+        } else {
+          await deletePostMutation.mutateAsync({ postId: report.targetId, deleteReason: reason });
+        }
+      } else {
+        if (kind === "archive") {
+          await adminCancelActivityMutation.mutateAsync({
+            activityId: report.targetId,
+            cancelReason: reason
+          });
+        } else {
+          await adminDeleteActivityMutation.mutateAsync({
+            activityId: report.targetId,
+            deleteReason: reason
+          });
+        }
+      }
+
+      setOpenDirectActionRowId((current) => (current === report.id ? null : current));
+      setDirectActionKind(null);
+      setDirectActionReasons((prev) => withoutKey(prev, report.id));
+      setDirectActionResultTags((prev) => ({
+        ...prev,
+        [report.id]: kind === "archive" ? copy.archiveSuccessTag : copy.deleteSuccessTag
+      }));
+    } catch {
+      // 提交失败时特意不清空 directActionReasons，保留管理员已经输入的
+      // 原因，跟这个页面/其它管理页一致的"失败不丢用户输入"原则。
+      setRowErrors((prev) => ({ ...prev, [report.id]: GENERIC_ERROR_MESSAGE }));
+    } finally {
+      setDirectActioningReportId(null);
+    }
   }
 
   async function handleConfirm(reportId: string, action: PendingAction): Promise<void> {
@@ -314,21 +517,30 @@ export function AdminReportsPage() {
     }
   }
 
+  // 从原生 <select> 改成胶囊 Chips（功能改动清单第 7 项："状态分段
+  // 待处理/处理中/已处理/已驳回"），视觉沿用 all-posts-page.tsx 已经建立的
+  // chip 写法，理由同那边的注释。
   const statusFilter = (
-    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-      状态
-      <select
-        value={status}
-        onChange={(event) => handleStatusChange(event.target.value)}
-        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-      >
-        {STATUS_FILTER_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
+    <div className="mb-4 flex flex-wrap gap-2">
+      {STATUS_FILTER_OPTIONS.map((option) => {
+        const active = status === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => handleStatusChange(option.value)}
+            aria-pressed={active}
+            className={
+              active
+                ? "flex h-8 shrink-0 items-center justify-center rounded-full px-3 text-sm whitespace-nowrap bg-primary font-semibold text-white"
+                : "flex h-8 shrink-0 items-center justify-center rounded-full border border-border bg-bg px-3 text-sm whitespace-nowrap text-text-muted"
+            }
+          >
             {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+          </button>
+        );
+      })}
+    </div>
   );
 
   const partialFailureBanner = partialFailureMessage ? (
@@ -383,6 +595,12 @@ export function AdminReportsPage() {
           {visibleReports.map((report) => {
             const isActioning = actioningReportId === report.id;
             const isFormOpen = openFormRowId === report.id;
+            const isDirectActionOpen = openDirectActionRowId === report.id;
+            // getDirectActionCopy 只对 post/activity 两种 targetType 返回
+            // 非空值，见该函数顶部注释——user/comment 举报没有对应的"下架/
+            // 删除"直接操作按钮。
+            const directCopy = getDirectActionCopy(report.targetType);
+            const deleteCopy = getDeleteActionCopy(report.targetType);
 
             return (
               <li key={report.id} className="mb-2 rounded-lg border border-border bg-card p-4">
@@ -446,7 +664,12 @@ export function AdminReportsPage() {
                     {rowErrors[report.id]}
                   </p>
                 ) : null}
-                {isFormOpen ? null : (
+                {directActionResultTags[report.id] ? (
+                  <p className="mt-2 inline-block rounded-full bg-primary-light px-2 py-0.5 text-xs font-medium text-primary">
+                    {directActionResultTags[report.id]}
+                  </p>
+                ) : null}
+                {isFormOpen || isDirectActionOpen ? null : (
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -464,103 +687,98 @@ export function AdminReportsPage() {
                     >
                       驳回举报
                     </button>
+                    {directCopy ? (
+                      <>
+                        <button
+                          type="button"
+                          disabled={isActioning}
+                          onClick={() => openDirectActionForm(report.id, "archive")}
+                          className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {directCopy.archiveTriggerLabel}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isActioning}
+                          onClick={() => openDirectActionForm(report.id, "delete")}
+                          className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {directCopy.deleteTriggerLabel}
+                        </button>
+                      </>
+                    ) : null}
                   </div>
                 )}
                 {isFormOpen ? (
-                  <div className="mt-3 rounded border border-border bg-bg p-3">
-                    {validationErrors[report.id] ? (
-                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {validationErrors[report.id]}
-                      </p>
-                    ) : null}
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      处理说明
-                      <input
-                        type="text"
-                        value={noteDrafts[report.id] ?? ""}
-                        onChange={(event) =>
-                          setNoteDrafts((prev) => ({
-                            ...prev,
-                            [report.id]: event.target.value
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    {(() => {
-                      const deleteCopy = getDeleteActionCopy(report.targetType);
-                      if (!deleteCopy) return null;
-
-                      return (
-                        <div>
-                          <label className="mb-2 flex items-center gap-2 text-sm text-text">
-                            <input
-                              type="checkbox"
-                              checked={deleteChecked[report.id] ?? false}
-                              onChange={(event) =>
-                                setDeleteChecked((prev) => ({
-                                  ...prev,
-                                  [report.id]: event.target.checked
-                                }))
-                              }
-                              disabled={isActioning}
-                              className="accent-primary"
-                            />
-                            {deleteCopy.checkboxLabel}
-                          </label>
-                          {deleteChecked[report.id] ? (
-                            <>
-                              {deleteValidationErrors[report.id] ? (
-                                <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                                  {deleteValidationErrors[report.id]}
-                                </p>
-                              ) : null}
-                              <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                                {deleteCopy.reasonLabel}
-                                <input
-                                  type="text"
-                                  value={deleteReasonDrafts[report.id] ?? ""}
-                                  onChange={(event) =>
-                                    setDeleteReasonDrafts((prev) => ({
-                                      ...prev,
-                                      [report.id]: event.target.value
-                                    }))
-                                  }
-                                  disabled={isActioning}
-                                  className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                                />
-                              </label>
-                            </>
-                          ) : null}
-                        </div>
-                      );
-                    })()}
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() =>
-                          handleConfirm(report.id, openFormAction as PendingAction)
-                        }
-                        className={
-                          openFormAction === "resolve"
-                            ? "rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-                            : "rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        }
-                      >
-                        {openFormAction === "resolve" ? "确认标记已处理" : "确认驳回举报"}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => cancelForm(report.id)}
-                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
+                  <ReasonSheet
+                    title={openFormAction === "resolve" ? "标记已处理" : "驳回举报"}
+                    targetLabel={getReportTargetLabel(report)}
+                    reasonLabel="处理说明"
+                    reasonValue={noteDrafts[report.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setNoteDrafts((prev) => ({ ...prev, [report.id]: value }))
+                    }
+                    secondaryOption={
+                      deleteCopy
+                        ? {
+                            checkboxLabel: deleteCopy.checkboxLabel,
+                            checked: deleteChecked[report.id] ?? false,
+                            onCheckedChange: (checked) =>
+                              setDeleteChecked((prev) => ({ ...prev, [report.id]: checked })),
+                            reasonLabel: deleteCopy.reasonLabel,
+                            reasonValue: deleteReasonDrafts[report.id] ?? "",
+                            onReasonChange: (value) =>
+                              setDeleteReasonDrafts((prev) => ({ ...prev, [report.id]: value }))
+                          }
+                        : undefined
+                    }
+                    // 处理说明和"同时删除/下架"的原因各自有独立的校验错误
+                    // （validationErrors / deleteValidationErrors），但
+                    // ReasonSheet 只留了一个错误提示位——两者理论上可能同时
+                    // 触发（处理说明和第二个原因都没填），这里按"先提示处理
+                    // 说明缺失"的顺序取一个展示，管理员补上之后重新点确认，
+                    // 另一条校验错误自然会在下一轮提交里浮现，不需要在这一个
+                    // 提示位里同时塞两条信息。
+                    errorMessage={
+                      validationErrors[report.id] ?? deleteValidationErrors[report.id] ?? null
+                    }
+                    confirmLabel={openFormAction === "resolve" ? "确认标记已处理" : "确认驳回举报"}
+                    destructive={openFormAction === "dismiss"}
+                    pending={isActioning}
+                    onConfirm={() => handleConfirm(report.id, openFormAction as PendingAction)}
+                    onClose={() => cancelForm(report.id)}
+                  />
+                ) : null}
+                {isDirectActionOpen && directCopy && directActionKind ? (
+                  <ReasonSheet
+                    title={
+                      directActionKind === "archive" ? directCopy.archiveTitle : directCopy.deleteTitle
+                    }
+                    targetLabel={getReportTargetLabel(report)}
+                    reasonLabel={
+                      directActionKind === "archive"
+                        ? directCopy.archiveReasonLabel
+                        : directCopy.deleteReasonLabel
+                    }
+                    reasonValue={directActionReasons[report.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setDirectActionReasons((prev) => ({ ...prev, [report.id]: value }))
+                    }
+                    errorMessage={directActionValidationErrors[report.id] ?? null}
+                    confirmLabel={
+                      directActionKind === "archive"
+                        ? directCopy.archiveConfirmLabel
+                        : directCopy.deleteConfirmLabel
+                    }
+                    // 下架和删除都算破坏性操作（跟 all-posts-page.tsx 的
+                    // 下架/删除按钮同样用红色 bg-danger 实心按钮的理由一致，
+                    // 见该文件相关注释），不区分 archive/delete 都传
+                    // destructive。
+                    destructive
+                    pending={directActioningReportId === report.id}
+                    onConfirm={() => handleConfirmDirectAction(report, directActionKind)}
+                    onClose={() => cancelDirectActionForm(report.id)}
+                  />
                 ) : null}
               </li>
             );

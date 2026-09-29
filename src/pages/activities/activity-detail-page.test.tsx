@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -8,13 +8,11 @@ const {
   useToggleActivityParticipationMutation,
   useActivityFavoriteIdsQuery,
   useToggleActivityFavoriteMutation,
-  useCreateActivityConversationMutation,
   useActivityCommentsQuery,
   useCreateCommentMutation,
   useDeleteCommentMutation,
   shareMock,
   mutateParticipationMock,
-  mutateContactMock,
   navigateMock
 } = vi.hoisted(() => ({
   useActivityDetailQuery: vi.fn(),
@@ -23,13 +21,11 @@ const {
   useToggleActivityParticipationMutation: vi.fn(),
   useActivityFavoriteIdsQuery: vi.fn(),
   useToggleActivityFavoriteMutation: vi.fn(),
-  useCreateActivityConversationMutation: vi.fn(),
   useActivityCommentsQuery: vi.fn(),
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
   shareMock: vi.fn(),
   mutateParticipationMock: vi.fn(),
-  mutateContactMock: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -55,12 +51,6 @@ vi.mock("../../features/activities/use-activity-favorite-ids-query", () => ({
 }));
 vi.mock("../../features/activities/use-toggle-activity-favorite-mutation", () => ({
   useToggleActivityFavoriteMutation
-}));
-// 任务卡 3（"联系发起人"按钮）：跟 contact-seller-button.test.tsx 是同一个
-// mock 模式，只 mock 到 use-create-activity-conversation-mutation 这一层
-// hook，不 mock 更底层的 conversations-repository。
-vi.mock("../../features/activities/use-create-activity-conversation-mutation", () => ({
-  useCreateActivityConversationMutation
 }));
 // 找搭子留言区任务卡：页面最下面接了 <CommentSection activityId={...} />，
 // 让它真实渲染（跟 post-detail-page.test.tsx mock CommentSection 依赖的
@@ -89,7 +79,6 @@ vi.mock("react-router-dom", async (importOriginal) => {
 
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
-import { AppError } from "../../utils/app-error";
 import { ActivityDetailPage } from "./activity-detail-page";
 
 const initialAuthState = useAuthStore.getState();
@@ -130,13 +119,11 @@ describe("ActivityDetailPage", () => {
     useToggleActivityParticipationMutation.mockReset();
     useActivityFavoriteIdsQuery.mockReset();
     useToggleActivityFavoriteMutation.mockReset();
-    useCreateActivityConversationMutation.mockReset();
     useActivityCommentsQuery.mockReset();
     useCreateCommentMutation.mockReset();
     useDeleteCommentMutation.mockReset();
     shareMock.mockReset();
     mutateParticipationMock.mockReset();
-    mutateContactMock.mockReset();
     navigateMock.mockReset();
 
     useActivityParticipantsQuery.mockReturnValue({ data: [] });
@@ -147,10 +134,6 @@ describe("ActivityDetailPage", () => {
     });
     useActivityFavoriteIdsQuery.mockReturnValue({ data: [] });
     useToggleActivityFavoriteMutation.mockReturnValue({ mutate: vi.fn(), isPending: false });
-    useCreateActivityConversationMutation.mockReturnValue({
-      mutate: mutateContactMock,
-      isPending: false
-    });
     // CommentSection 默认没有留言、不在加载中——这个文件的测试只关心
     // ActivityDetailPage 自己的渲染行为，见上面 vi.mock 的注释。
     useActivityCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
@@ -536,9 +519,11 @@ describe("ActivityDetailPage", () => {
     expect(organizerCardLink.querySelector("svg.lucide-chevron-right")).toBeInTheDocument();
   });
 
-  // 04 号卡改版：收藏/分享/举报不再平铺在页面底部，收进了顶部"…"更多
-  // 菜单——默认收起，点开菜单触发按钮之后才应该出现在文档里。
-  it("does not render the collect/share/report actions until the '…' more-menu is opened, and shows all three once it is", () => {
+  // design_handoff_saminest_ios 第 4 项：收藏/分享挪出"…"更多菜单，这个
+  // 菜单现在只剩举报——默认收起，点开菜单触发按钮之后举报链接才出现在
+  // 文档里；收藏/分享不会因为菜单打开与否而出现/消失，因为它们不在这个
+  // 菜单里了（见下面"底部操作栏"describe 块）。
+  it("only shows 举报 inside the '…' more-menu (收藏/分享 moved to the bottom bar, not here)", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -550,88 +535,109 @@ describe("ActivityDetailPage", () => {
       route: "/activities/:id"
     });
 
-    expect(screen.queryByRole("button", { name: "收藏" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "分享" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "举报" })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
-    expect(screen.getByRole("button", { name: /收藏/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /分享/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /举报/ })).toHaveAttribute(
       "href",
       "/activities/act-1/report"
     );
   });
 
-  // 页面底部不应该再平铺这三个按钮/链接——验收标准明确要求"页面底部没有
-  // 平铺这三个按钮"，不只是"菜单里有"。
-  it("does not render a flat collect/share/report row at the bottom of the page anymore", () => {
-    useActivityDetailQuery.mockReturnValue({
-      data: sampleActivityDetail,
-      isPending: false,
-      isError: false
+  // design_handoff_saminest_ios 第 4 项：底部固定操作栏——收藏｜报名参加｜
+  // 分享，跟帖子详情页底部工具栏是同一种布局，不依赖"…"菜单是否打开，
+  // data 加载成功就常驻渲染。
+  describe("底部操作栏（design_handoff_saminest_ios 第 4 项：收藏｜报名参加｜分享）", () => {
+    it("renders 收藏 (icon variant) and 分享 always, without opening the '…' more-menu", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const bar = screen.getByTestId("activity-detail-action-bar");
+      expect(within(bar).getByRole("button", { name: "收藏" })).toBeInTheDocument();
+      expect(within(bar).getByRole("button", { name: "分享" })).toBeInTheDocument();
     });
 
-    const { container } = renderWithProviders(<ActivityDetailPage />, {
-      initialEntries: ["/activities/act-1"],
-      route: "/activities/:id"
+    it("does not render the action bar while the activity detail query is pending or the activity is not found", () => {
+      useActivityDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+      expect(screen.queryByTestId("activity-detail-action-bar")).not.toBeInTheDocument();
     });
 
-    // 菜单没打开时，整个文档里都不应该出现这三个可点元素——上面那条测试
-    // 已经断言过"菜单打开后才出现"，这里换个角度确认它们不是从别的地方
-    // （比如遗留的底部行）冒出来的。
-    expect(container.querySelector("[aria-label='收藏']")).not.toBeInTheDocument();
-  });
+    it("calls Share.share with the activity title, a time/location summary, and the hardcoded production domain when 分享 is clicked from the bottom bar", async () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
 
-  it("calls Share.share with the activity title, a time/location summary, and the hardcoded production domain when 分享 is clicked from the more-menu", async () => {
-    useActivityDetailQuery.mockReturnValue({
-      data: sampleActivityDetail,
-      isPending: false,
-      isError: false
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      fireEvent.click(within(screen.getByTestId("activity-detail-action-bar")).getByRole("button", { name: "分享" }));
+
+      await waitFor(() => {
+        expect(shareMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            title: "周末吃火锅",
+            url: "https://www.saminest.com/activities/act-1",
+            dialogTitle: "分享"
+          })
+        );
+      });
     });
 
-    renderWithProviders(<ActivityDetailPage />, {
-      initialEntries: ["/activities/act-1"],
-      route: "/activities/:id"
+    // 全 App 视觉 Token 体系（第二批）：ActivityFavoriteButton 的填充色从
+    // text-danger 换成 text-primary（BARRY 明确要求"不要用大红色心形"），
+    // 断言跟着更新，见 activity-favorite-button.tsx 的改动说明。
+    it("renders the ActivityFavoriteButton (♡ 收藏) inside the bottom bar", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+      useActivityFavoriteIdsQuery.mockReturnValue({ data: ["act-1"] });
+
+      const { container } = renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const heartIcon = container.querySelector("svg.lucide-heart");
+      expect(heartIcon).toBeInTheDocument();
+      expect(heartIcon).toHaveClass("fill-current", "text-primary");
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
-    fireEvent.click(screen.getByRole("button", { name: /分享/ }));
+    it("renders the 报名参加 button occupying the middle flex-1 slot, with no 联系发起人 button anywhere", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
 
-    await waitFor(() => {
-      expect(shareMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "周末吃火锅",
-          url: "https://www.saminest.com/activities/act-1",
-          dialogTitle: "分享"
-        })
-      );
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByRole("button", { name: "我要报名" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "联系发起人" })).not.toBeInTheDocument();
     });
-  });
-
-  // 全 App 视觉 Token 体系（第二批）：ActivityFavoriteButton 的填充色从
-  // text-danger 换成 text-primary（BARRY 明确要求"不要用大红色心形"），
-  // 断言跟着更新，见 activity-favorite-button.tsx 的改动说明。
-  it("renders the ActivityFavoriteButton (♡ 收藏) inside the more-menu", () => {
-    useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
-    useActivityDetailQuery.mockReturnValue({
-      data: sampleActivityDetail,
-      isPending: false,
-      isError: false
-    });
-    useActivityFavoriteIdsQuery.mockReturnValue({ data: ["act-1"] });
-
-    const { container } = renderWithProviders(<ActivityDetailPage />, {
-      initialEntries: ["/activities/act-1"],
-      route: "/activities/:id"
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
-
-    const heartIcon = container.querySelector("svg.lucide-heart");
-    expect(heartIcon).toBeInTheDocument();
-    expect(heartIcon).toHaveClass("fill-current", "text-primary");
   });
 
   // 这是这次改版最重要的一致性测试：头像堆叠的"空位"点击必须触发跟
@@ -711,188 +717,6 @@ describe("ActivityDetailPage", () => {
     for (const button of screen.getAllByRole("button", { name: "报名加入活动" })) {
       expect(button).toBeDisabled();
     }
-  });
-
-  // 任务卡 3："联系发起人"按钮，跟"我要报名"并排展示。
-  describe("联系发起人按钮", () => {
-    it("renders '联系发起人' alongside '我要报名' when the viewer is not the organizer", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      expect(screen.getByRole("button", { name: "我要报名" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "联系发起人" })).toBeInTheDocument();
-    });
-
-    it("renders '联系发起人' for a logged-out visitor too (click-time login redirect, not a hidden button)", () => {
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      expect(screen.getByRole("button", { name: "联系发起人" })).toBeInTheDocument();
-    });
-
-    it("does not render '联系发起人' when the viewer is the activity's own organizer", () => {
-      useAuthStore.getState().setSession({ user: { id: sampleActivityDetail.organizerId } } as never);
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      expect(screen.queryByRole("button", { name: "联系发起人" })).not.toBeInTheDocument();
-    });
-
-    it("navigates to /login and does not call the mutation when logged out", () => {
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
-
-      expect(navigateMock).toHaveBeenCalledWith("/login");
-      expect(mutateContactMock).not.toHaveBeenCalled();
-    });
-
-    it("calls the mutation with the activity id and navigates to the conversation on success", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
-
-      expect(mutateContactMock).toHaveBeenCalledWith(
-        "act-1",
-        expect.objectContaining({
-          onSuccess: expect.any(Function),
-          onError: expect.any(Function)
-        })
-      );
-
-      const { onSuccess } = mutateContactMock.mock.calls[0][1];
-      onSuccess({ conversationId: "conversation-1" });
-
-      expect(navigateMock).toHaveBeenCalledWith("/messages/conversation-1");
-    });
-
-    it("shows the account-restricted message and does not navigate when the mutation rejects with ACCOUNT_RESTRICTED", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
-
-      const { onError } = mutateContactMock.mock.calls[0][1];
-      act(() => {
-        onError(
-          new AppError(
-            "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。",
-            "ACCOUNT_RESTRICTED"
-          )
-        );
-      });
-
-      expect(screen.getByRole("alert")).toHaveTextContent(
-        "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
-      );
-      expect(navigateMock).not.toHaveBeenCalledWith(
-        expect.stringMatching(/^\/messages\//)
-      );
-    });
-
-    it("shows a generic error message for any other failure", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "联系发起人" }));
-
-      const { onError } = mutateContactMock.mock.calls[0][1];
-      act(() => {
-        onError(new Error("cannot start a direct conversation with yourself"));
-      });
-
-      expect(screen.getByRole("alert")).toHaveTextContent("会话创建失败，请稍后重试。");
-      expect(navigateMock).not.toHaveBeenCalledWith(
-        expect.stringMatching(/^\/messages\//)
-      );
-    });
-
-    it("disables the button while the mutation is pending, preventing a double submit", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
-      useActivityDetailQuery.mockReturnValue({
-        data: sampleActivityDetail,
-        isPending: false,
-        isError: false
-      });
-      useCreateActivityConversationMutation.mockReturnValue({
-        mutate: mutateContactMock,
-        isPending: true
-      });
-
-      renderWithProviders(<ActivityDetailPage />, {
-        initialEntries: ["/activities/act-1"],
-        route: "/activities/:id"
-      });
-
-      const button = screen.getByRole("button", { name: "创建会话中…" });
-      expect(button).toBeDisabled();
-
-      fireEvent.click(button);
-
-      expect(mutateContactMock).not.toHaveBeenCalled();
-    });
   });
 
   // 任务卡 4：只有当前登录用户是这个活动的发起人时才展示"📢通知参与者"

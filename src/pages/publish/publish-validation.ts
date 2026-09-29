@@ -54,6 +54,14 @@ export const DESCRIPTION_MAX_LENGTH = 10000;
 // supabase/migrations/20260722000400_add_posts_location_text.sql 的说明：
 // 这是给"下拉框里没有的地区"提供的兜底手动输入，不是把标准化地区选择
 // 整个换成自由文本，locations 表和 location_id 外键完全不受影响。
+//
+// design_handoff_saminest_ios 第 6 项起，/region-select?mode=form 选中的
+// 任何一个州都能在 locations 表里查到对应的 type='state' 行（12 号卡把
+// 全美 51 州补全成真实行之后），publish-page.tsx 不会再主动把 locationId
+// 设成这个哨兵值——这条分支现在只是给历史遗留数据（那批 locationId 为
+// null、只存了 locationText 的老帖子）保留的读/改兼容路径，不是新选择
+// 流程的一部分。见下面 validatePublishInput 的处理和 publish-page.tsx
+// 消费 pendingRegion 的地方。
 export const OTHER_LOCATION_VALUE = "__other__";
 
 // 跟 posts_location_text_length_check 这条数据库约束保持一致。
@@ -120,9 +128,15 @@ export function validatePublishInput(
     return fail("PUBLISH_CATEGORY_REQUIRED", "请选择分类。");
   }
 
-  // 地区："其他"是下拉框里的哨兵选项，选中后 locationId 不提交真实外键值
-  // （提交 null），改为要求 locationText 必填；选真实地区时 locationText
-  // 不提交（提交 null），两者互斥，见 OTHER_LOCATION_VALUE 上方注释。
+  // 地区：OTHER_LOCATION_VALUE 这个哨兵值目前只有历史遗留帖子（location_id
+  // 为 null、只存了 locationText 的老数据）会命中——选中它时 locationId
+  // 提交为 null，locationText 必填，跟改动前完全一样，纯粹是为了不破坏
+  // 这批老帖子的编辑路径。
+  //
+  // design_handoff_saminest_ios 第 6 项：除了这条历史兼容分支，locationId
+  // （所在州/城市，真实外键）和 locationText（"城市/具体位置"，可选补充
+  // 说明，照抄 activities 的 landmarkText 是独立字段这个先例）不再互斥——
+  // 两者可以同时提交，也可以都不填（对应"不限地区"）。
   let locationId: string | null = locationIdRaw || null;
   let locationText: string | null = null;
   if (locationIdRaw === OTHER_LOCATION_VALUE) {
@@ -136,6 +150,14 @@ export function validatePublishInput(
       );
     }
     locationId = null;
+    locationText = locationTextRaw;
+  } else if (locationTextRaw) {
+    if (locationTextRaw.length > LOCATION_TEXT_MAX_LENGTH) {
+      return fail(
+        "PUBLISH_LOCATION_TEXT_LENGTH",
+        `具体位置不能超过 ${LOCATION_TEXT_MAX_LENGTH} 字符。`
+      );
+    }
     locationText = locationTextRaw;
   }
 

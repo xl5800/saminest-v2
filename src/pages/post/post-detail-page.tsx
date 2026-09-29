@@ -445,37 +445,36 @@ export function PostDetailPage() {
         </div>
       </div>
 
-      {/* 任务卡3：固定底部工具栏——分享/咨询/收藏合并成同一条，取代原来
-          "内容区一行分享/收藏/举报图标"+"单独 fixed 的咨询按钮"这两块。
-          容器本身的 fixed 定位、白底+顶部细边框、安全区适配（原来任务卡2
-          留下的 pt-3 + pb-[0.75rem+安全区]）都不变。
+      {/* design_handoff_saminest_ios 第 4 项（详情页底部操作栏重排）：
+          原来的顺序是"分享｜咨询｜收藏"，设计稿（05-post-detail.png）要求
+          "收藏｜私信咨询｜分享"——收藏移到最左、分享移到最右，中间主按钮
+          文案从"咨询"改成"私信咨询"。容器本身的 fixed 定位、白底+顶部细
+          边框、安全区适配都不变，ContactSellerButton/FavoriteButton 两个
+          组件本身也没有改动，这里只是调整了三个子节点的书写顺序（对应
+          视觉上从左到右的顺序）和中间按钮的高度/圆角/文案。
 
-          不再用 empty:hidden：ContactSellerButton 在作者查看自己帖子时
-          仍然内部返回 null（组件逻辑没动），但容器现在总有分享+收藏两个
-          图标子节点，DOM 层面永远不会真的是空的，:empty 选择器不会再命中
-          ——直接始终渲染整条工具栏，author 查看自己帖子时自然就是"分享+
-          收藏两个图标"，不需要在这个页面里额外判断一次"我是不是作者"。
-
-          整条工具栏（连同下面的正文）都挂在 data 加载成功之后才渲染——
-          分享需要 data.title/价格拼分享文案，帖子还没加载出来或者
-          "帖子未找到"页面上出现这条工具栏没有意义（原来的容器在这两种
-          状态下也会渲染，只是里面的 ContactSellerButton 自己保持隐藏；
-          这次顺带修正了这一点，不算独立的额外改动，是合并三个操作后的
-          自然结果）。
-
-          中间的"咨询"按钮包了一层 flex-1 的 div 让它占满两个图标之外的
-          剩余宽度——ContactSellerButton 组件本身（含它内部的 <span> 包裹
-          结构）没变，传给它的 className 还是任务卡2定下的 h-12 +
-          text-[15px] + w-full，圆角这次从 rounded-xl（12px）换成新的
-          rounded-button（14px，见 index.css --radius-button 的说明）——
-          这是这个页面唯一的主要 CTA（报名/联系类按钮），矩形形状符合
-          "按钮"这一档，不是 Pill，套用这个新 token 没有歧义。 */}
+          中间"私信咨询"按钮的高度从 h-12（48px）改成设计稿标注的 46px
+          （h-[46px]，项目里没有现成的 h-[46px] 语义 token，直接用任意值
+          class，这个高度只有这一处用到，不值得为它新增一个 token），
+          圆角从 rounded-button（14px，--radius-button token）改成
+          rounded-lg（Tailwind 内置 8px，正好对应设计稿标注的 8px）——
+          故意不动 --radius-button 这个 token 本身，它是全 App 共用的主按钮
+          圆角，帖子详情页这个按钮的 8px 是这次设计稿给这一个按钮的专属
+          数值，不是要把全局主按钮圆角都改成 8px。 */}
       {id && data ? (
         <div
           data-testid="post-detail-contact-bar"
           className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-card px-4 pt-3"
           style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
         >
+          <FavoriteButton postId={id} variant="icon" />
+          <div className="flex-1">
+            <ContactSellerButton
+              postId={id}
+              label="私信咨询"
+              className="flex h-[46px] w-full items-center justify-center rounded-lg bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+            />
+          </div>
           <button
             type="button"
             onClick={() => setIsShareSheetOpen(true)}
@@ -484,14 +483,6 @@ export function PostDetailPage() {
             <Share2 size={22} aria-hidden="true" />
             <span className="text-xs">分享</span>
           </button>
-          <div className="flex-1">
-            <ContactSellerButton
-              postId={id}
-              label="咨询"
-              className="flex h-12 w-full items-center justify-center rounded-button bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            />
-          </div>
-          <FavoriteButton postId={id} variant="icon" />
         </div>
       ) : null}
 

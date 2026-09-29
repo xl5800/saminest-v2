@@ -89,6 +89,33 @@ describe("validatePublishInput", () => {
     expect(result.data?.locationText).toBe("Somewhere else");
   });
 
+  // design_handoff_saminest_ios 第 6 项：locationId（真实的州/城市外键）和
+  // locationText（"城市/具体位置"补充说明）不再互斥，可以同时提交——照抄
+  // activities 的 landmarkText 是独立字段这个先例，见 publish-validation.ts
+  // 里 OTHER_LOCATION_VALUE 上方的注释。
+  it("accepts a real locationId together with a supplementary locationText, trimmed, both non-null", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      locationId: "loc-state-ca",
+      locationText: "  近 UCLA  "
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.locationId).toBe("loc-state-ca");
+    expect(result.data?.locationText).toBe("近 UCLA");
+  });
+
+  it("rejects a supplementary locationText longer than 100 characters even with a real locationId", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      locationId: "loc-state-ca",
+      locationText: "a".repeat(101)
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_LOCATION_TEXT_LENGTH");
+  });
+
   it("rejects an empty title", () => {
     const result = validatePublishInput({ ...validInput, title: "   " });
 

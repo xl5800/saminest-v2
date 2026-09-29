@@ -4,20 +4,31 @@ import { useEffect } from "react";
 import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActiveCategories, listActiveLocations, createPost, getPostDetail, updatePost } =
-  vi.hoisted(() => ({
-    listActiveCategories: vi.fn(),
-    listActiveLocations: vi.fn(),
-    createPost: vi.fn(),
-    getPostDetail: vi.fn(),
-    updatePost: vi.fn()
-  }));
+const {
+  listActiveCategories,
+  listActiveLocations,
+  listActiveActivityRegions,
+  createPost,
+  getPostDetail,
+  updatePost
+} = vi.hoisted(() => ({
+  listActiveCategories: vi.fn(),
+  listActiveLocations: vi.fn(),
+  // design_handoff_saminest_ios 第 6 项：跟 create-activity-page 的同名
+  // 测试一样，pendingRegion 消费的 effect 现在要靠这个反查函数把
+  // stateCode 解析成真实的 locations.id，见下面 beforeEach 里的 mock 值。
+  listActiveActivityRegions: vi.fn(),
+  createPost: vi.fn(),
+  getPostDetail: vi.fn(),
+  updatePost: vi.fn()
+}));
 
 vi.mock("../../repositories/categories-repository", () => ({
   listActiveCategories
 }));
 vi.mock("../../repositories/locations-repository", () => ({
-  listActiveLocations
+  listActiveLocations,
+  listActiveActivityRegions
 }));
 vi.mock("../../repositories/posts-repository", () => ({
   createPost,
@@ -135,12 +146,14 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
     usePendingPostFormDraftStore.setState(initialPendingPostDraftState, true);
     listActiveCategories.mockReset();
     listActiveLocations.mockReset();
+    listActiveActivityRegions.mockReset();
     createPost.mockReset();
     getPostDetail.mockReset();
     updatePost.mockReset();
 
     listActiveCategories.mockResolvedValue([{ id: "cat-1", slug: "rent", nameZh: "租房" }]);
     listActiveLocations.mockResolvedValue([{ id: "loc-1", name: "Rockville" }]);
+    listActiveActivityRegions.mockResolvedValue([{ id: "loc-va", name: "VA", stateCode: "VA" }]);
   });
 
   it("keeps 标题/描述/价格/联系方式 after a real navigation round-trip through 地区选择 (新建帖子: 租房/求租/二手共用这个页面)", async () => {
@@ -195,7 +208,12 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
         expect.objectContaining({
           title: "Sunny room",
           description: "Nice and quiet, close to metro.",
-          locationText: "VA 弗吉尼亚州"
+          // design_handoff_saminest_ios 第 6 项：选中的州现在通过
+          // regionsByStateCode 反查成真实的 locations.id 提交，不再把州名
+          // 字符串塞进 locationText（见 publish-page.tsx 消费 pendingRegion
+          // 的 effect 顶部注释）。
+          locationId: "loc-va",
+          locationText: null
         })
       );
     });
@@ -217,6 +235,9 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
       locationId: "loc-1",
       locationText: null,
       locationName: "Rockville",
+      // design_handoff_saminest_ios 第 6 项：regionLabel 回填现在读这个
+      // 字段（见 publish-page.tsx 里 regionLabel 回填那段注释）。
+      locationJoinedName: "Rockville",
       contactMethod: "email",
       contactValue: "old@example.com",
       status: "approved",

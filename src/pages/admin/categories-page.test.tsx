@@ -12,6 +12,16 @@ vi.mock("../../repositories/categories-repository", () => ({
   createCategory,
   updateCategory
 }));
+// AdminNav（这个页面顶部渲染的管理后台导航条）功能改动清单第 7 项新增了
+// "待审核"/"举报处理"两个角标，分别调用 countPendingPosts/
+// countPendingReports——这个页面本身跟这两份数据无关，这里只提供最小 mock，
+// 避免真的打到 Supabase，见 pending-posts-page.test.tsx 同样的注释。
+vi.mock("../../repositories/posts-repository", () => ({
+  countPendingPosts: () => Promise.resolve(0)
+}));
+vi.mock("../../repositories/reports-repository", () => ({
+  countPendingReports: () => Promise.resolve(0)
+}));
 
 import { renderWithProviders } from "../../test/render-with-providers";
 import { AppError } from "../../utils/app-error";
@@ -84,12 +94,18 @@ describe("AdminCategoriesPage", () => {
     expect(inactiveRow).toHaveTextContent("已停用");
   });
 
+  // 功能改动清单第 7 项：新建表单从页面顶部常驻的行内表单改成点击
+  // "＋ 新建分类"才打开的底部弹层（CategoryFormSheet），所以每个跟创建
+  // 相关的用例都要先点开这颗触发按钮，才能看到 Slug/中文名称等字段——
+  // 这跟 all-posts-page.test.tsx / reports-page.test.tsx 里"先点开表单
+  // 再操作字段"是同一个模式。
   it("blocks submission and shows a validation error for a missing slug, missing name_zh, or a negative sort_order, without calling createCategory", async () => {
     listAllCategoriesForAdmin.mockResolvedValue([]);
 
     renderWithProviders(<AdminCategoriesPage />);
     await screen.findByText("暂无分类");
 
+    fireEvent.click(screen.getByRole("button", { name: "＋ 新建分类" }));
     fireEvent.click(screen.getByRole("button", { name: "新建分类" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("请填写 slug。");
     expect(createCategory).not.toHaveBeenCalled();
@@ -110,13 +126,14 @@ describe("AdminCategoriesPage", () => {
     expect(createCategory).not.toHaveBeenCalled();
   });
 
-  it("adds the newly created category to the list without removing existing rows, and clears the form", async () => {
+  it("adds the newly created category to the list without removing existing rows, closes the sheet, and resets the draft", async () => {
     listAllCategoriesForAdmin.mockResolvedValue([activeCategory]);
     createCategory.mockResolvedValue({ id: "cat-3" });
 
     renderWithProviders(<AdminCategoriesPage />);
     await screen.findByText("租房");
 
+    fireEvent.click(screen.getByRole("button", { name: "＋ 新建分类" }));
     fireEvent.change(screen.getByLabelText("Slug"), {
       target: { value: "furniture" }
     });
@@ -136,10 +153,15 @@ describe("AdminCategoriesPage", () => {
     expect(await screen.findByText("家具")).toBeInTheDocument();
     // 原有的行还在，不是"替换列表"而是"追加"。
     expect(screen.getByText("租房")).toBeInTheDocument();
+    // 成功后弹层关闭（不再是常驻表单）。
+    expect(screen.queryByLabelText("Slug")).not.toBeInTheDocument();
+
+    // 重新打开弹层，确认草稿已经被清空。
+    fireEvent.click(screen.getByRole("button", { name: "＋ 新建分类" }));
     expect(screen.getByLabelText("Slug")).toHaveValue("");
   });
 
-  it("shows the specific duplicate-slug message when createCategory rejects with CATEGORY_SLUG_DUPLICATE", async () => {
+  it("shows the specific duplicate-slug message when createCategory rejects with CATEGORY_SLUG_DUPLICATE, and keeps the sheet open", async () => {
     listAllCategoriesForAdmin.mockResolvedValue([]);
     createCategory.mockRejectedValue(
       new AppError("该 slug 已被使用，请换一个。", "CATEGORY_SLUG_DUPLICATE")
@@ -148,6 +170,7 @@ describe("AdminCategoriesPage", () => {
     renderWithProviders(<AdminCategoriesPage />);
     await screen.findByText("暂无分类");
 
+    fireEvent.click(screen.getByRole("button", { name: "＋ 新建分类" }));
     fireEvent.change(screen.getByLabelText("Slug"), { target: { value: "rent" } });
     fireEvent.change(screen.getByLabelText("中文名称"), { target: { value: "租房" } });
     fireEvent.click(screen.getByRole("button", { name: "新建分类" }));
@@ -155,6 +178,8 @@ describe("AdminCategoriesPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "该 slug 已被使用，请换一个。"
     );
+    // 提交失败不关闭弹层、不丢已经输入的内容。
+    expect(screen.getByLabelText("Slug")).toHaveValue("rent");
   });
 
   it("opens the edit form pre-filled with the row's current values", async () => {

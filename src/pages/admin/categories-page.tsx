@@ -1,6 +1,7 @@
-import { type FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { CategoryFormSheet } from "../../components/category-form-sheet";
 import { TopBar } from "../../components/top-bar";
 import { useAdminCategoriesQuery } from "../../features/admin/use-admin-categories-query";
 import { useCreateCategoryMutation } from "../../features/admin/use-create-category-mutation";
@@ -12,7 +13,6 @@ const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const SLUG_REQUIRED_MESSAGE = "请填写 slug。";
 const NAME_ZH_REQUIRED_MESSAGE = "请填写中文名称。";
 const SORT_ORDER_INVALID_MESSAGE = "排序值必须是不小于 0 的整数。";
-const SLUG_DUPLICATE_HINT_MESSAGE = "此 slug 已存在。";
 
 // 跟 users-page.tsx 的 ACCOUNT_STATUS_LABELS 是同一个"给数据库字段配中文
 // 文案"的惯例。
@@ -127,6 +127,14 @@ function duplicateSlugErrorMessage(error: unknown): string {
  * 真正的强制来自 createCategory/updateCategory 捕获数据库 23505 后抛出的
  * CATEGORY_SLUG_DUPLICATE AppError——提交时永远都会走一遍服务端校验，本地
  * 提示不能替代它。
+ *
+ * 功能改动清单第 7 项：新建/编辑表单从页面顶部常驻的行内表单改成底部弹层
+ * CategoryFormSheet（README 管理后台小节："新建/编辑弹层字段：slug、
+ * 中文名称、英文名称、描述、排序"），顶部改成一个"＋ 新建分类"触发按钮
+ * （虚线蓝框浅蓝底，README 原文）。原来 <form onSubmit> 的提交方式跟着
+ * 改成普通按钮 onClick——底部弹层的确认按钮不是表单的 submit 按钮，跟
+ * handleEditSave 已经是同一种"按钮 onClick 触发校验+提交"的写法保持
+ * 一致，不需要再要 FormEvent/preventDefault。
  */
 export function AdminCategoriesPage() {
   const { data, isPending, isError } = useAdminCategoriesQuery();
@@ -140,6 +148,7 @@ export function AdminCategoriesPage() {
   const [createDraft, setCreateDraft] = useState<CategoryDraft>(EMPTY_DRAFT);
   const [createError, setCreateError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [isCreateSheetOpen, setIsCreateSheetOpen] = useState(false);
 
   const [openEditRowId, setOpenEditRowId] = useState<string | null>(null);
   const [editDrafts, setEditDrafts] = useState<Record<string, CategoryDraft>>({});
@@ -166,9 +175,16 @@ export function AdminCategoriesPage() {
     );
   }
 
-  async function handleCreateSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  function openCreateSheet(): void {
+    setIsCreateSheetOpen(true);
+    setCreateError(null);
+  }
 
+  function closeCreateSheet(): void {
+    setIsCreateSheetOpen(false);
+  }
+
+  async function handleCreateConfirm(): Promise<void> {
     const validation = validateCategoryDraft(createDraft);
     if (!validation.success) {
       setCreateError(validation.error);
@@ -192,7 +208,11 @@ export function AdminCategoriesPage() {
         }
       ]);
       setCreateDraft(EMPTY_DRAFT);
+      setIsCreateSheetOpen(false);
     } catch (error) {
+      // 提交失败时特意不清空 createDraft、也不关闭弹层，保留管理员已经
+      // 输入的内容，跟这个文件里 handleEditSave 以及其它管理页一致的
+      // "失败不丢用户输入"原则。
       setCreateError(duplicateSlugErrorMessage(error));
     } finally {
       setIsCreating(false);
@@ -261,85 +281,30 @@ export function AdminCategoriesPage() {
   const showSlugDuplicateHint =
     trimmedCreateSlug !== "" && existingSlugs.has(trimmedCreateSlug);
 
-  const createForm = (
-    <form onSubmit={handleCreateSubmit} noValidate className="mb-6 rounded-lg border border-border bg-card p-4">
-      <h2 className="mb-3 text-sm font-semibold text-text">新建分类</h2>
-      {createError ? (
-        <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-          {createError}
-        </p>
-      ) : null}
-      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-        Slug
-        <input
-          type="text"
-          value={createDraft.slug}
-          onChange={(event) =>
-            setCreateDraft((prev) => ({ ...prev, slug: event.target.value }))
-          }
-          disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-      {showSlugDuplicateHint ? <p className="text-xs text-warning">{SLUG_DUPLICATE_HINT_MESSAGE}</p> : null}
-      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-        中文名称
-        <input
-          type="text"
-          value={createDraft.nameZh}
-          onChange={(event) =>
-            setCreateDraft((prev) => ({ ...prev, nameZh: event.target.value }))
-          }
-          disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-        英文名称
-        <input
-          type="text"
-          value={createDraft.nameEn}
-          onChange={(event) =>
-            setCreateDraft((prev) => ({ ...prev, nameEn: event.target.value }))
-          }
-          disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-        描述
-        <textarea
-          value={createDraft.description}
-          onChange={(event) =>
-            setCreateDraft((prev) => ({ ...prev, description: event.target.value }))
-          }
-          disabled={isCreating}
-          className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-      <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-        排序
-        <input
-          type="number"
-          min={0}
-          step={1}
-          value={createDraft.sortOrder}
-          onChange={(event) =>
-            setCreateDraft((prev) => ({ ...prev, sortOrder: event.target.value }))
-          }
-          disabled={isCreating}
-          className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-        />
-      </label>
-      <button
-        type="submit"
-        disabled={isCreating}
-        className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        新建分类
-      </button>
-    </form>
+  // README 管理后台小节："顶部「＋ 新建分类」（虚线蓝框浅蓝底）"。
+  const createTrigger = (
+    <button
+      type="button"
+      onClick={openCreateSheet}
+      className="mb-6 w-full rounded-xl border-2 border-dashed border-primary bg-primary-light px-4 py-3 text-sm font-semibold text-primary hover:bg-primary-lighter"
+    >
+      ＋ 新建分类
+    </button>
   );
+
+  const createSheet = isCreateSheetOpen ? (
+    <CategoryFormSheet
+      title="新建分类"
+      draft={createDraft}
+      onDraftChange={setCreateDraft}
+      showSlugDuplicateHint={showSlugDuplicateHint}
+      errorMessage={createError}
+      confirmLabel="新建分类"
+      pending={isCreating}
+      onConfirm={handleCreateConfirm}
+      onClose={closeCreateSheet}
+    />
+  ) : null;
 
   if (isPending) {
     return (
@@ -347,7 +312,8 @@ export function AdminCategoriesPage() {
         <TopBar variant="nav-only" title="分类管理" />
         <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
           <AdminNav />
-          {createForm}
+          {createTrigger}
+          {createSheet}
           <p role="status" className="text-sm text-text-muted">加载中…</p>
         </div>
       </main>
@@ -360,7 +326,8 @@ export function AdminCategoriesPage() {
         <TopBar variant="nav-only" title="分类管理" />
         <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
           <AdminNav />
-          {createForm}
+          {createTrigger}
+          {createSheet}
           <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
             分类加载失败，请稍后重试。
           </p>
@@ -376,7 +343,8 @@ export function AdminCategoriesPage() {
       <TopBar variant="nav-only" title="分类管理" />
       <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
       <AdminNav />
-      {createForm}
+      {isCreateSheetOpen ? null : createTrigger}
+      {createSheet}
       {visibleCategories.length === 0 ? (
         <p role="status" className="text-sm text-text-muted">暂无分类</p>
       ) : (
@@ -386,118 +354,37 @@ export function AdminCategoriesPage() {
             const isEditOpen = openEditRowId === category.id;
             const draft = editDrafts[category.id] ?? draftFromCategory(category);
 
+            // README 管理后台小节："停用卡片 70% 透明"——只影响卡片本身的
+            // 视觉呈现，不影响这一行是否可交互（编辑/启用按钮仍然正常可点，
+            // 停用不是禁用整行）。
+            const cardClassName = category.isActive
+              ? "mb-2 rounded-lg border border-border bg-card p-4"
+              : "mb-2 rounded-lg border border-border bg-card p-4 opacity-70";
+
             return (
-              <li key={category.id} className="mb-2 rounded-lg border border-border bg-card p-4">
+              <li key={category.id} className={cardClassName}>
                 {rowErrors[category.id] ? (
                   <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                     {rowErrors[category.id]}
                   </p>
                 ) : null}
                 {isEditOpen ? (
-                  <div className="mt-3 rounded border border-border bg-bg p-3">
-                    {editValidationErrors[category.id] ? (
-                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {editValidationErrors[category.id]}
-                      </p>
-                    ) : null}
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      Slug
-                      <input
-                        type="text"
-                        value={draft.slug}
-                        onChange={(event) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [category.id]: { ...draft, slug: event.target.value }
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      中文名称
-                      <input
-                        type="text"
-                        value={draft.nameZh}
-                        onChange={(event) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [category.id]: { ...draft, nameZh: event.target.value }
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      英文名称
-                      <input
-                        type="text"
-                        value={draft.nameEn}
-                        onChange={(event) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [category.id]: { ...draft, nameEn: event.target.value }
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      描述
-                      <textarea
-                        value={draft.description}
-                        onChange={(event) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [category.id]: {
-                              ...draft,
-                              description: event.target.value
-                            }
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="mt-1 w-full rounded border border-border px-3 py-2 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      排序
-                      <input
-                        type="number"
-                        min={0}
-                        step={1}
-                        value={draft.sortOrder}
-                        onChange={(event) =>
-                          setEditDrafts((prev) => ({
-                            ...prev,
-                            [category.id]: { ...draft, sortOrder: event.target.value }
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => handleEditSave(category.id)}
-                        className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        保存
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => cancelEdit(category.id)}
-                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
+                  <CategoryFormSheet
+                    title="编辑分类"
+                    draft={draft}
+                    onDraftChange={(nextDraft) =>
+                      setEditDrafts((prev) => ({ ...prev, [category.id]: nextDraft }))
+                    }
+                    showSlugDuplicateHint={
+                      draft.slug.trim() !== category.slug &&
+                      existingSlugs.has(draft.slug.trim())
+                    }
+                    errorMessage={editValidationErrors[category.id] ?? null}
+                    confirmLabel="保存"
+                    pending={isActioning}
+                    onConfirm={() => handleEditSave(category.id)}
+                    onClose={() => cancelEdit(category.id)}
+                  />
                 ) : (
                   <>
                     <span className="mr-3 break-words text-sm text-text-muted">{category.slug}</span>

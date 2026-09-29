@@ -1,6 +1,7 @@
 import { type FormEvent, useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
 import { useAdminUsersQuery } from "../../features/admin/use-admin-users-query";
 import { useSetAccountStatusMutation } from "../../features/admin/use-set-account-status-mutation";
@@ -59,6 +60,18 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * 不再显示"设为受限"），避免一次没有意义的点击——RPC 本身也会在状态没有
  * 变化时拒绝（"already has account_status ..."），这里只是提前把这类
  * 点不出结果的按钮藏起来，不是唯一的保护层。
+ *
+ * 功能改动清单第 7 项：这一行原因输入的行内展开表单改成底部弹层
+ * ReasonSheet（README 管理后台小节："所有需要原因的操作统一改为底部
+ * 弹出表单"）。「设为封禁」是这三个操作里唯一破坏性的（对应 README
+ * 状态徽标颜色表：suspended 是危险色），传 destructive；「设为受限」/
+ * 「恢复正常」都不是，颜色跟原版一致（原版这两个按钮也不是红色）。
+ * README 提到的头像 / "注册于 YYYY-MM · 发布 N 条" 这两处视觉信息需要
+ * list_profiles_for_admin RPC 再新增返回列（头像已经是 profiles 表现有
+ * 列，但"发布 N 条"要在函数里新加一次按用户分组的帖子计数子查询）——
+ * 跟功能改动清单第 5/6 项一样属于"需要改数据库"的范畴，这次任务卡的
+ * 范围明确是"改用底部弹层"，这两处视觉细节不在这一步里做，先只做弹层
+ * 转换。
  */
 export function AdminUsersPage() {
   const currentUserId = useAuthStore((s) => s.session)?.user.id;
@@ -258,48 +271,21 @@ export function AdminUsersPage() {
                   </div>
                 )}
                 {isSelf ? null : isFormOpen ? (
-                  <div className="mt-3 rounded border border-border bg-bg p-3">
-                    {validationErrors[user.id] ? (
-                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {validationErrors[user.id]}
-                      </p>
-                    ) : null}
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      原因
-                      <input
-                        type="text"
-                        value={reasonDrafts[user.id] ?? ""}
-                        onChange={(event) =>
-                          setReasonDrafts((prev) => ({
-                            ...prev,
-                            [user.id]: event.target.value
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() =>
-                          handleConfirm(user.id, openFormAction as StatusAction)
-                        }
-                        className={actionButtonClassName[openFormAction as StatusAction]}
-                      >
-                        确认{ACTION_LABELS[openFormAction as StatusAction]}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => cancelForm(user.id)}
-                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
+                  <ReasonSheet
+                    title={ACTION_LABELS[openFormAction as StatusAction]}
+                    targetLabel={`${user.displayName}（${user.email}）`}
+                    reasonLabel="原因"
+                    reasonValue={reasonDrafts[user.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setReasonDrafts((prev) => ({ ...prev, [user.id]: value }))
+                    }
+                    errorMessage={validationErrors[user.id] ?? null}
+                    confirmLabel={`确认${ACTION_LABELS[openFormAction as StatusAction]}`}
+                    destructive={openFormAction === "suspended"}
+                    pending={isActioning}
+                    onConfirm={() => handleConfirm(user.id, openFormAction as StatusAction)}
+                    onClose={() => cancelForm(user.id)}
+                  />
                 ) : null}
               </li>
             );

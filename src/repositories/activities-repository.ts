@@ -83,7 +83,7 @@ interface ActivityListRow {
   channel: string;
   tag_text: string | null;
   title: string;
-  location: { name: string } | null;
+  location: { name: string; state_code: string | null } | null;
   landmark_text: string | null;
   is_online: boolean;
   start_at: string;
@@ -111,6 +111,18 @@ interface ActivityListRow {
  * 的模糊匹配）。stateCode 筛选（08 号卡新增，取代原来的 locationId）就是
  * "同州"这个产品要求本身（见设计文档第 5 节问题 2：不做真实地理距离，
  * 复用 locations 表的州/城市粒度）。
+ *
+ * design_handoff_saminest_ios 第 6 项："线上活动任何州都显示"——线上活动
+ * 本来就可以不填州（见 create-activity-page.tsx "州（可选）"那行），筛选
+ * 某个州时不应该把这些活动也筛没了。这条不是在 SQL 层用 `.or()` 实现的：
+ * PostgREST 对内嵌表列做行级过滤必须用 `!inner` join（见下面
+ * ACTIVITY_LIST_SELECT_COLUMNS 的注释），而线上活动的 location_id 经常是
+ * null，`!inner` join 会直接把这些行整个丢掉，丢了之后 `.or()` 也救不
+ * 回来——所以改成 JS 层过滤：这个函数体固定左连接查回 state_code，拿到
+ * 结果之后再按 `是线上活动 或者 州代码匹配` 筛一遍，见下面 listActivities
+ * 的实现。这个项目的活动总量本来就是"个位数到几十条"这个体量（跟
+ * locations-repository.ts listRegionContentCounts 顶部注释同一个判断），
+ * 不值得为了这一个筛选条件另外维护一份复杂的 SQL OR 表达式。
  */
 // activities 列表查询共用的 select 列表：activity-list-page.tsx（公开浏览）、
 // my-activities-page.tsx 的"我发起的"/"我报名的"两个 tab 都要展示同一组
@@ -138,20 +150,15 @@ interface ActivityListRow {
 // activity-list-page.tsx 真正用它渲染头像堆叠，my-activities-page.tsx 的
 // 两个 tab 多出这两个字段但不用，不算破坏性变更，不需要为了"只有一处用"
 // 就拆成两套 select。
-// 08 号卡：listActivities 按 stateCode 筛选时，location 这一列需要从默认
-// 的左连接换成 `locations!inner(...)`——PostgREST 要求这么写才能对内嵌表
-// 的列（state_code）做过滤，见下面 listActivities 里的用法，跟
-// posts-repository.ts listApprovedPosts 是同一个处理方式。
-// listMyOrganizedActivities/listMyJoinedActivities 这两个函数不需要这个
-// 筛选，继续用下面固定的左连接版本（ACTIVITY_LIST_SELECT_COLUMNS），不受
-// 影响。
-function buildActivityListSelectColumns(locationJoin: "left" | "inner"): string {
-  const locationSelect =
-    locationJoin === "inner" ? "location:locations!inner(name, state_code)" : "location:locations(name)";
-  return `id, organizer_id, channel, tag_text, title, ${locationSelect}, landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)`;
-}
-
-const ACTIVITY_LIST_SELECT_COLUMNS = buildActivityListSelectColumns("left");
+// design_handoff_saminest_ios 第 6 项之前，08 号卡这里按 stateCode 筛选时
+// 会把 location 这一列的联表从左连接换成 `locations!inner(...)`（PostgREST
+// 要求这么写才能对内嵌表的列做行级过滤，posts-repository.ts
+// listApprovedPosts 是同一个处理方式）。这次改成 JS 层过滤（见上面
+// listActivities 顶部注释里"线上活动任何州都显示"那段），不再需要按
+// stateCode 有没有传切换联表类型——固定用左连接选出 state_code，
+// listActivities/listMyOrganizedActivities/listMyJoinedActivities 三个
+// 函数统一用这一份 select，不再需要两个版本。
+const ACTIVITY_LIST_SELECT_COLUMNS = `id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)`;
 
 function mapActivityListRow(row: ActivityListRow): ActivityListItem {
   return {
@@ -187,13 +194,10 @@ export async function listActivities(
   input: ListActivitiesInput = {}
 ): Promise<ActivityListItem[]> {
   const nowIso = new Date().toISOString();
-  const selectColumns = input.stateCode
-    ? buildActivityListSelectColumns("inner")
-    : ACTIVITY_LIST_SELECT_COLUMNS;
 
   let query = getSupabaseClient()
     .from("activities")
-    .select(selectColumns)
+    .select(ACTIVITY_LIST_SELECT_COLUMNS)
     .is("deleted_at", null)
     .in("status", ["open", "full"])
     .gte("start_at", nowIso)
@@ -202,9 +206,6 @@ export async function listActivities(
   if (input.channel) {
     query = query.eq("channel", input.channel);
   }
-  if (input.stateCode) {
-    query = query.eq("location.state_code", input.stateCode);
-  }
 
   const { data, error } = await query.overrideTypes<ActivityListRow[]>();
 
@@ -212,7 +213,15 @@ export async function listActivities(
     throw new AppError(error.message, "ACTIVITIES_LIST_FAILED", error);
   }
 
-  return (data ?? []).map(mapActivityListRow);
+  // design_handoff_saminest_ios 第 6 项："线上活动任何州都显示"——stateCode
+  // 筛选在 JS 层做（不是 SQL `.eq`），见上面 ACTIVITY_LIST_SELECT_COLUMNS
+  // 上方的注释；保留一份 `is_online` 恒为 true 的活动，不管它的
+  // location.state_code 是不是等于 input.stateCode（甚至是不是 null）。
+  const rows = input.stateCode
+    ? (data ?? []).filter((row) => row.is_online || row.location?.state_code === input.stateCode)
+    : (data ?? []);
+
+  return rows.map(mapActivityListRow);
 }
 
 /**

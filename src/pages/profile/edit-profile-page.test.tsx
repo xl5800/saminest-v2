@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   useMyProfileQuery,
   useUpdateProfileMutation,
-  useLocationsQuery,
+  listActiveActivityRegions,
   mutateAsyncMock,
   navigateMock,
   uploadAvatarMock,
@@ -13,7 +13,11 @@ const {
 } = vi.hoisted(() => ({
   useMyProfileQuery: vi.fn(),
   useUpdateProfileMutation: vi.fn(),
-  useLocationsQuery: vi.fn(),
+  // design_handoff_saminest_ios 第 6 项：地区字段从原生 <select>（靠
+  // useLocationsQuery 查 14 个城市）换成跳转 /region-select?mode=form，
+  // 跟 publish-page.test.tsx / create-activity-page.test.tsx 一样在
+  // repository 层 mock 这个反查函数，不再需要 mock useLocationsQuery。
+  listActiveActivityRegions: vi.fn(),
   mutateAsyncMock: vi.fn(),
   navigateMock: vi.fn(),
   uploadAvatarMock: vi.fn(),
@@ -27,8 +31,8 @@ vi.mock("../../features/profile/use-my-profile-query", () => ({
 vi.mock("../../features/profile/use-update-profile-mutation", () => ({
   useUpdateProfileMutation
 }));
-vi.mock("../../features/locations/use-locations-query", () => ({
-  useLocationsQuery
+vi.mock("../../repositories/locations-repository", () => ({
+  listActiveActivityRegions
 }));
 vi.mock("../../repositories/profiles-repository", () => ({
   updateMyAvatarUrl
@@ -52,11 +56,13 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { EditProfilePage } from "./edit-profile-page";
 
 const initialAuthState = useAuthStore.getState();
+const initialPendingRegionState = usePendingFormRegionStore.getState();
 
 const sampleProfile = {
   displayName: "小明",
@@ -66,11 +72,6 @@ const sampleProfile = {
   locationName: "Rockville",
   age: 25
 };
-
-const sampleLocations = [
-  { id: "loc-1", name: "Rockville" },
-  { id: "loc-2", name: "Bethesda" }
-];
 
 function makeFile(name: string, type: string, sizeBytes: number): File {
   return new File([new Uint8Array(sizeBytes)], name, { type });
@@ -88,10 +89,11 @@ describe("EditProfilePage", () => {
   beforeEach(() => {
     useAuthStore.setState(initialAuthState, true);
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    usePendingFormRegionStore.setState(initialPendingRegionState, true);
 
     useMyProfileQuery.mockReset();
     useUpdateProfileMutation.mockReset();
-    useLocationsQuery.mockReset();
+    listActiveActivityRegions.mockReset();
     mutateAsyncMock.mockReset();
     navigateMock.mockReset();
     uploadAvatarMock.mockReset();
@@ -107,7 +109,7 @@ describe("EditProfilePage", () => {
       mutateAsync: mutateAsyncMock,
       isPending: false
     });
-    useLocationsQuery.mockReturnValue({ data: sampleLocations });
+    listActiveActivityRegions.mockResolvedValue([{ id: "loc-ca", name: "CA", stateCode: "CA" }]);
     updateMyAvatarUrl.mockResolvedValue(undefined);
     removeAvatarFileMock.mockResolvedValue(undefined);
   });
@@ -117,7 +119,11 @@ describe("EditProfilePage", () => {
 
     expect(screen.getByLabelText("昵称")).toHaveValue("小明");
     expect(screen.getByLabelText(/简介/)).toHaveValue("热爱生活");
-    expect(screen.getByLabelText(/城市/)).toHaveValue("loc-1");
+    // design_handoff_saminest_ios 第 6 项：地区字段不再是原生 <select>——
+    // 展示文案直接复用服务端已经解析好的 locationName（经过
+    // formatLocationDisplayName，见 edit-profile-page.tsx 消费 profile 的
+    // effect），这里断言那行按钮上显示的文字，而不是某个表单控件的 value。
+    expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByLabelText(/年龄/)).toHaveValue(25);
   });
 
@@ -136,12 +142,63 @@ describe("EditProfilePage", () => {
     expect(screen.getByLabelText(/年龄/)).toHaveValue(null);
   });
 
-  it("renders the city dropdown options from useLocationsQuery, plus an unselect option", () => {
+  // design_handoff_saminest_ios 第 6 项：地区选择从原生下拉换成跳转
+  // /region-select?mode=form 整页选择，这里只断言"点了会跳转到对的路径"，
+  // 回填逻辑（消费 usePendingFormRegionStore）单独用下面几个测试覆盖，
+  // 跟 publish-page.test.tsx 是同一个模式。
+  it("navigates to /region-select?mode=form when the 常驻地区 field is clicked", () => {
     renderPage();
 
-    expect(screen.getByRole("option", { name: "Rockville" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "Bethesda" })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: "不选择城市" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Rockville"));
+
+    expect(navigateMock).toHaveBeenCalledWith("/region-select?mode=form");
+  });
+
+  it("shows '不选择地区' when the profile has no saved location", () => {
+    useMyProfileQuery.mockReturnValue({
+      data: { ...sampleProfile, locationId: null, locationName: null },
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(screen.getByText("不选择地区")).toBeInTheDocument();
+  });
+
+  it("resolves a state picked via /region-select into a real locationId through regionsByStateCode", async () => {
+    renderPage();
+
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "CA",
+      stateName: "California",
+      cityId: null,
+      cityName: null
+    });
+
+    expect(await screen.findByText("CA 加利福尼亚州")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: "loc-ca" })
+      );
+    });
+  });
+
+  it("clears the picked region back to '不选择地区' when the clear button is clicked", async () => {
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "清除地区" }));
+    expect(screen.getByText("不选择地区")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    await waitFor(() => {
+      expect(mutateAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: null })
+      );
+    });
   });
 
   it("shows a validation error and does not call the mutation when the display name is cleared", () => {
@@ -178,13 +235,19 @@ describe("EditProfilePage", () => {
     expect(mutateAsyncMock).not.toHaveBeenCalled();
   });
 
-  it("calls the mutation with the trimmed displayName/bio, selected locationId, and parsed age, then navigates to /profile on success", async () => {
+  it("calls the mutation with the trimmed displayName/bio, resolved locationId, and parsed age, then navigates to /profile on success", async () => {
     mutateAsyncMock.mockResolvedValue(undefined);
     renderPage();
 
     fireEvent.change(screen.getByLabelText("昵称"), { target: { value: "  小红  " } });
     fireEvent.change(screen.getByLabelText(/简介/), { target: { value: "  你好呀  " } });
-    fireEvent.change(screen.getByLabelText(/城市/), { target: { value: "loc-2" } });
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "CA",
+      stateName: "California",
+      cityId: null,
+      cityName: null
+    });
+    await screen.findByText("CA 加利福尼亚州");
     fireEvent.change(screen.getByLabelText(/年龄/), { target: { value: "30" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
@@ -193,7 +256,7 @@ describe("EditProfilePage", () => {
         userId: "user-1",
         displayName: "小红",
         bio: "你好呀",
-        locationId: "loc-2",
+        locationId: "loc-ca",
         age: 30
       });
     });
@@ -207,7 +270,7 @@ describe("EditProfilePage", () => {
     renderPage();
 
     fireEvent.change(screen.getByLabelText(/简介/), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText(/城市/), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "清除地区" }));
     fireEvent.change(screen.getByLabelText(/年龄/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 

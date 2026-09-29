@@ -9,6 +9,14 @@ export interface PendingPostFormDraft {
   price: string;
   contactMethod: string;
   contactValue: string;
+  /** design_handoff_saminest_ios 第 6 项新增："城市/具体位置"这个补充说明
+   *  输入框现在是用户直接打字的字段（不再只是"选了没有城市数据的州"时
+   *  程序自动填进去的值，见 publish-page.tsx 消费 pendingRegion 的地方），
+   *  所以要跟 title/description 这些字段一样存进草稿——不存的话，用户在
+   *  这个输入框里打了字、又点击"所在州"跳转 /region-select，回来时
+   *  publish-page.tsx 会被整个卸载重挂载，这个输入框的内容会被清空，是
+   *  27 号卡那个 bug 的同一种表现，只是换了一个字段。 */
+  locationText: string;
   /** 31 号卡（求租板块改版）新增：跟 price/contactMethod 等其它字段一样是
    *  表单原始字符串，只在求租分类下会真正渲染这两个输入框，但草稿类型上
    *  不区分分类——非求租分类下这两个字段就是空字符串，随其它字段一起

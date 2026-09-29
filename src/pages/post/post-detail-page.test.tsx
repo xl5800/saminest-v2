@@ -470,7 +470,11 @@ describe("PostDetailPage", () => {
   // favorite-button.tsx）；咨询复用 ContactSellerButton（文案从"联系
   // 发布者"换成"咨询"，背后逻辑没变）；举报不再是独立图标/链接，挪进了
   // 点击"分享"弹出的自定义弹层里（见下面"分享弹层"describe 块）。
-  it("still renders FavoriteButton (icon variant), the 咨询 button (ContactSellerButton relabeled) and a 分享 button — but no standalone 举报 link", () => {
+  //
+  // design_handoff_saminest_ios 第 4 项：顺序改成"收藏｜私信咨询｜分享"，
+  // 按钮文案从"咨询"改成"私信咨询"（ContactSellerButton 本身没变，只是
+  // 调用方传的 label 变了），断言跟着更新。
+  it("still renders FavoriteButton (icon variant), the 私信咨询 button (ContactSellerButton relabeled) and a 分享 button — but no standalone 举报 link", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -483,7 +487,7 @@ describe("PostDetailPage", () => {
     });
 
     expect(screen.getByRole("button", { name: "收藏" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "咨询" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "私信咨询" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "分享" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "举报" })).not.toBeInTheDocument();
   });
@@ -519,7 +523,11 @@ describe("PostDetailPage", () => {
       expect(bar.style.paddingBottom).toBe("calc(0.75rem + env(safe-area-inset-bottom))");
     });
 
-    it("renders the 咨询 button itself at 48px tall, 12px rounded corners, and the smaller 15px font size — not the old full-width 16px-text color bar", () => {
+    // design_handoff_saminest_ios 第 4 项：高度从 48px（h-12）改成设计稿
+    // 标注的 46px（h-[46px]），圆角从 rounded-button（14px）改成设计稿
+    // 标注的 8px（rounded-lg，Tailwind 内置刚好等于 8px）——只改这一个
+    // 按钮自己的 className，不动 --radius-button 这个全局 token。
+    it("renders the 私信咨询 button itself at 46px tall, 8px rounded corners, and the smaller 15px font size — not the old full-width 16px-text color bar", () => {
       usePostDetailQuery.mockReturnValue({
         data: samplePostDetail,
         isPending: false,
@@ -531,10 +539,8 @@ describe("PostDetailPage", () => {
         route: "/post/:id"
       });
 
-      const button = screen.getByRole("button", { name: "咨询" });
-      // 全 App 视觉 Token 体系（第一批）：圆角从 rounded-xl（12px）换成
-      // 新的 rounded-button（14px），断言跟着更新。
-      expect(button).toHaveClass("h-12", "rounded-button", "text-[15px]", "w-full", "bg-primary", "text-white");
+      const button = screen.getByRole("button", { name: "私信咨询" });
+      expect(button).toHaveClass("h-[46px]", "rounded-lg", "text-[15px]", "w-full", "bg-primary", "text-white");
       expect(button.className).not.toContain("text-base");
       expect(button.className).not.toContain("shadow-fab");
     });
@@ -544,7 +550,7 @@ describe("PostDetailPage", () => {
     // 消失（那个 empty:hidden 技巧已经不适用，因为工具栏现在总有分享+收藏
     // 两个图标子节点，DOM 层面永远不会真的是空的），这次这种场景下工具栏
     // 本身仍然渲染，只是里面少了"咨询"这一个按钮。
-    it("still renders the toolbar (分享 + 收藏) but hides the 咨询 button when the current user is viewing their own post", () => {
+    it("still renders the toolbar (分享 + 收藏) but hides the 私信咨询 button when the current user is viewing their own post", () => {
       useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
       // samplePostDetail.authorId 是 "user-2"——跟上面登录的用户同一个 id，
       // 触发 ContactSellerButton 内部"作者不能联系自己"的隐藏判断。
@@ -560,7 +566,7 @@ describe("PostDetailPage", () => {
         route: "/post/:id"
       });
 
-      expect(screen.queryByRole("button", { name: "咨询" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "私信咨询" })).not.toBeInTheDocument();
       const bar = screen.getByTestId("post-detail-contact-bar");
       expect(bar).not.toHaveClass("empty:hidden");
       expect(within(bar).getByRole("button", { name: "分享" })).toBeInTheDocument();

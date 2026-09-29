@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   listActiveCategories,
   listActiveLocations,
+  listActiveActivityRegions,
   createPost,
   getPostDetail,
   updatePost,
@@ -19,6 +20,12 @@ const {
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
   listActiveLocations: vi.fn(),
+  // design_handoff_saminest_ios 第 6 项：所在州字段现在跟 create-
+  // activity-page.tsx 一样，靠这个反查函数把 stateCode 解析成真实的
+  // locations.id（见 publish-page.tsx 消费 pendingRegion 的 effect），
+  // 不再需要时另外 mock 一遍——跟 listActiveLocations 一样直接放进这个
+  // 模块级 mock 里。
+  listActiveActivityRegions: vi.fn(),
   createPost: vi.fn(),
   getPostDetail: vi.fn(),
   updatePost: vi.fn(),
@@ -37,7 +44,8 @@ vi.mock("../../repositories/categories-repository", () => ({
   listActiveCategories
 }));
 vi.mock("../../repositories/locations-repository", () => ({
-  listActiveLocations
+  listActiveLocations,
+  listActiveActivityRegions
 }));
 vi.mock("../../repositories/posts-repository", () => ({
   createPost,
@@ -128,6 +136,7 @@ describe("PublishPage", () => {
     useAuthStore.setState(initialAuthState, true);
     listActiveCategories.mockReset();
     listActiveLocations.mockReset();
+    listActiveActivityRegions.mockReset();
     createPost.mockReset();
     getPostDetail.mockReset();
     updatePost.mockReset();
@@ -148,6 +157,12 @@ describe("PublishPage", () => {
     ]);
     listActiveLocations.mockResolvedValue([
       { id: "loc-1", name: "Rockville" }
+    ]);
+    // design_handoff_saminest_ios 第 6 项：默认给几个测试里会用到的州
+    // 都准备好反查用的 locations.id——具体测试如果需要断言别的州，
+    // 会在自己内部覆盖一遍这个 mock。
+    listActiveActivityRegions.mockResolvedValue([
+      { id: "loc-ca", name: "CA", stateCode: "CA" }
     ]);
     insertPostImages.mockResolvedValue([]);
     removePostImageFiles.mockResolvedValue(undefined);
@@ -599,21 +614,21 @@ describe("PublishPage", () => {
     expect(insertPostImages).not.toHaveBeenCalled();
   });
 
-  // 12 号卡：地区选择从原生下拉换成跳转 /region-select?mode=form + 回填
-  // usePendingFormRegionStore（回填机制本身的单测在
-  // pending-form-region-store.test.ts / region-select-page.test.tsx，
-  // 这里只测 PublishPage 消费这个 store 之后的表现——不用真的渲染
-  // RegionSelectPage，直接往 store 里写值，模拟"从那个页面选完回来"这一刻）。
+  // design_handoff_saminest_ios 第 6 项：地区选择从原生下拉换成跳转
+  // /region-select?mode=form + 回填 usePendingFormRegionStore（回填机制
+  // 本身的单测在 pending-form-region-store.test.ts /
+  // region-select-page.test.tsx，这里只测 PublishPage 消费这个 store 之后
+  // 的表现——不用真的渲染 RegionSelectPage，直接往 store 里写值，模拟
+  // "从那个页面选完回来"这一刻）。
   //
-  // 原来"输入任意手动文字"的"其他（手动输入）"UI 已经被这个新流程取代——
-  // 没有城市数据的州（大多数州）复用的正是同一个 OTHER_LOCATION_VALUE +
-  // locationText 机制，只是 locationText 的值现在来自选中的州（格式化好的
-  // "缩写 中文州名"），不是用户手打的任意文字，见 publish-page.tsx 消费
-  // pendingRegion 的 effect 顶部注释。"OTHER_LOCATION_VALUE 但 locationText
-  // 为空"这个校验分支现在在 UI 层已经不可达（effect 总是把两者一起设），
-  // 那条校验规则本身仍然由 publish-validation.test.ts 直接测纯函数覆盖，
-  // 不需要在这里再模拟一次不可达的路径。
-  it("submits a state-only region (no city data) picked via /region-select as locationText, with a null locationId", async () => {
+  // 12 号卡时期"没有城市数据的州复用 OTHER_LOCATION_VALUE + locationText
+  // 兜底"的写法已经被第 6 项取代——51 州现在在 locations 表里都有真实的
+  // type='state' 行，选中的州直接通过 regionsByStateCode 反查出真正的
+  // locations.id 提交，不再把州名字符串硬塞进 locationText（见
+  // publish-page.tsx 消费 pendingRegion 的 effect 顶部注释）。locationText
+  // 现在是"城市/具体位置"这个独立输入框的值，跟"所在州"是两个不互斥的
+  // 字段，下面单独一条用例覆盖两者同时存在的情况。
+  it("submits a state picked via /region-select as locationId, resolved through regionsByStateCode", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
     await screen.findByRole("option", { name: "租房" });
@@ -632,8 +647,43 @@ describe("PublishPage", () => {
     await waitFor(() => {
       expect(createPost).toHaveBeenCalledWith(
         expect.objectContaining({
-          locationId: null,
-          locationText: "CA 加利福尼亚州"
+          locationId: "loc-ca",
+          locationText: null
+        })
+      );
+    });
+  });
+
+  // design_handoff_saminest_ios 第 6 项 gap #2：验证"所在州"和"城市/
+  // 具体位置"现在是两个可以同时提交的独立字段，不再是互斥的"选了州就等于
+  // locationText"关系。
+  it("submits both a resolved locationId and a user-typed locationText together when both fields are filled", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("option", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.change(screen.getByLabelText("城市 / 具体位置（可选）"), {
+      target: { value: "近地铁站" }
+    });
+    usePendingFormRegionStore.getState().setPendingRegion({
+      stateCode: "CA",
+      stateName: "California",
+      cityId: null,
+      cityName: null
+    });
+    await screen.findByText("CA 加利福尼亚州");
+
+    // 选州这一步不应该把刚才手打的"城市/具体位置"清空。
+    expect(screen.getByLabelText("城市 / 具体位置（可选）")).toHaveValue("近地铁站");
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          locationId: "loc-ca",
+          locationText: "近地铁站"
         })
       );
     });
@@ -665,12 +715,15 @@ describe("PublishPage", () => {
     });
   });
 
-  it("clears a picked region back to '不限地区' (locationId/locationText both null) when the clear button is clicked", async () => {
+  it("clears a picked region back to '不限地区' (locationId null) when the clear button is clicked, without touching locationText", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
     await screen.findByRole("option", { name: "租房" });
 
     fillRequiredFields();
+    fireEvent.change(screen.getByLabelText("城市 / 具体位置（可选）"), {
+      target: { value: "近地铁站" }
+    });
     usePendingFormRegionStore.getState().setPendingRegion({
       stateCode: "CA",
       stateName: "California",
@@ -681,6 +734,10 @@ describe("PublishPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "清除地区" }));
     expect(screen.getByText("不限地区")).toBeInTheDocument();
+    // design_handoff_saminest_ios 第 6 项：清空"所在州"不应该连带清空
+    // 用户在"城市/具体位置"里打的字——两个字段现在互不依赖，见
+    // handleClearRegion 顶部注释。
+    expect(screen.getByLabelText("城市 / 具体位置（可选）")).toHaveValue("近地铁站");
 
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
@@ -688,7 +745,7 @@ describe("PublishPage", () => {
       expect(createPost).toHaveBeenCalledWith(
         expect.objectContaining({
           locationId: null,
-          locationText: null
+          locationText: "近地铁站"
         })
       );
     });
@@ -837,6 +894,12 @@ describe("PublishPage in edit mode", () => {
     locationId: "loc-1",
     locationText: null,
     locationName: "Rockville",
+    // design_handoff_saminest_ios 第 6 项：regionLabel 回填现在读的是这个
+    // 字段（联表结果本身），不再是 locationName（见 publish-page.tsx 里
+    // regionLabel 回填那段注释）——真实接口的 getPostDetail() 会一起带上
+    // 这两个字段，这里的 fixture 跟着补上，不然"所在州"按钮会显示成
+    // "不限地区"。
+    locationJoinedName: "Rockville",
     createdAt: "2026-01-01T00:00:00.000Z",
     authorDisplayName: "Alice",
     contactMethod: "email",
@@ -853,6 +916,7 @@ describe("PublishPage in edit mode", () => {
     useAuthStore.setState(initialAuthState, true);
     listActiveCategories.mockReset();
     listActiveLocations.mockReset();
+    listActiveActivityRegions.mockReset();
     createPost.mockReset();
     getPostDetail.mockReset();
     updatePost.mockReset();
@@ -873,6 +937,9 @@ describe("PublishPage in edit mode", () => {
     ]);
     listActiveLocations.mockResolvedValue([
       { id: "loc-1", name: "Rockville" }
+    ]);
+    listActiveActivityRegions.mockResolvedValue([
+      { id: "loc-ca", name: "CA", stateCode: "CA" }
     ]);
     insertPostImages.mockResolvedValue([]);
     removePostImageFiles.mockResolvedValue(undefined);
@@ -922,7 +989,12 @@ describe("PublishPage in edit mode", () => {
       ...existingPostDetail,
       locationId: null,
       locationText: "Somewhere custom",
-      locationName: "Somewhere custom"
+      locationName: "Somewhere custom",
+      // 这条历史遗留数据没有真实的 locations 外键，联表结果本身自然是
+      // null——显式覆盖掉从 existingPostDetail 继承来的 "Rockville"，
+      // 不然 regionLabel 回填逻辑会误用那个值（见 publish-page.tsx 里
+      // regionLabel 回填那段注释里"历史遗留『其他』分支"的说明）。
+      locationJoinedName: null
     });
     renderEditPage();
 

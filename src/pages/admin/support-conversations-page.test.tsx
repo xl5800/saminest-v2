@@ -8,6 +8,16 @@ const { useAdminSupportConversationsQuery } = vi.hoisted(() => ({
 vi.mock("../../features/admin/use-admin-support-conversations-query", () => ({
   useAdminSupportConversationsQuery
 }));
+// AdminNav（这个页面顶部渲染的管理后台导航条）功能改动清单第 7 项新增了
+// "待审核"/"举报处理"两个角标，分别调用 countPendingPosts/
+// countPendingReports——这个页面本身跟这两份数据无关，这里只提供最小 mock，
+// 避免真的打到 Supabase，见 pending-posts-page.test.tsx 同样的注释。
+vi.mock("../../repositories/posts-repository", () => ({
+  countPendingPosts: () => Promise.resolve(0)
+}));
+vi.mock("../../repositories/reports-repository", () => ({
+  countPendingReports: () => Promise.resolve(0)
+}));
 
 import { renderWithProviders } from "../../test/render-with-providers";
 import { AdminSupportConversationsPage } from "./support-conversations-page";

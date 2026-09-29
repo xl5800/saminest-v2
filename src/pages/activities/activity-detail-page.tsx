@@ -1,31 +1,23 @@
 import { Share } from "@capacitor/share";
 import { Flag, Share2 } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { ActivityFavoriteButton } from "../../components/activity-favorite-button";
 import { ActivityParticipantAvatars } from "../../components/activity-participant-avatars";
-import {
-  ActivityParticipationButtonView,
-  SECONDARY_BUTTON_CLASS_NAME
-} from "../../components/activity-participation-button";
+import { ActivityParticipationButtonView } from "../../components/activity-participation-button";
 import { CommentSection } from "../../components/comment-section";
 import { PersonCard } from "../../components/person-card";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
-import { useCreateActivityConversationMutation } from "../../features/activities/use-create-activity-conversation-mutation";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
 import type { ActivityDetail, ActivityParticipant } from "../../repositories/activities-repository";
 import { getActivityChannelMeta } from "../../repositories/activities-repository";
 import { useAuthStore } from "../../store/auth-store";
-import { AppError } from "../../utils/app-error";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatActivityStartAt } from "../../utils/format";
-
-const CONTACT_ORGANIZER_DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 
 /**
  * 任务卡 9（找搭子详情页改版对齐方案图）：拼出"已加入"名单里单个参与者
@@ -106,10 +98,19 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  *
  * 04 号卡（find-buddy-flow）改版：顶部换成 TopBar 的 detail 变体（返回
  * 箭头 + "…"更多菜单），原来页面底部平铺的"收藏/分享/举报"操作行收进了
- * 这个更多菜单——ActivityFavoriteButton/handleShare/举报链接三个实现完全
- * 没变，只是从"页面正文里的一行"挪成了"菜单里的三项"，见下面 moreMenu
- * 的 content。TopBar 不认识"收藏/分享/举报"这些具体业务概念，调用方传
- * 什么就摆什么，见 top-bar.tsx 顶部注释。
+ * 这个更多菜单。
+ *
+ * design_handoff_saminest_ios 第 4 项（详情页底部操作栏重排）：设计稿
+ * （07-activity-detail-top.png）把"收藏"和"分享"从"…"更多菜单里挪回了
+ * 页面底部固定操作栏（收藏｜报名参加｜分享，跟帖子详情页底部工具栏是同一
+ * 种"图标+文字竖排在两侧、中间一个撑满的主按钮"布局），"…"菜单里只留
+ * 举报——这算是对 04 号卡那次改版的部分推翻，BARRY 看过设计稿截图后确认
+ * 要按设计稿改（详见跟 ActivityFavoriteButton 相关的这次改动说明）。
+ * ActivityFavoriteButton 新增了 `variant="icon"` 给这个底部栏用（照抄
+ * favorite-button.tsx 的 icon 变体视觉），moreMenu 原来的横向菜单行样式
+ * （`variant="menu"`，默认值）保留给"…"菜单以外没有别的调用点。分享按钮
+ * 的点击逻辑（handleShare）完全没变，只是从菜单里的一行文字链接换成了
+ * 底部栏的竖排图标按钮，跟帖子详情页分享按钮同一个视觉写法。
  *
  * 发起人卡片这次加了一个右侧 chevron（纯装饰，不改变可点击范围——整张
  * 卡片本来就是一个 <Link>）：明确提示"这一整行可点，会跳发起者主页"，
@@ -149,23 +150,19 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  * 文字链接（原来跟发起人卡片指向同一个 /users/:id、允许重复展示）任务卡 9
  * 已经删掉了——发起人身份现在只靠下面的 PersonCard 展示，不再重复。
  *
- * 任务卡 3（"联系发起人"按钮）：跟"参加活动"按钮并排放在同一行，样式复用
- * activity-participation-button.tsx 已导出的 SECONDARY_BUTTON_CLASS_NAME
- * （两个按钮各占半行——两者都套了一层 flex-1，PRIMARY/SECONDARY 各自的
- * `w-full` 类名负责撑满各自的半行，不需要改 ActivityParticipationButtonView
- * 本身）。点击行为整套照抄 contact-seller-button.tsx（未登录跳 /login、
- * 建会话中禁用按钮、ACCOUNT_RESTRICTED 单独文案、其它失败统一文案），但
- * 没有抽成一个新的共享组件——这次任务允许修改的文件列表明确只到
- * activity-detail-page.tsx 本身，所以逻辑直接写在这个页面组件里，不是
- * 遗漏了做成组件。调用的 useCreateActivityConversationMutation 内部包的
- * createActivityConversation() 是 conversations-repository.ts 里早就存在
- * 的函数（"一起去"报名/退出通知发起人那一步已经在用，见该函数顶部注释），
- * 这次没有改动那个仓库函数本身。
- *
- * 发起人自己看自己发起的活动时不展示这个按钮——判断用 data.organizerId
- * 是否等于当前登录用户 id，跟 ContactSellerButton 隐藏"联系发布者"给作者
- * 本人看的判断是同一个写法；未登录用户仍然能看到按钮（点击后跳
- * /login，不是隐藏，因为这时候还判断不出"是不是自己"）。
+ * design_handoff_saminest_ios 第 4 项：上面这条"联系发起人"按钮这次删掉
+ * 了——设计稿的底部操作栏只有"收藏｜报名参加｜分享"三项，没有咨询/联系类
+ * 按钮（README 原文明确写了"不要咨询按钮"），"参加活动"改成独占底部主按钮
+ * 的位置（flex-1，不再跟联系发起人各占半行）。这是任务卡 3 那次产品决定的
+ * 一次推翻，不是这次顺手改的——BARRY 看过现状和设计稿截图的差异后明确选择
+ * 按设计稿改。连带删除的：useCreateActivityConversationMutation 这个 hook
+ * 调用、handleContactOrganizerClick 处理函数、contactError 状态、
+ * CONTACT_ORGANIZER_DEFAULT_ERROR_MESSAGE 常量，以及不再需要的 navigate/
+ * currentUserId（这两个此前只有联系发起人这一处在用）。
+ * useCreateActivityConversationMutation 这个 hook 本身、它背后的
+ * conversations-repository.ts 里的 createActivityConversation() 函数都没有
+ * 删除或改动——只是这个页面不再调用它，其它调用点（"一起去"报名/退出通知
+ * 发起人那一步）不受影响。
  *
  * 找搭子留言区任务卡：页面最下面接入 `<CommentSection activityId={data.id} />`
  * （参照 post-detail-page.tsx 接 `<CommentSection postId={id} />` 的同一个
@@ -194,9 +191,7 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
-  const currentUserId = session?.user.id;
 
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
@@ -212,34 +207,6 @@ export function ActivityDetailPage() {
   });
 
   const canTapEmptySlot = !participationAction.disabled && !participationAction.isApproved;
-
-  const createActivityConversation = useCreateActivityConversationMutation();
-  const [contactError, setContactError] = useState<string | null>(null);
-
-  function handleContactOrganizerClick(activityId: string): void {
-    if (!currentUserId) {
-      navigate("/login");
-      return;
-    }
-    if (createActivityConversation.isPending) return;
-
-    setContactError(null);
-    createActivityConversation.mutate(activityId, {
-      onSuccess: ({ conversationId }) => {
-        navigate(`/messages/${conversationId}`);
-      },
-      onError: (mutationError) => {
-        // 跟 contact-seller-button.tsx 的 handleClick 同一个判断：账号受限
-        // 是一个明确、可操作的失败原因，跟其它未知失败原因共用一条"请稍后
-        // 重试"文案会误导用户。
-        if (mutationError instanceof AppError && mutationError.code === "ACCOUNT_RESTRICTED") {
-          setContactError(mutationError.message);
-        } else {
-          setContactError(CONTACT_ORGANIZER_DEFAULT_ERROR_MESSAGE);
-        }
-      }
-    });
-  }
 
   async function handleShare(activity: ActivityDetail): Promise<void> {
     if (!id) return;
@@ -272,24 +239,13 @@ export function ActivityDetailPage() {
             ? {
                 label: "更多操作",
                 content: (
-                  <>
-                    <ActivityFavoriteButton activityId={data.id} />
-                    <button
-                      type="button"
-                      onClick={() => void handleShare(data)}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text hover:bg-bg"
-                    >
-                      <Share2 size={16} aria-hidden="true" />
-                      分享
-                    </button>
-                    <Link
-                      to={`/activities/${data.id}/report`}
-                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
-                    >
-                      <Flag size={16} aria-hidden="true" />
-                      举报
-                    </Link>
-                  </>
+                  <Link
+                    to={`/activities/${data.id}/report`}
+                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
+                  >
+                    <Flag size={16} aria-hidden="true" />
+                    举报
+                  </Link>
                 )
               }
             : undefined
@@ -450,36 +406,41 @@ export function ActivityDetailPage() {
               </div>
             ) : null}
 
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <ActivityParticipationButtonView action={participationAction} />
-              </div>
-              {currentUserId && data.organizerId === currentUserId ? null : (
-                <div className="flex-1">
-                  <button
-                    type="button"
-                    disabled={createActivityConversation.isPending}
-                    onClick={() => handleContactOrganizerClick(data.id)}
-                    className={SECONDARY_BUTTON_CLASS_NAME}
-                  >
-                    {createActivityConversation.isPending ? "创建会话中…" : "联系发起人"}
-                  </button>
-                  {contactError ? (
-                    <p
-                      role="alert"
-                      className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
-                    >
-                      {contactError}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </div>
-
             <CommentSection activityId={data.id} />
           </div>
         ) : null}
       </div>
+
+      {/* design_handoff_saminest_ios 第 4 项：底部固定操作栏，跟
+          post-detail-page.tsx 的写法是同一套（fixed 定位、白底+顶部细
+          边框、左右各一个竖排图标按钮、中间一个 flex-1 的主按钮，安全区
+          适配也是同一行 style）——收藏用 ActivityFavoriteButton 新增的
+          `variant="icon"`，分享是这个页面本来就有的 handleShare，中间是
+          "参加活动"按钮（ActivityParticipationButtonView，这次改成独占
+          flex-1，不再跟"联系发起人"各占半行，那个按钮已经按设计稿删掉，
+          见页面顶部注释）。整条栏跟正文一样等 data 加载成功才渲染——分享
+          需要 data.title 拼文案，报名按钮也需要 data 里的 status/
+          organizerId 等字段，跟正文其它区块要求一致。 */}
+      {data ? (
+        <div
+          data-testid="activity-detail-action-bar"
+          className="fixed inset-x-0 bottom-0 z-20 flex items-center gap-3 border-t border-border bg-card px-4 pt-3"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <ActivityFavoriteButton activityId={data.id} variant="icon" />
+          <div className="flex-1">
+            <ActivityParticipationButtonView action={participationAction} />
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleShare(data)}
+            className="flex flex-col items-center gap-1 text-text-muted hover:text-primary"
+          >
+            <Share2 size={22} aria-hidden="true" />
+            <span className="text-xs">分享</span>
+          </button>
+        </div>
+      ) : null}
     </main>
   );
 }

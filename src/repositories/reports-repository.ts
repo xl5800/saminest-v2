@@ -327,3 +327,23 @@ export async function listReportsForModeration(
     reporterName: row.reporter?.display_name ?? "未知用户"
   }));
 }
+
+/**
+ * 管理后台顶部 Tab 角标用（功能改动清单第 7 项，同 posts-repository.ts 的
+ * countPendingPosts，理由见那边的注释）：只要待处理举报的数量，不要整份
+ * 列表内容，改成 `{ count: "exact", head: true }`。固定查 status =
+ * 'pending'（角标只对"待处理"这一个状态计数，跟 listReportsForModeration
+ * 默认参数一致），不像 listReportsForModeration 那样接受任意 status 参数。
+ */
+export async function countPendingReports(): Promise<number> {
+  const { count, error } = await getSupabaseClient()
+    .from("reports")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending");
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_PENDING_REPORTS_COUNT_FAILED", error);
+  }
+
+  return count ?? 0;
+}

@@ -7,14 +7,22 @@ const {
   dismissReport,
   deletePost,
   deleteComment,
-  adminCancelActivity
+  adminCancelActivity,
+  adminArchivePost,
+  adminDeleteActivity
 } = vi.hoisted(() => ({
   listReportsForModeration: vi.fn(),
   resolveReport: vi.fn(),
   dismissReport: vi.fn(),
   deletePost: vi.fn(),
   deleteComment: vi.fn(),
-  adminCancelActivity: vi.fn()
+  adminCancelActivity: vi.fn(),
+  // 功能改动清单第 7 项："下架帖子"/"删除帖子"/"下架活动"/"删除活动"两组
+  // 新增的直接操作按钮，分别走 adminArchivePost（帖子下架）和
+  // adminDeleteActivity（活动删除，deletePost/adminCancelActivity 两个
+  // 已经在用了）。
+  adminArchivePost: vi.fn(),
+  adminDeleteActivity: vi.fn()
 }));
 
 vi.mock("../../repositories/reports-repository", async () => {
@@ -23,15 +31,29 @@ vi.mock("../../repositories/reports-repository", async () => {
   );
   return {
     ...actual,
-    listReportsForModeration
+    listReportsForModeration,
+    // 上面这个 spread ...actual 会带出真实的 countPendingReports（AdminNav
+    // 「举报处理」角标用的数量查询，功能改动清单第 7 项），真实实现会打到
+    // 真正的 Supabase 客户端——测试环境没有配置真实的连接信息，这里显式
+    // 覆盖成一个 mock，跟这个页面自己的 listReportsForModeration mock是
+    // 同一个理由，不依赖 actual 里的真实网络调用。
+    countPendingReports: () => Promise.resolve(0)
   };
 });
+// AdminNav 同时也会为「待审核」角标调用 countPendingPosts，这个页面本身
+// 跟待审核帖子数据无关，只提供最小 mock，见 pending-posts-page.test.tsx /
+// all-posts-page.test.tsx 同样的注释。
+vi.mock("../../repositories/posts-repository", () => ({
+  countPendingPosts: () => Promise.resolve(0)
+}));
 vi.mock("../../repositories/admin-repository", () => ({
   resolveReport,
   dismissReport,
   deletePost,
   deleteComment,
-  adminCancelActivity
+  adminCancelActivity,
+  adminArchivePost,
+  adminDeleteActivity
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -59,6 +81,8 @@ describe("AdminReportsPage", () => {
     deletePost.mockReset();
     deleteComment.mockReset();
     adminCancelActivity.mockReset();
+    adminArchivePost.mockReset();
+    adminDeleteActivity.mockReset();
   });
 
   it("shows an empty state when there are no reports", async () => {
@@ -264,6 +288,9 @@ describe("AdminReportsPage", () => {
     });
   });
 
+  // 状态筛选从原生 <select> 改成胶囊 Chips（功能改动清单第 7 项），"待处理"
+  // 这颗 chip 用 aria-pressed 表达选中态，不再是 <select> 的 value，理由
+  // 跟 all-posts-page.test.tsx 同一批筛选测试的改法一致。
   it("defaults the status filter to pending and requests pending reports", async () => {
     listReportsForModeration.mockResolvedValue([]);
 
@@ -272,7 +299,10 @@ describe("AdminReportsPage", () => {
     await waitFor(() => {
       expect(listReportsForModeration).toHaveBeenCalledWith("pending");
     });
-    expect(screen.getByLabelText("状态")).toHaveValue("pending");
+    expect(await screen.findByRole("button", { name: "待处理" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
   });
 
   it("re-queries with the new status when the filter changes", async () => {
@@ -283,11 +313,15 @@ describe("AdminReportsPage", () => {
       expect(listReportsForModeration).toHaveBeenCalledWith("pending");
     });
 
-    fireEvent.change(screen.getByLabelText("状态"), { target: { value: "resolved" } });
+    fireEvent.click(screen.getByRole("button", { name: "已处理" }));
 
     await waitFor(() => {
       expect(listReportsForModeration).toHaveBeenCalledWith("resolved");
     });
+    expect(screen.getByRole("button", { name: "已处理" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
   });
 
   it("shows a validation error and does not call resolveReport when confirming with an empty note", async () => {
@@ -655,6 +689,168 @@ describe("AdminReportsPage", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent(
         "举报已处理，但下架活动失败"
       );
+    });
+  });
+
+  // 功能改动清单第 7 项："帖子/活动类新增「下架帖子」「删除帖子」（或
+  // 「下架活动」「删除活动」）两个直接操作"——跟上面 resolveReport/
+  // dismissReport 驱动的"标记已处理/驳回举报"是完全独立的一条路径，见
+  // reports-page.tsx 顶部 DirectActionCopy 相关注释：不调用 resolve/
+  // dismiss，这一行不会消失，改用 directActionResultTags 展示的小标签
+  // 提示操作已完成。
+  describe("直接操作：下架/删除帖子或活动", () => {
+    const postReport = {
+      ...sampleReport,
+      id: "report-post-1",
+      targetType: "post",
+      targetId: "post-1"
+    };
+    const activityReport = {
+      ...sampleReport,
+      id: "report-activity-1",
+      targetType: "activity",
+      targetId: "act-1"
+    };
+    const userReport = {
+      ...sampleReport,
+      id: "report-user-1",
+      targetType: "user",
+      targetId: "user-1"
+    };
+    const commentReport = {
+      ...sampleReport,
+      id: "report-comment-1",
+      targetType: "comment",
+      targetId: "comment-1",
+      commentPreview: null
+    };
+
+    it("shows 下架帖子/删除帖子 for post reports and 下架活动/删除活动 for activity reports, but neither for user or comment reports", async () => {
+      listReportsForModeration.mockResolvedValue([
+        postReport,
+        activityReport,
+        userReport,
+        commentReport
+      ]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findAllByText("广告/垃圾信息");
+
+      expect(screen.getByRole("button", { name: "下架帖子" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "删除帖子" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "下架活动" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "删除活动" })).toBeInTheDocument();
+    });
+
+    it("submits 下架帖子 with its own reason, calling adminArchivePost directly (not resolveReport/dismissReport), and keeps the row with a 帖子已下架 tag", async () => {
+      adminArchivePost.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([postReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架帖子" }));
+      fireEvent.change(screen.getByLabelText("下架原因"), {
+        target: { value: "涉嫌虚假信息" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      await waitFor(() => {
+        expect(adminArchivePost).toHaveBeenCalledWith("post-1", "涉嫌虚假信息");
+      });
+      expect(resolveReport).not.toHaveBeenCalled();
+      expect(dismissReport).not.toHaveBeenCalled();
+      expect(await screen.findByText("帖子已下架")).toBeInTheDocument();
+      expect(screen.getByText("广告/垃圾信息")).toBeInTheDocument();
+    });
+
+    it("submits 删除帖子 with its own reason, calling deletePost directly and keeps the row with a 帖子已删除 tag", async () => {
+      deletePost.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([postReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "删除帖子" }));
+      fireEvent.change(screen.getByLabelText("删除原因"), {
+        target: { value: "违反平台规则" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+      await waitFor(() => {
+        expect(deletePost).toHaveBeenCalledWith("post-1", "违反平台规则");
+      });
+      expect(await screen.findByText("帖子已删除")).toBeInTheDocument();
+      expect(screen.getByText("广告/垃圾信息")).toBeInTheDocument();
+    });
+
+    it("submits 下架活动 with its own reason, calling adminCancelActivity directly and keeps the row with a 活动已下架 tag", async () => {
+      adminCancelActivity.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([activityReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架活动" }));
+      fireEvent.change(screen.getByLabelText("下架原因"), {
+        target: { value: "违反平台规则" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      await waitFor(() => {
+        expect(adminCancelActivity).toHaveBeenCalledWith("act-1", "违反平台规则");
+      });
+      expect(await screen.findByText("活动已下架")).toBeInTheDocument();
+    });
+
+    it("submits 删除活动 with its own reason, calling adminDeleteActivity directly and keeps the row with a 活动已删除 tag", async () => {
+      adminDeleteActivity.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([activityReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "删除活动" }));
+      fireEvent.change(screen.getByLabelText("删除原因"), {
+        target: { value: "违反平台规则" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+      await waitFor(() => {
+        expect(adminDeleteActivity).toHaveBeenCalledWith("act-1", "违反平台规则");
+      });
+      expect(await screen.findByText("活动已删除")).toBeInTheDocument();
+    });
+
+    it("shows a validation error and does not call adminArchivePost when confirming 下架帖子 with an empty reason", async () => {
+      listReportsForModeration.mockResolvedValue([postReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架帖子" }));
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("请填写下架原因。");
+      expect(adminArchivePost).not.toHaveBeenCalled();
+    });
+
+    it("preserves the typed reason and shows a row error when adminArchivePost fails", async () => {
+      adminArchivePost.mockRejectedValue(new Error("boom"));
+      listReportsForModeration.mockResolvedValue([postReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架帖子" }));
+      fireEvent.change(screen.getByLabelText("下架原因"), {
+        target: { value: "涉嫌虚假信息" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
+      expect(screen.getByLabelText("下架原因")).toHaveValue("涉嫌虚假信息");
+      expect(screen.getByText("广告/垃圾信息")).toBeInTheDocument();
     });
   });
 });

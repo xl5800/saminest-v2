@@ -1,9 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hoisted(() => {
+const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock } = vi.hoisted(() => {
   const overrideTypesMock = vi.fn();
   const singleMock = vi.fn();
   const maybeSingleMock = vi.fn();
+  // countPendingPosts（功能改动清单第 7 项，AdminNav「待审核」角标）的
+  // 查询链路是 select({count,head:true}).eq("status","pending").is("deleted_at",null)，
+  // 最后一步 is() 之后没有再调用任何终结方法，是直接 await 整条链式调用
+  // 本身——真实的 supabase-js query builder 本身就是个 thenable。这里补
+  // 一个 .then 让 builder 自己也能被直接 await，写法照抄
+  // activities-repository.test.ts 的 hasPendingActivityParticipantsForOrganizer
+  // 那份注释和实现。
+  const thenMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   const chain = [
     "select",
@@ -23,7 +31,10 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock } = vi.hois
   builder.overrideTypes = overrideTypesMock;
   builder.single = singleMock;
   builder.maybeSingle = maybeSingleMock;
-  return { queryBuilder: builder, overrideTypesMock, singleMock, maybeSingleMock };
+  builder.then = vi.fn((resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+    Promise.resolve(thenMock()).then(resolve, reject)
+  );
+  return { queryBuilder: builder, overrideTypesMock, singleMock, maybeSingleMock, thenMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -35,6 +46,7 @@ vi.mock("../integrations/supabase/client", () => ({
 
 import {
   archivePost,
+  countPendingPosts,
   createPost,
   deleteMyPost,
   getPostAuthorId,
@@ -235,6 +247,40 @@ describe("listApprovedPosts", () => {
       ],
       hasNextPage: false
     });
+  });
+
+  // design_handoff_saminest_ios 第 6 项：location_text 现在可以跟真实的
+  // location 联表结果共存（发帖人选了州之后又填了"城市/具体位置"），这时
+  // 展示应该优先用 location_text（跟 activities 的 landmarkText ??
+  // locationName 是同一个优先级），不是像改动前那样直接用 location.name、
+  // 静默丢掉 location_text，见 resolveLocationName 的注释。
+  it("prefers location_text over the joined location name when both are present", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "Sunny room",
+          price_amount: 1200,
+          price_label: null,
+          currency_code: "USD",
+          created_at: "2026-07-01T00:00:00.000Z",
+          favorite_count: 3,
+          comment_count: 7,
+          poster_age: 25,
+          poster_gender: "女",
+          location: { name: "CA 加利福尼亚州" },
+          location_text: "近 UCLA",
+          category: { name_zh: "租房" },
+          author: { display_name: "Alice", avatar_url: "https://img.example.com/avatar.jpg" },
+          post_images: []
+        }
+      ],
+      error: null
+    });
+
+    const result = await listApprovedPosts({ page: 0, pageSize: 1 });
+
+    expect(result.posts[0].locationName).toBe("近 UCLA");
   });
 
   it("drops the extra row and reports hasNextPage when more than pageSize rows come back", async () => {
@@ -617,7 +663,10 @@ describe("listPendingPosts", () => {
         createdAt: "2026-07-01T00:00:00.000Z",
         authorName: "Alice",
         categoryName: "租房",
-        status: "pending"
+        status: "pending",
+        // 待审核的帖子不可能已经被驳回或下架过，这两个字段恒为 null。
+        rejectionReason: null,
+        archiveReason: null
       }
     ]);
   });
@@ -656,6 +705,53 @@ describe("listPendingPosts", () => {
 
     await expect(listPendingPosts()).rejects.toMatchObject({
       code: "ADMIN_PENDING_POSTS_LIST_FAILED"
+    });
+  });
+});
+
+// 功能改动清单第 7 项：AdminNav「待审核」角标用的数量查询，见
+// posts-repository.ts 里 countPendingPosts 顶部的注释。
+describe("countPendingPosts", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    thenMock.mockReset();
+  });
+
+  it("queries posts filtered to status = pending and deleted_at is null, with count: 'exact', head: true", async () => {
+    thenMock.mockResolvedValue({ count: 0, data: null, error: null });
+
+    await countPendingPosts();
+
+    expect(fromMock).toHaveBeenCalledWith("posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+  });
+
+  it("returns the count when the query succeeds", async () => {
+    thenMock.mockResolvedValue({ count: 7, data: null, error: null });
+
+    await expect(countPendingPosts()).resolves.toBe(7);
+  });
+
+  it("returns 0 (not throw) when count comes back null", async () => {
+    thenMock.mockResolvedValue({ count: null, data: null, error: null });
+
+    await expect(countPendingPosts()).resolves.toBe(0);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    thenMock.mockResolvedValue({
+      count: null,
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(countPendingPosts()).rejects.toMatchObject({
+      code: "ADMIN_PENDING_POSTS_COUNT_FAILED"
     });
   });
 });
@@ -780,6 +876,12 @@ describe("getPostDetail", () => {
       locationId: "loc-1",
       locationText: null,
       locationName: "Rockville",
+      // design_handoff_saminest_ios 第 6 项新增字段——联表结果本身（不经过
+      // resolveLocationName 的 locationText fallback），见 PostDetail 接口
+      // 上对这个字段的注释。这条用例的 location_text 是 null，所以跟
+      // locationName 取值相同，不能靠这一点误以为两个字段是一回事——下面
+      // "prefers location_text..." 那条用例专门覆盖两者不同的情况。
+      locationJoinedName: "Rockville",
       createdAt: "2026-07-01T00:00:00.000Z",
       authorDisplayName: "Alice",
       authorId: "user-1",
@@ -933,7 +1035,9 @@ describe("listAllPosts", () => {
           created_at: "2026-07-01T00:00:00.000Z",
           status: "approved",
           author_name: "Alice",
-          category_name: "租房"
+          category_name: "租房",
+          rejection_reason: null,
+          archive_reason: null
         }
       ],
       error: null
@@ -948,9 +1052,39 @@ describe("listAllPosts", () => {
         createdAt: "2026-07-01T00:00:00.000Z",
         authorName: "Alice",
         categoryName: "租房",
-        status: "approved"
+        status: "approved",
+        rejectionReason: null,
+        archiveReason: null
       }
     ]);
+  });
+
+  // 功能改动清单第 7 项：管理后台「全部帖子」要展示驳回/下架原因的灰底
+  // 备注，admin_list_posts() 现在会带出 rejection_reason / archive_reason
+  // 这两列（见
+  // supabase/migrations/20260929000000_admin_archive_post_function.sql），
+  // 这里单独断言一条已下架的行能正确映射出 archiveReason。
+  it("maps a delisted row's archive_reason through to archiveReason", async () => {
+    rpcMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-2",
+          title: "Old listing",
+          created_at: "2026-07-02T00:00:00.000Z",
+          status: "archived",
+          author_name: "Bob",
+          category_name: "二手",
+          rejection_reason: null,
+          archive_reason: "涉嫌虚假信息，管理员下架"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listAllPosts();
+
+    expect(result[0].archiveReason).toBe("涉嫌虚假信息，管理员下架");
+    expect(result[0].rejectionReason).toBeNull();
   });
 
   it("returns an empty list without throwing when there are no posts", async () => {

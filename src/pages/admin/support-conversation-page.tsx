@@ -292,12 +292,17 @@ export function AdminSupportConversationPage() {
                             <img src={message.imageUrl} alt="" className="h-40 w-40 object-cover" />
                           </button>
                         ) : null}
+                        {/* BARRY 明确要求全站背景改米白色时，对方消息
+                            气泡是保留白色的两个例外之一（另一个是帖子
+                            卡片本身）——见 conversation-page.tsx 同一处
+                            气泡、index.css --color-card 改动的注释，这里
+                            用新增的 bg-card-white，不跟 bg-card 一起变。 */}
                         {message.body ? (
                           <div
                             className={
                               isMine
                                 ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3.5 py-2.5 text-base text-white [overflow-wrap:anywhere]"
-                                : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
+                                : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card-white px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
                             }
                           >
                             {message.body}

@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
 import { useAllActivitiesForAdminQuery } from "../../features/admin/use-all-activities-for-admin-query";
+import { useAdminArchivePostMutation } from "../../features/admin/use-admin-archive-post-mutation";
 import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
 import { useAdminDeleteActivityMutation } from "../../features/admin/use-admin-delete-activity-mutation";
 import { useAllPostsQuery } from "../../features/admin/use-all-posts-query";
@@ -15,24 +17,31 @@ const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const DELETE_REASON_REQUIRED_MESSAGE = "请填写删除原因。";
 const CANCEL_REASON_REQUIRED_MESSAGE = "请填写下架原因。";
 
-// value === "" 表示"全部"，不带 status 过滤条件传给 listAllPosts；其余取值
-// 是产品明确要求的三个可选项（pending/approved/rejected）。
+// 功能改动清单第 7 项：管理后台「全部帖子」新增对帖子的「下架」，状态
+// 筛选新增「已下架」（value 直接用 posts.status 真实取值 "archived"——
+// 管理员下架和作者自助下架复用同一个 status 值，见
+// supabase/migrations/20260929000000_admin_archive_post_function.sql
+// 顶部说明）。value === "" 表示"全部"，不带 status 过滤条件传给
+// listAllPosts。
 const STATUS_FILTER_OPTIONS = [
   { value: "", label: "全部" },
   { value: "pending", label: "待审核" },
   { value: "approved", label: "已通过" },
-  { value: "rejected", label: "已驳回" }
+  { value: "rejected", label: "已驳回" },
+  { value: "archived", label: "已下架" }
 ] as const;
 
-// 覆盖 posts.status 约束里现实中会出现的所有取值（不止过滤器上那三个可选
-// 项——过滤器只暴露产品要求的三个，但列表本身默认"全部"时 draft/archived
-// 的帖子也会出现在行里，标签要能覆盖到，不能显示成裸的英文枚举值）。
+// 覆盖 posts.status 约束里现实中会出现的所有取值（不止过滤器上那几个可选
+// 项——过滤器只暴露产品要求的选项，但列表本身默认"全部"时 draft 的帖子
+// 也会出现在行里，标签要能覆盖到，不能显示成裸的英文枚举值）。
+// archived 的文案从"已归档"改成"已下架"——README 管理后台小节统一用
+// "下架"这个词，不管是作者自助下架还是管理员下架，对外都是同一个状态。
 const STATUS_LABELS: Record<string, string> = {
   pending: "待审核",
   approved: "已通过",
   rejected: "已驳回",
   draft: "草稿",
-  archived: "已归档"
+  archived: "已下架"
 };
 
 // activities.status 的取值（open/full/cancelled/ended）跟帖子完全不是
@@ -101,11 +110,16 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  * 行内操作共用一套"删除"表单状态
  * （openDeleteRowId/deleteReasons/deleteValidationErrors/actioningId）——
  * 帖子的删除和活动的删除虽然背后是两个不同的 mutation，但同一时刻只会
- * 展示其中一种行，不会有 id 冲突或"分不清是哪种删除"的问题。活动行
- * 额外的"下架"动作是完全独立的第二套表单状态（openCancelRowId/
- * cancelReasons/cancelValidationErrors）——这是任务卡明确要求的：不能让
- * "下架"和"删除"共享同一个 openDeleteRowId，否则没法同时看清一行现在
- * 展开的到底是哪个表单。
+ * 展示其中一种行，不会有 id 冲突或"分不清是哪种删除"的问题。"下架"动作
+ * 是完全独立的第二套表单状态（openCancelRowId/cancelReasons/
+ * cancelValidationErrors）——这是任务卡明确要求的：不能让"下架"和"删除"
+ * 共享同一个 openDeleteRowId，否则没法同时看清一行现在展开的到底是哪个
+ * 表单。功能改动清单第 7 项给帖子也加了"下架"之后，这套"下架"表单状态
+ * 从"只有活动行会用"变成"帖子行和活动行都会用"，命名保持 open**Cancel**
+ * RowId 不改——活动那边的下架 mutation 本来就叫 cancelActivity，帖子那边
+ * 新增的下架 mutation（adminArchivePost）复用同一套 UI 状态，只是
+ * handleConfirmCancel 内部按 isActivitiesView 分流调用哪个 mutation，跟
+ * handleConfirmDelete 已经在用的分流写法一致。
  *
  * 切换分类/搜索词都要把两套行内表单状态重置——避免在新条件下继续展示上
  * 一个条件下展开到一半的表单。
@@ -139,6 +153,7 @@ export function AdminAllPostsPage() {
   );
 
   const deletePostMutation = useDeletePostMutation();
+  const archivePostMutation = useAdminArchivePostMutation();
   const deleteActivityMutation = useAdminDeleteActivityMutation();
   const cancelActivityMutation = useAdminCancelActivityMutation();
 
@@ -151,8 +166,9 @@ export function AdminAllPostsPage() {
     Record<string, string>
   >({});
 
-  // 活动"下架"独立的一套表单状态——不跟上面的删除表单共享，见组件顶部
-  // 注释。
+  // "下架"独立的一套表单状态（帖子/活动共用同一套 UI 状态，按
+  // isActivitiesView 分流调用哪个 mutation）——不跟上面的删除表单共享，见
+  // 组件顶部注释。
   const [openCancelRowId, setOpenCancelRowId] = useState<string | null>(null);
   const [cancelReasons, setCancelReasons] = useState<Record<string, string>>({});
   const [cancelValidationErrors, setCancelValidationErrors] = useState<
@@ -240,64 +256,94 @@ export function AdminAllPostsPage() {
     }
   }
 
-  async function handleConfirmCancel(activityId: string): Promise<void> {
-    const reason = (cancelReasons[activityId] ?? "").trim();
+  // id 是帖子 id 还是活动 id 由 isActivitiesView 决定——跟 handleConfirmDelete
+  // 已经在用的分流写法一致。帖子那支路调用的是新增的 adminArchivePost
+  // （功能改动清单第 7 项），活动那支路还是原来的 admin_cancel_activity，
+  // 两个不同的 mutation 共用这一套 UI/校验逻辑。
+  async function handleConfirmCancel(id: string): Promise<void> {
+    const reason = (cancelReasons[id] ?? "").trim();
     if (!reason) {
       setCancelValidationErrors((prev) => ({
         ...prev,
-        [activityId]: CANCEL_REASON_REQUIRED_MESSAGE
+        [id]: CANCEL_REASON_REQUIRED_MESSAGE
       }));
       return;
     }
 
-    setCancelValidationErrors((prev) => withoutKey(prev, activityId));
-    setRowErrors((prev) => withoutKey(prev, activityId));
-    setActioningId(activityId);
+    setCancelValidationErrors((prev) => withoutKey(prev, id));
+    setRowErrors((prev) => withoutKey(prev, id));
+    setActioningId(id);
     try {
-      await cancelActivityMutation.mutateAsync({ activityId, cancelReason: reason });
-      setOpenCancelRowId((current) => (current === activityId ? null : current));
-      setCancelReasons((prev) => withoutKey(prev, activityId));
+      if (isActivitiesView) {
+        await cancelActivityMutation.mutateAsync({ activityId: id, cancelReason: reason });
+      } else {
+        await archivePostMutation.mutateAsync({ postId: id, archiveNote: reason });
+      }
+      setOpenCancelRowId((current) => (current === id ? null : current));
+      setCancelReasons((prev) => withoutKey(prev, id));
     } catch {
-      setRowErrors((prev) => ({ ...prev, [activityId]: GENERIC_ERROR_MESSAGE }));
+      setRowErrors((prev) => ({ ...prev, [id]: GENERIC_ERROR_MESSAGE }));
     } finally {
       setActioningId(null);
     }
   }
 
+  // 分类/状态从原生 <select> 改成胶囊 Chips（README 管理后台小节："分类
+  // Chips：全部帖子/租房/求满/二手/找搭子"、"状态分段：全部/待审核/...")。
+  // 选中态视觉直接复用 admin-nav.tsx 顶部 tab 已经确立的写法
+  // （rounded-full + bg-primary text-white / border border-border bg-bg
+  // text-text-muted），保持管理后台内部的胶囊控件视觉统一，不用第三套配色。
+  const chipInactiveClassName =
+    "flex h-8 shrink-0 items-center justify-center rounded-full border border-border bg-bg px-3 text-sm whitespace-nowrap text-text-muted";
+  const chipActiveClassName =
+    "flex h-8 shrink-0 items-center justify-center rounded-full px-3 text-sm whitespace-nowrap bg-primary font-semibold text-white";
+
   const categoryFilterControl = (
-    <label className="mb-4 ml-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-      分类
-      <select
-        value={categoryFilter}
-        onChange={(event) => handleCategoryFilterChange(event.target.value)}
-        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+    <div className="mb-4 flex flex-wrap gap-2">
+      <button
+        type="button"
+        onClick={() => handleCategoryFilterChange("")}
+        aria-pressed={categoryFilter === ""}
+        className={categoryFilter === "" ? chipActiveClassName : chipInactiveClassName}
       >
-        <option value="">全部帖子</option>
-        {(categories ?? []).map((category) => (
-          <option key={category.id} value={category.id}>
-            {category.nameZh}
-          </option>
-        ))}
-        <option value={ACTIVITIES_FILTER_VALUE}>找搭子</option>
-      </select>
-    </label>
+        全部帖子
+      </button>
+      {(categories ?? []).map((category) => (
+        <button
+          key={category.id}
+          type="button"
+          onClick={() => handleCategoryFilterChange(category.id)}
+          aria-pressed={categoryFilter === category.id}
+          className={categoryFilter === category.id ? chipActiveClassName : chipInactiveClassName}
+        >
+          {category.nameZh}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => handleCategoryFilterChange(ACTIVITIES_FILTER_VALUE)}
+        aria-pressed={isActivitiesView}
+        className={isActivitiesView ? chipActiveClassName : chipInactiveClassName}
+      >
+        找搭子
+      </button>
+    </div>
   );
 
   const statusFilterControl = isActivitiesView ? null : (
-    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-      状态
-      <select
-        value={statusFilter}
-        onChange={(event) => handleStatusFilterChange(event.target.value)}
-        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-      >
-        {STATUS_FILTER_OPTIONS.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <div className="mb-4 flex flex-wrap gap-2">
+      {STATUS_FILTER_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => handleStatusFilterChange(option.value)}
+          aria-pressed={statusFilter === option.value}
+          className={statusFilter === option.value ? chipActiveClassName : chipInactiveClassName}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 
   const searchControl = (
@@ -411,88 +457,38 @@ export function AdminAllPostsPage() {
                   </div>
                 )}
                 {isCancelFormOpen ? (
-                  <div className="mt-3 rounded border border-border bg-bg p-3">
-                    {cancelValidationErrors[activity.id] ? (
-                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {cancelValidationErrors[activity.id]}
-                      </p>
-                    ) : null}
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      下架原因
-                      <input
-                        type="text"
-                        value={cancelReasons[activity.id] ?? ""}
-                        onChange={(event) =>
-                          setCancelReasons((prev) => ({
-                            ...prev,
-                            [activity.id]: event.target.value
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => handleConfirmCancel(activity.id)}
-                        className="rounded border border-warning px-3 py-1.5 text-sm font-medium text-warning hover:bg-warning/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        确认下架
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => cancelCancelForm(activity.id)}
-                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
+                  <ReasonSheet
+                    title="下架活动"
+                    targetLabel={activity.title}
+                    reasonLabel="下架原因"
+                    reasonValue={cancelReasons[activity.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setCancelReasons((prev) => ({ ...prev, [activity.id]: value }))
+                    }
+                    errorMessage={cancelValidationErrors[activity.id] ?? null}
+                    confirmLabel="确认下架"
+                    destructive
+                    pending={isActioning}
+                    onConfirm={() => handleConfirmCancel(activity.id)}
+                    onClose={() => cancelCancelForm(activity.id)}
+                  />
                 ) : null}
                 {isDeleteFormOpen ? (
-                  <div className="mt-3 rounded border border-border bg-bg p-3">
-                    {deleteValidationErrors[activity.id] ? (
-                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {deleteValidationErrors[activity.id]}
-                      </p>
-                    ) : null}
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      删除原因
-                      <input
-                        type="text"
-                        value={deleteReasons[activity.id] ?? ""}
-                        onChange={(event) =>
-                          setDeleteReasons((prev) => ({
-                            ...prev,
-                            [activity.id]: event.target.value
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => handleConfirmDelete(activity.id)}
-                        className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        确认删除
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => cancelDeleteForm(activity.id)}
-                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
+                  <ReasonSheet
+                    title="删除活动"
+                    targetLabel={activity.title}
+                    reasonLabel="删除原因"
+                    reasonValue={deleteReasons[activity.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setDeleteReasons((prev) => ({ ...prev, [activity.id]: value }))
+                    }
+                    errorMessage={deleteValidationErrors[activity.id] ?? null}
+                    confirmLabel="确认删除"
+                    destructive
+                    pending={isActioning}
+                    onConfirm={() => handleConfirmDelete(activity.id)}
+                    onClose={() => cancelDeleteForm(activity.id)}
+                  />
                 ) : null}
               </li>
             );
@@ -503,14 +499,25 @@ export function AdminAllPostsPage() {
           {visiblePosts.map((post) => {
             const isActioning = actioningId === post.id;
             const isDeleteFormOpen = openDeleteRowId === post.id;
+            const isCancelFormOpen = openCancelRowId === post.id;
+            const isAlreadyArchived = post.status === "archived";
             const statusVariant =
               post.status === "approved"
                 ? "bg-success/10 text-success"
                 : post.status === "pending"
                   ? "bg-warning/10 text-warning"
-                  : post.status === "rejected"
+                  : post.status === "rejected" || post.status === "archived"
                     ? "bg-danger/10 text-danger"
                     : "bg-bg text-text-muted";
+            // 驳回/下架原因灰底备注（README 管理后台小节）——只在有对应原因
+            // 时才展示，两者互斥（一条帖子不会同时是 rejected 又是
+            // archived），谁的原因非空就展示谁的。
+            const reasonNote =
+              post.status === "rejected" && post.rejectionReason
+                ? { label: "驳回原因", text: post.rejectionReason }
+                : post.status === "archived" && post.archiveReason
+                  ? { label: "下架原因", text: post.archiveReason }
+                  : null;
 
             return (
               <li key={post.id} className="mb-2 rounded-lg border border-border bg-card p-4">
@@ -521,13 +528,26 @@ export function AdminAllPostsPage() {
                   {STATUS_LABELS[post.status] ?? post.status}
                 </span>
                 <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(post.createdAt)}</span>
+                {reasonNote ? (
+                  <p className="mb-2 mt-1 rounded bg-bg px-2 py-1 text-xs text-text-muted">
+                    {reasonNote.label}：{reasonNote.text}
+                  </p>
+                ) : null}
                 {rowErrors[post.id] ? (
                   <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                     {rowErrors[post.id]}
                   </p>
                 ) : null}
-                {isDeleteFormOpen ? null : (
+                {isDeleteFormOpen || isCancelFormOpen ? null : (
                   <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isActioning || isAlreadyArchived}
+                      onClick={() => openCancelForm(post.id)}
+                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      下架
+                    </button>
                     <button
                       type="button"
                       disabled={isActioning}
@@ -538,47 +558,39 @@ export function AdminAllPostsPage() {
                     </button>
                   </div>
                 )}
+                {isCancelFormOpen ? (
+                  <ReasonSheet
+                    title="下架帖子"
+                    targetLabel={post.title}
+                    reasonLabel="下架原因"
+                    reasonValue={cancelReasons[post.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setCancelReasons((prev) => ({ ...prev, [post.id]: value }))
+                    }
+                    errorMessage={cancelValidationErrors[post.id] ?? null}
+                    confirmLabel="确认下架"
+                    destructive
+                    pending={isActioning}
+                    onConfirm={() => handleConfirmCancel(post.id)}
+                    onClose={() => cancelCancelForm(post.id)}
+                  />
+                ) : null}
                 {isDeleteFormOpen ? (
-                  <div className="mt-3 rounded border border-border bg-bg p-3">
-                    {deleteValidationErrors[post.id] ? (
-                      <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                        {deleteValidationErrors[post.id]}
-                      </p>
-                    ) : null}
-                    <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                      删除原因
-                      <input
-                        type="text"
-                        value={deleteReasons[post.id] ?? ""}
-                        onChange={(event) =>
-                          setDeleteReasons((prev) => ({
-                            ...prev,
-                            [post.id]: event.target.value
-                          }))
-                        }
-                        disabled={isActioning}
-                        className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                      />
-                    </label>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => handleConfirmDelete(post.id)}
-                        className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        确认删除
-                      </button>
-                      <button
-                        type="button"
-                        disabled={isActioning}
-                        onClick={() => cancelDeleteForm(post.id)}
-                        className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </div>
+                  <ReasonSheet
+                    title="删除帖子"
+                    targetLabel={post.title}
+                    reasonLabel="删除原因"
+                    reasonValue={deleteReasons[post.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setDeleteReasons((prev) => ({ ...prev, [post.id]: value }))
+                    }
+                    errorMessage={deleteValidationErrors[post.id] ?? null}
+                    confirmLabel="确认删除"
+                    destructive
+                    pending={isActioning}
+                    onConfirm={() => handleConfirmDelete(post.id)}
+                    onClose={() => cancelDeleteForm(post.id)}
+                  />
                 ) : null}
               </li>
             );

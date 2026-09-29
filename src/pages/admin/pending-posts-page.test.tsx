@@ -8,11 +8,20 @@ const { listPendingPosts, approvePost, rejectPost } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../repositories/posts-repository", () => ({
-  listPendingPosts
+  listPendingPosts,
+  // AdminNav（这个页面顶部渲染的管理后台导航条）功能改动清单第 7 项新增了
+  // "待审核"角标，会调用 countPendingPosts——这个页面自己的测试跟角标数字
+  // 无关，这里只给一个不为 0 的默认值，不然会一直不渲染而失去测试意义。
+  countPendingPosts: () => Promise.resolve(0)
 }));
 vi.mock("../../repositories/admin-repository", () => ({
   approvePost,
   rejectPost
+}));
+// 同上，AdminNav 也会为"举报处理"角标调用 countPendingReports；这个页面
+// 本身不依赖举报数据，这里只提供最小 mock 避免真的打到 Supabase。
+vi.mock("../../repositories/reports-repository", () => ({
+  countPendingReports: () => Promise.resolve(0)
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";

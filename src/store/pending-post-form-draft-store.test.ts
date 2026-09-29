@@ -25,6 +25,9 @@ const sampleDraft = {
   // 用例的 round-trip 断言。
   posterAge: "25",
   posterGender: "女",
+  // design_handoff_saminest_ios 第 6 项新增——见 store 顶部对这个字段的
+  // 注释，跟其它字段一样参与 round-trip 断言。
+  locationText: "近地铁站",
   images: [sampleFile],
   existingImages: []
 };

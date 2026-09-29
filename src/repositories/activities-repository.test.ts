@@ -90,7 +90,7 @@ describe("listActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     // 显式过滤 deleted_at，不只靠 RLS——发起人/管理员自己查这个公开列表
     // 时，activities_select_own 这条策略会让他们看到自己已经删除的活动，
@@ -110,29 +110,96 @@ describe("listActivities", () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith("channel", "food");
   });
 
-  // 08 号卡：locationId 换成了 stateCode——筛选一个州时，location 这一列
-  // 的联表从左连接换成 `locations!inner(...)`（PostgREST 要求这么写才能
-  // 对内嵌表的列做过滤），select 字符串也要跟着变，见
-  // activities-repository.ts 的 buildActivityListSelectColumns。
-  it("also filters by stateCode when provided, switching the location join to an inner join", async () => {
+  // design_handoff_saminest_ios 第 6 项之前，08 号卡这里筛一个州时会把
+  // location 联表从左连接换成 `locations!inner(...)`。这次改成 JS 层过滤
+  // （见 activities-repository.ts 里 listActivities 顶部"线上活动任何州都
+  // 显示"那段注释），select 字符串不再随 stateCode 有没有传而变化，
+  // `.eq("location.state_code", ...)` 这次 SQL 层过滤也删掉了——两条测试
+  // 换成下面这一条，断言"不管传不传 stateCode，select 和 eq 调用都一样"。
+  it("always selects the same columns (including location.state_code) regardless of stateCode, and never sends a SQL-level state_code filter", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listActivities({ stateCode: "VA" });
 
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations!inner(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
-    expect(queryBuilder.eq).toHaveBeenCalledWith("location.state_code", "VA");
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("location.state_code", "VA");
   });
 
-  it("does not switch to an inner join when stateCode is not provided (unfiltered browsing keeps location-less activities)", async () => {
-    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+  // design_handoff_saminest_ios 第 6 项："线上活动任何州都显示"——筛某个
+  // 州时，同州的线下活动保留，其它州的线下活动被过滤掉，但线上活动
+  // （is_online）不管 location 是什么（包括 null，线上活动本来就可以不填
+  // 州）都要保留。
+  describe("stateCode filtering (design_handoff_saminest_ios 第 6 项：线上活动任何州都显示)", () => {
+    function activityRow(overrides: Record<string, unknown>): Record<string, unknown> {
+      return {
+        id: "act-x",
+        organizer_id: "user-1",
+        channel: "food",
+        tag_text: null,
+        title: "占位标题",
+        location: null,
+        landmark_text: null,
+        is_online: false,
+        start_at: "2026-08-20T18:00:00.000Z",
+        capacity: null,
+        participant_count: 1,
+        status: "open",
+        requires_approval: false,
+        organizer: null,
+        ...overrides
+      };
+    }
 
-    await listActivities();
+    it("keeps an offline activity in the matching state, drops one in a different state", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          activityRow({ id: "act-va", location: { name: "Arlington", state_code: "VA" } }),
+          activityRow({ id: "act-md", location: { name: "Rockville", state_code: "MD" } })
+        ],
+        error: null
+      });
 
-    expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
-    );
+      const result = await listActivities({ stateCode: "VA" });
+
+      expect(result.map((item) => item.id)).toEqual(["act-va"]);
+    });
+
+    it("keeps an online activity with no location (or a different state's location) when a state filter is active", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          activityRow({ id: "act-online-no-location", is_online: true, location: null }),
+          activityRow({
+            id: "act-online-other-state",
+            is_online: true,
+            location: { name: "Austin", state_code: "TX" }
+          }),
+          activityRow({ id: "act-offline-other-state", location: { name: "Austin", state_code: "TX" } })
+        ],
+        error: null
+      });
+
+      const result = await listActivities({ stateCode: "VA" });
+
+      expect(result.map((item) => item.id).sort()).toEqual(
+        ["act-online-no-location", "act-online-other-state"].sort()
+      );
+    });
+
+    it("does not filter anything when stateCode is not provided", async () => {
+      overrideTypesMock.mockResolvedValue({
+        data: [
+          activityRow({ id: "act-va", location: { name: "Arlington", state_code: "VA" } }),
+          activityRow({ id: "act-md", location: { name: "Rockville", state_code: "MD" } })
+        ],
+        error: null
+      });
+
+      const result = await listActivities();
+
+      expect(result.map((item) => item.id).sort()).toEqual(["act-md", "act-va"]);
+    });
   });
 
   it("maps rows to ActivityListItem, resolving the joined location name, organizer identity and requiresApproval", async () => {
@@ -901,7 +968,7 @@ describe("listMyOrganizedActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("organizer_id", "user-1");
     expect(queryBuilder.in).not.toHaveBeenCalled();
@@ -983,7 +1050,7 @@ describe("listMyJoinedActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url))"
+      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url))"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);

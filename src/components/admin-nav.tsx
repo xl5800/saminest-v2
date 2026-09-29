@@ -1,5 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 
+import { usePendingPostsCountQuery } from "../features/admin/use-pending-posts-count-query";
+import { usePendingReportsCountQuery } from "../features/admin/use-pending-reports-count-query";
+
 interface AdminNavItem {
   to: string;
   label: string;
@@ -43,19 +46,51 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
  * 视觉上沿用 category-nav.tsx 的横向可滚动胶囊 tab（overflow-x-auto + 圆角
  * 胶囊 + aria-current="page"），不用固定网格布局，方便以后管理页面变多时
  * 不用重新设计这个组件。
+ *
+ * 功能改动清单第 7 项（README 管理后台小节："待审核、举报处理、客服显示
+ * 红色计数角标（选中时角标白底蓝字）"）：「待审核」「举报处理」两个角标
+ * 分别走 countPendingPosts/countPendingReports（posts-repository.ts /
+ * reports-repository.ts 新增的 `{ count: "exact", head: true }` 查询，
+ * 不拉整份列表，见各自文件里的注释），数字为 0 时不渲染角标（没有待处理
+ * 项时没必要展示一个"0"）。
+ *
+ * 「客服」角标这次没有实现，是刻意搁置，不是遗漏：客服会话走
+ * admin_list_support_conversations 这个 security definer RPC（管理员
+ * 不是 conversation_members 里的一行，直接对 conversations/messages 表开
+ * is_admin() RLS 例外这条路已经在
+ * supabase/migrations/20260921040500_remove_admin_exception_from_conversation_rls.sql
+ * 里因为一次真实的数据泄露事故回退过，不能重蹈），而这个 RPC 目前完全没有
+ * "管理员未读"这个概念（返回列里没有对应字段，客服普通用户那边的未读靠
+ * conversation_members.last_read_at，管理员没有这一行，机制不适用）——
+ * 要做这个角标需要先设计"未读"在管理员语境下到底怎么定义、再加一次新的
+ * 数据库迁移（比如给 conversations 加一列 admin_last_read_at，或者换一个
+ * 计数口径），跟功能改动清单第 5/6 项一样属于"需要改数据库"且需要先出
+ * 方案的范畴，这次任务卡的范围不包含，先不做，留给后续单独排期。
  */
 export function AdminNav() {
   const location = useLocation();
+  const pendingPostsCountQuery = usePendingPostsCountQuery();
+  const pendingReportsCountQuery = usePendingReportsCountQuery();
+
+  const badgeCountsByPath: Record<string, number | undefined> = {
+    "/admin/posts": pendingPostsCountQuery.data,
+    "/admin/reports": pendingReportsCountQuery.data
+  };
 
   const inactiveClassName =
     "flex h-9 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
   const activeClassName =
     "flex h-9 items-center justify-center rounded-full px-4 text-sm whitespace-nowrap bg-primary text-white font-semibold";
+  const inactiveBadgeClassName =
+    "ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-danger px-1 text-xs font-semibold text-white";
+  const activeBadgeClassName =
+    "ml-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-xs font-semibold text-primary";
 
   return (
     <nav aria-label="管理后台导航" className="mb-4 flex gap-2 overflow-x-auto">
       {ADMIN_NAV_ITEMS.map((item) => {
         const active = location.pathname === item.to;
+        const badgeCount = badgeCountsByPath[item.to];
         return (
           <Link
             key={item.to}
@@ -64,6 +99,11 @@ export function AdminNav() {
             className={active ? activeClassName : inactiveClassName}
           >
             {item.label}
+            {badgeCount ? (
+              <span className={active ? activeBadgeClassName : inactiveBadgeClassName}>
+                {badgeCount}
+              </span>
+            ) : null}
           </Link>
         );
       })}

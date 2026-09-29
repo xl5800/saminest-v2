@@ -124,6 +124,22 @@
  *   场景再新增）、Tailwind 内置的 `text-white`，避免为了跟原方案名字对齐
  *   而硬造没有独立数值的重复 token。
  */
+/*
+ * design_handoff_saminest_ios（方案 1a，2026-09-28）功能改动清单第 1 项：
+ * 全局配色换成暖色中性。蓝色系（primary/primary-hover/primary-pressed/
+ * primary-dark/primary-light/primary-lighter/primary-soft/accent）保持
+ * 原值不变——handoff README 明确"蓝色系保持不变"，这里只改中性色（背景/
+ * 文字/边框/分割线/遮罩/卡片投影）的数值，不新增、不删除、不改名任何
+ * token，延续这个文件一贯的"改值不改名"原则。
+ *
+ * handoff 的 Design Tokens 表格里有四行（正文段落 #2F2B27、次要正文
+ * #4A453F、强边框——虚线添加框/复选框 #CDC7BD、弹层投影 0 -8px 30px
+ * rgba(60,45,30,.12)）没有对应的现有 token 名字，是新的组件级用法，不是
+ * "改现有 token 的值"，所以这次不新建 token——留到功能改动清单里真正用到
+ * 它们的那几项（发布页虚线添加框、帖子详情正文、地区选择底部弹层）落地时,
+ * 再按那批组件的实际需要决定新增 token 还是内联，避免这次"只改中性色值"
+ * 的任务卡范围里先斩后奏建一批还没有调用点的 token。
+ */
 @theme {
   --color-primary: #315bea;
   /* 按下态（--color-primary-pressed）是这批新增的，跟 hover 反馈是两个
@@ -148,12 +164,17 @@
    * （body 直接用它），首页/找搭子/消息列表/聊天/我的/公开主页这次都是
    * 跟着这一个数值变化自动统一变灰，不需要逐页面改代码。
    */
-  --color-bg: #ebedf3;
+  /* design handoff 第 1 项（暖色中性）：#ebedf3 → #f7f5f1，跟卡片
+     （--color-card，仍是纯白）之间继续靠"背景变暖灰 + 卡片边框投影"拉开
+     层次，不是把卡片也调暖。 */
+  --color-bg: #f7f5f1;
   /* 次级页面背景，这批新增——给需要跟主页面背景区分一档、但又不到卡片
-     纯白程度的场景用，这一批四个页面暂时没有用到，留给第二批。 */
-  --color-bg-secondary: #f0f3f8;
+     纯白程度的场景用，这一批四个页面暂时没有用到，留给第二批。
+     design handoff 第 1 项：#f0f3f8 → #f2efe9（跟下面 --color-surface-muted
+     这次改成同一个值，handoff 表格把这两个 token 合并成一行）。 */
+  --color-bg-secondary: #f2efe9;
   /*
-   * --color-card（Card 背景，#FFFFFF，见 00-overview.md 全局设计 Token
+   * --color-card（Card 背景，见 00-overview.md 全局设计 Token
    * 表格）：01 号卡的 token 落地漏掉了这一条，导致 top-bar.tsx 的
    * ICON_BUTTON_CLASS_NAME、category-nav.tsx、post-list.tsx 等一批早就在
    * 用的 bg-card/ring-card class 因为没有对应的 --color-card 变量，一直
@@ -166,29 +187,67 @@
    * ring-card/text-card 用法不用跟着改。这批视觉 Token 体系落地数值维持
    * #ffffff 不变——层次感靠背景变灰+卡片边框投影撑出来，不是把卡片也
    * 调灰。
+   *
+   * BARRY 明确要求（这次不是 design_handoff_saminest_ios README 里的
+   * 条目，是直接口头提的）：除了帖子卡片本身（post-list.tsx）和聊天里
+   * 对方发来的消息气泡，全站其它所有原来纯白的 bg-card 背景（找搭子卡片、
+   * 个人主页身份信息卡、"我的帖子/收藏"列表行、TopBar/底部导航/顶栏这类
+   * 常驻 UI、发布表单的输入框、各种弹窗/操作面板、管理后台等）都要换成
+   * 米白色——这两个例外要保留对比度：帖子卡片是全站曝光最高的主力内容，
+   * 聊天气泡本身贴着已经是米白色的页面背景（--color-bg），气泡和背景
+   * 撞成同一个颜色会分不清"这是一条消息"还是"这是空白页面"。
+   *
+   * 这里直接把 --color-card 本身改成米白色（跟 --color-bg-secondary/
+   * --color-surface-muted 复用同一个数值，三个 token 语义不同但刻意保持
+   * 同一档米白，不再新增一个数值相近又不完全一样的第三种"米白"），全站
+   * 绝大多数 bg-card/ring-card 调用点不需要逐个改 class，颜色自动跟着变；
+   * 只有下面 --color-card-white 这个新 token 覆盖的两个例外场景需要手动
+   * 把 class 从 bg-card 换成 bg-card-white，没有改回 #ffffff 语义的
+   * bg-card 用法保留白色。
    */
-  --color-card: #ffffff;
+  --color-card: #f2efe9;
+  /* 上面这条注释里"两个例外"专用——post-list.tsx 的帖子卡片本身（含骨架屏）
+   * 和 conversation-page.tsx / support-conversation-page.tsx 对方消息
+   * 气泡，这三处从 bg-card 换成 bg-card-white，保留纯白，不跟着
+   * --color-card 这次改成米白色。新建一个 token 而不是复用旧的
+   * --color-card 数值原地保留白色再让"其它一切"改用新 token，是因为
+   * 这次要改的调用点（40+ 处）远比要保留白色的调用点（数量个位数）多，
+   * 反过来改动量小得多，也不需要逐个排查"这处 bg-card 到底要不要变"。 */
+  --color-card-white: #ffffff;
   /* 弱化表面/图片占位底色，这批新增——找搭子卡片的头像空位占位格这次换
-     成这个 token，见 activity-participant-avatars.tsx 的改动。 */
-  --color-surface-muted: #eef1f7;
-  /* 列表项 hover/按下态，这批新增，这一批四个页面暂时没有用到。 */
-  --color-surface-hover: #f8f9fc;
+     成这个 token，见 activity-participant-avatars.tsx 的改动。
+     design handoff 第 1 项：#eef1f7 → #f2efe9（跟 --color-bg-secondary
+     合并成同一个值，见上面那条注释）。 */
+  --color-surface-muted: #f2efe9;
+  /* 列表项 hover/按下态，这批新增，这一批四个页面暂时没有用到。
+     design handoff 第 1 项：#f8f9fc → #f7f5f1（跟 --color-bg 这次改成
+     同一个值）。 */
+  --color-surface-hover: #f7f5f1;
   --color-surface-pressed: #f0f2f6;
-  --color-text: #20242c;
-  --color-text-muted: #697386;
-  --color-text-subtle: #9aa3b2;
+  /* design handoff 第 1 项：#20242c → #26221e。 */
+  --color-text: #26221e;
+  /* design handoff 第 1 项：#697386 → #756e65。 */
+  --color-text-muted: #756e65;
+  /* design handoff 第 1 项：#9aa3b2 → #9c958b（跟下面 --color-nav-icon
+     这次改成同一个值，handoff 表格把这两个 token 合并成一行）。 */
+  --color-text-subtle: #9c958b;
   /* 输入框占位文字/禁用态文字，这批新增，比 text-subtle 更淡一级，这一批
      四个页面暂时没有用到。 */
   --color-text-placeholder: #a8afbc;
   --color-text-disabled: #c3c8d1;
-  --color-border: #e7eaf0;
+  /* design handoff 第 1 项：#e7eaf0 → #e3ded6。 */
+  --color-border: #e3ded6;
   /* 比 --color-border 更淡一档的分割线，这批新增，这一批暂时没有用到；
-     --color-divider 才是消息列表这类"行与行之间"场景专用的，见下面。 */
-  --color-border-light: #eceef3;
+     --color-divider 才是消息列表这类"行与行之间"场景专用的，见下面。
+     design handoff 第 1 项：#eceef3 → #ece8e1（跟下面 --color-divider
+     这次改成同一个值，handoff 表格把这两个 token 合并成一行）。 */
+  --color-border-light: #ece8e1;
   /* 列表项之间的分割线（比如消息列表行与行之间），跟卡片边框
      --color-border 刻意区分成两个不同数值——分割线要更淡，这批新增，见
-     conversation-list-page.tsx 的改动。 */
-  --color-divider: #e9ecf2;
+     conversation-list-page.tsx 的改动。
+     design handoff 第 1 项：#e9ecf2 → #ece8e1（跟上面 --color-border-light
+     合并成同一个值）。 */
+  --color-divider: #ece8e1;
   /* 顶栏+分类 Chips 固定成一张卡片任务卡新增——固定卡片底部的分隔线，
      跟下面滚动过去的内容区分开（BARRY 明确要求用一条细线，不是靠阴影）。
      卡片背景复用已有的 --color-bg-secondary（#f0f3f8），页面背景是
@@ -214,11 +273,14 @@
   --color-image-placeholder-icon: #a7afbd;
   /* 底部导航未选中图标颜色，这批新增，比 --color-text-muted 稍浅——专门
      给导航用，不复用 text-muted，这一批四个页面暂时没有用到（底部导航
-     在第二批范围）。 */
-  --color-nav-icon: #8c95a3;
+     在第二批范围）。
+     design handoff 第 1 项：#8c95a3 → #9c958b（跟上面 --color-text-subtle
+     合并成同一个值，handoff 表格把这两个 token 合并成一行）。 */
+  --color-nav-icon: #9c958b;
   /* 弹窗/BottomSheet 遮罩层，这批新增，替代黑色遮罩，这一批四个页面暂时
-     没有用到（Modal/BottomSheet 在第二批范围）。 */
-  --color-overlay: rgba(20, 26, 38, 0.45);
+     没有用到（Modal/BottomSheet 在第二批范围）。
+     design handoff 第 1 项：rgba(20,26,38,.45) → rgba(38,34,30,.38)。 */
+  --color-overlay: rgba(38, 34, 30, 0.38);
 
   /*
    * 圆角刻度：Tailwind 默认圆角档位（rounded-lg=8px, rounded-xl=12px,
@@ -255,8 +317,10 @@
    * --shadow-fab 的 RGB 分量同步换算成新的 --color-primary（#315BEA），
    * 透明度从 0.35 降到 0.18，是 BARRY 给的按钮投影数值，不是随意调整。
    */
+  /* design handoff 第 1 项：rgb 分量从冷蓝调 20/30/50 换成暖棕调
+     60/45/30，呼应新的 --color-text（#26221E），透明度改成 .04/.05。 */
   --shadow-card:
-    0 1px 2px rgba(20, 30, 50, 0.03), 0 4px 12px rgba(20, 30, 50, 0.04);
+    0 1px 2px rgba(60, 45, 30, 0.04), 0 4px 12px rgba(60, 45, 30, 0.05);
   --shadow-search: 0 1px 4px rgba(0, 0, 0, 0.06);
   --shadow-fab: 0 6px 16px rgba(49, 91, 234, 0.18);
   --shadow-settings-item: 0 2px 12px rgba(0, 0, 0, 0.05);

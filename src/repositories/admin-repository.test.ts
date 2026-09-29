@@ -7,6 +7,7 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  adminArchivePost,
   adminCancelActivity,
   adminDeleteActivity,
   approvePost,
@@ -182,6 +183,35 @@ describe("deleteComment", () => {
 
     await expect(deleteComment("comment-1", "")).rejects.toMatchObject({
       code: "ADMIN_DELETE_COMMENT_FAILED"
+    });
+  });
+});
+
+// 功能改动清单第 7 项：管理后台新增帖子「下架」。
+describe("adminArchivePost", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_archive_post with target_post_id and archive_note", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminArchivePost("post-1", "涉嫌虚假信息");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_archive_post", {
+      target_post_id: "post-1",
+      archive_note: "涉嫌虚假信息"
+    });
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. empty reason or already archived)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "archive_note is required" }
+    });
+
+    await expect(adminArchivePost("post-1", "")).rejects.toMatchObject({
+      code: "ADMIN_ARCHIVE_POST_FAILED"
     });
   });
 });

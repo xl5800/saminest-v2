@@ -165,6 +165,39 @@ export async function adminDeleteActivity(
 }
 
 /**
+ * 管理员下架帖子（把 posts.status 改成 'archived' + 写 archive_reason +
+ * 记一条 moderation_actions 日志，原子性由 admin_archive_post 这个
+ * security definer 函数保证，见
+ * supabase/migrations/20260929000000_admin_archive_post_function.sql）。
+ * 功能改动清单第 7 项：原版帖子只有删除，这里新增「下架」——跟
+ * deletePost 是两个独立的操作，不是同一个操作的两种参数：下架
+ * （status='archived'，行还留着，README 里「我的帖子」页允许作者之后
+ * 「重新上架」）跟删除（deleted_at，行从列表消失）语义完全不同，页面上
+ * 是两个各自独立的按钮/表单，跟 adminCancelActivity/adminDeleteActivity
+ * 对活动的处理是同一个模式。故意不叫 archivePost——那个名字已经被
+ * posts-repository.ts 的作者自助下架函数占用了，两者是完全独立的两条
+ * 授权路径（`author_id = auth.uid()` 的直接 UPDATE vs `is_admin()` 的
+ * security definer 函数），不共用同一个前端函数。参数名 target_post_id /
+ * archive_note 跟该迁移文件里函数签名完全一致；archive_note 而不是
+ * archive_reason，是因为 posts 表上真的有一列叫 archive_reason，参数名
+ * 避开列名是这个代码库一贯的做法（跟 reject_post 的 rejection_note /
+ * posts.rejection_reason 同理）。
+ */
+export async function adminArchivePost(
+  postId: string,
+  archiveNote: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_archive_post", {
+    target_post_id: postId,
+    archive_note: archiveNote
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_ARCHIVE_POST_FAILED", error);
+  }
+}
+
+/**
  * 设置某个用户的 account_status（active/restricted/suspended），走
  * set_account_status 这个 security definer 函数（见
  * supabase/migrations/20260717000700_account_status_enforcement.sql）。

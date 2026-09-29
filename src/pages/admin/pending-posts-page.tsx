@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { AdminNav } from "../../components/admin-nav";
+import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
 import { useApprovePostMutation } from "../../features/admin/use-approve-post-mutation";
 import { usePendingPostsQuery } from "../../features/admin/use-pending-posts-query";
@@ -183,47 +184,27 @@ export function AdminPendingPostsPage() {
                   </button>
                 )}
               </div>
+              {/* 功能改动清单第 7 项："所有需要原因的操作统一改为底部弹出
+                  表单（替代原版行内展开）"——驳回原因这里原来是行内展开的
+                  <input>，改成 ReasonSheet，行为（openRejectRowId 控制
+                  开合、提交失败不清空 rejectReasons）没有变，只是外观从
+                  行内换成底部弹层。 */}
               {isRejectFormOpen ? (
-                <div className="mt-3 rounded border border-border bg-bg p-3">
-                  {rejectValidationErrors[post.id] ? (
-                    <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-                      {rejectValidationErrors[post.id]}
-                    </p>
-                  ) : null}
-                  <label className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-text">
-                    驳回原因
-                    <input
-                      type="text"
-                      value={rejectReasons[post.id] ?? ""}
-                      onChange={(event) =>
-                        setRejectReasons((prev) => ({
-                          ...prev,
-                          [post.id]: event.target.value
-                        }))
-                      }
-                      disabled={isActioning}
-                      className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                    />
-                  </label>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => handleConfirmReject(post.id)}
-                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      确认驳回
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isActioning}
-                      onClick={() => cancelRejectForm(post.id)}
-                      className="rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      取消
-                    </button>
-                  </div>
-                </div>
+                <ReasonSheet
+                  title="驳回帖子"
+                  targetLabel={post.title}
+                  reasonLabel="驳回原因"
+                  reasonValue={rejectReasons[post.id] ?? ""}
+                  onReasonChange={(value) =>
+                    setRejectReasons((prev) => ({ ...prev, [post.id]: value }))
+                  }
+                  errorMessage={rejectValidationErrors[post.id] ?? null}
+                  confirmLabel="确认驳回"
+                  destructive
+                  pending={isActioning}
+                  onConfirm={() => handleConfirmReject(post.id)}
+                  onClose={() => cancelRejectForm(post.id)}
+                />
               ) : null}
             </li>
           );

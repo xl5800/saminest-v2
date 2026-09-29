@@ -77,7 +77,9 @@ export function LoginPage() {
   return (
     <AuthLayout>
       <p className="mb-1 text-sm text-text-muted">欢迎回来</p>
-      <h1 className="mb-6 text-xl font-bold text-text">登录 Saminest</h1>
+      {/* design handoff 第 2 项（页面标题用品牌蓝）：登录页标题
+          text-text → text-primary。 */}
+      <h1 className="mb-6 text-xl font-bold text-primary">登录 Saminest</h1>
       {error ? (
         <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
           {error}

@@ -1,12 +1,18 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
-import { type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName, formatStateLabelByCode } from "../../data/us-states";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
+// design_handoff_saminest_ios 第 6 项：跟 create-activity-page.tsx 反查
+// "选中的 stateCode 对应哪一行 locations.id" 用的是同一个 hook——名字虽然
+// 叫 useActivityRegionsQuery，但底层查的是 locations 表里全美 51 个
+// type = 'state' 行本身（不是活动专属的数据），发帖表单需要同一份数据来
+// 做同样的反查，没有必要另建一个几乎一样的 hook。
+import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
 import { useUpdatePostMutation } from "../../features/my-posts/use-update-post-mutation";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
@@ -27,6 +33,7 @@ import {
   DESCRIPTION_MAX_LENGTH,
   DESCRIPTION_MIN_LENGTH,
   GENDER_OPTIONS,
+  LOCATION_TEXT_MAX_LENGTH,
   OTHER_LOCATION_VALUE,
   TITLE_MAX_LENGTH,
   TITLE_MIN_LENGTH,
@@ -264,6 +271,20 @@ export function PublishPage() {
   // 已经靠 auth-store 的 userId 判断 enabled，不需要额外传参。
   const { data: myProfile } = useMyProfileQuery();
 
+  // design_handoff_saminest_ios 第 6 项：stateCode → locations.id 的反查表，
+  // 跟 create-activity-page.tsx 是同一套逻辑（见下面消费 pendingRegion 的
+  // effect），补全 51 州之后全美任意一个州都能在这里查到。
+  const { data: regions, isError: regionsError } = useActivityRegionsQuery();
+  const regionsByStateCode = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const region of regions ?? []) {
+      if (region.stateCode) {
+        map.set(region.stateCode, region.id);
+      }
+    }
+    return map;
+  }, [regions]);
+
   // 27 号卡：只在组件首次挂载时读一次这个 store 的快照（useRef 的构造
   // 参数只在第一次渲染生效）——不用 useEffect 读，因为下面每个字段的
   // useState 都需要在“第一次渲染”这同一刻就拿到初始值。真正的清空放在
@@ -273,7 +294,11 @@ export function PublishPage() {
 
   const [categoryId, setCategoryId] = useState(initialDraft?.categoryId ?? "");
   const [locationId, setLocationId] = useState("");
-  const [locationText, setLocationText] = useState("");
+  // design_handoff_saminest_ios 第 6 项：locationText 现在是"城市/具体
+  // 位置"这个输入框的真实受控值（用户直接打字），不再只是"选了没有城市
+  // 数据的州"时程序自动填进去的派生值，所以要跟 title/description 一样吃
+  // 草稿回填（见 pending-post-form-draft-store.ts 顶部注释）。
+  const [locationText, setLocationText] = useState(initialDraft?.locationText ?? "");
   // 12 号卡：地区字段的展示文案，跟 locationId/locationText 这两个提交用的
   // 值分开存——两者语义不一样（这个只管这一行按钮显示什么字，不参与校验/
   // 提交），见下面消费 pendingRegion 的 effect 和"地区"字段的渲染。
@@ -329,9 +354,16 @@ export function PublishPage() {
     seededRef.current = true;
 
     setCategoryId(existingPost.categoryId);
+    // design_handoff_saminest_ios 第 6 项：locationId 和 locationText 不再
+    // 互斥（见 publish-validation.ts 的注释），编辑模式回填要独立恢复两个
+    // 字段，不能再假设"有 locationId 就一定没有 locationText"——真实外键
+    // 存在时，locationText 现在可能是这条帖子自己的"城市/具体位置"补充
+    // 说明（新数据），也可能压根没填（旧数据/用户没写），两种情况都要
+    // 原样带出来，不能硬写成空字符串。没有 locationId、只有 locationText
+    // 时仍然是历史遗留的"其他"分支，跟改动前一样处理。
     if (existingPost.locationId) {
       setLocationId(existingPost.locationId);
-      setLocationText("");
+      setLocationText(existingPost.locationText ?? "");
     } else if (existingPost.locationText) {
       setLocationId(OTHER_LOCATION_VALUE);
       setLocationText(existingPost.locationText);
@@ -339,15 +371,21 @@ export function PublishPage() {
       setLocationId("");
       setLocationText("");
     }
-    // 地区字段的展示文案直接复用 locationName（服务端已经算好的"城市名 或
-    // locationText"，见 posts-repository.ts 的 resolveLocationName），不用
-    // 自己重新判断一遍 locationId/locationText 该显示哪个——两边算的是
-    // 同一件事，没必要维护两份逻辑。formatLocationDisplayName 防御性地
-    // 处理"历史数据里 locationName 恰好是裸州代码"这种情况（目前帖子的
-    // location_id 从没引用过 type='state' 的行，理论上不会发生，只是跟
-    // 别处展示 locationName 的地方用同一个函数保持一致）。
+    // design_handoff_saminest_ios 第 6 项：这个按钮要展示的是"所在州/城市"
+    // 本身，不能再直接复用 locationName——那个字段现在优先展示
+    // locationText（"城市/具体位置"补充说明，见 resolveLocationName 的
+    // 注释），如果这条帖子同时有真实地区和补充说明，locationName 拿到的
+    // 会是补充说明，不是州名，两个字段现在需要分别回填到各自的输入。
+    // locationJoinedName 是联表结果本身（不经过 locationText 的
+    // fallback），有真实 locationId 时用它；历史遗留的"其他"分支
+    // （locationId 为 null）沿用改动前的行为，回退到 locationText——那批
+    // 老数据里 locationText 存的就是格式化好的州名字符串本身。
     setRegionLabel(
-      existingPost.locationName ? formatLocationDisplayName(existingPost.locationName) : ""
+      existingPost.locationJoinedName
+        ? formatLocationDisplayName(existingPost.locationJoinedName)
+        : !existingPost.locationId && existingPost.locationText
+          ? formatLocationDisplayName(existingPost.locationText)
+          : ""
     );
     setTitle(existingPost.title);
     setDescription(existingPost.description);
@@ -419,18 +457,22 @@ export function PublishPage() {
   // 城市的 id，跟改版前用户从原生下拉里选中一个城市是完全一样的提交路径。
   //
   // 没有 cityId（其余 47 个州，或者 DC/VA/MD 没有下钻直接选中整个州——
-  // 目前 UI 上不会出现后一种情况，但这里不假设一定是前一种）时，没有
-  // 一个 locations.id 可以引用（大多数州在 locations 表里压根没有对应的
-  // 行，见 us-states.ts / activities-repository.ts 08 号卡那批注释里对
-  // 这同一个问题的说明），复用发布表单原本就有的"其他（手动输入）"兜底
-  // 机制（OTHER_LOCATION_VALUE + locationText，见 publish-validation.ts）
-  // ——不是绕开校验，是把"选了一个没有真实城市数据的州"当成跟"手动输入了
-  // 一个地名"完全一样的一种情况处理，locationText 存这个州格式化好的
-  // "缩写 中文州名"，跟别处（帖子卡片/详情页的 locationName）展示的是
-  // 同一个字符串，不需要展示层再判断一次这是不是"其他"分支存的值。
+  // 目前 UI 上不会出现后一种情况，但这里不假设一定是前一种）时：
+  //
+  // design_handoff_saminest_ios 第 6 项：不再把"选中的州"硬塞进
+  // OTHER_LOCATION_VALUE + locationText 这个兜底分支——现在 51 个州在
+  // locations 表里都有真实的 type='state' 行（见 activities-repository.ts
+  // 08 号卡 + 后续补全 51 州的迁移），跟 create-activity-page.tsx 一样，
+  // 直接用组件顶部的 regionsByStateCode 反查出真正的 locations.id 提交。
+  // locationText 现在是"城市/具体位置"这个独立输入框的用户自己打的值
+  // （见 pending-post-form-draft-store.ts 顶部注释），这个 effect 只负责
+  // "所在州"这一个字段，不应该再顺手覆盖 locationText——不然用户刚在
+  // 那个输入框里打的字，会被这里的州选择清空。
   //
   // 消费完立刻 clearPendingRegion()，避免残留值在下一次进入另一个表单
-  // （比如离开这里去发一条不同的帖子）时被误读。
+  // （比如离开这里去发一条不同的帖子）时被误读；但反查暂时查不到时先不清
+  // （见下面注释，跟 create-activity-page.tsx 是同一个时序问题、同一个
+  // 处理方式）。
   const pendingRegion = usePendingFormRegionStore((s) => s.pendingRegion);
   const clearPendingRegion = usePendingFormRegionStore((s) => s.clearPendingRegion);
 
@@ -438,17 +480,28 @@ export function PublishPage() {
     if (!pendingRegion) return;
 
     if (pendingRegion.cityId) {
+      // DC/VA/MD 下钻到具体城市——城市本身就是 locations 表里的真实行，
+      // 直接拿它的 id 提交，比以前原生 <select> 能选的粒度更细。
       setLocationId(pendingRegion.cityId);
-      setLocationText("");
       setRegionLabel(pendingRegion.cityName ?? formatStateLabelByCode(pendingRegion.stateCode));
-    } else {
-      const stateLabel = formatStateLabelByCode(pendingRegion.stateCode);
-      setLocationId(OTHER_LOCATION_VALUE);
-      setLocationText(stateLabel);
-      setRegionLabel(stateLabel);
+      clearPendingRegion();
+      return;
     }
-    clearPendingRegion();
-  }, [pendingRegion, clearPendingRegion]);
+
+    const resolvedId = regionsByStateCode.get(pendingRegion.stateCode);
+    if (resolvedId) {
+      setLocationId(resolvedId);
+      setRegionLabel(formatStateLabelByCode(pendingRegion.stateCode));
+      clearPendingRegion();
+    }
+    // resolvedId 暂时查不到时，先不 clearPendingRegion()：大概率是用户从
+    // /region-select 选完返回的时候，regions 这条查询碰巧还没返回（这个
+    // effect 的依赖里有 regionsByStateCode，查询完成、这个 Map 更新后会
+    // 重新跑一遍再重试）。如果这里提前清空 pendingRegion，一旦踩中这个
+    // 时序，用户刚选的地区会被静默丢弃、州字段停在"请选择州"，且再也没有
+    // 机会重试——这比让用户多等一两百毫秒严重得多，跟 create-activity-page
+    // 是同一个理由。
+  }, [pendingRegion, regionsByStateCode, clearPendingRegion]);
 
   function handleOpenRegionSelect(): void {
     // 27 号卡：跳转前先把地区以外的字段（含已选/已上传图片）整个存进这个
@@ -461,6 +514,13 @@ export function PublishPage() {
       price,
       contactMethod,
       contactValue,
+      // design_handoff_saminest_ios 第 6 项：locationText 现在是"城市/
+      // 具体位置"这个独立输入框的用户自己打的值，不再由 pendingRegion
+      // 消费的 effect 派生，所以要跟其它字段一样存进草稿，不然点击"所在
+      // 州"跳转 /region-select 再回来时，这个输入框里刚打的字会被组件
+      // 卸载重挂载清空——27 号卡同一类 bug，见 pending-post-form-draft-
+      // store.ts 顶部对这个字段的注释。
+      locationText,
       posterAge,
       posterGender,
       images,
@@ -473,9 +533,13 @@ export function PublishPage() {
   // /region-select 列表里的一项（那边的"全美"在 form 场景下压根不展示，
   // 见 region-select-page.tsx），是这个字段自己的"清空"操作，回到改版前
   // 默认的"不限地区"状态。
+  //
+  // design_handoff_saminest_ios 第 6 项：这里不再顺手清空 locationText——
+  // 那个字段现在是"城市/具体位置"这个独立输入框的用户自己打的值，跟"所在
+  // 州"是两个互不依赖的字段（见 resolveLocationName 的注释），清空州不
+  // 应该连带清掉用户在另一个输入框里打的字。
   function handleClearRegion(): void {
     setLocationId("");
-    setLocationText("");
     setRegionLabel("");
   }
 
@@ -709,7 +773,13 @@ export function PublishPage() {
             ) : null}
 
             <div className="mb-4">
-              <span className="mb-2 block text-xs font-semibold text-text">地区</span>
+              {/* design_handoff_saminest_ios 第 6 项（README「发布帖子：原
+                  『城市』改为『所在州』」）：这个字段以前叫"地区"、点开的
+                  弹层只有 14 个 DC/VA/MD 城市，现在改成跟找搭子一样的
+                  51 州选择弹层，label 文案跟着改成"所在州"，避免用户以为
+                  还是选城市。下方新增独立的"城市 / 具体位置"输入框承接
+                  原来"城市"这一级的精度。 */}
+              <span className="mb-2 block text-xs font-semibold text-text">所在州</span>
               {/* 外层是普通 div，不是 button——"清除地区"和"跳转整页选择"
                   是两个独立的可交互控件（两个 <button> 平级放着），不把
                   "×"清除按钮嵌套进主按钮里，避免"<button> 嵌套 <button>"
@@ -739,7 +809,29 @@ export function PublishPage() {
                   </button>
                 ) : null}
               </div>
+              {regionsError ? (
+                <p role="alert" className="mt-2 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+                  州加载失败，请刷新页面重试。
+                </p>
+              ) : null}
             </div>
+
+            {/* design_handoff_saminest_ios 第 6 项（README「下方新增
+                『城市 / 具体位置』文本输入」）：跟"所在州"是两个独立字段，
+                用户直接打字，不受上面那个字段的选择/清空影响——见
+                handleClearRegion 和消费 pendingRegion 的 effect 顶部注释、
+                resolveLocationName 展示时的合并规则。 */}
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">城市 / 具体位置（可选）</span>
+              <input
+                type="text"
+                value={locationText}
+                onChange={(event) => setLocationText(event.target.value)}
+                maxLength={LOCATION_TEXT_MAX_LENGTH}
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
+                placeholder="比如：曼哈顿 / 近地铁站"
+              />
+            </label>
 
             {isWantedCategory ? (
               <>

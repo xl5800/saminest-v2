@@ -6,6 +6,7 @@ const {
   singleMock,
   overrideTypesMock,
   inMock,
+  thenMock,
   commentQueryBuilder,
   commentInMock,
   commentOverrideTypesMock,
@@ -19,6 +20,15 @@ const {
   // select/eq/order 那样返回 builder 继续链式调用，所以单独给它一个 mock，
   // 而不是塞进下面的 chain 数组。
   const inMock = vi.fn();
+  // countPendingReports（功能改动清单第 7 项，AdminNav「举报处理」角标）
+  // 的查询链路是 select({count,head:true}).eq("status","pending")，最后
+  // 一步 eq() 之后没有再调用任何终结方法（不像其它函数落到
+  // overrideTypes()/single()），是直接 await 整条链式调用本身——真实的
+  // supabase-js query builder 本身就是个 thenable。这里补一个 .then 让
+  // builder 自己也能被直接 await，写法照抄
+  // activities-repository.test.ts 的 hasPendingActivityParticipantsForOrganizer
+  // 那份注释和实现，理由一致，这里不重复展开。
+  const thenMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
   builder.insert = insertMock;
   const chain = ["select", "eq", "order"] as const;
@@ -28,6 +38,9 @@ const {
   builder.single = singleMock;
   builder.overrideTypes = overrideTypesMock;
   builder.in = inMock;
+  builder.then = vi.fn((resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
+    Promise.resolve(thenMock()).then(resolve, reject)
+  );
 
   // fetchTargetTitles 对 comments 表的查询链路比 posts/activities/profiles
   // 多一步 .overrideTypes()（select().in().overrideTypes()，因为这条查询
@@ -52,6 +65,7 @@ const {
     singleMock,
     overrideTypesMock,
     inMock,
+    thenMock,
     commentQueryBuilder,
     commentInMock,
     commentOverrideTypesMock,
@@ -63,7 +77,7 @@ vi.mock("../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ from: fromMock })
 }));
 
-import { createReport, listReportsForModeration } from "./reports-repository";
+import { countPendingReports, createReport, listReportsForModeration } from "./reports-repository";
 
 describe("createReport", () => {
   beforeEach(() => {
@@ -566,6 +580,52 @@ describe("listReportsForModeration", () => {
 
     await expect(listReportsForModeration()).rejects.toMatchObject({
       code: "ADMIN_REPORTS_LIST_FAILED"
+    });
+  });
+});
+
+// 功能改动清单第 7 项：AdminNav「举报处理」角标用的数量查询，见
+// reports-repository.ts 里 countPendingReports 顶部的注释。
+describe("countPendingReports", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of ["select", "eq", "order"] as const) {
+      queryBuilder[key].mockClear();
+    }
+    thenMock.mockReset();
+  });
+
+  it("queries reports filtered to status = pending, with count: 'exact', head: true", async () => {
+    thenMock.mockResolvedValue({ count: 0, data: null, error: null });
+
+    await countPendingReports();
+
+    expect(fromMock).toHaveBeenCalledWith("reports");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
+  });
+
+  it("returns the count when the query succeeds", async () => {
+    thenMock.mockResolvedValue({ count: 4, data: null, error: null });
+
+    await expect(countPendingReports()).resolves.toBe(4);
+  });
+
+  it("returns 0 (not throw) when count comes back null", async () => {
+    thenMock.mockResolvedValue({ count: null, data: null, error: null });
+
+    await expect(countPendingReports()).resolves.toBe(0);
+  });
+
+  it("throws an AppError when the Supabase query fails", async () => {
+    thenMock.mockResolvedValue({
+      count: null,
+      data: null,
+      error: { message: "network down", code: "500" }
+    });
+
+    await expect(countPendingReports()).rejects.toMatchObject({
+      code: "ADMIN_PENDING_REPORTS_COUNT_FAILED"
     });
   });
 });

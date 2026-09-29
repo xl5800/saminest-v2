@@ -102,18 +102,29 @@ interface PostFeedRow {
 }
 
 /**
- * 地区展示名：优先用标准化地区（location_id 联表出来的 name），
- * 没有的话退回作者发布/编辑时手动填的 location_text（"其他"选项，见
- * supabase/migrations/20260722000400_add_posts_location_text.sql），
- * 两者都没有才是真的"不限地区"。四处需要展示地区名的查询
- * （listApprovedPosts / getPostDetail / listMyPosts / listFavoritedPosts）
- * 共用这一个函数，避免同一个 fallback 逻辑写四遍。
+ * 地区展示名：优先用 location_text（发帖人自己填的"城市/具体位置"补充
+ * 说明，比如"近 UCLA"），没有的话退回标准化地区（location_id 联表出来的
+ * name，比如"CA 加利福尼亚州"），两者都没有才是真的"不限地区"。四处需要
+ * 展示地区名的查询（listApprovedPosts / getPostDetail / listMyPosts /
+ * listFavoritedPosts）共用这一个函数，避免同一个 fallback 逻辑写四遍。
+ *
+ * design_handoff_saminest_ios 第 6 项之前，location_text 只在
+ * location_id 为 null 时才会有值（"其他"选项的自由文本兜底，两者互斥，见
+ * publish-validation.ts 的历史注释），这个函数当时不管先后顺序、结果都
+ * 一样。第 6 项起，location_text 变成一个可以跟真实 location_id 共存的
+ * 独立补充字段（发帖人选了"CA 加利福尼亚州"这个州之后，还能再填"近
+ * UCLA"这种具体位置），这里改成优先展示 location_text——跟
+ * activities-repository.ts 的活动列表/详情页展示"landmarkText ??
+ * locationName"是同一个优先级顺序（具体位置比笼统的州/城市名更有信息量，
+ * 见 activity-card.tsx / activity-detail-page.tsx 的同款判断），不是两条
+ * 不相关的逻辑各写一遍。历史遗留数据（location_id 为 null、只有
+ * location_text）不受这次调整影响，两种顺序结果相同。
  */
 export function resolveLocationName(
   location: { name: string } | null,
   locationText: string | null
 ): string | null {
-  return location?.name ?? locationText ?? null;
+  return locationText ?? location?.name ?? null;
 }
 
 /**
@@ -330,6 +341,15 @@ export interface PostDetail {
   locationId: string | null;
   locationText: string | null;
   locationName: string | null;
+  /** design_handoff_saminest_ios 第 6 项新增——locationName 现在优先展示
+   *  locationText（见 resolveLocationName 的注释），发布表单编辑模式回填
+   *  "所在州"选择器的按钮文案时不能用它：一旦这条帖子同时有真实 location
+   *  联表结果和 locationText，locationName 拿到的会是 locationText，把它
+   *  当成"州/城市名"填回选择器按钮会显示错内容。这个字段是联表结果本身、
+   *  不经过 resolveLocationName 那层 fallback，只给 publish-page.tsx 回填
+   *  地区选择器按钮文案用，只读的帖子详情页/列表卡片继续用 locationName
+   *  展示（它们要的正是"具体位置优先"这个语义，不需要这个字段）。 */
+  locationJoinedName: string | null;
   createdAt: string;
   authorDisplayName: string;
   /** 23 号卡新增——发帖者卡片（PersonCard）跳转 /users/:authorId 用，同
@@ -457,6 +477,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     locationId: data.location_id,
     locationText: data.location_text,
     locationName: resolveLocationName(data.location, data.location_text),
+    locationJoinedName: data.location?.name ?? null,
     createdAt: data.created_at,
     authorDisplayName: data.author?.display_name ?? "未知用户",
     authorId: data.author_id,
@@ -477,6 +498,16 @@ export interface AdminPostListItem {
   authorName: string;
   categoryName: string;
   status: string;
+  /** 驳回原因，只在 status === "rejected" 时有值；listPendingPosts 返回的行
+   *  永远是 null（待审核的帖子还没被驳回过）。管理后台「全部帖子」列表
+   *  据此在行内展示灰底备注（README 管理后台小节），见
+   *  supabase/migrations/20260722000000_add_posts_rejection_reason.sql。 */
+  rejectionReason: string | null;
+  /** 管理员下架原因，只在 status === "archived" 且是管理员操作的下架时
+   *  有值（作者自助下架不写这一列）；listPendingPosts 返回的行永远是
+   *  null。见
+   *  supabase/migrations/20260929000000_admin_archive_post_function.sql。 */
+  archiveReason: string | null;
 }
 
 interface AdminPendingPostRow {
@@ -525,8 +556,37 @@ export async function listPendingPosts(): Promise<AdminPostListItem[]> {
     // status 再从 row 上读一遍更直接；AdminPostListItem 加这个字段主要是为了
     // 给 listAllPosts（混合状态的列表）用，listPendingPosts 这边永远是
     // "pending"，没必要为了这一个已知常量再多查一列。
-    status: "pending"
+    status: "pending",
+    // 待审核的帖子不可能已经被驳回或下架过，这两个字段恒为 null，没必要
+    // 为了它们再多查两列。
+    rejectionReason: null,
+    archiveReason: null
   }));
+}
+
+/**
+ * 管理后台顶部 Tab 角标用（功能改动清单第 7 项：README 管理后台小节
+ * "待审核、举报处理、客服显示红色计数角标"）：只要数量，不要行内容，
+ * 所以不复用 listPendingPosts 整份列表——那样每次渲染 AdminNav（六个
+ * 管理页面顶部都会挂这个导航条）都要多拉一份完整的待审核帖子数据，
+ * 这里改成 `{ count: "exact", head: true }` 只让数据库返回一个数字，
+ * 写法跟 activities-repository.ts 的
+ * hasPendingActivityParticipantsForOrganizer 是同一个模式。过滤条件
+ * （status = 'pending' + deleted_at is null）跟 listPendingPosts 保持
+ * 完全一致，这样角标数字和"待审核"页面实际能看到的行数永远对得上。
+ */
+export async function countPendingPosts(): Promise<number> {
+  const { count, error } = await getSupabaseClient()
+    .from("posts")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .is("deleted_at", null);
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_PENDING_POSTS_COUNT_FAILED", error);
+  }
+
+  return count ?? 0;
 }
 
 export interface CreatePostInput {
@@ -615,6 +675,8 @@ interface AdminAllPostRpcRow {
   status: string;
   author_name: string;
   category_name: string;
+  rejection_reason: string | null;
+  archive_reason: string | null;
 }
 
 /**
@@ -639,6 +701,12 @@ interface AdminAllPostRpcRow {
  * （admin_list_functions_remove_admin_select_bypass）把 RLS 里的
  * `or is_admin()` 去掉了，改成这个专门函数——函数内部自己校验
  * is_admin()，只给管理员后台这一个调用点用。
+ *
+ * 功能改动清单第 7 项（管理后台新增帖子「下架」）：admin_list_posts() 的
+ * 返回列扩成同时带 rejection_reason / archive_reason（见
+ * supabase/migrations/20260929000000_admin_archive_post_function.sql），
+ * 「全部帖子」页要在行内展示驳回/下架原因的灰底备注，不能只有 status
+ * 这一个字面量。
  */
 export async function listAllPosts(
   statusFilter?: string,
@@ -661,7 +729,9 @@ export async function listAllPosts(
     createdAt: row.created_at,
     authorName: row.author_name,
     categoryName: row.category_name,
-    status: row.status
+    status: row.status,
+    rejectionReason: row.rejection_reason,
+    archiveReason: row.archive_reason
   }));
 }
 

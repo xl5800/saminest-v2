@@ -337,7 +337,11 @@ export function TopBar(props: TopBarProps) {
       <header className={STICKY_CARD_CLASS_NAME}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <EmptySlot />
-          <h1 className="flex-1 truncate text-center text-xl font-bold text-text">{props.title}</h1>
+          {/* design handoff 第 2 项（页面标题用品牌蓝）：tab 变体标题
+              text-text → text-primary，目前调用点是消息页「消息」/分类页
+              「分类」——卡片内部自己的标题（活动卡片/帖子卡片等）不受影响，
+              那些标题不经过这个组件。 */}
+          <h1 className="flex-1 truncate text-center text-xl font-bold text-primary">{props.title}</h1>
           {props.right ? (
             <button
               type="button"
@@ -360,8 +364,11 @@ export function TopBar(props: TopBarProps) {
       <header className={STICKY_CARD_CLASS_NAME}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <BackButton onBack={props.onBack} />
+          {/* design handoff 第 2 项：detail 变体标题 text-text → text-primary
+              （所有二级页 TopBar 标题统一用品牌蓝，卡片内部自己的标题不受
+              影响，那些不经过这个组件）。 */}
           {props.title ? (
-            <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+            <h1 className="flex-1 truncate text-center text-base font-bold text-primary">
               {props.title}
             </h1>
           ) : (
@@ -389,7 +396,8 @@ export function TopBar(props: TopBarProps) {
           >
             <X size={18} aria-hidden="true" />
           </button>
-          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+          {/* design handoff 第 2 项：create 变体标题 text-text → text-primary。 */}
+          <h1 className="flex-1 truncate text-center text-base font-bold text-primary">
             {props.title}
           </h1>
           <button
@@ -410,8 +418,9 @@ export function TopBar(props: TopBarProps) {
     <header className={STICKY_CARD_CLASS_NAME}>
       <div className={HEADER_ROW_CLASS_NAME}>
         <BackButton onBack={props.onBack} />
+        {/* design handoff 第 2 项：nav-only 变体标题 text-text → text-primary。 */}
         {props.title ? (
-          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
+          <h1 className="flex-1 truncate text-center text-base font-bold text-primary">
             {props.title}
           </h1>
         ) : (

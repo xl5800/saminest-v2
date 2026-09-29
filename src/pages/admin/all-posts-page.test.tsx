@@ -1,18 +1,31 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listAllPosts, listAllActivitiesForAdmin, listActiveCategories, deletePost, adminDeleteActivity, adminCancelActivity } =
-  vi.hoisted(() => ({
-    listAllPosts: vi.fn(),
-    listAllActivitiesForAdmin: vi.fn(),
-    listActiveCategories: vi.fn(),
-    deletePost: vi.fn(),
-    adminDeleteActivity: vi.fn(),
-    adminCancelActivity: vi.fn()
-  }));
+const {
+  listAllPosts,
+  listAllActivitiesForAdmin,
+  listActiveCategories,
+  deletePost,
+  adminArchivePost,
+  adminDeleteActivity,
+  adminCancelActivity
+} = vi.hoisted(() => ({
+  listAllPosts: vi.fn(),
+  listAllActivitiesForAdmin: vi.fn(),
+  listActiveCategories: vi.fn(),
+  deletePost: vi.fn(),
+  adminArchivePost: vi.fn(),
+  adminDeleteActivity: vi.fn(),
+  adminCancelActivity: vi.fn()
+}));
 
 vi.mock("../../repositories/posts-repository", () => ({
-  listAllPosts
+  listAllPosts,
+  // AdminNav（这个页面顶部渲染的管理后台导航条）功能改动清单第 7 项新增了
+  // "待审核"角标，会调用 countPendingPosts；这个页面自己跟角标数字无关，
+  // 只提供最小 mock 避免真的打到 Supabase，见 pending-posts-page.test.tsx
+  // 同样的注释。
+  countPendingPosts: () => Promise.resolve(0)
 }));
 vi.mock("../../repositories/activities-repository", () => ({
   listAllActivitiesForAdmin
@@ -22,8 +35,13 @@ vi.mock("../../repositories/categories-repository", () => ({
 }));
 vi.mock("../../repositories/admin-repository", () => ({
   deletePost,
+  adminArchivePost,
   adminDeleteActivity,
   adminCancelActivity
+}));
+// 同上，AdminNav 也会为"举报处理"角标调用 countPendingReports。
+vi.mock("../../repositories/reports-repository", () => ({
+  countPendingReports: () => Promise.resolve(0)
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -35,7 +53,9 @@ const samplePost = {
   createdAt: "2026-07-01T00:00:00.000Z",
   authorName: "Alice",
   categoryName: "租房",
-  status: "approved"
+  status: "approved",
+  rejectionReason: null,
+  archiveReason: null
 };
 
 const sampleActivity = {
@@ -62,6 +82,7 @@ describe("AdminAllPostsPage", () => {
     listAllActivitiesForAdmin.mockReset();
     listActiveCategories.mockReset();
     deletePost.mockReset();
+    adminArchivePost.mockReset();
     adminDeleteActivity.mockReset();
     adminCancelActivity.mockReset();
 
@@ -115,7 +136,12 @@ describe("AdminAllPostsPage", () => {
     await waitFor(() => {
       expect(listAllPosts).toHaveBeenCalledWith(undefined, undefined, undefined);
     });
-    expect(screen.getByLabelText("状态")).toHaveValue("");
+    // 状态筛选从原生 <select> 改成胶囊 Chips（功能改动清单第 7 项），"全部"
+    // 这颗 chip 用 aria-pressed 表达选中态，不再是 <select> 的 value。
+    expect(await screen.findByRole("button", { name: "全部" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
   });
 
   it("re-queries with the new status when the filter changes", async () => {
@@ -126,10 +152,30 @@ describe("AdminAllPostsPage", () => {
       expect(listAllPosts).toHaveBeenCalledWith(undefined, undefined, undefined);
     });
 
-    fireEvent.change(screen.getByLabelText("状态"), { target: { value: "pending" } });
+    fireEvent.click(screen.getByRole("button", { name: "待审核" }));
 
     await waitFor(() => {
       expect(listAllPosts).toHaveBeenCalledWith("pending", undefined, undefined);
+    });
+    expect(screen.getByRole("button", { name: "待审核" })).toHaveAttribute(
+      "aria-pressed",
+      "true"
+    );
+  });
+
+  // 功能改动清单第 7 项：状态分段新增「已下架」。
+  it("requests the archived status when 已下架 is selected", async () => {
+    listAllPosts.mockResolvedValue([]);
+
+    renderWithProviders(<AdminAllPostsPage />);
+    await waitFor(() => {
+      expect(listAllPosts).toHaveBeenCalledWith(undefined, undefined, undefined);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "已下架" }));
+
+    await waitFor(() => {
+      expect(listAllPosts).toHaveBeenCalledWith("archived", undefined, undefined);
     });
   });
 
@@ -186,8 +232,11 @@ describe("AdminAllPostsPage", () => {
   });
 
   // "全部帖子"管理页扩展成能管理所有内容任务卡：分类筛选（含"找搭子"）。
+  // 功能改动清单第 7 项之后从原生 <select> 改成胶囊 Chips，用
+  // getByRole("button", {name}) + aria-pressed 代替 getByLabelText +
+  // fireEvent.change。
   describe("分类筛选", () => {
-    it("populates the category dropdown from useCategoriesQuery, plus a fixed 全部帖子/找搭子 option at each end", async () => {
+    it("renders a fixed 全部帖子/找搭子 chip at each end, with categories from useCategoriesQuery in between", async () => {
       listAllPosts.mockResolvedValue([]);
 
       renderWithProviders(<AdminAllPostsPage />);
@@ -195,9 +244,15 @@ describe("AdminAllPostsPage", () => {
         expect(listActiveCategories).toHaveBeenCalled();
       });
 
-      const select = (await screen.findByLabelText("分类")) as HTMLSelectElement;
-      const optionLabels = Array.from(select.options).map((option) => option.textContent);
-      expect(optionLabels).toEqual(["全部帖子", "租房", "求租", "二手", "找搭子"]);
+      // 分类 Chips 和状态 Chips 都用 aria-pressed，靠这个属性把两组区分开，
+      // 不靠 DOM 顺序（避免状态 Chips 也在同一批 aria-pressed 按钮里被
+      // 误认成分类）。
+      const chipLabels = ["全部帖子", "租房", "求租", "二手", "找搭子"];
+      for (const label of chipLabels) {
+        expect(await screen.findByRole("button", { name: label })).toHaveAttribute(
+          "aria-pressed"
+        );
+      }
     });
 
     it("re-queries listAllPosts with the selected category id when a post category is chosen", async () => {
@@ -208,7 +263,7 @@ describe("AdminAllPostsPage", () => {
         expect(listAllPosts).toHaveBeenCalledWith(undefined, undefined, undefined);
       });
 
-      fireEvent.change(await screen.findByLabelText("分类"), { target: { value: "cat-rent" } });
+      fireEvent.click(await screen.findByRole("button", { name: "租房" }));
 
       await waitFor(() => {
         expect(listAllPosts).toHaveBeenCalledWith(undefined, "cat-rent", undefined);
@@ -221,13 +276,13 @@ describe("AdminAllPostsPage", () => {
 
       renderWithProviders(<AdminAllPostsPage />);
       await screen.findByText("Sunny room near metro");
-      expect(screen.getByLabelText("状态")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "全部" })).toBeInTheDocument();
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "__activities__" } });
+      fireEvent.click(screen.getByRole("button", { name: "找搭子" }));
 
       expect(await screen.findByText("周末吃火锅")).toBeInTheDocument();
       expect(screen.queryByText("Sunny room near metro")).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("状态")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "全部" })).not.toBeInTheDocument();
     });
 
     it("shows the activity's organizer, a 找搭子 label, and a status badge (including cancelled -> 已下架)", async () => {
@@ -235,7 +290,7 @@ describe("AdminAllPostsPage", () => {
       listAllActivitiesForAdmin.mockResolvedValue([{ ...sampleActivity, status: "cancelled" }]);
 
       renderWithProviders(<AdminAllPostsPage />);
-      fireEvent.change(await screen.findByLabelText("分类"), { target: { value: "__activities__" } });
+      fireEvent.click(await screen.findByRole("button", { name: "找搭子" }));
 
       const item = await screen.findByText("周末吃火锅");
       const row = item.closest("li");
@@ -249,7 +304,7 @@ describe("AdminAllPostsPage", () => {
       listAllActivitiesForAdmin.mockResolvedValue([]);
 
       renderWithProviders(<AdminAllPostsPage />);
-      fireEvent.change(await screen.findByLabelText("分类"), { target: { value: "__activities__" } });
+      fireEvent.click(await screen.findByRole("button", { name: "找搭子" }));
 
       expect(await screen.findByText("暂无找搭子活动")).toBeInTheDocument();
     });
@@ -259,7 +314,7 @@ describe("AdminAllPostsPage", () => {
       listAllActivitiesForAdmin.mockRejectedValue(new Error("network down"));
 
       renderWithProviders(<AdminAllPostsPage />);
-      fireEvent.change(await screen.findByLabelText("分类"), { target: { value: "__activities__" } });
+      fireEvent.click(await screen.findByRole("button", { name: "找搭子" }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent("活动加载失败，请稍后重试。");
     });
@@ -299,7 +354,7 @@ describe("AdminAllPostsPage", () => {
       listAllActivitiesForAdmin.mockResolvedValue([]);
 
       renderWithProviders(<AdminAllPostsPage />);
-      fireEvent.change(await screen.findByLabelText("分类"), { target: { value: "__activities__" } });
+      fireEvent.click(await screen.findByRole("button", { name: "找搭子" }));
       await waitFor(() => {
         expect(listAllActivitiesForAdmin).toHaveBeenCalledWith(undefined);
       });
@@ -323,7 +378,7 @@ describe("AdminAllPostsPage", () => {
 
     async function renderActivitiesView() {
       renderWithProviders(<AdminAllPostsPage />);
-      fireEvent.change(await screen.findByLabelText("分类"), { target: { value: "__activities__" } });
+      fireEvent.click(await screen.findByRole("button", { name: "找搭子" }));
       await screen.findByText("周末吃火锅");
     }
 
@@ -392,6 +447,112 @@ describe("AdminAllPostsPage", () => {
 
       expect(await screen.findByRole("alert")).toHaveTextContent("请填写删除原因。");
       expect(adminDeleteActivity).not.toHaveBeenCalled();
+    });
+  });
+
+  // 功能改动清单第 7 项：帖子新增「下架」，跟已有的「删除」是两个独立按钮/
+  // 独立表单——跟活动行「下架 + 删除」是同一个模式（见上面那个 describe），
+  // 这里镜像一份同样的用例，换成帖子相关的 mutation。
+  describe("帖子行：下架 + 删除", () => {
+    it("renders both 下架 and 删除 buttons, and disables 下架 when the post is already archived", async () => {
+      listAllPosts.mockResolvedValue([{ ...samplePost, status: "archived" }]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+      await screen.findByText("Sunny room near metro");
+
+      expect(screen.getByRole("button", { name: "下架" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "删除" })).not.toBeDisabled();
+    });
+
+    it("opening 下架 does not also open 删除, and vice versa (independent state)", async () => {
+      listAllPosts.mockResolvedValue([samplePost]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+      await screen.findByText("Sunny room near metro");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架" }));
+      expect(screen.getByLabelText("下架原因")).toBeInTheDocument();
+      expect(screen.queryByLabelText("删除原因")).not.toBeInTheDocument();
+    });
+
+    it("submits 下架 with its own reason, calling adminArchivePost and updating the status badge to 已下架 without removing the row", async () => {
+      adminArchivePost.mockResolvedValue(undefined);
+      listAllPosts.mockResolvedValue([samplePost]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+      await screen.findByText("Sunny room near metro");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架" }));
+      fireEvent.change(screen.getByLabelText("下架原因"), { target: { value: "涉嫌虚假信息" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      await waitFor(() => {
+        expect(adminArchivePost).toHaveBeenCalledWith("post-1", "涉嫌虚假信息");
+      });
+      expect(await screen.findByText("已下架")).toBeInTheDocument();
+      expect(screen.getByText("Sunny room near metro")).toBeInTheDocument();
+    });
+
+    it("shows a validation error and does not call adminArchivePost when confirming 下架 with an empty reason", async () => {
+      listAllPosts.mockResolvedValue([samplePost]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+      await screen.findByText("Sunny room near metro");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架" }));
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("请填写下架原因。");
+      expect(adminArchivePost).not.toHaveBeenCalled();
+    });
+
+    it("preserves the typed 下架 reason when adminArchivePost fails", async () => {
+      adminArchivePost.mockRejectedValue(new Error("boom"));
+      listAllPosts.mockResolvedValue([samplePost]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+      await screen.findByText("Sunny room near metro");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架" }));
+      fireEvent.change(screen.getByLabelText("下架原因"), { target: { value: "涉嫌虚假信息" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
+      expect(screen.getByLabelText("下架原因")).toHaveValue("涉嫌虚假信息");
+    });
+  });
+
+  // README 管理后台小节："驳回/下架原因灰底备注"。
+  describe("驳回/下架原因备注", () => {
+    it("shows the rejection reason note for a rejected post", async () => {
+      listAllPosts.mockResolvedValue([
+        { ...samplePost, status: "rejected", rejectionReason: "标题涉嫌虚假宣传" }
+      ]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+
+      const item = await screen.findByText("Sunny room near metro");
+      expect(item.closest("li")).toHaveTextContent("驳回原因：标题涉嫌虚假宣传");
+    });
+
+    it("shows the archive reason note for an archived post", async () => {
+      listAllPosts.mockResolvedValue([
+        { ...samplePost, status: "archived", archiveReason: "涉嫌虚假信息，管理员下架" }
+      ]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+
+      const item = await screen.findByText("Sunny room near metro");
+      expect(item.closest("li")).toHaveTextContent("下架原因：涉嫌虚假信息，管理员下架");
+    });
+
+    it("shows no reason note for an approved post", async () => {
+      listAllPosts.mockResolvedValue([samplePost]);
+
+      renderWithProviders(<AdminAllPostsPage />);
+
+      const item = await screen.findByText("Sunny room near metro");
+      expect(item.closest("li")).not.toHaveTextContent("原因：");
     });
   });
 });

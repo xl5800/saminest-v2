@@ -937,13 +937,20 @@ export function MessageConversationPage() {
                             border-border 边框 + text-text 深字"这条。
                             联系客服改成真聊天任务卡：body 现在可能为
                             null（纯图片消息），这一整块改成条件渲染，
-                            不再无条件展示一个空气泡。 */}
+                            不再无条件展示一个空气泡。
+                            BARRY 明确要求全站背景改米白色时，这个对方
+                            消息气泡是保留白色的两个例外之一（另一个是
+                            帖子卡片本身）——见 index.css --color-card 这次
+                            改动的注释：气泡本来就贴着已经是米白色的页面
+                            背景（bg-bg），气泡也变成同一个米白色会分不清
+                            "这是一条消息"还是"这是空白页面"，所以这里用
+                            新增的 bg-card-white，不跟 bg-card 一起变。 */}
                         {message.body ? (
                           <div
                             className={
                               isMine
                                 ? "min-w-0 whitespace-pre-wrap rounded-2xl bg-primary px-3.5 py-2.5 text-base text-white [overflow-wrap:anywhere]"
-                                : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
+                                : "min-w-0 whitespace-pre-wrap rounded-2xl border border-border bg-card-white px-3.5 py-2.5 text-base text-text [overflow-wrap:anywhere]"
                             }
                           >
                             {message.body}
