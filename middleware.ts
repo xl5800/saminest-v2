@@ -8,6 +8,19 @@ import { next } from "@vercel/functions";
  * `/activities/:id/notify` 这些子路径。
  */
 export const config = {
+  // 显式切到 Node.js Routing Middleware 运行时（Vercel 官方文档
+  // /docs/routing-middleware#runtime-options：`middleware.ts` 文件约定
+  // 默认走 Edge 运行时，可以通过这里的 runtime: 'nodejs' 改成 Node.js
+  // 运行时）。原因：Edge 运行时对「未支持模块」有一份很严格的白名单，
+  // 部署这个功能时反复遇到 "Edge Function 'middleware' is referencing
+  // unsupported modules" ——即使 middleware.ts 和 api/og/activity.tsx
+  // 之间已经不再共享任何 src/ 源文件（各自本地复制了一份），Vercel 仍然
+  // 在某种构建产物层面把两者关联在了一起，报错信息本身已经退化成
+  // 语焉不详的 "- @vercel: module"，没法再针对具体某个包做排查。改成
+  // Node.js 运行时后，Middleware 不再受 Edge 那份模块白名单限制（可以
+  // 使用完整的 Node.js API/生态），middleware 和 api/og/activity.tsx
+  // 从此在两个完全不同的运行时构建产物里，不可能再互相牵连。
+  runtime: "nodejs",
   matcher: ["/post/:id", "/activities/:id"]
 };
 
