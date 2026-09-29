@@ -793,6 +793,7 @@ export type Database = {
       }
       posts: {
         Row: {
+          archive_reason: string | null
           archived_at: string | null
           author_id: string
           category_id: string
@@ -821,6 +822,7 @@ export type Database = {
           visibility: string
         }
         Insert: {
+          archive_reason?: string | null
           archived_at?: string | null
           author_id: string
           category_id: string
@@ -849,6 +851,7 @@ export type Database = {
           visibility?: string
         }
         Update: {
+          archive_reason?: string | null
           archived_at?: string | null
           author_id?: string
           category_id?: string
@@ -1060,6 +1063,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_archive_post: {
+        Args: { archive_note: string; target_post_id: string }
+        Returns: undefined
+      }
       admin_cancel_activity: {
         Args: { cancel_reason: string; target_activity_id: string }
         Returns: undefined
@@ -1085,10 +1092,12 @@ export type Database = {
           status_filter?: string
         }
         Returns: {
+          archive_reason: string
           author_name: string
           category_name: string
           created_at: string
           id: string
+          rejection_reason: string
           status: string
           title: string
         }[]
@@ -1227,6 +1236,7 @@ export type Database = {
       get_post_snapshot: {
         Args: { target_id: string }
         Returns: {
+          archive_reason: string | null
           archived_at: string | null
           author_id: string
           category_id: string
@@ -1477,7 +1487,7 @@ export type CompositeTypes<
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][CompositeTypeName & keyof DefaultSchema["CompositeTypes"]]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
