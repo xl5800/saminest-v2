@@ -91,7 +91,16 @@ vi.mock("../repositories/posts-repository", () => ({
   listAllPosts,
   listMyPosts,
   createPost,
-  getPostDetail
+  getPostDetail,
+  // AdminNav（每个 /admin/* 页面顶部都会渲染）功能改动清单第 7 项新增了
+  // "待审核"角标，会调用 countPendingPosts——漏了这个 mock 会导致
+  // usePendingPostsCountQuery 里 `queryFn: countPendingPosts` 拿到
+  // undefined，调用时直接抛"vitest 模块没有这个导出"，让所有 /admin/*
+  // 路由测试崩溃（不是查询失败这种可以静默降级的错误，是渲染时的同步异常）。
+  // 这几个 /admin/* 路由测试本身不关心角标数字，给一个固定的 0 即可，
+  // 照抄 pending-posts-page.test.tsx/all-posts-page.test.tsx 已经在用的
+  // 同一个 mock 值。
+  countPendingPosts: () => Promise.resolve(0)
 }));
 vi.mock("../repositories/messages-repository", () => ({
   listMessages,
@@ -109,7 +118,14 @@ vi.mock("../repositories/reports-repository", async () => {
   );
   return {
     ...actual,
-    listReportsForModeration
+    listReportsForModeration,
+    // 同上，AdminNav 也会为"举报处理"角标调用 countPendingReports——这里
+    // importActual 保留了真实模块的其它导出，本来就不会像 countPendingPosts
+    // 那样直接崩溃，但不加这个覆盖会让真的 countPendingReports 实现跑起来，
+    // 尝试打一次真实的 Supabase 查询（这个文件里其它仓库函数都是纯 mock，
+    // 唯独这一个会实际发请求）。补上固定值，跟 countPendingPosts 一样避免
+    // 测试悄悄依赖网络。
+    countPendingReports: () => Promise.resolve(0)
   };
 });
 vi.mock("../repositories/feedback-repository", async () => {

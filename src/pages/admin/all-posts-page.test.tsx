@@ -228,7 +228,14 @@ describe("AdminAllPostsPage", () => {
       "操作失败，请稍后重试。"
     );
     expect(screen.getByLabelText("删除原因")).toHaveValue("违反平台规则");
-    expect(screen.getByText("Sunny room near metro")).toBeInTheDocument();
+    // 这里不能再用 getByText（单数）：删除失败后确认弹层（ConfirmSheet）
+    // 不会关闭（保留用户已经输入的删除原因），它自己也渲染了一遍
+    // post.title 作为确认文案，跟列表行里的标题重复，会同时匹配到两个
+    // 节点，getByText 在有多个匹配时会直接抛错。用 getAllByText 只确认
+    // "这一行没有被误删掉"，不关心具体是哪一份 DOM 节点——照抄
+    // pending-posts-page.test.tsx 里 rejectPost 失败那条测试已经用过的
+    // 同一个修法。
+    expect(screen.getAllByText("Sunny room near metro").length).toBeGreaterThan(0);
   });
 
   // "全部帖子"管理页扩展成能管理所有内容任务卡：分类筛选（含"找搭子"）。
@@ -489,8 +496,18 @@ describe("AdminAllPostsPage", () => {
       await waitFor(() => {
         expect(adminArchivePost).toHaveBeenCalledWith("post-1", "涉嫌虚假信息");
       });
-      expect(await screen.findByText("已下架")).toBeInTheDocument();
-      expect(screen.getByText("Sunny room near metro")).toBeInTheDocument();
+      // 这里不能用裸的 screen.findByText("已下架")：页面顶部的状态筛选
+      // Chips 里本来就有一个文案同样是"已下架"的筛选项，跟这一行刚更新的
+      // 状态徽章同时匹配，findByText 在有多个匹配时会直接抛"多个匹配"的
+      // 错误——scope 到这一行本身（用标题元素 .closest("li") 定位），
+      // 断言这一行的文本内容里包含"已下架"，不去管页面上是不是还有别的
+      // 地方也写着同样两个字，照抄 pending-posts-page.test.tsx 之前修过的
+      // 同类问题（.closest("li") + toHaveTextContent）。
+      const row = screen.getByText("Sunny room near metro").closest("li");
+      await waitFor(() => {
+        expect(row).toHaveTextContent("已下架");
+      });
+      expect(row).toHaveTextContent("Sunny room near metro");
     });
 
     it("shows a validation error and does not call adminArchivePost when confirming 下架 with an empty reason", async () => {
