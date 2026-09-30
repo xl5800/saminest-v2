@@ -164,15 +164,17 @@
    * （body 直接用它），首页/找搭子/消息列表/聊天/我的/公开主页这次都是
    * 跟着这一个数值变化自动统一变灰，不需要逐页面改代码。
    */
-  /* design handoff 第 1 项（暖色中性）：#ebedf3 → #f7f5f1，跟卡片
-     （--color-card，仍是纯白）之间继续靠"背景变暖灰 + 卡片边框投影"拉开
-     层次，不是把卡片也调暖。 */
-  --color-bg: #f7f5f1;
+  /* 全局配色改为冷灰色调任务卡：#f7f5f1 → #f0f2f5，暖色中性调回冷灰调，
+     覆盖 design handoff 第 1 项定的暖色值。跟卡片（--color-card，这次也
+     改回纯白）之间继续靠"背景变冷灰 + 卡片边框投影"拉开层次，不是把卡片
+     也调灰。 */
+  --color-bg: #f0f2f5;
   /* 次级页面背景，这批新增——给需要跟主页面背景区分一档、但又不到卡片
      纯白程度的场景用，这一批四个页面暂时没有用到，留给第二批。
-     design handoff 第 1 项：#f0f3f8 → #f2efe9（跟下面 --color-surface-muted
-     这次改成同一个值，handoff 表格把这两个 token 合并成一行）。 */
-  --color-bg-secondary: #f2efe9;
+     全局配色改为冷灰色调任务卡：#f2efe9 → #e9ebee，冷灰色调覆盖 design
+     handoff 第 1 项定的暖色值（跟下面 --color-surface-muted 保持同一个
+     值）。 */
+  --color-bg-secondary: #e9ebee;
   /*
    * --color-card（Card 背景，见 00-overview.md 全局设计 Token
    * 表格）：01 号卡的 token 落地漏掉了这一条，导致 top-bar.tsx 的
@@ -205,7 +207,11 @@
    * 把 class 从 bg-card 换成 bg-card-white，没有改回 #ffffff 语义的
    * bg-card 用法保留白色。
    */
-  --color-card: #f2efe9;
+  /* 全局配色改为冷灰色调任务卡：#f2efe9 → #ffffff，卡片背景改回纯白——
+     这次的冷灰主题不延续上面那段大注释里"全站 bg-card 改米白色"的决定，
+     只改 @theme 数值，不逐个排查/改动那些调用点的 class（它们本来就是
+     bg-card，颜色跟着这个 token 自动变化）。 */
+  --color-card: #ffffff;
   /* 上面这条注释里"两个例外"专用——post-list.tsx 的帖子卡片本身（含骨架屏）
    * 和 conversation-page.tsx / support-conversation-page.tsx 对方消息
    * 气泡，这三处从 bg-card 换成 bg-card-white，保留纯白，不跟着
@@ -216,38 +222,41 @@
   --color-card-white: #ffffff;
   /* 弱化表面/图片占位底色，这批新增——找搭子卡片的头像空位占位格这次换
      成这个 token，见 activity-participant-avatars.tsx 的改动。
-     design handoff 第 1 项：#eef1f7 → #f2efe9（跟 --color-bg-secondary
-     合并成同一个值，见上面那条注释）。 */
-  --color-surface-muted: #f2efe9;
+     全局配色改为冷灰色调任务卡：#f2efe9 → #e9ebee（继续跟
+     --color-bg-secondary 保持同一个值）。 */
+  --color-surface-muted: #e9ebee;
   /* 列表项 hover/按下态，这批新增，这一批四个页面暂时没有用到。
-     design handoff 第 1 项：#f8f9fc → #f7f5f1（跟 --color-bg 这次改成
-     同一个值）。 */
-  --color-surface-hover: #f7f5f1;
+     全局配色改为冷灰色调任务卡：#f7f5f1 → #f0f2f5（继续跟 --color-bg
+     保持同一个值）。项目里目前没有任何组件在用这个 token，这次改动不会
+     有可见变化，是预期结果。 */
+  --color-surface-hover: #f0f2f5;
   --color-surface-pressed: #f0f2f6;
-  /* design handoff 第 1 项：#20242c → #26221e。 */
-  --color-text: #26221e;
-  /* design handoff 第 1 项：#697386 → #756e65。 */
-  --color-text-muted: #756e65;
-  /* design handoff 第 1 项：#9aa3b2 → #9c958b（跟下面 --color-nav-icon
-     这次改成同一个值，handoff 表格把这两个 token 合并成一行）。 */
-  --color-text-subtle: #9c958b;
+  /* 全局配色改为冷灰色调任务卡：#26221e → #1c1e21，冷灰色调覆盖 design
+     handoff 第 1 项定的暖色值。 */
+  --color-text: #1c1e21;
+  /* 全局配色改为冷灰色调任务卡：#756e65 → #65676b。 */
+  --color-text-muted: #65676b;
+  /* 全局配色改为冷灰色调任务卡：#9c958b → #8a8d91（继续跟下面
+     --color-nav-icon 保持同一个值）。 */
+  --color-text-subtle: #8a8d91;
   /* 输入框占位文字/禁用态文字，这批新增，比 text-subtle 更淡一级，这一批
      四个页面暂时没有用到。 */
   --color-text-placeholder: #a8afbc;
   --color-text-disabled: #c3c8d1;
-  /* design handoff 第 1 项：#e7eaf0 → #e3ded6。 */
-  --color-border: #e3ded6;
+  /* 全局配色改为冷灰色调任务卡：#e3ded6 → #dadde1，冷灰色调覆盖 design
+     handoff 第 1 项定的暖色值。 */
+  --color-border: #dadde1;
   /* 比 --color-border 更淡一档的分割线，这批新增，这一批暂时没有用到；
      --color-divider 才是消息列表这类"行与行之间"场景专用的，见下面。
-     design handoff 第 1 项：#eceef3 → #ece8e1（跟下面 --color-divider
-     这次改成同一个值，handoff 表格把这两个 token 合并成一行）。 */
-  --color-border-light: #ece8e1;
+     全局配色改为冷灰色调任务卡：#ece8e1 → #e4e6eb（继续跟下面
+     --color-divider 保持同一个值）。 */
+  --color-border-light: #e4e6eb;
   /* 列表项之间的分割线（比如消息列表行与行之间），跟卡片边框
      --color-border 刻意区分成两个不同数值——分割线要更淡，这批新增，见
      conversation-list-page.tsx 的改动。
-     design handoff 第 1 项：#e9ecf2 → #ece8e1（跟上面 --color-border-light
-     合并成同一个值）。 */
-  --color-divider: #ece8e1;
+     全局配色改为冷灰色调任务卡：#ece8e1 → #e4e6eb（继续跟上面
+     --color-border-light 保持同一个值）。 */
+  --color-divider: #e4e6eb;
   /* 顶栏+分类 Chips 固定成一张卡片任务卡新增——固定卡片底部的分隔线，
      跟下面滚动过去的内容区分开（BARRY 明确要求用一条细线，不是靠阴影）。
      卡片背景复用已有的 --color-bg-secondary（#f0f3f8），页面背景是
@@ -274,13 +283,14 @@
   /* 底部导航未选中图标颜色，这批新增，比 --color-text-muted 稍浅——专门
      给导航用，不复用 text-muted，这一批四个页面暂时没有用到（底部导航
      在第二批范围）。
-     design handoff 第 1 项：#8c95a3 → #9c958b（跟上面 --color-text-subtle
-     合并成同一个值，handoff 表格把这两个 token 合并成一行）。 */
-  --color-nav-icon: #9c958b;
+     全局配色改为冷灰色调任务卡：#9c958b → #8a8d91（继续跟上面
+     --color-text-subtle 保持同一个值）。 */
+  --color-nav-icon: #8a8d91;
   /* 弹窗/BottomSheet 遮罩层，这批新增，替代黑色遮罩，这一批四个页面暂时
      没有用到（Modal/BottomSheet 在第二批范围）。
-     design handoff 第 1 项：rgba(20,26,38,.45) → rgba(38,34,30,.38)。 */
-  --color-overlay: rgba(38, 34, 30, 0.38);
+     全局配色改为冷灰色调任务卡：rgba(38,34,30,.38) → rgba(0,0,0,.4)，
+     冷灰色调覆盖 design handoff 第 1 项定的暖色遮罩，改回中性黑。 */
+  --color-overlay: rgba(0, 0, 0, 0.4);
 
   /*
    * 圆角刻度：Tailwind 默认圆角档位（rounded-lg=8px, rounded-xl=12px,
@@ -317,10 +327,11 @@
    * --shadow-fab 的 RGB 分量同步换算成新的 --color-primary（#315BEA），
    * 透明度从 0.35 降到 0.18，是 BARRY 给的按钮投影数值，不是随意调整。
    */
-  /* design handoff 第 1 项：rgb 分量从冷蓝调 20/30/50 换成暖棕调
-     60/45/30，呼应新的 --color-text（#26221E），透明度改成 .04/.05。 */
+  /* 全局配色改为冷灰色调任务卡：rgb 分量从暖棕调 60/45/30 改回中性黑
+     0/0/0，覆盖 design handoff 第 1 项定的暖棕调投影，透明度数值本身
+     不变（.04/.05）。 */
   --shadow-card:
-    0 1px 2px rgba(60, 45, 30, 0.04), 0 4px 12px rgba(60, 45, 30, 0.05);
+    0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.05);
   --shadow-search: 0 1px 4px rgba(0, 0, 0, 0.06);
   --shadow-fab: 0 6px 16px rgba(49, 91, 234, 0.18);
   --shadow-settings-item: 0 2px 12px rgba(0, 0, 0, 0.05);
