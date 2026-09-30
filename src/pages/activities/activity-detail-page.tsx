@@ -1,5 +1,5 @@
 import { Share } from "@capacitor/share";
-import { Flag, Share2 } from "lucide-react";
+import { Clock, Flag, MapPin, Share2, Users } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
 import { ActivityFavoriteButton } from "../../components/activity-favorite-button";
@@ -17,7 +17,21 @@ import type { ActivityDetail, ActivityParticipant } from "../../repositories/act
 import { getActivityChannelMeta } from "../../repositories/activities-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
-import { formatActivityStartAt } from "../../utils/format";
+import { formatActivityParticipantSummary, formatActivityStartAt } from "../../utils/format";
+
+// 找搭子卡片+详情页视觉对齐设计稿任务卡：时间行的"星期几"次要文字——这个
+// 仓库里没有现成的星期格式化函数（format.ts 不在这张任务卡允许改动的文件
+// 范围内，不新增导出），本地手写一个小的星期几数组，跟 formatActivityStartAt
+// 一样用本地时区的 getDay()（活动开始时间用户关心的是"到场当天是星期几"，
+// 不是 UTC 那一天，见 formatActivityStartAt 顶部注释里"用本地时区"的理由，
+// 这里延续同一个判断）。
+const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+function formatActivityWeekday(startAt: string): string {
+  const date = new Date(startAt);
+  if (Number.isNaN(date.getTime())) return "";
+  return WEEKDAY_LABELS[date.getDay()];
+}
 
 /**
  * 任务卡 9（找搭子详情页改版对齐方案图）：拼出"已加入"名单里单个参与者
@@ -68,6 +82,9 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  * PersonCard 展示）。头像拼图/"📢通知参与者"/联系方式/底部按钮这几块的
  * 内部逻辑和判断条件完全没动，只是位置跟着挪；"活动描述"这个小标题是这次
  * 新加的（改版前描述正文上面没有任何标题文字，直接跟在联系方式下面）。
+ * （下面"找搭子卡片+详情页视觉对齐设计稿"任务卡把"地点 → 时间"两步换成
+ * 了合并的一个容器、顺序也从"地点→时间"倒过来变成"时间→地点→已报名"，
+ * 见下面单独的说明，这里的"标题→地点→时间"只是历史记录。）
  *
  * "已加入"参与者名单：对 participants（不含发起人，跟头像拼图用的是同
  * 一份 useActivityParticipantsQuery 数据，没有另外发一次查询）逐个渲染一
@@ -188,6 +205,25 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
  * 加了 organizer_id 不等于 user_id 的条件，见对应迁移文件），不是只在
  * 前端隐藏/禁用按钮就足够——BARRY 明确要求这次改动不动"还差 N 人"这个
  * 人数计算逻辑，这里也确实没有碰 participant_count 相关的任何代码。
+ *
+ * 找搭子卡片+详情页视觉对齐设计稿任务卡（信息展示部分，不改底部按钮）：
+ * - 标题不再自带频道 emoji 前缀，改成标题上方单独一行（频道图标+文案，
+ *   小号字），跟 activity-card.tsx 那边的改法是同一个理由：避免频道信息
+ *   在标题和新行里重复展示两次，见 ChannelIcon/channelLabel 的注释。
+ * - 时间/地点/已报名进度这三块从各自独立展示，合并成一个 rounded-button
+ *   （14px 圆角，对应 index.css `--radius-button`）+ overflow-hidden +
+ *   divide-y divide-divider 的圆角容器，顺序是时间→地点→已报名（对应
+ *   Clock/MapPin/Users 三个图标的顺序，是设计稿给的顺序，倒过来了改版前
+ *   "地点→时间"的相对顺序）。时间行新增一行"星期几"次要文字（本地手写的
+ *   formatActivityWeekday，不是 format.ts 里的函数——这张任务卡的允许
+ *   改动范围没有包含 format.ts，见函数上方注释）；地点行沿用改版前已有的
+ *   "地标名/线上活动/地点待定 + 城市州名"两行逻辑，完全没动，只是从独立
+ *   的边框卡片挪进了合并容器里的一行。
+ * - "已报名"这一行新增一条 3px 高的进度条，宽度是 `(participantCount + 1)
+ *   / capacity` 的百分比（+1 是发起人本人，跟 formatActivityParticipantSummary
+ *   内部的 joinedCount 口径一致，见该函数上方注释），capacity 为 null 时
+ *   不展示进度条（百分比算不出来），只展示 formatActivityParticipantSummary
+ *   返回的"已有 N 人报名"这一行文字，不报错、不展示一条假的进度条。
  */
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -197,6 +233,12 @@ export function ActivityDetailPage() {
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
 
   const isOrganizer = !!session && !!data && session.user.id === data.organizerId;
+  // 找搭子卡片+详情页视觉对齐设计稿任务卡：标题上方新增的频道行需要用到
+  // 这两个值，data 还没加载出来时不需要真的展示，但 JSX 里不能直接写
+  // `const`，提前在这里算好，data 为 null/undefined 时退回 getActivityChannelMeta
+  // 自己的占位分支（channel 传空字符串命中未知值兜底），反正这两个值只在
+  // 下面 `data ?` 为真的分支里才会被渲染出来。
+  const { icon: ChannelIcon, label: channelLabel } = getActivityChannelMeta(data?.channel ?? "");
 
   const participationAction = useActivityParticipationAction({
     activityId: id ?? "",
@@ -296,28 +338,74 @@ export function ActivityDetailPage() {
           <div className="space-y-4">
             {/* 1. 标题——任务卡 9：频道/标签徽章 chip 删掉了（频道已经通过
                 emoji 表达），"发起人：{昵称}"文字链接也删掉了（发起人身份
-                下面的 PersonCard 已经展示，见页面顶部注释）。 */}
-            <h1 className="text-xl font-bold text-text">
-              {getActivityChannelMeta(data.channel).emoji} {data.title}
-            </h1>
-
-            {/* 2. 地点 */}
-            <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
-              <p>
-                {data.isOnline
-                  ? "线上活动"
-                  : (data.landmarkText ??
-                    (data.locationName ? formatLocationDisplayName(data.locationName) : "地点待定"))}
-              </p>
-              {!data.isOnline && data.locationName ? (
-                <p className="mt-1 text-xs text-text-muted">
-                  {formatLocationDisplayName(data.locationName)}
-                </p>
-              ) : null}
+                下面的 PersonCard 已经展示，见页面顶部注释）。找搭子卡片+
+                详情页视觉对齐设计稿任务卡：标题不再自带频道 emoji 前缀，
+                频道改成标题上方单独一行（图标+文案，小号字），避免频道
+                信息在标题里和新行里重复出现两次。 */}
+            <div className="flex items-center gap-1 text-xs font-medium text-text-muted">
+              <ChannelIcon aria-hidden="true" size={14} className="shrink-0" />
+              {channelLabel}
             </div>
+            <h1 className="text-xl font-bold text-text">{data.title}</h1>
 
-            {/* 3. 时间 */}
-            <p className="text-sm text-text-muted">{formatActivityStartAt(data.startAt)}</p>
+            {/* 2. 时间/地点/已报名进度——找搭子卡片+详情页视觉对齐设计稿
+                任务卡：原来时间/地点各自独立展示，这次合并成一个圆角容器
+                （14px 圆角，对应 index.css 里的 --radius-button，overflow
+                hidden 配合 divide-y 画内部分隔线），新增"已报名"这一行放进
+                同一个容器。行的顺序（时间→地点→已报名）跟任务卡给的图标
+                顺序（Clock/MapPin/Users）保持一致，是对改版前"地点→时间"
+                顺序的一次调换，是设计稿要求的，不是无意间改动了顺序。
+                容器背景延续跟改版前地点/联系方式两个区块一样的 bg-bg，
+                divide-divider 分隔线（比 border-border 浅一档、又跟
+                bg-bg/bg-card 背景色都不同的专用列表分割线 token，见
+                index.css 里 --color-divider 的说明）。 */}
+            <div className="divide-y divide-divider overflow-hidden rounded-button border border-border bg-bg">
+              <div className="flex items-start gap-3 p-3">
+                <Clock aria-hidden="true" size={16} className="mt-0.5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-text">{formatActivityStartAt(data.startAt)}</p>
+                  <p className="mt-0.5 text-xs text-text-muted">{formatActivityWeekday(data.startAt)}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3">
+                <MapPin aria-hidden="true" size={16} className="mt-0.5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-text">
+                    {data.isOnline
+                      ? "线上活动"
+                      : (data.landmarkText ??
+                        (data.locationName ? formatLocationDisplayName(data.locationName) : "地点待定"))}
+                  </p>
+                  {!data.isOnline && data.locationName ? (
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      {formatLocationDisplayName(data.locationName)}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+              <div className="flex items-start gap-3 p-3">
+                <Users aria-hidden="true" size={16} className="mt-0.5 shrink-0 text-text-muted" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-text">
+                    {formatActivityParticipantSummary(data.participantCount, data.capacity)}
+                  </p>
+                  {/* capacity 为空时不展示进度条（百分比算不出来），只展示
+                      上面那行人数文案——跟 formatActivityParticipantSummary
+                      本身"capacity 为 null 时只展示已有人数"的空值处理方式
+                      一致，不为了凑一条进度条而报错/展示一个假的百分比。 */}
+                  {data.capacity !== null ? (
+                    <div className="mt-2 h-[3px] w-full overflow-hidden rounded-full bg-border">
+                      <div
+                        className="h-full rounded-full bg-primary"
+                        style={{
+                          width: `${Math.min(100, ((data.participantCount + 1) / data.capacity) * 100)}%`
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
 
             {/* 4. 活动描述——"活动描述"这个小标题是任务卡 9 新加的，改版前
                 描述正文没有单独的标题文字。 */}

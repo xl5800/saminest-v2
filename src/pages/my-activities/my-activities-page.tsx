@@ -66,22 +66,34 @@ interface ActivityCardProps {
 }
 
 /**
- * 两个 tab 共用的卡片展示部分（emoji+标题/地点/时间/频道/人数汇总），
+ * 两个 tab 共用的卡片展示部分（频道图标+标题/地点/时间/频道/人数汇总），
  * 只有卡片底部的操作按钮不一样，用 action 这个 ReactNode 参数注入，避免
  * 两个 tab 各写一遍几乎一样的卡片布局。note 是一行可选的状态提示文字
  * （"发起人已取消此活动"/"申请中，等待发起人同意"），extra 是"我发起的"
  * tab 专用的待审核申请区块。
+ *
+ * 找搭子卡片+详情页视觉对齐设计稿任务卡：getActivityChannelMeta 返回值从
+ * emoji 字符串改成 lucide-react 图标组件——这个页面不在那张任务卡的改版
+ * 范围内（没有要求重排这个页面的卡片布局），只是被迫跟着改渲染方式（不改
+ * 的话这里会编译不过）。图标挪到标题文字块外面单独一个 flex 容器里，而
+ * 不是直接拼进 <p> 文本里——line-clamp-2 是靠 -webkit-line-clamp 实现的，
+ * 要求那个元素自己是纯文本的多行截断容器，如果让图标也在同一个 <p> 里就
+ * 得把 <p> 改成 flex 容器，会跟 -webkit-line-clamp 的实现方式冲突；用外层
+ * flex 包一层、图标和 <p> 分开是兄弟节点，两者互不干扰。图标尺寸 16px，
+ * 跟旁边 text-base（16px）标题字号取同一个数值，视觉上协调即可，不是
+ * 逐像素换算出来的。
  */
 function ActivityCard({ activity, error, note, action, extra }: ActivityCardProps) {
-  const { emoji, label } = getActivityChannelMeta(activity.channel);
+  const { icon: ChannelIcon, label } = getActivityChannelMeta(activity.channel);
 
   return (
     <li className="rounded-2xl border border-border bg-card p-3 shadow-card">
       <Link to={`/activities/${activity.id}`} className="block">
         <div className="flex items-start justify-between gap-2">
-          <p className="line-clamp-2 break-words text-base text-text">
-            {emoji} {activity.title}
-          </p>
+          <div className="flex min-w-0 items-start gap-1.5">
+            <ChannelIcon aria-hidden="true" size={16} className="mt-0.5 shrink-0 text-text-muted" />
+            <p className="line-clamp-2 min-w-0 break-words text-base text-text">{activity.title}</p>
+          </div>
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${statusBadgeClassName(activity.status)}`}
           >

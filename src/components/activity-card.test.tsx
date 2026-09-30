@@ -126,12 +126,55 @@ describe("ActivityCard", () => {
     expect(container.querySelectorAll("a")).toHaveLength(1);
   });
 
-  it("renders emoji+title, location/landmark, and start time", () => {
+  it("renders the title (no emoji prefix), location/landmark, and start time", () => {
     renderCard();
 
     const link = screen.getByRole("link", { name: /周末吃火锅/ });
-    expect(link).toHaveTextContent("🍜 周末吃火锅");
+    expect(link).toHaveTextContent("周末吃火锅");
     expect(link).toHaveTextContent("海底捞");
     expect(link).toHaveTextContent(/08-20/);
+  });
+
+  // 找搭子卡片+详情页视觉对齐设计稿任务卡：文字区顶部新增一行"频道图标+
+  // 频道文案"，取代了原来挂在标题前面的 emoji 前缀。
+  describe("频道行 + 状态文字 (找搭子卡片+详情页视觉对齐设计稿任务卡)", () => {
+    it("renders a channel icon and label in a row above the title, with a MapPin/Clock icon on the location/time rows", () => {
+      const { container } = renderCard();
+
+      expect(screen.getByText("吃饭搭子")).toBeInTheDocument();
+      // Soup 是"吃饭"频道对应的图标，跟 MapPin/Clock 一起，卡片里一共应该
+      // 有三个装饰性图标（不含头像拼图里的 Crown/Plus）。
+      expect(container.querySelector("svg.lucide-soup")).toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-map-pin")).toBeInTheDocument();
+      expect(container.querySelector("svg.lucide-clock")).toBeInTheDocument();
+    });
+
+    // ActivityParticipantAvatars 头像格下方原有的"还差 N 人"文字没有删
+    // （见 activity-card.tsx 顶部注释），巧合数字相同时页面上会有两处一样
+    // 的文案，这里用 tagName 精确定位到新加的顶部状态 <span>，不是那个
+    // <p>。
+
+    // sampleActivity：capacity=4，participantCount=1 → 已加入 2 人（含
+    // 发起人），还差 2 人，颜色应该是 text-text-muted。
+    it("shows '还差 N 人' in text-text-muted when there is remaining capacity", () => {
+      renderCard();
+
+      const status = screen.getAllByText("还差 2 人（2/4）").find((el) => el.tagName === "SPAN");
+      expect(status?.className).toMatch(/text-text-muted/);
+    });
+
+    it("shows '已满员' in text-text-subtle when capacity is reached", () => {
+      renderCard({ ...sampleActivity, capacity: 2, participantCount: 1 });
+
+      const status = screen.getAllByText("已满员（2/2）").find((el) => el.tagName === "SPAN");
+      expect(status?.className).toMatch(/text-text-subtle/);
+    });
+
+    it("shows '已有 N 人报名' in text-primary when capacity is unlimited (null)", () => {
+      renderCard({ ...sampleActivity, capacity: null, participantCount: 3 });
+
+      const status = screen.getAllByText("已有 4 人报名").find((el) => el.tagName === "SPAN");
+      expect(status?.className).toMatch(/\btext-primary\b/);
+    });
   });
 });

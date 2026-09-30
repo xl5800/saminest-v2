@@ -201,14 +201,19 @@ describe("MyActivitiesPage", () => {
     );
   });
 
-  it("renders an organized activity's title, channel, location, time, participant summary, and status badge", async () => {
+  // 找搭子卡片+详情页视觉对齐设计稿任务卡：getActivityChannelMeta 从 emoji
+  // 字符串改成 lucide-react 图标组件，这个页面被迫跟着改渲染方式（不在那
+  // 张任务卡的改版范围内，只是类型变了不能不改），标题文字本身不再带 emoji
+  // 前缀，改成用一个真实的 <svg> 图标渲染在标题旁边。
+  it("renders an organized activity's title (with a channel icon, not an emoji prefix), channel, location, time, participant summary, and status badge", async () => {
     listMyOrganizedActivities.mockResolvedValue([sampleOrganizedActivity]);
 
     renderWithProviders(<MyActivitiesPage />);
 
     const link = await screen.findByRole("link", { name: /周末吃火锅/ });
     expect(link).toHaveAttribute("href", "/activities/act-1");
-    expect(link).toHaveTextContent("🍜 周末吃火锅");
+    expect(link).toHaveTextContent("周末吃火锅");
+    expect(link.querySelector("svg")).toBeInTheDocument();
     expect(link).toHaveTextContent("吃饭搭子");
     expect(link).toHaveTextContent("海底捞");
     // 活动"人数上限"语义修正：sampleOrganizedActivity 是 2 个参与者 + 1

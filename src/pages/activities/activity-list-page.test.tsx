@@ -375,26 +375,31 @@ describe("ActivityListPage", () => {
     expect(container.querySelector(".columns-2")).not.toBeInTheDocument();
   });
 
-  it("renders emoji+title, location/landmark, and start time on the card", async () => {
+  it("renders the title (no emoji prefix), location/landmark, and start time on the card", async () => {
     listActivities.mockResolvedValue([sampleActivity]);
 
     renderWithProviders(<ActivityListPage />);
 
     const link = await screen.findByRole("link", { name: /周末吃火锅/ });
-    expect(link).toHaveTextContent("🍜 周末吃火锅");
+    expect(link).toHaveTextContent("周末吃火锅");
     expect(link).toHaveTextContent("海底捞");
     expect(link).toHaveTextContent(/08-20/);
   });
 
-  it("no longer renders a separate channel-label pill or a participant-summary line on the card (that information now lives inside the avatar stack's own caption)", async () => {
+  // 找搭子卡片+详情页视觉对齐设计稿任务卡：频道文案挪到了文字区顶部新的
+  // 一行（图标+文案），不再是"没有单独展示、只在头像堆叠下方的说明文字里
+  // 间接出现"的状态；"还差 N 人"这类人数状态文字现在有两处（新加的顶部
+  // 状态文字 + 头像堆叠原有的说明文字），是这次任务卡明确保留的重复，
+  // 不是意外冒出来的第二份。
+  it("renders the channel label once and the participant-summary text twice (new top status row + the avatar stack's own caption)", async () => {
     listActivities.mockResolvedValue([sampleActivity]);
 
     renderWithProviders(<ActivityListPage />);
 
     const link = await screen.findByRole("link", { name: /周末吃火锅/ });
-    expect(link).not.toHaveTextContent("吃饭搭子");
+    expect(link).toHaveTextContent("吃饭搭子");
     const summaryOccurrences = (link.textContent ?? "").match(/还差 \d+ 人/g) ?? [];
-    expect(summaryOccurrences).toHaveLength(1);
+    expect(summaryOccurrences).toHaveLength(2);
   });
 
   it("renders the ActivityParticipantAvatars stack with the organizer's crown badge, in non-interactive mode (no <button> for empty slots)", async () => {
