@@ -674,6 +674,26 @@ export function MessageConversationPage() {
 
   const messageList = messages ?? [];
 
+  // 系统通知会话：消息倒序展示任务卡——系统通知是纯单向公告，用户打开
+  // 会话最关心的是"最新一条说了什么"，不需要像私信/客服那样从头往下读，
+  // 所以这类会话把最新消息放在最上面。showTimeDivider 必须按 messageList
+  // 本来的真实时间顺序（升序，老消息在前）跟上一条比较算好，再整体反转
+  // 显示顺序——不能先反转数组再拿"反转后的上一个元素"比较，那样比较的
+  // 对象其实是时间上更晚的一条消息，会算出错误的分隔线。私信/客服会话
+  // 完全不受这段影响：messages-repository.ts / useMessagesQuery 本身的
+  // 查询顺序（升序）没有变，这里只是渲染层面按 isSystemConversation 分流。
+  const messageItems = messageList.map((message, index) => {
+    const previousMessage = messageList[index - 1];
+    return {
+      message,
+      showTimeDivider: shouldShowMessageTimeDivider(
+        message.createdAt,
+        previousMessage ? previousMessage.createdAt : null
+      )
+    };
+  });
+  const displayMessageItems = isSystemConversation ? [...messageItems].reverse() : messageItems;
+
   // 首次进入会话、消息加载完成时，以及自己发送新消息成功、列表因为
   // invalidate 重新拉取之后，都会命中这个 effect（messageList 的引用/
   // 长度会变）——直接把 scrollTop 设成 scrollHeight，不需要平滑动画，
@@ -681,12 +701,17 @@ export function MessageConversationPage() {
   // 如果以后从一个会话直接切换到另一个会话（路由参数变了但组件没有被
   // 卸载重建），确保切换后同样会重新定位到新会话的最新消息，不依赖组件
   // 重新挂载这个前提。
+  //
+  // 系统通知会话：消息倒序展示任务卡——跳过这个 effect。反转显示顺序之后
+  // 最新消息已经在容器默认的顶部位置，不需要（也不应该）再滚到底部，
+  // 否则会把用户重新滚到最旧的那条消息，效果正好是反的。私信/客服会话
+  // 不受影响，继续原样滚到底部。
   useEffect(() => {
-    if (messagesPending || messageList.length === 0) return;
+    if (isSystemConversation || messagesPending || messageList.length === 0) return;
     const container = messagesContainerRef.current;
     if (!container) return;
     container.scrollTop = container.scrollHeight;
-  }, [conversationId, messagesPending, messageList.length]);
+  }, [conversationId, messagesPending, messageList.length, isSystemConversation]);
 
   // 联系客服改成真聊天任务卡：只要有文字或者有图片就能发，两者都为空才
   // 禁用——不再要求文字必填。
@@ -824,12 +849,7 @@ export function MessageConversationPage() {
         ) : null}
         {!messagesPending && !messagesError && messageList.length > 0 ? (
           <ul className="flex flex-col gap-3">
-            {messageList.map((message, index) => {
-              const previousMessage = messageList[index - 1];
-              const showTimeDivider = shouldShowMessageTimeDivider(
-                message.createdAt,
-                previousMessage ? previousMessage.createdAt : null
-              );
+            {displayMessageItems.map(({ message, showTimeDivider }) => {
               const isMine = message.senderId === currentUserId;
               const isSystemMessage = message.notificationPayload !== null;
               // 联系客服改成真聊天任务卡新增：sender_id 为 null 但

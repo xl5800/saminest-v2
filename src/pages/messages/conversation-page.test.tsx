@@ -349,6 +349,30 @@ describe("MessageConversationPage", () => {
     expect(listItems.slice(1).every((item) => item.hasAttribute("data-message-owner"))).toBe(true);
   });
 
+  // 【任务卡 3】消息倒序展示 + 自动滚动方向修正：这条改动只针对系统通知
+  // 会话生效——普通私信/客服会话（originType 不是 "system"）渲染顺序
+  // 必须保持原样（真实时间升序，老消息在最上面），跟改动前完全一致，
+  // 不能被系统通知那条分支意外影响到。
+  it("keeps the original ascending (oldest-first) message order for a non-system (private) conversation", () => {
+    useMessagesQuery.mockReturnValue({
+      data: [
+        { id: "message-1", senderId: "user-1", body: "最早一条", notificationPayload: null, createdAt: "2026-07-20T12:00:00.000Z" },
+        { id: "message-2", senderId: "seller-1", body: "中间一条", notificationPayload: null, createdAt: "2026-07-20T12:01:00.000Z" },
+        { id: "message-3", senderId: "user-1", body: "最新一条", notificationPayload: null, createdAt: "2026-07-20T12:02:00.000Z" }
+      ],
+      isPending: false,
+      isError: false
+    });
+
+    const { container } = renderPage();
+
+    const bubbles = container.querySelectorAll("[data-message-owner]");
+    const bubbleTexts = Array.from(bubbles).map((bubble) => bubble.textContent);
+    expect(bubbleTexts[0]).toContain("最早一条");
+    expect(bubbleTexts[1]).toContain("中间一条");
+    expect(bubbleTexts[2]).toContain("最新一条");
+  });
+
   // 28 号卡（私信消息气泡头像显示，改版后）：不做"连续同一发送者只在第
   // 一条显示"的分组——双方每一条消息都各自带一个头像，没有 spacer 占位，
   // 不管上一条是谁发的、隔了多久。
@@ -1105,6 +1129,129 @@ describe("MessageConversationPage", () => {
       await waitFor(() => {
         expect(markConversationAsRead).toHaveBeenCalledWith("conversation-1", "user-1");
       });
+    });
+
+    // 【任务卡 3】消息倒序展示 + 自动滚动方向修正：系统通知会话把最新消息
+    // 放在最上面（跟私信/客服会话相反）——用 aria-label 区分"活动通知"/
+    // "系统通知"这两种卡片，断言 DOM 渲染顺序（不是数据本身的顺序，
+    // messages-repository.ts 的查询顺序继续保持升序，不受这次改动影响）。
+    it("renders system notification cards with the newest message first (reversed display order)", () => {
+      mockSystemConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "最早一条",
+            notificationPayload: { title: "最早一条", summary: null, link: null },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          },
+          {
+            id: "message-2",
+            senderId: null,
+            body: "中间一条",
+            notificationPayload: { title: "中间一条", summary: null, link: null },
+            createdAt: "2026-08-19T00:00:00.000Z"
+          },
+          {
+            id: "message-3",
+            senderId: null,
+            body: "最新一条",
+            notificationPayload: { title: "最新一条", summary: null, link: null },
+            createdAt: "2026-08-20T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      const cards = container.querySelectorAll('[data-message-owner="system"]');
+      expect(cards).toHaveLength(3);
+      // SystemNotificationCard 的标题是 <p>（不是标准 heading），直接按
+      // 每张卡片自己的文字内容判断渲染顺序。
+      const cardTexts = Array.from(cards).map((card) => card.textContent);
+      expect(cardTexts[0]).toContain("最新一条");
+      expect(cardTexts[1]).toContain("中间一条");
+      expect(cardTexts[2]).toContain("最早一条");
+    });
+
+    // 时间分隔线必须按真实时间顺序（原始升序）判断，不能在反转显示顺序
+    // 之后重新按"渲染顺序里的上一个元素"比较——否则会拿本来更晚的一条
+    // 消息当作"上一条"，算出错误的分隔线。这里构造三条跨天的消息（每天
+    // 只有一条，理应每条前面都有一条分隔线），反转显示之后断言分隔线
+    // 数量和位置仍然正确，不会因为显示顺序反转而消失或算错。
+    it("computes time dividers from the true chronological order, even though the display order is reversed", () => {
+      mockSystemConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "第一天",
+            notificationPayload: { title: "第一天", summary: null, link: null },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          },
+          {
+            id: "message-2",
+            senderId: null,
+            body: "第二天",
+            notificationPayload: { title: "第二天", summary: null, link: null },
+            createdAt: "2026-08-19T00:00:00.000Z"
+          },
+          {
+            id: "message-3",
+            senderId: null,
+            body: "第三天",
+            notificationPayload: { title: "第三天", summary: null, link: null },
+            createdAt: "2026-08-20T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderPage();
+
+      // 三条消息互相跨天，每一条前面都应该有一条时间分隔线。
+      expect(container.querySelectorAll("time")).toHaveLength(3);
+    });
+
+    // 系统通知会话反转显示顺序之后，最新消息已经在容器默认的顶部位置，
+    // 不应该再触发"滚到底部"这个 effect——跟私信/客服会话（下面单独一组
+    // 测试）形成对照。
+    it("does not scroll the message list container to the bottom for a system conversation", () => {
+      const scrollHeightSpy = vi
+        .spyOn(HTMLElement.prototype, "scrollHeight", "get")
+        .mockReturnValue(1200);
+      mockSystemConversation();
+      useMessagesQuery.mockReturnValue({
+        data: [
+          {
+            id: "message-1",
+            senderId: null,
+            body: "通知一",
+            notificationPayload: { title: "通知一", summary: null, link: null },
+            createdAt: "2026-08-18T00:00:00.000Z"
+          },
+          {
+            id: "message-2",
+            senderId: null,
+            body: "通知二",
+            notificationPayload: { title: "通知二", summary: null, link: null },
+            createdAt: "2026-08-19T00:00:00.000Z"
+          }
+        ],
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getByTestId("conversation-messages").scrollTop).toBe(0);
+
+      scrollHeightSpy.mockRestore();
     });
   });
 
