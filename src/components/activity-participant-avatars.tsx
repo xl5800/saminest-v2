@@ -31,7 +31,13 @@ import { formatActivityParticipantSummary } from "../utils/format";
  * 影响原来的规则 3（溢出）分支，规则 1/2（capacity 封顶 / 补空位到 8）逐字
  * 不变；组件新增 showAllParticipants prop 驱动这一支，默认 false，不影响
  * 活动卡片现有的 shape="square" + 封顶 8 个不做 "+N" 这条行为（卡片调用点
- * 没有传这个新 prop）。 */
+ * 没有传这个新 prop）。
+ *
+ * 找搭子卡片+详情页视觉对齐设计稿任务卡：真实头像占位格（没有 avatarUrl
+ * 时的首字母格子）新增"按人轮换底色"，只对 participants 数组里的人生效，
+ * 发起人的占位格维持原来固定的 bg-primary/10 不变——见下面
+ * PLACEHOLDER_BG_COLORS/placeholderColorIndex 的注释。空位格子（还没人
+ * 报名的位置）的样式完全没动。 */
 export const MAX_TOTAL_SLOTS = 8;
 /**
  * 真实头像（发起人+参与者）数量超过这个数字才会出现"+N"溢出徽标——比
@@ -145,11 +151,31 @@ type Slot =
   | { type: "participant"; participant: ActivityParticipant }
   | { type: "empty" };
 
+// 找搭子卡片+详情页视觉对齐设计稿任务卡：真实头像占位格（没有 avatarUrl
+// 时的首字母格子）按人轮换底色，4 色循环——设计稿给的是具体色值，不是
+// 这个仓库已有的哪个语义 token（跟这批任务卡里 activity-card.tsx 状态
+// 文字用的 primary/text-muted/text-subtle 不一样，那几个是"新色值刚好
+// 撞上已有 token"，这四个没有撞上任何已有 token，所以用 Tailwind 任意值
+// 语法直接写具体色值，不是新增设计系统 token——这张任务卡明确要求"不新增
+// 设计系统 token"）。文字色统一用 text-text（这个仓库已有的主文字色
+// token），不跟着底色换。空位格子（还没人报名的位置）的样式不受这次改动
+// 影响，继续用 SQUARE_EMPTY_SLOT_CLASS_NAME/EMPTY_SLOT_CLASS_NAME 原来的
+// 固定底色，只有真实头像占位格才轮换。
+const PLACEHOLDER_BG_COLORS = ["bg-[#dfe6fd]", "bg-[#e4e6eb]", "bg-[#def2e8]", "bg-[#fbe3e4]"];
+
 interface SlotAvatarProps {
   avatarUrl: string | null;
   initial: string;
   isOrganizer?: boolean;
   shape: "round" | "square";
+  /** 找搭子卡片+详情页视觉对齐设计稿任务卡新增：这个人在 participants
+   *  数组里的下标，取模 4 决定占位格底色（PLACEHOLDER_BG_COLORS）。发起人
+   *  不在 participants 数组里（组件 props 里 participants "已经不包含
+   *  发起人"，见 ActivityParticipantAvatarsProps 的注释），传 undefined
+   *  时占位格退回改动前的 bg-primary/10 底色，不参与轮换——任务卡原话
+   *  "轮换规则可以简单按这个人在参与者数组里的下标取模 4"，没有提发起人，
+   *  发起人本来就有 Crown 角标区分身份，不需要再靠底色区分。 */
+  placeholderColorIndex?: number;
 }
 
 /**
@@ -164,7 +190,16 @@ interface SlotAvatarProps {
  * 靠外层 grid 的 gap-0.5 露出背景色实现，见 SQUARE_AVATAR_GRID_CLASS_NAME
  * 的注释），角标本身的圆形徽章样式不受影响，两种形状共用同一个 Crown 角标。
  */
-function SlotAvatar({ avatarUrl, initial, isOrganizer, shape }: SlotAvatarProps) {
+function SlotAvatar({ avatarUrl, initial, isOrganizer, shape, placeholderColorIndex }: SlotAvatarProps) {
+  // placeholderColorIndex 有值（真实参与者）就按下标取模 4 轮换底色、文字
+  // 统一 text-text；undefined（发起人，或者调用方没传）维持改动前的固定
+  // bg-primary/10 + text-primary，不参与轮换，见 placeholderColorIndex
+  // 上面的注释。
+  const placeholderColorClassName =
+    placeholderColorIndex !== undefined
+      ? `${PLACEHOLDER_BG_COLORS[placeholderColorIndex % PLACEHOLDER_BG_COLORS.length]} text-text`
+      : "bg-primary/10 text-primary";
+
   if (shape === "square") {
     return (
       <div className="relative">
@@ -173,7 +208,7 @@ function SlotAvatar({ avatarUrl, initial, isOrganizer, shape }: SlotAvatarProps)
         ) : (
           <span
             aria-hidden="true"
-            className={`flex ${SQUARE_AVATAR_TILE_CLASS_NAME} items-center justify-center bg-primary/10 text-sm font-semibold text-primary`}
+            className={`flex ${SQUARE_AVATAR_TILE_CLASS_NAME} items-center justify-center ${placeholderColorClassName} text-sm font-semibold`}
           >
             {initial}
           </span>
@@ -201,7 +236,7 @@ function SlotAvatar({ avatarUrl, initial, isOrganizer, shape }: SlotAvatarProps)
       ) : (
         <span
           aria-hidden="true"
-          className={`flex ${AVATAR_SIZE_CLASS_NAME} ${AVATAR_RING_CLASS_NAME} items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary`}
+          className={`flex ${AVATAR_SIZE_CLASS_NAME} ${AVATAR_RING_CLASS_NAME} items-center justify-center rounded-full ${placeholderColorClassName} text-sm font-semibold`}
         >
           {initial}
         </span>
@@ -377,6 +412,11 @@ export function ActivityParticipantAvatars({
                 avatarUrl={participant.avatarUrl}
                 initial={participant.displayName.trim().charAt(0).toUpperCase() || "?"}
                 shape={shape}
+                // participants.indexOf 按对象引用找回这个人在原始
+                // participants 数组里的下标——slot.participant 就是那个
+                // 数组里的同一个对象（computeSlots 只是重新排列/截断，没有
+                // 拷贝出新对象），不需要另外维护一份 index 映射。
+                placeholderColorIndex={participants.indexOf(participant)}
               />
             );
 

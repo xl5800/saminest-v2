@@ -1,3 +1,15 @@
+import {
+  Bookmark,
+  BookOpen,
+  Car,
+  Clapperboard,
+  Dumbbell,
+  Gamepad2,
+  type LucideIcon,
+  Plane,
+  Soup
+} from "lucide-react";
+
 import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
@@ -5,7 +17,12 @@ import { AppError } from "../utils/app-error";
 /**
  * 固定频道枚举，对应 activities.channel 的 check 约束，见
  * docs/01_Product/FindBuddy-Design.md 第 1 节。"其他"设计文档里没有给
- * emoji（原文只写"其他"），这里补一个中性的 🔖，不代表任何具体场景。
+ * emoji（原文只写"其他"），这里补一个中性的 🔖，不代表任何具体场景。这份
+ * emoji 只给 create-activity-page.tsx 的分类选择器和 activity-list-page.tsx
+ * 的筛选下拉框用（两处都是"选一个频道"的选择型 UI，emoji 在这种场景够用、
+ * 视觉上也够醒目）——卡片/详情页找搭子卡片视觉对齐设计稿任务卡起，"展示
+ * 已选中频道"这个场景改用 lucide-react 图标（见下面 getActivityChannelMeta），
+ * 这两个是两套独立的展示需求，不是同一份数据的重复定义。
  */
 export const ACTIVITY_CHANNEL_OPTIONS = [
   { value: "food", label: "吃饭搭子", emoji: "🍜" },
@@ -28,22 +45,43 @@ export function isActivityChannel(value: string): value is ActivityChannel {
   return ACTIVITY_CHANNEL_VALUES.includes(value);
 }
 
-const ACTIVITY_CHANNEL_META: Record<string, { label: string; emoji: string }> =
+// 找搭子卡片+详情页视觉对齐设计稿任务卡：频道图标从 emoji 字符改成
+// lucide-react 图标组件，映射关系是设计稿给的，跟 ACTIVITY_CHANNEL_OPTIONS
+// 的 emoji 顺序一一对应但不是同一套符号体系（emoji 没有"其他"对应的固定
+// 图标语义，这里选 Bookmark 跟 emoji 版本选 🔖 是同一个"中性占位"的理由）。
+const ACTIVITY_CHANNEL_ICONS: Record<string, LucideIcon> = {
+  food: Soup,
+  carpool: Car,
+  fitness: Dumbbell,
+  game: Gamepad2,
+  study: BookOpen,
+  travel: Plane,
+  entertainment: Clapperboard,
+  other: Bookmark
+};
+
+const ACTIVITY_CHANNEL_META: Record<string, { label: string; icon: LucideIcon }> =
   Object.fromEntries(
     ACTIVITY_CHANNEL_OPTIONS.map((option) => [
       option.value,
-      { label: option.label, emoji: option.emoji }
+      { label: option.label, icon: ACTIVITY_CHANNEL_ICONS[option.value] ?? Bookmark }
     ])
   );
 
 /**
- * 卡片/详情页展示频道 emoji+文案用。理论上 channel 不应该出现枚举之外的
+ * 卡片/详情页展示频道图标+文案用。理论上 channel 不应该出现枚举之外的
  * 值（数据库有 check 约束），但防御性处理一下，未知值退回一个占位，不让
  * 页面崩掉——跟 posts-repository.ts 里"联表可能返回 null 时退回占位文案"
  * 是同一个原则。
+ *
+ * 找搭子卡片+详情页视觉对齐设计稿任务卡：返回值从 `{ label, emoji: string }`
+ * 改成 `{ label, icon: LucideIcon }`——调用点（activity-card.tsx/
+ * activity-detail-page.tsx/my-activities-page.tsx）原来直接把 emoji 字符串
+ * 当文本渲染，现在要把 icon 当成组件渲染（`<Icon size={...} />`），不是
+ * 简单的字符串替换。
  */
-export function getActivityChannelMeta(channel: string): { label: string; emoji: string } {
-  return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, emoji: "🔖" };
+export function getActivityChannelMeta(channel: string): { label: string; icon: LucideIcon } {
+  return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, icon: Bookmark };
 }
 
 export interface ActivityListItem {

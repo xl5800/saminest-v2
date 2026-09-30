@@ -209,9 +209,13 @@ describe("ActivityDetailPage", () => {
 
   // 任务卡 9（找搭子详情页改版对齐方案图）：新的页面顺序是标题 → 地点 →
   // 时间 → "活动描述"小标题+正文 → 联系方式 → 头像拼图 → （仅发起人可见的
-  // "📢通知参与者"）→ 发起人 PersonCard → "已加入"名单 → 底部按钮行；频道/
-  // 标签徽章 chip 和"发起人：{昵称}"文字链接这两处冗余信息删掉了。
-  it("renders the full activity content in the new order (title, location, time, description, contact info, avatar stack), without the removed channel/tag chip and organizer text link", () => {
+  // "📢通知参与者"）→ 发起人 PersonCard → "已加入"名单 → 底部按钮行；
+  // "发起人：{昵称}"文字链接删掉了。找搭子卡片+详情页视觉对齐设计稿任务卡：
+  // 频道 chip 不是删掉了，是换了个位置——从标题里的 emoji 前缀，挪到标题
+  // 上方单独一行的"频道图标+文案"，所以"吃饭搭子"这个文案现在应该出现在
+  // 页面上（在标题前面），不是被删掉；时间/地点合并进同一个容器后，相对
+  // 顺序也从"地点→时间"倒过来变成"时间→地点"，见下面的顺序断言。
+  it("renders the full activity content in the new order (channel, title, time, location, description, contact info, avatar stack), without the removed organizer text link", () => {
     useActivityDetailQuery.mockReturnValue({
       data: sampleActivityDetail,
       isPending: false,
@@ -223,11 +227,11 @@ describe("ActivityDetailPage", () => {
       route: "/activities/:id"
     });
 
-    expect(screen.getByRole("heading", { name: "🍜 周末吃火锅" })).toBeInTheDocument();
-    // 频道标签"吃饭搭子"（chip 上的文字）和"发起人："这两处文字不应该再
-    // 出现在页面上——频道已经通过标题里的 emoji 表达，发起人身份已经通过
-    // 下面的 PersonCard（"Alice 发起人"）展示。
-    expect(screen.queryByText("吃饭搭子")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "周末吃火锅" })).toBeInTheDocument();
+    // 频道文案"吃饭搭子"现在是标题上方新行的内容，应该出现在页面上；
+    // "发起人："这个文字链接前缀已经删掉了——发起人身份已经通过下面的
+    // PersonCard（"Alice 发起人"）展示。
+    expect(screen.getByText("吃饭搭子")).toBeInTheDocument();
     expect(screen.queryByText(/发起人：/)).not.toBeInTheDocument();
     expect(screen.getByText("海底捞")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
@@ -239,14 +243,15 @@ describe("ActivityDetailPage", () => {
       "/users/user-1"
     );
 
-    // 页面顺序断言：标题 → 地点 → 时间 → 活动描述 → 联系方式 → 头像拼图 →
-    // 发起人卡片，用各个文案在 document.body.textContent 里出现的先后
-    // 顺序来断言，不依赖具体 DOM 结构。收藏/分享/举报这次挪进了顶部"…"
-    // 更多菜单（默认收起，不在正文流里），不在这条顺序链里。
+    // 页面顺序断言：频道行 → 标题 → 时间 → 地点 → 活动描述 → 联系方式 →
+    // 头像拼图 → 发起人卡片，用各个文案在 document.body.textContent 里
+    // 出现的先后顺序来断言，不依赖具体 DOM 结构。收藏/分享/举报这次挪进了
+    // 顶部"…"更多菜单（默认收起，不在正文流里），不在这条顺序链里。
     const text = container.textContent ?? "";
+    const channelIndex = text.indexOf("吃饭搭子");
     const titleIndex = text.indexOf("周末吃火锅");
-    const locationIndex = text.indexOf("海底捞");
     const startAtIndex = text.indexOf("08-20");
+    const locationIndex = text.indexOf("海底捞");
     const descriptionHeadingIndex = text.indexOf("活动描述");
     const descriptionIndex = text.indexOf("一起吃火锅，AA制");
     const contactIndex = text.indexOf("联系方式");
@@ -255,12 +260,106 @@ describe("ActivityDetailPage", () => {
     // 的 subtitle）定位，这两处都不是唯一文字，但相对顺序足够断言。
     const organizerCardIndex = text.lastIndexOf("发起人"); // PersonCard 的 subtitle，页面上此时唯一出现这个词的地方。
 
-    expect(titleIndex).toBeLessThan(locationIndex);
-    expect(locationIndex).toBeLessThan(startAtIndex);
-    expect(startAtIndex).toBeLessThan(descriptionHeadingIndex);
+    expect(channelIndex).toBeLessThan(titleIndex);
+    expect(titleIndex).toBeLessThan(startAtIndex);
+    expect(startAtIndex).toBeLessThan(locationIndex);
+    expect(locationIndex).toBeLessThan(descriptionHeadingIndex);
     expect(descriptionHeadingIndex).toBeLessThan(descriptionIndex);
     expect(descriptionIndex).toBeLessThan(contactIndex);
     expect(contactIndex).toBeLessThan(organizerCardIndex);
+  });
+
+  // 找搭子卡片+详情页视觉对齐设计稿任务卡：时间/地点/已报名进度合并成一个
+  // 圆角容器，内部三行之间用分隔线隔开，各自带一个图标。
+  describe("时间/地点/已报名进度合并容器 (找搭子卡片+详情页视觉对齐设计稿任务卡)", () => {
+    it("renders Clock/MapPin/Users icons for the three merged rows, divided by divide-y", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const mergedContainer = container.querySelector(".divide-y.divide-divider");
+      expect(mergedContainer).toBeInTheDocument();
+      expect(mergedContainer?.querySelector("svg.lucide-clock")).toBeInTheDocument();
+      expect(mergedContainer?.querySelector("svg.lucide-map-pin")).toBeInTheDocument();
+      expect(mergedContainer?.querySelector("svg.lucide-users")).toBeInTheDocument();
+    });
+
+    it("shows a secondary weekday line under the time, and a secondary city/state line under the location", () => {
+      useActivityDetailQuery.mockReturnValue({
+        // 2099-08-20 是星期四（UTC/本地同一天，测试环境用本地时区）。
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByText(/^周[一二三四五六日]$/)).toBeInTheDocument();
+      expect(screen.getByText("Rockville")).toBeInTheDocument();
+    });
+
+    // sampleActivityDetail：capacity=4，participantCount=2 → 已加入 3 人
+    // （含发起人），进度条宽度应该是 3/4 = 75%。
+    it("sizes the progress bar fill to (participantCount + 1) / capacity as a percentage", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: sampleActivityDetail,
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const fill = container.querySelector(".bg-primary.h-full");
+      expect(fill).toBeInTheDocument();
+      expect((fill as HTMLElement).style.width).toBe("75%");
+    });
+
+    it("clamps the progress bar fill at 100% instead of overflowing when joined count exceeds capacity", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: { ...sampleActivityDetail, capacity: 2, participantCount: 5 },
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      const fill = container.querySelector(".bg-primary.h-full");
+      expect((fill as HTMLElement).style.width).toBe("100%");
+    });
+
+    // capacity 为 null 时算不出百分比——不报错、不展示一条假的进度条，只
+    // 展示 formatActivityParticipantSummary 的"已有 N 人报名"文字。
+    it("hides the progress bar (but still shows the participant count text) when capacity is null", () => {
+      useActivityDetailQuery.mockReturnValue({
+        data: { ...sampleActivityDetail, capacity: null, participantCount: 2 },
+        isPending: false,
+        isError: false
+      });
+
+      const { container } = renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(screen.getByText("已有 3 人报名")).toBeInTheDocument();
+      expect(container.querySelector(".bg-primary.h-full")).not.toBeInTheDocument();
+    });
   });
 
   it("renders the ActivityParticipantAvatars stack with the organizer's crown badge", () => {

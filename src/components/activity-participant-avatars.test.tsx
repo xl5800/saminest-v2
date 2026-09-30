@@ -66,6 +66,78 @@ describe("ActivityParticipantAvatars", () => {
     expect(container.querySelector("svg.lucide-crown")).toBeInTheDocument();
   });
 
+  // 找搭子卡片+详情页视觉对齐设计稿任务卡：真实头像占位格按人轮换底色。
+  describe("占位格按人轮换底色 (找搭子卡片+详情页视觉对齐设计稿任务卡)", () => {
+    it("keeps the organizer's placeholder on the unchanged bg-primary/10 background, not the rotation", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: [],
+        capacity: null,
+        canTapEmptySlot: false,
+        onTapEmptySlot: vi.fn()
+      });
+
+      expect(screen.getByText("A")).toHaveClass("bg-primary/10", "text-primary");
+    });
+
+    it("cycles four background colors across participants by their index in the participants array, wrapping at 4", () => {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(5),
+        capacity: null,
+        canTapEmptySlot: false,
+        onTapEmptySlot: vi.fn()
+      });
+
+      // Bob(0)/Frank(4) 应该是同一档颜色（4 取模回绕），Carol(1)/Dave(2)/
+      // Eve(3) 各自是不同的一档，文字色统一是 text-text（不跟着变）。
+      const bob = screen.getByText("B");
+      const carol = screen.getByText("C");
+      const dave = screen.getByText("D");
+      const eve = screen.getByText("E");
+      const frank = screen.getByText("F");
+
+      for (const el of [bob, carol, dave, eve, frank]) {
+        expect(el).toHaveClass("text-text");
+        expect(el.className).not.toMatch(/text-primary\b/);
+      }
+
+      expect(bob.className).toBe(frank.className);
+      const colorClassesUsed = new Set(
+        [bob, carol, dave, eve].map((el) =>
+          el.className
+            .split(" ")
+            .find((cls) => cls.startsWith("bg-["))
+        )
+      );
+      // 4 个人（Bob/Carol/Dave/Eve）应该正好用满 4 档不同的轮换底色。
+      expect(colorClassesUsed.size).toBe(4);
+    });
+
+    it("does not add a rotation background class to an empty slot", () => {
+      const { container } = renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: [],
+        capacity: 4,
+        interactive: false
+      });
+
+      const emptySlots = Array.from(container.querySelectorAll("span[aria-hidden='true']")).filter(
+        (el) => el.querySelector("svg.lucide-plus")
+      );
+      expect(emptySlots.length).toBeGreaterThan(0);
+      for (const slot of emptySlots) {
+        expect(slot.className).not.toMatch(/bg-\[#/);
+      }
+    });
+  });
+
   it("does not put a crown badge on participant avatars", () => {
     const { container } = renderAvatars({
       organizerId: "org-1",

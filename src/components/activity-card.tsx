@@ -1,9 +1,10 @@
+import { Clock, MapPin } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { formatLocationDisplayName } from "../data/us-states";
 import type { ActivityListItem, ActivityParticipant } from "../repositories/activities-repository";
 import { getActivityChannelMeta } from "../repositories/activities-repository";
-import { formatActivityStartAt } from "../utils/format";
+import { formatActivityParticipantSummary, formatActivityStartAt } from "../utils/format";
 import { ActivityParticipantAvatars } from "./activity-participant-avatars";
 
 export interface ActivityCardProps {
@@ -65,9 +66,36 @@ export interface ActivityCardProps {
  * `rounded-card-lg`（20px）——找搭子卡片是这个页面的主力曝光位，跟首页
  * post-list.tsx 网格卡片同一档，见 index.css `--radius-card-lg` 的说明。
  * 只改这一个 class，其它结构/间距/交互不变。
+ *
+ * 找搭子卡片+详情页视觉对齐设计稿任务卡：
+ * - 频道从"标题前面挂一个 emoji 字符"改成"文字区顶部单独一行（图标+
+ *   文案），右边配一段状态纯文字"——原来标题行的 `{emoji} {title}`
+ *   去掉了 emoji 前缀，频道信息统一挪到这条新行展示，不再跟标题重复
+ *   出现两次。状态文字复用 formatActivityParticipantSummary（跟
+ *   ActivityParticipantAvatars 底部那行、my-activities-page.tsx 卡片
+ *   是同一个格式化函数，不重新拼一遍文案），颜色按它对应的三种情况分：
+ *   capacity 为 null（"已有 N 人报名"）用 text-primary，还有名额（"还差
+ *   N 人"）用 text-text-muted，已满员用 text-text-subtle——用
+ *   activity.participantCount（权威计数）而不是 participants 这个头像
+ *   预览数组的长度来算，跟 my-activities-page.tsx 卡片已有的"人数文案用
+ *   participantCount 不用预览数组长度"这条约定保持一致，预览数组只负责
+ *   渲染头像格，不参与任何数字计算。
+ * - 地点/时间两行各自前面加一个小图标（MapPin/Clock，12px，比旁边 text-xs
+ *   文字稍大一点点但不抢视觉重点），跟文字用 flex 摆在同一行、垂直居中
+ *   对齐。
+ * - ActivityParticipantAvatars 头像格下方原有的"还差 N 人"文字没有删——
+ *   任务卡没有要求动这部分，两处文字概念上有一点重复，但分别服务于不同
+ *   的视觉位置（顶部状态 vs 头像区说明），保留现状。
  */
 export function ActivityCard({ activity, participants }: ActivityCardProps) {
-  const { emoji } = getActivityChannelMeta(activity.channel);
+  const { icon: ChannelIcon, label } = getActivityChannelMeta(activity.channel);
+  const joinedCount = activity.participantCount + 1;
+  const statusColorClassName =
+    activity.capacity === null
+      ? "text-primary"
+      : joinedCount >= activity.capacity
+        ? "text-text-subtle"
+        : "text-text-muted";
 
   return (
     <Link
@@ -75,16 +103,29 @@ export function ActivityCard({ activity, participants }: ActivityCardProps) {
       className="block overflow-hidden rounded-card-lg border border-border bg-card shadow-card"
     >
       <div className="p-5 pt-3 pb-2">
-        <p className="line-clamp-2 break-words text-base text-text">
-          {emoji} {activity.title}
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex min-w-0 items-center gap-1 text-xs font-medium text-text-muted">
+            <ChannelIcon aria-hidden="true" size={14} className="shrink-0" />
+            <span className="truncate">{label}</span>
+          </span>
+          <span className={`shrink-0 text-xs font-medium ${statusColorClassName}`}>
+            {formatActivityParticipantSummary(activity.participantCount, activity.capacity)}
+          </span>
+        </div>
+        <p className="mt-1 line-clamp-2 break-words text-base text-text">{activity.title}</p>
+        <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
+          <MapPin aria-hidden="true" size={12} className="shrink-0" />
+          <span className="truncate">
+            {activity.isOnline
+              ? "线上"
+              : activity.landmarkText ??
+                (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
+          </span>
         </p>
-        <p className="mt-1 text-xs text-text-muted">
-          {activity.isOnline
-            ? "线上"
-            : activity.landmarkText ??
-              (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")}
+        <p className="mt-1 flex items-center gap-1 text-xs text-text-muted">
+          <Clock aria-hidden="true" size={12} className="shrink-0" />
+          {formatActivityStartAt(activity.startAt)}
         </p>
-        <p className="mt-1 text-xs text-text-muted">{formatActivityStartAt(activity.startAt)}</p>
       </div>
       <ActivityParticipantAvatars
         organizerId={activity.organizerId}
