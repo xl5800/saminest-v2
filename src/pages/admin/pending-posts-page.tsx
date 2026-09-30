@@ -171,7 +171,14 @@ export function AdminPendingPostsPage() {
                   onClick={() => handleApprove(post.id)}
                   className="rounded bg-primary px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  通过
+                  {/* 用户反馈"点了通过，这条帖子在待审核列表里呆了一会才消失"——
+                      实际不是缓存问题：approveMutation.mutateAsync 成功后就立刻
+                      本地 removePost，没有任何人为延迟，那"一会"就是等
+                      approve_post 这个 RPC 网络往返的真实耗时，只是按钮文案一直
+                      停在"通过"，看不出正在处理，体感像是卡住了。这里补一个
+                      "处理中…"文案，跟 register-page.tsx/login-page.tsx 提交
+                      按钮同一个套路，不改变实际耗时，但让等待有反馈。 */}
+                  {isActioning ? "处理中…" : "通过"}
                 </button>
                 {isRejectFormOpen ? null : (
                   <button

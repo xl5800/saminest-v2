@@ -133,21 +133,20 @@ export function RegisterPage() {
             />
             <span>
               我已阅读并同意
-              <Link
-                to="/terms"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline"
-              >
+              {/*
+                之前这两个链接带 target="_blank"，在浏览器里能正常新开一个标签页，
+                但 /terms 和 /privacy 本来就是这个 SPA 自己的内部路由，不是外部链接——
+                Capacitor 打包出来的 App 用的是原生 WebView，没有"新标签页"这个概念，
+                target="_blank" 在里面点了没有任何反应（既不报错也不跳转），这就是注册页
+                用户反馈点了用户协议/隐私政策打不开的原因。去掉 target="_blank" 后，
+                react-router 的 Link 会走正常的客户端路由跳转，在网页端和 App 里都能用；
+                唯一的代价是网页端不再新开标签页，而是在当前页跳转，可以接受。
+              */}
+              <Link to="/terms" className="text-primary underline">
                 《用户协议》
               </Link>
               和
-              <Link
-                to="/privacy"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-primary underline"
-              >
+              <Link to="/privacy" className="text-primary underline">
                 《隐私政策》
               </Link>
             </span>

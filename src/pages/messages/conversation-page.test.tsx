@@ -1326,7 +1326,26 @@ describe("MessageConversationPage", () => {
     invalidateQueriesSpy.mockRestore();
   });
 
-  it("does not invalidate the conversations list query when markConversationAsRead fails", async () => {
+  // 用户反馈"看了未读消息切到别的界面，底部导航消息图标的小红点还在"：
+  // 根因是标记已读成功后只 invalidate 了会话列表自己的查询，没有一起
+  // invalidate bottom-nav.tsx 用的 has-unread-system-notification 查询，
+  // 那个查询没有 realtime，全靠默认的 30s staleTime + refetchOnWindowFocus
+  // 兜底，纯 SPA 内路由跳转不会触发窗口 focus，红点因此会多留一段时间。
+  it("also invalidates the has-unread-system-notification query after markConversationAsRead succeeds, so the bottom-nav badge clears immediately instead of waiting on staleTime/refetchOnWindowFocus", async () => {
+    const invalidateQueriesSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+
+    renderPage();
+
+    await waitFor(() => {
+      expect(invalidateQueriesSpy).toHaveBeenCalledWith({
+        queryKey: ["has-unread-system-notification", "user-1"]
+      });
+    });
+
+    invalidateQueriesSpy.mockRestore();
+  });
+
+  it("does not invalidate the conversations list or has-unread-system-notification queries when markConversationAsRead fails", async () => {
     markConversationAsRead.mockRejectedValue(new Error("network down"));
     const invalidateQueriesSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
     const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1338,6 +1357,9 @@ describe("MessageConversationPage", () => {
     });
     expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
       queryKey: ["conversations", "user-1"]
+    });
+    expect(invalidateQueriesSpy).not.toHaveBeenCalledWith({
+      queryKey: ["has-unread-system-notification", "user-1"]
     });
 
     invalidateQueriesSpy.mockRestore();

@@ -221,11 +221,14 @@ function ActivityNotificationCard({ payload, createdAt }: SystemNotificationCard
  * 会话分支调用是范围限制，不是这个函数只支持系统会话。标记成功后
  * invalidate 会话列表用到的 ["conversations", currentUserId] 这个 query
  * key，这样返回 /messages 列表页时能立刻看到这条会话的未读红点/加粗消失，
- * 不用等到下一次 refetchOnWindowFocus 才刷新——底部导航"消息"图标的未读
- * 红点（hasUnreadSystemNotification，只反映系统通知）这次不跟着改，继续
- * 靠它自己原来的 refetchOnWindowFocus 机制，范围说明里已经写明这是独立
- * 的另一个改动，这次不做。失败只 console.error，不影响页面正常使用——
- * 标记已读是次要副作用，不应该因为它失败就让整个页面报错。
+ * 不用等到下一次 refetchOnWindowFocus 才刷新。同一时机也 invalidate
+ * bottom-nav.tsx 用的 ["has-unread-system-notification", currentUserId]
+ * （之前这里特意不跟着改，理由是"范围之外"；后来用户反馈"看了系统通知，
+ * 切到别的界面，底部导航消息图标的小红点还留着"，才发现只靠那个查询自己
+ * 默认的 30s staleTime + refetchOnWindowFocus 兜底不够——纯 SPA 内路由
+ * 跳转不触发 window 的 blur/focus，红点可能要留一小段时间才消失，体感
+ * 像是卡住了，所以这次把这半条补上）。失败只 console.error，不影响页面
+ * 正常使用——标记已读是次要副作用，不应该因为它失败就让整个页面报错。
  *
  * UGC 安全功能补齐任务卡 1（屏蔽用户）：header 右上角原来那个禁用的
  * "更多会话选项（暂不可用）"占位按钮，这次实现成真正可点的"…"菜单——
@@ -503,6 +506,19 @@ export function MessageConversationPage() {
     markConversationAsRead(conversationId, currentUserId)
       .then(() => {
         void queryClient.invalidateQueries({ queryKey: ["conversations", currentUserId] });
+        // 用户反馈"看了未读消息、切到别的界面，底部导航消息图标的小红点
+        // 还在"：上面这一行原来只 invalidate 会话列表自己的未读状态，没有
+        // 一起 invalidate bottom-nav.tsx 用的
+        // ["has-unread-system-notification", currentUserId]（见
+        // use-has-unread-system-notification-query.ts）。那个查询本身没有
+        // realtime，只靠 react-query 默认的 30s staleTime + refetchOnWindowFocus
+        // 兜底刷新——纯 SPA 内部路由跳转不会触发 window 的 blur/focus，所以
+        // 红点要等到下次切后台再切回来，或者凑巧过了 30s 才会消失，不是真的
+        // 卡住，只是没人告诉它数据已经变了。这里补上这一行，标记已读成功后
+        // 立刻让红点跟着刷新。
+        void queryClient.invalidateQueries({
+          queryKey: ["has-unread-system-notification", currentUserId]
+        });
       })
       .catch((error) => {
         console.error("标记会话已读失败：", error);

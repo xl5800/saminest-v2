@@ -98,6 +98,33 @@ describe("AdminPendingPostsPage", () => {
     expect(approvePost).toHaveBeenCalledWith("post-1");
   });
 
+  // 用户反馈"点了通过，帖子在待审核列表里呆了一会才消失，像是卡住了"——
+  // 根因不是缓存问题（removePost 在 mutateAsync 成功后立刻执行），而是等待
+  // approve_post 这个 RPC 网络往返期间，按钮文案一直停在"通过"，看不出正在
+  // 处理。这里改成 approve 进行中显示"处理中…"，跟 register-page.tsx 提交
+  // 按钮一个套路，验证这个反馈文案确实会出现。
+  it("shows a '处理中…' label on the approve button while the approve request is in flight", async () => {
+    listPendingPosts.mockResolvedValue([samplePost]);
+    let resolveApprove!: () => void;
+    approvePost.mockReturnValue(
+      new Promise<void>((resolve) => {
+        resolveApprove = resolve;
+      })
+    );
+
+    renderWithProviders(<AdminPendingPostsPage />);
+    await screen.findByText("Sunny room near metro");
+
+    fireEvent.click(screen.getByRole("button", { name: "通过" }));
+
+    expect(await screen.findByRole("button", { name: "处理中…" })).toBeDisabled();
+
+    resolveApprove();
+    await waitFor(() => {
+      expect(screen.queryByText("Sunny room near metro")).not.toBeInTheDocument();
+    });
+  });
+
   it("keeps the row and shows an inline error when approve fails", async () => {
     listPendingPosts.mockResolvedValue([samplePost]);
     approvePost.mockRejectedValue(new Error("boom"));
@@ -162,6 +189,11 @@ describe("AdminPendingPostsPage", () => {
       "操作失败，请稍后重试。"
     );
     expect(screen.getByLabelText("驳回原因")).toHaveValue("内容违规");
-    expect(screen.getByText("Sunny room near metro")).toBeInTheDocument();
+    // 这里不能再用 getByText（单数）：驳回失败后 ReasonSheet 不会关闭（保留
+    // 用户已经输入的驳回原因），它自己的 targetLabel 也渲染的是
+    // post.title，跟列表行里的标题重复，会同时匹配到两个节点，
+    // getByText 在有多个匹配时会直接抛错。用 getAllByText 只确认"这一行
+    // 没有被误删掉"，不关心具体是哪一份 DOM 节点。
+    expect(screen.getAllByText("Sunny room near metro").length).toBeGreaterThan(0);
   });
 });

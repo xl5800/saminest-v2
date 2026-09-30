@@ -73,16 +73,19 @@ describe("RegisterPage", () => {
     expect(screen.getByLabelText("确认密码")).toBeInTheDocument();
   });
 
-  it("renders the terms/privacy checkbox with links that open in a new tab", () => {
+  it("renders the terms/privacy checkbox with links that navigate in-app (no target=_blank)", () => {
     renderRegisterPage();
 
+    // 不能再用 target="_blank"：/terms 和 /privacy 是应用内部路由，Capacitor 的原生
+    // WebView 没有"新标签页"，target="_blank" 在 App 里点了没反应。去掉之后走正常的
+    // 客户端路由跳转，网页端和 App 里都能用。
     expect(screen.getByRole("checkbox")).not.toBeChecked();
     const termsLink = screen.getByRole("link", { name: "《用户协议》" });
     expect(termsLink).toHaveAttribute("href", "/terms");
-    expect(termsLink).toHaveAttribute("target", "_blank");
+    expect(termsLink).not.toHaveAttribute("target");
     const privacyLink = screen.getByRole("link", { name: "《隐私政策》" });
     expect(privacyLink).toHaveAttribute("href", "/privacy");
-    expect(privacyLink).toHaveAttribute("target", "_blank");
+    expect(privacyLink).not.toHaveAttribute("target");
   });
 
   it("blocks submission on the client and shows a friendly message when passwords mismatch", async () => {
