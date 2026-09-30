@@ -23,10 +23,14 @@ import { usePendingFormRegionStore } from "../../store/pending-form-region-store
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { RegionSelectPage } from "./region-select-page";
 
-// DC 只有 1 个城市（单一地区的州，直接选中），VA/MD 各有多个（下钻）——
-// 跟真实种子数据的分布一致，见 locations-repository.ts / migration 里的
-// 14 条 type = 'city' 行。其余 48 个州（08 号卡新增的全美覆盖）在这份
-// mock 里没有任何城市数据，跟生产环境目前的真实情况一致。
+// DC 只有 1 个城市，VA/MD 各有多个——跟真实种子数据的分布一致，见
+// locations-repository.ts / migration 里的 14 条 type = 'city' 行。发布
+// 表单选地区，VA/MD 都不再下钻任务卡起，这份分布不再驱动任何点击/渲染
+// 分支（不管城市数是 0、1 还是多个，点击一律直接选中整个州），继续保留
+// 这份夹具只是因为 stateRows 的构造仍然会查 cities，见
+// region-select-page.tsx 里 StateRow.cities 字段上的注释。其余 48 个州
+// （08 号卡新增的全美覆盖）在这份 mock 里没有任何城市数据，跟生产环境目前
+// 的真实情况一致。
 const CITIES = [
   { id: "city-dc", name: "Washington, DC", stateCode: "DC" },
   { id: "city-arlington", name: "Arlington", stateCode: "VA" },
@@ -93,8 +97,9 @@ describe("RegionSelectPage", () => {
   });
 
   // 地区筛选栏暂时只精确到州任务卡：筛选场景不做城市下钻，所以不管这个州
-  // 有几个真实城市，都不展示右侧 chevron（对比 form-mode 描述块里同名的
-  // 下钻行为测试，那边 VA/MD 仍然保留 chevron）。
+  // 有几个真实城市，都不展示右侧 chevron。发布表单选地区，VA/MD 都不再
+  // 下钻任务卡起，form-mode 描述块里的同名断言也是一样的结果了（那张
+  // 任务卡之前 VA/MD 在表单场景还保留 chevron，现在不再有区别）。
   it("does not show a chevron on any state row, regardless of how many cities it has", () => {
     renderWithProviders(<RegionSelectPage />);
 
@@ -325,36 +330,22 @@ describe("RegionSelectPage", () => {
       expect(navigateMock).toHaveBeenCalledWith(-1);
     });
 
-    it("writes a drilled-down city pick to usePendingFormRegionStore too", () => {
-      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
-
-      fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
-      fireEvent.click(screen.getByRole("button", { name: "Arlington" }));
-
-      expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
-        stateCode: "VA",
-        stateName: "Virginia",
-        cityId: "city-arlington",
-        cityName: "Arlington"
-      });
-      expect(useSelectedRegionStore.getState().selectedRegion).toBeNull();
-    });
-
-    // 地区筛选栏暂时只精确到州任务卡明确要求表单场景保留改动前的完整
-    // 下钻/chevron/自动选中唯一城市行为，这几条搬到这里继续断言，不受
-    // 这张任务卡影响。
-    it("shows a chevron-bearing row for multi-city states (VA/MD) and a plain row for the single-city state (DC)", () => {
+    // 发布表单选地区，VA/MD 都不再下钻任务卡：表单场景不再保留下钻/
+    // chevron/自动选中唯一城市/搜城市这一整套（「地区筛选栏暂时只精确到州」
+    // 任务卡当时只收窄了筛选场景，这次表单场景也统一收窄成一样），下面这
+    // 几条镜像顶层（筛选场景）的同名断言，确认两种场景现在完全一致。
+    it("does not show a chevron on any state row, regardless of how many cities it has", () => {
       renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
 
       const dcRow = screen.getByRole("button", { name: "DC 哥伦比亚特区" });
       const vaRow = screen.getByRole("button", { name: "VA 弗吉尼亚州" });
       const mdRow = screen.getByRole("button", { name: "MD 马里兰州" });
       expect(dcRow.querySelector("svg")).not.toBeInTheDocument();
-      expect(vaRow.querySelector("svg")).toBeInTheDocument();
-      expect(mdRow.querySelector("svg")).toBeInTheDocument();
+      expect(vaRow.querySelector("svg")).not.toBeInTheDocument();
+      expect(mdRow.querySelector("svg")).not.toBeInTheDocument();
     });
 
-    it("selects DC's only city directly and navigates back, without drilling down", () => {
+    it("selects DC directly with a null cityId/cityName, without auto-selecting its only city", () => {
       renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
 
       fireEvent.click(screen.getByRole("button", { name: "DC 哥伦比亚特区" }));
@@ -362,79 +353,51 @@ describe("RegionSelectPage", () => {
       expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
         stateCode: "DC",
         stateName: "District of Columbia",
-        cityId: "city-dc",
-        cityName: "Washington, DC"
+        cityId: null,
+        cityName: null
       });
       expect(navigateMock).toHaveBeenCalledWith(-1);
     });
 
-    it("drills into VA's city list on click, then selects a city and navigates back", () => {
+    it("selects VA directly with a null cityId/cityName, without drilling into its city list", () => {
       renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
 
       fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
 
-      expect(screen.getByRole("button", { name: "Arlington" })).toBeInTheDocument();
-      expect(screen.getByRole("button", { name: "Alexandria" })).toBeInTheDocument();
-      // 下钻之后州列表本身不再展示。
-      expect(screen.queryByRole("button", { name: "DC 哥伦比亚特区" })).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole("button", { name: "Arlington" }));
-
+      expect(screen.queryByRole("button", { name: "Arlington" })).not.toBeInTheDocument();
       expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
         stateCode: "VA",
         stateName: "Virginia",
-        cityId: "city-arlington",
-        cityName: "Arlington"
+        cityId: null,
+        cityName: null
       });
       expect(navigateMock).toHaveBeenCalledWith(-1);
     });
 
-    it("returns to the state list (not out of the page) when clicking back while drilled down", () => {
+    it("selects MD directly with a null cityId/cityName, without drilling into its city list", () => {
       renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
 
-      fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
-      expect(screen.getByRole("button", { name: "Arlington" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "MD 马里兰州" }));
 
-      fireEvent.click(screen.getByRole("button", { name: "返回" }));
-
-      expect(screen.getByRole("button", { name: "DC 哥伦比亚特区" })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Arlington" })).not.toBeInTheDocument();
-      // 没有真的离开这个页面/触发路由导航。
-      expect(navigateMock).not.toHaveBeenCalled();
+      expect(screen.queryByRole("button", { name: "Rockville" })).not.toBeInTheDocument();
+      expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
+        stateCode: "MD",
+        stateName: "Maryland",
+        cityId: null,
+        cityName: null
+      });
+      expect(navigateMock).toHaveBeenCalledWith(-1);
     });
 
-    it("filters to matching cities across all states when searching, selecting one writes its own state code", () => {
+    it("does not match city names when searching (state-only, same as the filter scenario)", () => {
       renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
 
       fireEvent.change(screen.getByPlaceholderText("请输入地址搜索"), {
-        target: { value: "ar" }
+        target: { value: "arlington" }
       });
 
-      // Arlington 命中；未命中的州行/城市行都不再展示。
-      expect(screen.getByRole("button", { name: "Arlington" })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "VA 弗吉尼亚州" })).not.toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "Rockville" })).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole("button", { name: "Arlington" }));
-
-      expect(usePendingFormRegionStore.getState().pendingRegion).toEqual({
-        stateCode: "VA",
-        stateName: "Virginia",
-        cityId: "city-arlington",
-        cityName: "Arlington"
-      });
-    });
-
-    it("re-sorts the currently visible list alphabetically when '按字母' is selected", () => {
-      renderWithProviders(<RegionSelectPage />, { initialEntries: ["/region-select?mode=form"] });
-
-      fireEvent.click(screen.getByRole("button", { name: "VA 弗吉尼亚州" }));
-      fireEvent.click(screen.getByRole("button", { name: "按字母" }));
-
-      const cityButtons = screen
-        .getAllByRole("button")
-        .filter((button) => ["Arlington", "Alexandria"].includes(button.textContent ?? ""));
-      expect(cityButtons.map((button) => button.textContent)).toEqual(["Alexandria", "Arlington"]);
+      expect(screen.queryByRole("button", { name: "Arlington" })).not.toBeInTheDocument();
+      expect(screen.getByText("没有找到匹配的地区。")).toBeInTheDocument();
     });
 
     it("does not clear an existing browsing selection in useSelectedRegionStore when picking a region in form mode", () => {
