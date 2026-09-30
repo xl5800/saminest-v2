@@ -90,7 +90,7 @@ describe("listActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, created_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     // 显式过滤 deleted_at，不只靠 RLS——发起人/管理员自己查这个公开列表
     // 时，activities_select_own 这条策略会让他们看到自己已经删除的活动，
@@ -122,7 +122,7 @@ describe("listActivities", () => {
     await listActivities({ stateCode: "VA" });
 
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, created_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).not.toHaveBeenCalledWith("location.state_code", "VA");
   });
@@ -961,22 +961,27 @@ describe("listActivityParticipantPreviews", () => {
 describe("listMyOrganizedActivities", () => {
   beforeEach(resetAllMocks);
 
-  it("filters to organizer_id = the given user, no status filter, ordered by start_at ascending (matching listActivities)", async () => {
+  // 任务卡 2（"我发起的"活动列表改成按创建时间倒序）：这条测试原本断言
+  // "ordered by start_at ascending (matching listActivities)"，这次反过来
+  // 断言 created_at 倒序——是这次任务卡明确要求的改动，不是遗漏，见
+  // activities-repository.ts 里这个函数的注释。
+  it("filters to organizer_id = the given user, no status filter, ordered by created_at descending (任务卡 2)", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listMyOrganizedActivities("user-1");
 
     expect(fromMock).toHaveBeenCalledWith("activities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
+      "id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, created_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("organizer_id", "user-1");
     expect(queryBuilder.in).not.toHaveBeenCalled();
     expect(queryBuilder.gte).not.toHaveBeenCalled();
-    expect(queryBuilder.order).toHaveBeenCalledWith("start_at", { ascending: true });
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(queryBuilder.order).not.toHaveBeenCalledWith("start_at", expect.anything());
   });
 
-  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId/organizerDisplayName/requiresApproval", async () => {
+  it("maps rows to ActivityListItem (same shape as listActivities), including organizerId/organizerDisplayName/requiresApproval/createdAt", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
@@ -989,6 +994,7 @@ describe("listMyOrganizedActivities", () => {
           landmark_text: "海底捞",
           is_online: false,
           start_at: "2026-08-20T18:00:00.000Z",
+          created_at: "2026-08-01T09:00:00.000Z",
           capacity: 4,
           participant_count: 2,
           status: "cancelled",
@@ -1014,6 +1020,7 @@ describe("listMyOrganizedActivities", () => {
         landmarkText: "海底捞",
         isOnline: false,
         startAt: "2026-08-20T18:00:00.000Z",
+        createdAt: "2026-08-01T09:00:00.000Z",
         capacity: 4,
         participantCount: 2,
         status: "cancelled",
@@ -1050,7 +1057,7 @@ describe("listMyJoinedActivities", () => {
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url))"
+      "status, activity:activities(id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, created_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url))"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("cancelled_at", null);

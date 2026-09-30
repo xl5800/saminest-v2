@@ -17,6 +17,7 @@ const sampleActivity: ActivityListItem = {
   landmarkText: "海底捞",
   isOnline: false,
   startAt: "2099-08-20T18:00:00.000Z",
+  createdAt: "2026-01-01T00:00:00.000Z",
   capacity: 4,
   participantCount: 1,
   status: "open",
