@@ -58,6 +58,12 @@ export interface ActivityListItem {
   landmarkText: string | null;
   isOnline: boolean;
   startAt: string;
+  /** 任务卡 2（"我发起的"活动列表改成按创建时间倒序）新增：
+   *  listMyOrganizedActivities 现在按这一列倒序排列，不再是 startAt。跟
+   *  其它两个函数共用同一份 select（见 ACTIVITY_LIST_SELECT_COLUMNS 的
+   *  注释），listActivities/listMyJoinedActivities 因此也会带上这个字段，
+   *  但都不读它——是共用 select 的必然结果，不是没控制住范围。 */
+  createdAt: string;
   capacity: number | null;
   participantCount: number;
   status: string;
@@ -87,6 +93,7 @@ interface ActivityListRow {
   landmark_text: string | null;
   is_online: boolean;
   start_at: string;
+  created_at: string;
   capacity: number | null;
   participant_count: number;
   status: string;
@@ -158,7 +165,11 @@ interface ActivityListRow {
 // stateCode 有没有传切换联表类型——固定用左连接选出 state_code，
 // listActivities/listMyOrganizedActivities/listMyJoinedActivities 三个
 // 函数统一用这一份 select，不再需要两个版本。
-const ACTIVITY_LIST_SELECT_COLUMNS = `id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)`;
+// 任务卡 2（"我发起的"活动列表改成按创建时间倒序）：加了 created_at 这一列
+// ——listMyOrganizedActivities 现在要按它倒序排，跟 listActivities/
+// listMyJoinedActivities 共用同一份 select，见 ActivityListItem.createdAt
+// 的注释。
+const ACTIVITY_LIST_SELECT_COLUMNS = `id, organizer_id, channel, tag_text, title, location:locations(name, state_code), landmark_text, is_online, start_at, created_at, capacity, participant_count, status, requires_approval, organizer:profiles(display_name, avatar_url)`;
 
 function mapActivityListRow(row: ActivityListRow): ActivityListItem {
   return {
@@ -173,6 +184,7 @@ function mapActivityListRow(row: ActivityListRow): ActivityListItem {
     landmarkText: row.landmark_text,
     isOnline: row.is_online,
     startAt: row.start_at,
+    createdAt: row.created_at,
     capacity: row.capacity,
     participantCount: row.participant_count,
     status: row.status,
@@ -230,11 +242,18 @@ export async function listActivities(
  * 完整记录，不只是还在招募中的）。activities_select_own 这条 RLS 早就
  * 允许发起人查自己任意状态的活动，这里不需要新权限。
  *
- * 按 start_at 升序（最快开始的活动排最前面）——跟 listActivities（公开
- * 列表页）保持一致：用户更关心"下一个要发生的活动是什么时候"，方便记得
- * 到场或者临时取消，不是"最近发布/更新的排前面"那种 listMyPosts 式的
- * created_at desc 直觉。之前用过降序，已按反馈改回来跟 listActivities
- * 统一，不要再改回降序。
+ * 任务卡 2（"我发起的"活动列表改成按创建时间倒序）：改成按 created_at
+ * 倒序（最近创建的排最前面），不再是 start_at 升序——这条排序规则之前
+ * 反复改过（见下面这段历史注释），这次是产品明确要求的改动，不是又一次
+ * 反复横跳，之后除非有新的明确要求，不要再改回 start_at。
+ *
+ * 历史注释（保留供参考，不代表当前行为）：曾经按 start_at 升序（最快
+ * 开始的活动排最前面），理由是"用户更关心下一个要发生的活动是什么时候，
+ * 跟 listActivities 公开列表页保持一致"；这条理由本身没有错，只是这次
+ * 产品想要的是"我发起的"这个管理向 tab 按管理直觉（最近创建的在前面，
+ * 跟 listMyPosts 的 created_at desc 是同一个直觉）排序，跟 listActivities
+ * 这个纯浏览场景不必须保持一致——两个函数服务的场景不同，允许排序规则
+ * 不同。
  */
 export async function listMyOrganizedActivities(
   organizerId: string
@@ -243,7 +262,7 @@ export async function listMyOrganizedActivities(
     .from("activities")
     .select(ACTIVITY_LIST_SELECT_COLUMNS)
     .eq("organizer_id", organizerId)
-    .order("start_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .overrideTypes<ActivityListRow[]>();
 
   if (error) {
