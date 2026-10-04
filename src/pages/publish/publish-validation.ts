@@ -1,13 +1,20 @@
 /**
  * 边界值和可选值都来自 Tables.md 第 9 章 posts 表：
- * - 9.6 字段验证："title 长度：1–120 字符"、"description 长度：1–10000 字符"、
- *   "price_amount >= 0"（下限从 5/10 放宽到 1 是 2026-07-21 的产品决定，
- *   数据库侧对应 posts_title_length_check / posts_description_length_check
- *   两条约束，见
+ * - 9.6 字段验证："title 长度：1–120 字符"、"description 长度：0–10000 字符"、
+ *   "price_amount >= 0"（数据库侧对应 posts_title_length_check /
+ *   posts_description_length_check 两条约束；下限从 5/10 放宽到 1 是
+ *   2026-07-21 的产品决定，见
  *   supabase/migrations/20260721000000_relax_posts_title_description_min_length.sql；
- *   上限 120 / 10000 未改动）
+ *   发布页简化改版（任务卡 7）又把 description 下限放宽到 0，见
+ *   supabase/migrations/20261004000000_allow_empty_post_description.sql）
  * - 9.5 contact_method 可选值：message / email / phone / wechat / other
  * 这里的前端校验必须和这些约束保持一致，不额外发明更严格或更宽松的规则。
+ *
+ * 发布页简化改版（任务卡 7）：发布表单不再有独立的"标题"输入框和"联系
+ * 方式"字段——title 从描述的第一行派生（见 deriveTitleFromDescription），
+ * 联系方式固定写站内私信（contact_method = 'message'、contact_value =
+ * null）。CONTACT_METHOD_OPTIONS 仍然导出：找搭子发布页
+ * （create-activity-page.tsx / activity-validation.ts）还在用它。
  */
 
 import { MAX_AGE, MIN_AGE } from "../profile/edit-profile-validation";
@@ -40,14 +47,36 @@ export const CONTACT_METHOD_OPTIONS = [
 
 export type ContactMethod = (typeof CONTACT_METHOD_OPTIONS)[number]["value"];
 
-const CONTACT_METHOD_VALUES: readonly string[] = CONTACT_METHOD_OPTIONS.map(
-  (option) => option.value
-);
-
-export const TITLE_MIN_LENGTH = 1;
 export const TITLE_MAX_LENGTH = 120;
-export const DESCRIPTION_MIN_LENGTH = 1;
 export const DESCRIPTION_MAX_LENGTH = 10000;
+
+/**
+ * 发布页简化改版（任务卡 7）：从描述内容派生 title——取 trim 之后的第一行
+ * （按 \n / \r\n 分割），超过 TITLE_MAX_LENGTH 按字符（Unicode 码点，不是
+ * UTF-16 单元，避免把 emoji 等代理对从中间截断成非法字符串）截断。先对
+ * 整段描述 trim 再取第一行，所以描述开头的空行不会让标题变成空字符串。
+ * 整段描述为空（或只有空白）时返回空字符串，由 validatePublishInput 拦住。
+ */
+export function deriveTitleFromDescription(description: string): string {
+  const firstLine = description.trim().split(/\r?\n/)[0] ?? "";
+  return Array.from(firstLine.trim()).slice(0, TITLE_MAX_LENGTH).join("");
+}
+
+/**
+ * 编辑模式回填描述框用：新格式的帖子（任务卡 7 之后发布的）description 保存
+ * 的是用户输入的完整原文，第一行本来就等于 title（截断前）；但历史帖子的
+ * title 是单独填的、不一定出现在 description 里。如果直接把历史帖子的
+ * description 原样塞回描述框，提交时 title 会被重新派生成描述的第一行，
+ * 悄悄把原标题替换掉。所以回填时：描述的第一行（派生规则同上）已经等于
+ * 原标题就原样回填；否则把标题作为第一行拼在描述前面，这样重新提交后
+ * 派生出来的 title 仍然是原标题。
+ */
+export function composeEditableDescription(title: string, description: string): string {
+  if (deriveTitleFromDescription(description) === title) {
+    return description;
+  }
+  return description.trim() ? `${title}\n${description}` : title;
+}
 
 // 地区下拉框"其他"选项用的哨兵值，不会和 locations 表里的真实 UUID 冲突。
 // 选中这个值时，locationId 提交为 null，locationText 改为必填——见
@@ -71,11 +100,10 @@ export interface PublishFormInput {
   categoryId: string;
   locationId: string;
   locationText: string;
-  title: string;
+  /** 完整的描述原文——title 不再是独立字段，由这里派生（见
+   *  deriveTitleFromDescription），联系方式也不再是表单输入（固定站内私信）。 */
   description: string;
   price: string;
-  contactMethod: string;
-  contactValue: string;
   /** 31 号卡新增：跟 price 一样是表单原始字符串，"可选、不强制"——非求租
    *  分类下 publish-page.tsx 不会渲染这两个输入框，调用这里时统一传空
    *  字符串，走跟"用户没填"完全相同的校验路径（见下方 validatePublishInput
@@ -116,11 +144,9 @@ export function validatePublishInput(
   const categoryId = input.categoryId.trim();
   const locationIdRaw = input.locationId.trim();
   const locationTextRaw = input.locationText.trim();
-  const title = input.title.trim();
   const description = input.description.trim();
+  const title = deriveTitleFromDescription(description);
   const priceRaw = input.price.trim();
-  const contactMethod = input.contactMethod.trim();
-  const contactValue = input.contactValue.trim();
   const posterAgeRaw = input.posterAge.trim();
   const posterGenderRaw = input.posterGender.trim();
 
@@ -161,21 +187,13 @@ export function validatePublishInput(
     locationText = locationTextRaw;
   }
 
-  // 下限现在是 1（TITLE_MIN_LENGTH/DESCRIPTION_MIN_LENGTH），trim 之后
-  // "不满足下限"等价于"整个字符串是空的"，所以下限失败只提示"请输入
-  // 标题/描述"，不再报"至少 X 个字符"这种数字提示——数字提示是给"下限
-  // 明显大于 1"的场景用的，下限就是 1 的时候报数字反而让人困惑。上限
-  // （120 / 10000）没有变，超过上限时仍然需要具体提示。
-  if (title.length < TITLE_MIN_LENGTH) {
-    return fail("PUBLISH_TITLE_REQUIRED", "请输入标题。");
-  }
-
-  if (title.length > TITLE_MAX_LENGTH) {
-    return fail("PUBLISH_TITLE_LENGTH", `标题不能超过 ${TITLE_MAX_LENGTH} 字符。`);
-  }
-
-  if (description.length < DESCRIPTION_MIN_LENGTH) {
-    return fail("PUBLISH_DESCRIPTION_REQUIRED", "请输入描述。");
+  // title 是从描述第一行派生的（派生时已经截断到 TITLE_MAX_LENGTH，所以不会
+  // 再有"标题太长"这种失败），派生结果为空说明整段描述是空的（或者只有
+  // 空白）——数据库 posts_title_length_check 要求 title 至少 1 个字符，这里
+  // 必须提前拦住，不能让空标题提交上去触发约束报错。description 自己的
+  // 下限已经放宽到 0（见文件顶部说明），不需要单独校验下限。
+  if (title.length === 0) {
+    return fail("PUBLISH_CONTENT_REQUIRED", "请至少写点什么。");
   }
 
   if (description.length > DESCRIPTION_MAX_LENGTH) {
@@ -195,10 +213,6 @@ export function validatePublishInput(
       return fail("PUBLISH_PRICE_NEGATIVE", "价格不能小于 0。");
     }
     priceAmount = parsed;
-  }
-
-  if (contactMethod && !CONTACT_METHOD_VALUES.includes(contactMethod)) {
-    return fail("PUBLISH_CONTACT_METHOD_INVALID", "联系方式类型不正确。");
   }
 
   // 31 号卡：性别/年龄"可选、不强制"——留空直接通过，不因为是求租分类就
@@ -233,8 +247,9 @@ export function validatePublishInput(
       title,
       description,
       priceAmount,
-      contactMethod: contactMethod || null,
-      contactValue: contactValue || null,
+      // 发布页简化改版（任务卡 7）：联系方式固定站内私信，不再由表单输入。
+      contactMethod: "message",
+      contactValue: null,
       posterAge,
       posterGender: posterGenderRaw || null
     },

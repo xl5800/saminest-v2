@@ -78,16 +78,24 @@ const initialAuthState = useAuthStore.getState();
 const initialPendingRegionState = usePendingFormRegionStore.getState();
 const initialPendingPostDraftState = usePendingPostFormDraftStore.getState();
 
+// 发布页简化改版（任务卡 7）：分类从 <select> 改成 role="radiogroup" 里的
+// 胶囊 tab 按钮（role="radio"），没有独立的"标题"输入框了，title 从描述
+// 第一行派生。下面两个常量/helper 是这套新交互的统一入口。
+const SAMPLE_TITLE = "Sunny room near metro";
+const SAMPLE_BODY = "A description that is definitely long enough.";
+const SAMPLE_DESCRIPTION = SAMPLE_TITLE + "\n" + SAMPLE_BODY;
+
+function selectCategory(name: string) {
+  fireEvent.click(screen.getByRole("radio", { name }));
+}
+
+function fillDescription(value: string) {
+  fireEvent.change(screen.getByLabelText("描述"), { target: { value } });
+}
+
 function fillRequiredFields() {
-  fireEvent.change(screen.getByLabelText("分类"), {
-    target: { value: "cat-1" }
-  });
-  fireEvent.change(screen.getByLabelText("标题"), {
-    target: { value: "Sunny room near metro" }
-  });
-  fireEvent.change(screen.getByLabelText("描述"), {
-    target: { value: "A description that is definitely long enough." }
-  });
+  selectCategory("租房");
+  fillDescription(SAMPLE_DESCRIPTION);
 }
 
 function makeImageFile(name: string): File {
@@ -178,7 +186,7 @@ describe("PublishPage", () => {
     renderWithProviders(<PublishPage />);
 
     expect(
-      await screen.findByRole("option", { name: "租房" })
+      await screen.findByRole("radio", { name: "租房" })
     ).toBeInTheDocument();
     expect(listActiveCategories).toHaveBeenCalled();
   });
@@ -190,7 +198,7 @@ describe("PublishPage", () => {
   // RegionSelectPage（那是它自己文件里的测试范围）。
   it("shows '不限地区' by default and navigates to /region-select?mode=form when the 地区 field is clicked", async () => {
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     expect(screen.getByText("不限地区")).toBeInTheDocument();
     fireEvent.click(screen.getByText("不限地区"));
@@ -201,9 +209,9 @@ describe("PublishPage", () => {
   it("preselects the category from a ?category=<slug> query param (used by the publish action sheet's 发布租房/求租/二手 entries)", async () => {
     renderWithProviders(<PublishPage />, { initialEntries: ["/publish?category=rent"] });
 
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
-    expect(screen.getByLabelText("分类")).toHaveValue("cat-1");
+    expect(screen.getByRole("radio", { name: "租房" })).toBeChecked();
   });
 
   it("leaves the category blank when ?category=<slug> does not match any loaded category", async () => {
@@ -211,9 +219,168 @@ describe("PublishPage", () => {
       initialEntries: ["/publish?category=not-a-real-slug"]
     });
 
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
-    expect(screen.getByLabelText("分类")).toHaveValue("");
+    expect(screen.getByRole("radio", { name: "租房" })).not.toBeChecked();
+  });
+
+  // ---- 发布页简化改版（任务卡 7）------------------------------------------
+
+  it("renders the category as a radiogroup of pill tab buttons (single choice) instead of a <select>", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-2", slug: "wanted", nameZh: "求租" },
+      { id: "cat-3", slug: "used", nameZh: "二手" }
+    ]);
+    renderWithProviders(<PublishPage />);
+
+    const group = await screen.findByRole("radiogroup", { name: "分类" });
+    // radiogroup 在分类数据返回之前就已经渲染（里面是空的），等第一个
+    // radio 出现再断言整组。
+    await screen.findByRole("radio", { name: "租房" });
+    expect(group.tagName).not.toBe("SELECT");
+    expect(screen.queryByRole("combobox", { name: "分类" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("radio").map((radio) => radio.textContent)).toEqual([
+      "租房",
+      "求租",
+      "二手"
+    ]);
+
+    selectCategory("求租");
+    expect(screen.getByRole("radio", { name: "求租" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "租房" })).not.toBeChecked();
+
+    // 单选：再点另一个，上一个取消选中。
+    selectCategory("二手");
+    expect(screen.getByRole("radio", { name: "二手" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "求租" })).not.toBeChecked();
+  });
+
+  it("styles the selected category tab with a primary background and the unselected ones with a light background", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-2", slug: "wanted", nameZh: "求租" }
+    ]);
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    selectCategory("租房");
+
+    expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\bbg-primary\b/);
+    expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\btext-white\b/);
+    expect(screen.getByRole("radio", { name: "求租" }).className).not.toMatch(/\bbg-primary\b/);
+    expect(screen.getByRole("radio", { name: "求租" }).className).toMatch(/\btext-text-muted\b/);
+  });
+
+  it("no longer renders a separate 标题 input, and the 描述 textarea hints that its first line becomes the title", async () => {
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    expect(screen.queryByLabelText("标题")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("描述")).toHaveAttribute(
+      "placeholder",
+      "第一行将作为标题…详细说说你的帖子"
+    );
+  });
+
+  it("no longer renders the 联系方式 type/content controls, nor the 拍照 button", async () => {
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    expect(screen.queryByLabelText("联系方式类型")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("联系方式内容")).not.toBeInTheDocument();
+    expect(screen.queryByText("拍照")).not.toBeInTheDocument();
+    expect(document.querySelector("input[capture]")).toBeNull();
+  });
+
+  it("orders the form as 分类 → 图片 → 描述 → 价格 → 所在州 → 城市/具体位置", async () => {
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    const nodes = [
+      screen.getByRole("radiogroup", { name: "分类" }),
+      screen.getByLabelText(/上传图片/),
+      screen.getByLabelText("描述"),
+      screen.getByLabelText("价格（可选）"),
+      screen.getByText("所在州"),
+      screen.getByLabelText("城市 / 具体位置（可选）")
+    ];
+    for (let index = 0; index < nodes.length - 1; index += 1) {
+      expect(
+        nodes[index].compareDocumentPosition(nodes[index + 1]) &
+          Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+    }
+  });
+
+  it("places the 求租-only 性别/年龄 fields below the description and above the price", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-2", slug: "wanted", nameZh: "求租" }
+    ]);
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+    selectCategory("求租");
+
+    const description = screen.getByLabelText("描述");
+    const gender = await screen.findByLabelText("性别（可选）");
+    const age = screen.getByLabelText("年龄（可选）");
+    const price = screen.getByLabelText("价格（可选）");
+    const following = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(description.compareDocumentPosition(gender) & following).toBeTruthy();
+    expect(gender.compareDocumentPosition(age) & following).toBeTruthy();
+    expect(age.compareDocumentPosition(price) & following).toBeTruthy();
+  });
+
+  it("derives the title from the first line (trimmed) and truncates it to 120 characters, while description keeps the full text", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    const longFirstLine = "a".repeat(150);
+    selectCategory("租房");
+    fillDescription(longFirstLine + "\n第二行");
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "a".repeat(120),
+          description: longFirstLine + "\n第二行"
+        })
+      );
+    });
+  });
+
+  it("always submits contact_method 'message' and contact_value null", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({ contactMethod: "message", contactValue: null })
+      );
+    });
+  });
+
+  it("allows a single-line post (title only, no extra body)", async () => {
+    createPost.mockResolvedValue({ id: "post-999" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    selectCategory("租房");
+    fillDescription("只有一行标题");
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(createPost).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "只有一行标题", description: "只有一行标题" })
+      );
+    });
   });
 
   it("does not render any field for author_id or status", () => {
@@ -225,35 +392,26 @@ describe("PublishPage", () => {
     expect(screen.queryByLabelText(/status/i)).not.toBeInTheDocument();
   });
 
-  it("blocks submission when the title is empty", async () => {
+  // 发布页简化改版（任务卡 7）：title 从描述第一行派生，整段描述为空（或只有
+  // 空白）时派生出来的 title 也是空——必须在前端拦住，不能让空 title 提交
+  // 到数据库。
+  it("blocks submission with a '请至少写点什么' message when the description (and so the derived title) is empty", async () => {
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
-    fireEvent.change(screen.getByLabelText("分类"), {
-      target: { value: "cat-1" }
-    });
-    fireEvent.change(screen.getByLabelText("标题"), {
-      target: { value: "   " }
-    });
-    fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "A description that is definitely long enough." }
-    });
+    selectCategory("租房");
+    fillDescription("   \n  ");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("请输入标题。");
+    expect(await screen.findByRole("alert")).toHaveTextContent("请至少写点什么。");
     expect(createPost).not.toHaveBeenCalled();
   });
 
   it("blocks submission when no category is selected", async () => {
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
-    fireEvent.change(screen.getByLabelText("标题"), {
-      target: { value: "Sunny room near metro" }
-    });
-    fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "A description that is definitely long enough." }
-    });
+    fillDescription(SAMPLE_DESCRIPTION);
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("请选择分类。");
@@ -263,7 +421,7 @@ describe("PublishPage", () => {
   it("submits author_id from the auth store and hardcodes status to pending via createPost, then redirects with a success message", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -274,10 +432,12 @@ describe("PublishPage", () => {
         categoryId: "cat-1",
         locationId: null,
         locationText: null,
-        title: "Sunny room near metro",
-        description: "A description that is definitely long enough.",
+        // title 从描述第一行派生，description 保存完整原文（标题行不剔除）；
+        // 联系方式固定站内私信。
+        title: SAMPLE_TITLE,
+        description: SAMPLE_DESCRIPTION,
         priceAmount: null,
-        contactMethod: null,
+        contactMethod: "message",
         contactValue: null,
         posterAge: null,
         posterGender: null
@@ -293,7 +453,7 @@ describe("PublishPage", () => {
   it("shows a generic error message and does not navigate when createPost fails", async () => {
     createPost.mockRejectedValue(new Error("insert failed"));
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -312,7 +472,7 @@ describe("PublishPage", () => {
       )
     );
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -341,7 +501,7 @@ describe("PublishPage", () => {
     insertPostImages.mockResolvedValue([]);
 
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     const fileA = makeImageFile("a.png");
@@ -414,7 +574,7 @@ describe("PublishPage", () => {
     insertPostImages.mockResolvedValue([]);
 
     const { invalidateQueriesSpy } = renderWithSpyableQueryClient(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     selectImages([makeImageFile("a.png")]);
@@ -434,7 +594,7 @@ describe("PublishPage", () => {
     createPost.mockResolvedValue({ id: "post-999" });
 
     const { invalidateQueriesSpy } = renderWithSpyableQueryClient(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -450,7 +610,7 @@ describe("PublishPage", () => {
     uploadPostImage.mockRejectedValue(new Error("upload failed"));
 
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     selectImages([makeImageFile("a.png")]);
@@ -482,7 +642,7 @@ describe("PublishPage", () => {
     insertPostImages.mockRejectedValue(new Error("insert failed"));
 
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     selectImages([makeImageFile("a.png")]);
@@ -525,7 +685,7 @@ describe("PublishPage", () => {
     });
 
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     selectImages([makeImageFile("a.png"), makeImageFile("b.png")]);
@@ -565,7 +725,7 @@ describe("PublishPage", () => {
     removePostImageFiles.mockRejectedValue(cleanupError);
 
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     selectImages([makeImageFile("a.png")]);
@@ -599,7 +759,7 @@ describe("PublishPage", () => {
   it("does not call uploadPostImage or insertPostImages, and keeps the original success message, when no images are selected", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -631,7 +791,7 @@ describe("PublishPage", () => {
   it("submits a state picked via /region-select as locationId, resolved through regionsByStateCode", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     usePendingFormRegionStore.getState().setPendingRegion({
@@ -660,7 +820,7 @@ describe("PublishPage", () => {
   it("submits both a resolved locationId and a user-typed locationText together when both fields are filled", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.change(screen.getByLabelText("城市 / 具体位置（可选）"), {
@@ -692,7 +852,7 @@ describe("PublishPage", () => {
   it("submits a city-backed region (DC/VA/MD drilldown) picked via /region-select as locationId, with a null locationText", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     usePendingFormRegionStore.getState().setPendingRegion({
@@ -718,7 +878,7 @@ describe("PublishPage", () => {
   it("clears a picked region back to '不限地区' (locationId null) when the clear button is clicked, without touching locationText", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
-    await screen.findByRole("option", { name: "租房" });
+    await screen.findByRole("radio", { name: "租房" });
 
     fillRequiredFields();
     fireEvent.change(screen.getByLabelText("城市 / 具体位置（可选）"), {
@@ -763,9 +923,9 @@ describe("PublishPage", () => {
 
     it("does not render the gender/age fields when the selected category is not 求租", async () => {
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
+      selectCategory("租房");
 
       expect(screen.queryByLabelText("性别（可选）")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("年龄（可选）")).not.toBeInTheDocument();
@@ -773,9 +933,9 @@ describe("PublishPage", () => {
 
     it("renders the gender/age fields once the 求租 category is selected", async () => {
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      selectCategory("求租");
 
       expect(screen.getByLabelText("性别（可选）")).toBeInTheDocument();
       expect(screen.getByLabelText("年龄（可选）")).toBeInTheDocument();
@@ -784,9 +944,9 @@ describe("PublishPage", () => {
     it("auto-fills the age field once from the current user's profile.age when 求租 is selected", async () => {
       getMyProfile.mockResolvedValue({ age: 28 });
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      selectCategory("求租");
 
       await waitFor(() => {
         expect(screen.getByLabelText("年龄（可选）")).toHaveValue(28);
@@ -796,9 +956,9 @@ describe("PublishPage", () => {
     it("does not overwrite a manually edited age with profile.age after the first auto-fill", async () => {
       getMyProfile.mockResolvedValue({ age: 28 });
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      selectCategory("求租");
       await waitFor(() => {
         expect(screen.getByLabelText("年龄（可选）")).toHaveValue(28);
       });
@@ -806,8 +966,8 @@ describe("PublishPage", () => {
       fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "35" } });
       // 切走求租分类再切回来，不应该把用户刚改的 35 冲回 profile 的 28——
       // ageAutoFilledRef 只允许自动填充生效一次。
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      selectCategory("租房");
+      selectCategory("求租");
 
       expect(screen.getByLabelText("年龄（可选）")).toHaveValue(35);
     });
@@ -815,9 +975,9 @@ describe("PublishPage", () => {
     it("leaves the age field blank (does not auto-fill) when profile.age is null", async () => {
       getMyProfile.mockResolvedValue({ age: null });
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      selectCategory("求租");
 
       await screen.findByLabelText("年龄（可选）");
       expect(screen.getByLabelText("年龄（可选）")).toHaveValue(null);
@@ -826,15 +986,10 @@ describe("PublishPage", () => {
     it("submits posterAge/posterGender when the 求租 category is selected and the fields are filled", async () => {
       createPost.mockResolvedValue({ id: "post-999" });
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
-      fireEvent.change(screen.getByLabelText("标题"), {
-        target: { value: "Looking for a room" }
-      });
-      fireEvent.change(screen.getByLabelText("描述"), {
-        target: { value: "A description that is definitely long enough." }
-      });
+      selectCategory("求租");
+      fillDescription("Looking for a room\n" + SAMPLE_BODY);
       fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
       fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "30" } });
 
@@ -850,20 +1005,15 @@ describe("PublishPage", () => {
     it("submits posterAge/posterGender as null when the category is switched away from 求租 after the fields were filled", async () => {
       createPost.mockResolvedValue({ id: "post-999" });
       renderWithProviders(<PublishPage />);
-      await screen.findByRole("option", { name: "租房" });
+      await screen.findByRole("radio", { name: "租房" });
 
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-2" } });
+      selectCategory("求租");
       fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
       fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "30" } });
       // 切回非求租分类——性别/年龄输入框随之不再渲染，但底层 state 值仍然
       // 留着，提交时必须被当成没填。
-      fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
-      fireEvent.change(screen.getByLabelText("标题"), {
-        target: { value: "Sunny room near metro" }
-      });
-      fireEvent.change(screen.getByLabelText("描述"), {
-        target: { value: "A description that is definitely long enough." }
-      });
+      selectCategory("租房");
+      fillDescription(SAMPLE_DESCRIPTION);
 
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
@@ -962,16 +1112,58 @@ describe("PublishPage in edit mode", () => {
     getPostDetail.mockResolvedValue(existingPostDetail);
     renderEditPage();
 
-    expect(await screen.findByDisplayValue("Original title")).toBeInTheDocument();
-    expect(
-      screen.getByDisplayValue("Original description that is long enough.")
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("分类")).toHaveValue("cat-1");
+    // 历史帖子（title 单独填、不在 description 里）回填描述框时，原标题会被
+    // 补成第一行，见 publish-validation.ts 的 composeEditableDescription。
+    expect(await screen.findByLabelText("描述")).toHaveValue(
+      "Original title\nOriginal description that is long enough."
+    );
+    expect(screen.getByRole("radio", { name: "租房" })).toBeChecked();
     // 地区字段不再是原生 <select>——展示文案直接复用服务端已经解析好的
     // locationName（见 publish-page.tsx 顶部注释），这里断言那行按钮上
     // 显示的文字，而不是某个表单控件的 value。
     expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(getPostDetail).toHaveBeenCalledWith("post-1");
+  });
+
+  // 发布页简化改版（任务卡 7）：新格式的帖子（description 第一行本来就是
+  // title）原样回填；重新保存后 title/description 保持一致，不会越存越长。
+  it("restores a new-format post's description unchanged (its first line already equals the title), and re-saving keeps title and description stable", async () => {
+    getPostDetail.mockResolvedValue({
+      ...existingPostDetail,
+      title: "新格式标题",
+      description: "新格式标题\n这是正文"
+    });
+    updatePost.mockResolvedValue(undefined);
+    renderEditPage();
+
+    expect(await screen.findByLabelText("描述")).toHaveValue("新格式标题\n这是正文");
+
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+    await waitFor(() => {
+      expect(updatePost).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "新格式标题", description: "新格式标题\n这是正文" })
+      );
+    });
+  });
+
+  // 历史帖子（title 单独填、不在 description 里）：直接回填原 description 会让
+  // 重新提交后的 title 悄悄变成描述第一行——回填时要把原标题补成第一行。
+  it("keeps a legacy post's original title when re-saved without edits (title is prepended as the first line of the textarea)", async () => {
+    getPostDetail.mockResolvedValue(existingPostDetail);
+    updatePost.mockResolvedValue(undefined);
+    renderEditPage();
+
+    await screen.findByDisplayValue(/Original title/);
+    fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
+
+    await waitFor(() => {
+      expect(updatePost).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: "Original title",
+          description: "Original title\nOriginal description that is long enough."
+        })
+      );
+    });
   });
 
   it("shows a not-found/no-permission message instead of a blank create form when getPostDetail returns null", async () => {
@@ -981,7 +1173,7 @@ describe("PublishPage in edit mode", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "帖子不存在，或没有权限编辑。"
     );
-    expect(screen.queryByLabelText("标题")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("描述")).not.toBeInTheDocument();
   });
 
   it("shows the post's free-text location (locationText) as the region field's display label when it used a custom location", async () => {
@@ -998,7 +1190,7 @@ describe("PublishPage in edit mode", () => {
     });
     renderEditPage();
 
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
     expect(screen.getByText("Somewhere custom")).toBeInTheDocument();
   });
 
@@ -1007,10 +1199,8 @@ describe("PublishPage in edit mode", () => {
     updatePost.mockResolvedValue(undefined);
     renderEditPage();
 
-    await screen.findByDisplayValue("Original title");
-    fireEvent.change(screen.getByLabelText("标题"), {
-      target: { value: "Updated title" }
-    });
+    await screen.findByDisplayValue(/Original title/);
+    fillDescription("Updated title\nOriginal description that is long enough.");
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 
     await waitFor(() => {
@@ -1019,6 +1209,11 @@ describe("PublishPage in edit mode", () => {
           postId: "post-1",
           currentStatus: "pending",
           title: "Updated title",
+          description: "Updated title\nOriginal description that is long enough.",
+          // 编辑保存同样固定站内私信（existingPostDetail 里原来的 email 联系
+          // 方式会被覆盖掉）。
+          contactMethod: "message",
+          contactValue: null,
           locationId: "loc-1",
           locationText: null
         })
@@ -1036,7 +1231,7 @@ describe("PublishPage in edit mode", () => {
     removeOwnPostImage.mockResolvedValue(undefined);
     renderEditPage();
 
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
     expect(screen.getByText("已上传的图片")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
@@ -1057,7 +1252,7 @@ describe("PublishPage in edit mode", () => {
       initialEntries: ["/publish/post-1"]
     });
 
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
 
     await waitFor(() => {
@@ -1093,7 +1288,7 @@ describe("PublishPage in edit mode", () => {
     insertPostImages.mockResolvedValue([]);
 
     renderEditPage();
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
 
     selectImages([makeImageFile("new.png")]);
     await screen.findByText("new.png");
@@ -1122,7 +1317,7 @@ describe("PublishPage in edit mode", () => {
     insertPostImages.mockRejectedValue({ message: "insert failed", code: "23505" });
 
     renderEditPage();
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
     // 编辑页加载时已经有一张旧图（existingPostDetail.images 里的
     // img-1），这里再选一张新图触发失败路径。
     expect(screen.getByText("已上传的图片")).toBeInTheDocument();
@@ -1162,7 +1357,7 @@ describe("PublishPage in edit mode", () => {
     });
     renderEditPage();
 
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
 
     expect(screen.getByLabelText("年龄（可选）")).toHaveValue(27);
     expect(screen.getByLabelText("性别（可选）")).toHaveValue("不透露");
@@ -1183,7 +1378,7 @@ describe("PublishPage in edit mode", () => {
     updatePost.mockResolvedValue(undefined);
     renderEditPage();
 
-    await screen.findByDisplayValue("Original title");
+    await screen.findByDisplayValue(/Original title/);
     fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "31" } });
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 

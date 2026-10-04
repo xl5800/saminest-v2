@@ -535,7 +535,8 @@ other
 
 ```text
 title 长度：1–120 字符
-description 长度：1–10000 字符
+description 长度：0–10000 字符（允许空字符串：发布页 title 从描述第一行派生，
+  见 supabase/migrations/20261004000000_allow_empty_post_description.sql）
 price_amount >= 0
 currency_code 长度为 3
 ```

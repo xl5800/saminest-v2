@@ -19,6 +19,11 @@ import {
  * - 不调用 post-image-storage-service 或 post-images-repository。
  * - 实际上传发生在第二阶段，接入 publish-page.tsx 提交流程时才会用到。
  *
+ * 发布页简化改版（任务卡 7）：去掉了原来单独的"拍照"按钮和它的第二个
+ * <input capture="environment">，只保留"从相册选择/拖拽上传"这一个入口。
+ * iOS WKWebView 里 <input type="file"> 的系统选择器通常自带"拍照/从图库
+ * 选择"选项，大概率不会真的损失拍照能力，但这一点需要在真机上实际确认。
+ *
  * 校验规则（数量上限、文件类型、大小、空文件、批次内重复）都是产品已确认的
  * 决定，这里不额外发明更宽松或更严格的规则。
  *
@@ -155,7 +160,6 @@ export function PostImagePicker({
   }
 
   const inputId = `${id}-input`;
-  const cameraInputId = `${id}-camera-input`;
 
   return (
     <div>
@@ -182,20 +186,6 @@ export function PostImagePicker({
           />
           <p className="text-sm text-text-muted">拖拽图片到此处，或点击从相册选择</p>
         </div>
-      </label>
-      <label
-        htmlFor={cameraInputId}
-        className="mt-2 inline-block cursor-pointer rounded border border-border px-3 py-1.5 text-sm font-medium text-text hover:bg-bg"
-      >
-        拍照
-        <input
-          id={cameraInputId}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          onChange={handleInputChange}
-          className="sr-only"
-        />
       </label>
       {errors.length > 0 ? (
         <div role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">

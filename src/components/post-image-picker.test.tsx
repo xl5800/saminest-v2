@@ -54,6 +54,18 @@ describe("PostImagePicker", () => {
     vi.unstubAllGlobals();
   });
 
+  // 发布页简化改版（任务卡 7）：去掉了单独的"拍照"按钮和它的第二个
+  // <input capture="environment">，只保留"从相册选择/拖拽上传"这一个入口。
+  it("has a single file input (album / drag-drop) and no separate 拍照 button or capture input", () => {
+    const { container } = render(<PickerHarness />);
+
+    expect(screen.queryByText("拍照")).not.toBeInTheDocument();
+    expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
+    expect(container.querySelector("input[capture]")).toBeNull();
+    expect(getFileInput()).toHaveAttribute("multiple");
+    expect(screen.getByText("拖拽图片到此处，或点击从相册选择")).toBeInTheDocument();
+  });
+
   it("accepts a valid file, shows a preview, and reports it to the parent", async () => {
     const onFilesChange = vi.fn();
     render(<PickerHarness onFilesChange={onFilesChange} />);

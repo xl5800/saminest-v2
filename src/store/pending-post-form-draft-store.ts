@@ -4,11 +4,11 @@ import type { PostDetailImage } from "../repositories/posts-repository";
 
 export interface PendingPostFormDraft {
   categoryId: string;
-  title: string;
+  /** 发布页简化改版（任务卡 7）：不再有独立的 title / contactMethod /
+   *  contactValue 字段——title 从 description 第一行派生，联系方式固定
+   *  站内私信，所以草稿里也不再存这三个值。 */
   description: string;
   price: string;
-  contactMethod: string;
-  contactValue: string;
   /** design_handoff_saminest_ios 第 6 项新增："城市/具体位置"这个补充说明
    *  输入框现在是用户直接打字的字段（不再只是"选了没有城市数据的州"时
    *  程序自动填进去的值，见 publish-page.tsx 消费 pendingRegion 的地方），

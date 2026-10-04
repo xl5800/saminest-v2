@@ -156,19 +156,17 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
     listActiveActivityRegions.mockResolvedValue([{ id: "loc-va", name: "VA", stateCode: "VA" }]);
   });
 
-  it("keeps 标题/描述/价格/联系方式 after a real navigation round-trip through 地区选择 (新建帖子: 租房/求租/二手共用这个页面)", async () => {
+  // 发布页简化改版（任务卡 7）：没有独立的标题/联系方式字段了，草稿里只存
+  // 分类/描述（第一行即标题）/价格这些还在的字段。
+  it("keeps 分类/描述/价格 after a real navigation round-trip through 地区选择 (新建帖子: 租房/求租/二手共用这个页面)", async () => {
     renderWithRealRouting("/publish");
 
-    await screen.findByRole("option", { name: "租房" });
-    fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
-    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Sunny room" } });
+    await screen.findByRole("radio", { name: "租房" });
+    fireEvent.click(screen.getByRole("radio", { name: "租房" }));
     fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Nice and quiet, close to metro." }
+      target: { value: "Sunny room\nNice and quiet, close to metro." }
     });
     fireEvent.change(screen.getByLabelText("价格（可选）"), { target: { value: "1200" } });
-    fireEvent.change(screen.getByLabelText("联系方式内容"), {
-      target: { value: "abc123" }
-    });
 
     // 点"地区"——真实路由跳转，PublishPage 会真的卸载、FakeRegionSelectStep
     // 挂载后立刻写回选中结果并 navigate(-1)，PublishPage 重新挂载。
@@ -180,22 +178,21 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
 
     // 这才是这次要修的 bug：其它字段在改版前会被清空（新建模式下打回
     // 空白），改版后应该原样保留。
-    expect(screen.getByLabelText("分类")).toHaveValue("cat-1");
-    expect(screen.getByLabelText("标题")).toHaveValue("Sunny room");
-    expect(screen.getByLabelText("描述")).toHaveValue("Nice and quiet, close to metro.");
+    expect(screen.getByRole("radio", { name: "租房" })).toBeChecked();
+    expect(screen.getByLabelText("描述")).toHaveValue(
+      "Sunny room\nNice and quiet, close to metro."
+    );
     expect(screen.getByLabelText("价格（可选）")).toHaveValue(1200);
-    expect(screen.getByLabelText("联系方式内容")).toHaveValue("abc123");
   });
 
   it("still submits successfully (normal publish flow is not broken) after the round-trip", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithRealRouting("/publish");
 
-    await screen.findByRole("option", { name: "租房" });
-    fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
-    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Sunny room" } });
+    await screen.findByRole("radio", { name: "租房" });
+    fireEvent.click(screen.getByRole("radio", { name: "租房" }));
     fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Nice and quiet, close to metro." }
+      target: { value: "Sunny room\nNice and quiet, close to metro." }
     });
 
     fireEvent.click(screen.getByText("不限地区"));
@@ -207,7 +204,7 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
       expect(createPost).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Sunny room",
-          description: "Nice and quiet, close to metro.",
+          description: "Sunny room\nNice and quiet, close to metro.",
           // design_handoff_saminest_ios 第 6 项：选中的州现在通过
           // regionsByStateCode 反查成真实的 locations.id 提交，不再把州名
           // 字符串塞进 locationText（见 publish-page.tsx 消费 pendingRegion
@@ -246,15 +243,17 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
 
     renderWithRealRouting("/publish/post-1");
 
-    expect(await screen.findByDisplayValue("Original title")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue(/Original title/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Edited title" } });
+    fireEvent.change(screen.getByLabelText("描述"), {
+      target: { value: "Edited title\nEdited body" }
+    });
 
     fireEvent.click(screen.getByText("Rockville"));
     await screen.findByText("VA 弗吉尼亚州");
 
-    expect(screen.getByLabelText("标题")).toHaveValue("Edited title");
-    expect(screen.queryByDisplayValue("Original title")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("描述")).toHaveValue("Edited title\nEdited body");
+    expect(screen.queryByDisplayValue(/Original title/)).not.toBeInTheDocument();
   });
 
   // 时效保险：如果用户点了"选择地区"之后没有很快走完这个来回（比如在
@@ -265,11 +264,10 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
   it("does not restore the draft if the round-trip through 地区选择 took longer than 5 minutes (TTL 安全网)", async () => {
     renderWithManualReturn("/publish");
 
-    await screen.findByRole("option", { name: "租房" });
-    fireEvent.change(screen.getByLabelText("分类"), { target: { value: "cat-1" } });
-    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Sunny room" } });
+    await screen.findByRole("radio", { name: "租房" });
+    fireEvent.click(screen.getByRole("radio", { name: "租房" }));
     fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Nice and quiet, close to metro." }
+      target: { value: "Sunny room\nNice and quiet, close to metro." }
     });
 
     // 基准用真实当前时间（不是一个很小的固定值）——mock 成一个远早于
@@ -287,9 +285,8 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
     // 地区字段本身没有时效限制，确认跳转+返回这个流程本身真的完整跑通。
     expect(await screen.findByText("VA 弗吉尼亚州")).toBeInTheDocument();
 
-    // 但草稿已经过期，分类/标题/描述不应该被回填，退回新建表单的初始态。
-    expect(screen.getByLabelText("分类")).toHaveValue("");
-    expect(screen.getByLabelText("标题")).toHaveValue("");
+    // 但草稿已经过期，分类/描述不应该被回填，退回新建表单的初始态。
+    expect(screen.getByRole("radio", { name: "租房" })).not.toBeChecked();
     expect(screen.getByLabelText("描述")).toHaveValue("");
   });
 });
