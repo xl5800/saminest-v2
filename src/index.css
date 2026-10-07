@@ -143,13 +143,15 @@
 @theme {
   --color-primary: #315bea;
   /* 按下态（--color-primary-pressed）是这批新增的，跟 hover 反馈是两个
-     不同交互阶段，之前项目里没有区分过。 */
-  --color-primary-pressed: #2449c9;
-  --color-primary-hover: #2b52d4;
+     不同交互阶段，之前项目里没有区分过。蓝色配色体系刷新任务卡：hover 和
+     按下态统一成同一个值 #2449C7（原来 hover #2b52d4 / pressed #2449c9 是
+     两个不同的值），token 名字两个都保留，调用点不用改。 */
+  --color-primary-pressed: #2449c7;
+  --color-primary-hover: #2449c7;
   --color-primary-dark: #2743b8;
-  --color-primary-light: #eaf0ff;
+  --color-primary-light: #eef3ff;
   /* 比 primary-light 更淡一档，这批新增。 */
-  --color-primary-lighter: #f3f6ff;
+  --color-primary-lighter: #f6f8ff;
   --color-primary-soft: #c9d5fb;
   --color-accent: #315bea;
   /*
