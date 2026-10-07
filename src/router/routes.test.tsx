@@ -747,8 +747,10 @@ describe("app routes", () => {
     renderAt("/publish");
 
     expect(screen.getByRole("heading", { name: "发布帖子" })).toBeInTheDocument();
+    // 发布页简化改版（任务卡 7）：分类从 <select> 的 <option> 改成胶囊 tab
+    // 按钮（role="radio"）。
     expect(
-      await screen.findByRole("option", { name: "租房" })
+      await screen.findByRole("radio", { name: "租房" })
     ).toBeInTheDocument();
   });
 

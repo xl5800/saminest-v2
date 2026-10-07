@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 
-import { OTHER_LOCATION_VALUE, validatePublishInput } from "./publish-validation";
+import {
+  composeEditableDescription,
+  deriveTitleFromDescription,
+  OTHER_LOCATION_VALUE,
+  validatePublishInput
+} from "./publish-validation";
 
 const validInput = {
   categoryId: "cat-1",
   locationId: "loc-1",
   locationText: "",
-  title: "Sunny room near metro",
-  description: "A description that is definitely long enough.",
+  // 发布页简化改版（任务卡 7）：没有独立的 title / contactMethod /
+  // contactValue 输入了，title 从描述第一行派生。
+  description: "Sunny room near metro\nA description that is definitely long enough.",
   price: "1200",
-  contactMethod: "email",
-  contactValue: "user@example.com",
   // 31 号卡新增字段：这份 baseline fixture 里留空，代表"非求租分类/没填"
   // 这个最常见的场景——已有的一大批用例都是继承自这个 baseline，不需要
   // 逐个改动就能覆盖"两者都不填时校验通过、返回 null/null"。
@@ -30,10 +34,11 @@ describe("validatePublishInput", () => {
         locationId: "loc-1",
         locationText: null,
         title: "Sunny room near metro",
-        description: "A description that is definitely long enough.",
+        // description 保存完整原文，第一行（标题行）不剔除。
+        description: "Sunny room near metro\nA description that is definitely long enough.",
         priceAmount: 1200,
-        contactMethod: "email",
-        contactValue: "user@example.com",
+        contactMethod: "message",
+        contactValue: null,
         posterAge: null,
         posterGender: null
       }
@@ -116,43 +121,64 @@ describe("validatePublishInput", () => {
     expect(result.error?.code).toBe("PUBLISH_LOCATION_TEXT_LENGTH");
   });
 
-  it("rejects an empty title", () => {
-    const result = validatePublishInput({ ...validInput, title: "   " });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("PUBLISH_TITLE_REQUIRED");
-  });
-
-  it("accepts a single-character title", () => {
-    const result = validatePublishInput({ ...validInput, title: "A" });
+  // 发布页简化改版（任务卡 7）：title 从描述第一行派生。
+  it("derives the title from the first line of the description and keeps the full text as description", () => {
+    const result = validatePublishInput({ ...validInput, description: "  标题行  \n第二行正文\n第三行" });
 
     expect(result.success).toBe(true);
+    expect(result.data?.title).toBe("标题行");
+    expect(result.data?.description).toBe("标题行  \n第二行正文\n第三行");
   });
 
-  it("rejects a title longer than 120 characters", () => {
-    const result = validatePublishInput({ ...validInput, title: "a".repeat(121) });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("PUBLISH_TITLE_LENGTH");
-  });
-
-  it("accepts a title exactly at the 120 character upper boundary", () => {
-    const result = validatePublishInput({ ...validInput, title: "a".repeat(120) });
+  it("uses the whole text as title when the description has a single line (no body)", () => {
+    const result = validatePublishInput({ ...validInput, description: "只有一行" });
 
     expect(result.success).toBe(true);
+    expect(result.data?.title).toBe("只有一行");
+    expect(result.data?.description).toBe("只有一行");
   });
 
-  it("rejects an empty description", () => {
-    const result = validatePublishInput({ ...validInput, description: "   " });
+  it("handles CRLF line breaks and ignores leading blank lines when picking the first line", () => {
+    const result = validatePublishInput({ ...validInput, description: "\r\n\r\n标题\r\n正文" });
 
-    expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("PUBLISH_DESCRIPTION_REQUIRED");
+    expect(result.success).toBe(true);
+    expect(result.data?.title).toBe("标题");
   });
 
-  it("accepts a single-character description", () => {
+  it("truncates a first line longer than 120 characters to exactly 120 for the title, without truncating the description", () => {
+    const longLine = "a".repeat(150);
+    const result = validatePublishInput({ ...validInput, description: longLine + "\n正文" });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.title).toBe("a".repeat(120));
+    expect(result.data?.description).toBe(longLine + "\n正文");
+  });
+
+  it("truncates by code point so an emoji at the boundary is never split in half", () => {
+    const line = "a".repeat(119) + "😀😀";
+    const result = validatePublishInput({ ...validInput, description: line });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.title).toBe("a".repeat(119) + "😀");
+  });
+
+  // 整段描述为空 → 派生出来的 title 也是空，必须在前端拦住，不能让空 title
+  // 提交到数据库触发 posts_title_length_check。
+  it("rejects an empty / whitespace-only description, because the derived title would be empty", () => {
+    for (const description of ["", "   ", "\n\n  \n"]) {
+      const result = validatePublishInput({ ...validInput, description });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.code).toBe("PUBLISH_CONTENT_REQUIRED");
+      expect(result.error?.message).toBe("请至少写点什么。");
+    }
+  });
+
+  it("accepts a single-character description (it is also the title)", () => {
     const result = validatePublishInput({ ...validInput, description: "A" });
 
     expect(result.success).toBe(true);
+    expect(result.data?.title).toBe("A");
   });
 
   it("rejects a description longer than 10000 characters", () => {
@@ -202,60 +228,12 @@ describe("validatePublishInput", () => {
     expect(result.error?.code).toBe("PUBLISH_PRICE_INVALID");
   });
 
-  it("rejects a contact method outside the posts.contact_method enum", () => {
-    const result = validatePublishInput({
-      ...validInput,
-      contactMethod: "carrier_pigeon"
-    });
-
-    expect(result.success).toBe(false);
-    expect(result.error?.code).toBe("PUBLISH_CONTACT_METHOD_INVALID");
-  });
-
-  it("accepts every allowed contact_method enum value", () => {
-    for (const method of ["message", "email", "phone", "wechat", "other"]) {
-      const result = validatePublishInput({
-        ...validInput,
-        contactMethod: method,
-        contactValue: "some-value"
-      });
-      expect(result.success).toBe(true);
-    }
-  });
-
-  it("allows a contact method without a contact value, since contact_value is nullable", () => {
-    const result = validatePublishInput({
-      ...validInput,
-      contactMethod: "phone",
-      contactValue: ""
-    });
+  // 发布页简化改版（任务卡 7）：联系方式不再是表单输入，固定站内私信。
+  it("always submits contact_method 'message' and contact_value null", () => {
+    const result = validatePublishInput(validInput);
 
     expect(result.success).toBe(true);
-    expect(result.data?.contactMethod).toBe("phone");
-    expect(result.data?.contactValue).toBeNull();
-  });
-
-  it("allows a contact value without a contact method, since contact_method is nullable", () => {
-    const result = validatePublishInput({
-      ...validInput,
-      contactMethod: "",
-      contactValue: "555-0100"
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.data?.contactMethod).toBeNull();
-    expect(result.data?.contactValue).toBe("555-0100");
-  });
-
-  it("allows omitting contact method and value together", () => {
-    const result = validatePublishInput({
-      ...validInput,
-      contactMethod: "",
-      contactValue: ""
-    });
-
-    expect(result.success).toBe(true);
-    expect(result.data?.contactMethod).toBeNull();
+    expect(result.data?.contactMethod).toBe("message");
     expect(result.data?.contactValue).toBeNull();
   });
 
@@ -303,5 +281,35 @@ describe("validatePublishInput", () => {
 
     expect(result.success).toBe(false);
     expect(result.error?.code).toBe("PUBLISH_POSTER_GENDER_INVALID");
+  });
+});
+
+describe("deriveTitleFromDescription", () => {
+  it("returns the trimmed first line", () => {
+    expect(deriveTitleFromDescription("  Hello  \nworld")).toBe("Hello");
+  });
+
+  it("returns an empty string for empty or whitespace-only input", () => {
+    expect(deriveTitleFromDescription("")).toBe("");
+    expect(deriveTitleFromDescription(" \n ")).toBe("");
+  });
+});
+
+// 编辑模式回填：历史帖子的 title 是单独填的、不一定出现在 description 里，
+// 回填时必须保证"重新提交后派生出来的 title 仍然是原标题"。
+describe("composeEditableDescription", () => {
+  it("returns the description unchanged when its first line already equals the title (new-format posts)", () => {
+    expect(composeEditableDescription("标题", "标题\n正文")).toBe("标题\n正文");
+  });
+
+  it("prepends the title as the first line for legacy posts whose description does not start with it", () => {
+    const composed = composeEditableDescription("旧标题", "这是一段独立的描述");
+
+    expect(composed).toBe("旧标题\n这是一段独立的描述");
+    expect(deriveTitleFromDescription(composed)).toBe("旧标题");
+  });
+
+  it("returns just the title when a legacy post has an empty description", () => {
+    expect(composeEditableDescription("旧标题", "")).toBe("旧标题");
   });
 });

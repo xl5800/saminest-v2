@@ -29,14 +29,11 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { getNextPostImageSortOrder } from "../../utils/post-image-sort-order";
 import {
-  CONTACT_METHOD_OPTIONS,
+  composeEditableDescription,
   DESCRIPTION_MAX_LENGTH,
-  DESCRIPTION_MIN_LENGTH,
   GENDER_OPTIONS,
   LOCATION_TEXT_MAX_LENGTH,
   OTHER_LOCATION_VALUE,
-  TITLE_MAX_LENGTH,
-  TITLE_MIN_LENGTH,
   validatePublishInput
 } from "./publish-validation";
 
@@ -238,6 +235,21 @@ async function uploadAndInsertPostImages(input: {
  * posterGender（回填逻辑见下面 seededRef 那个 effect），不应该被一个
  * 可能早就变过的 profiles.age 悄悄覆盖。
  *
+ * 发布页简化改版（任务卡 7）：
+ * - 表单顺序改成 分类 tab → 图片 → 描述 →（求租）性别/年龄 → 价格 →
+ *   所在州 → 城市/具体位置；图片上传（含编辑模式下"已上传的图片"）从原来
+ *   整个表单最后一个元素挪到分类下面第一个。
+ * - 分类选择器从 <select> 改成并排的胶囊 tab（单选，role="radiogroup"）。
+ * - 去掉独立的"标题"输入框：title 提交时从描述第一行派生（见
+ *   publish-validation.ts 的 deriveTitleFromDescription），description
+ *   列保存用户输入的完整原文，标题行在描述正文里会重复出现一次（刻意的
+ *   简化）。整段描述为空时在前端拦住（"请至少写点什么"），不让空标题
+ *   提交到数据库触发 posts_title_length_check。编辑模式回填描述框时，
+ *   历史帖子（title 单独填、不在 description 里）会把原标题补成第一行，
+ *   避免重新提交后 title 被悄悄换成描述的第一行。
+ * - 去掉"联系方式类型/内容"两个输入，提交时固定 contact_method =
+ *   'message'、contact_value = null（见 validatePublishInput）。
+ *
  * 提交时如果当前分类不是求租（不管是本来就不是，还是用户填完之后又把
  * 分类切换成了别的），一律把这两个字段当成没填（提交 null/null），不管
  * state 里当下留着什么值——分类下拉本身没有一个专门"切走求租分类时清空
@@ -252,11 +264,7 @@ export function PublishPage() {
   const [searchParams] = useSearchParams();
   const presetCategorySlug = searchParams.get("category");
 
-  const {
-    data: categories,
-    isPending: categoriesPending,
-    isError: categoriesError
-  } = useCategoriesQuery();
+  const { data: categories, isError: categoriesError } = useCategoriesQuery();
   const {
     data: existingPost,
     isPending: existingPostPending,
@@ -303,11 +311,8 @@ export function PublishPage() {
   // 值分开存——两者语义不一样（这个只管这一行按钮显示什么字，不参与校验/
   // 提交），见下面消费 pendingRegion 的 effect 和"地区"字段的渲染。
   const [regionLabel, setRegionLabel] = useState("");
-  const [title, setTitle] = useState(initialDraft?.title ?? "");
   const [description, setDescription] = useState(initialDraft?.description ?? "");
   const [price, setPrice] = useState(initialDraft?.price ?? "");
-  const [contactMethod, setContactMethod] = useState(initialDraft?.contactMethod ?? "");
-  const [contactValue, setContactValue] = useState(initialDraft?.contactValue ?? "");
   // 31 号卡：求租分类专属字段，跟其它字段一样吃草稿回填——见组件顶部注释
   // 和 handleOpenRegionSelect() 里存草稿的地方。
   const [posterAge, setPosterAge] = useState(initialDraft?.posterAge ?? "");
@@ -387,11 +392,12 @@ export function PublishPage() {
           ? formatLocationDisplayName(existingPost.locationText)
           : ""
     );
-    setTitle(existingPost.title);
-    setDescription(existingPost.description);
+    // 发布页简化改版（任务卡 7）：没有独立的标题输入框了，title 提交时从
+    // 描述第一行派生——历史帖子的 title 不一定出现在 description 里，直接
+    // 回填 description 会让重新提交后的 title 悄悄变成描述第一行，所以
+    // 用 composeEditableDescription 把原标题补成第一行，见该函数注释。
+    setDescription(composeEditableDescription(existingPost.title, existingPost.description));
     setPrice(existingPost.priceAmount !== null ? String(existingPost.priceAmount) : "");
-    setContactMethod(existingPost.contactMethod ?? "");
-    setContactValue(existingPost.contactValue ?? "");
     // 31 号卡：编辑模式回填这两个字段用帖子自己保存的 posterAge/
     // posterGender，不是当前 profiles.age——帖子已经有自己那份保存值，
     // 不应该被一个之后可能变过的 profile 值悄悄覆盖，见组件顶部注释。
@@ -509,11 +515,8 @@ export function PublishPage() {
     // 顶部注释。
     usePendingPostFormDraftStore.getState().saveDraft({
       categoryId,
-      title,
       description,
       price,
-      contactMethod,
-      contactValue,
       // design_handoff_saminest_ios 第 6 项：locationText 现在是"城市/
       // 具体位置"这个独立输入框的用户自己打的值，不再由 pendingRegion
       // 消费的 effect 派生，所以要跟其它字段一样存进草稿，不然点击"所在
@@ -580,11 +583,8 @@ export function PublishPage() {
       categoryId,
       locationId,
       locationText,
-      title,
       description,
       price,
-      contactMethod,
-      contactValue,
       posterAge: isWantedCategory ? posterAge : "",
       posterGender: isWantedCategory ? posterGender : ""
     });
@@ -742,35 +742,167 @@ export function PublishPage() {
                 这个文件下面每一个输入框/下拉/文本域都是同一处改动，不逐个
                 重复写注释。圆角本来就是 rounded-xl（12px，Tailwind 默认
                 档位），跟 index.css 圆角表"输入框 12px"这条一致，未改。 */}
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">分类</span>
-              <span className="relative block">
-                <select
-                  value={categoryId}
-                  onChange={(event) => setCategoryId(event.target.value)}
-                  disabled={categoriesPending}
-                  required
-                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-                >
-                  <option value="">请选择分类</option>
-                  {(categories ?? []).map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.nameZh}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  aria-hidden="true"
-                  size={16}
-                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
-                />
+            {/* 发布页简化改版（任务卡 7）：整体顺序是 分类 tab → 图片 → 描述 →
+                （求租）性别/年龄 → 价格 → 所在州 → 城市/具体位置。图片从
+                原来整个表单的最后一个元素挪到分类下面第一个；独立的"标题"
+                输入框、"联系方式类型/内容"都去掉了（title 提交时从描述第
+                一行派生，联系方式固定站内私信，见 publish-validation.ts）。
+
+                全 App 视觉 Token 体系（第二批）：这个表单里所有输入类控件的
+                focus 态从改动前的细描边 `focus:ring-1 focus:ring-primary`
+                统一换成 `focus:ring-4 focus:ring-primary-light`——BARRY
+                明确要求"不用加粗边框"这种方式，改成一圈柔和的浅蓝色光晕，
+                这个文件下面每一个输入框/文本域都是同一处改动，不逐个
+                重复写注释。圆角本来就是 rounded-xl（12px，Tailwind 默认
+                档位），跟 index.css 圆角表"输入框 12px"这条一致，未改。 */}
+            {/* 分类从原生 <select> 改成并排的胶囊 tab（单选）：选项仍然来自
+                useCategoriesQuery（不是写死"出租/求租/二手"三个字，数据库
+                里的分类名是什么就显示什么）。用 role="radiogroup"/"radio"
+                表达"单选一组"的语义（跟首页 CategoryNav 那种导航链接、后台
+                状态筛选 Chips 的 aria-pressed 开关语义不同，这里是表单里的
+                必选单选）。选中态 primary 蓝底白字，未选中态浅底灰字，样式
+                跟 category-nav.tsx 的 Chips 一致。 */}
+            <div className="mb-4">
+              <span id="publish-category-label" className="mb-2 block text-xs font-semibold text-text">
+                分类
               </span>
-            </label>
+              <div
+                role="radiogroup"
+                aria-labelledby="publish-category-label"
+                className="flex flex-wrap gap-2"
+              >
+                {(categories ?? []).map((category) => {
+                  const selected = category.id === categoryId;
+                  return (
+                    <button
+                      key={category.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      onClick={() => setCategoryId(category.id)}
+                      className={
+                        selected
+                          ? "flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold whitespace-nowrap text-white"
+                          : "flex h-10 items-center justify-center rounded-full border border-border bg-card px-5 text-sm whitespace-nowrap text-text-muted"
+                      }
+                    >
+                      {category.nameZh}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             {categoriesError ? (
               <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
                 分类加载失败，请刷新页面重试。
               </p>
             ) : null}
+
+            {isEditMode && existingImages.length > 0 ? (
+              <div className="mb-4">
+                <p className="mb-2 text-xs font-semibold text-text">已上传的图片</p>
+                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {existingImages.map((image) => (
+                    <li key={image.id} className="relative rounded-xl bg-card p-1">
+                      {image.publicUrl ? (
+                        <img
+                          src={image.publicUrl}
+                          alt=""
+                          width={80}
+                          height={80}
+                          className="h-20 w-20 rounded-lg object-cover"
+                        />
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExistingImage(image.id)}
+                        disabled={removingImageId === image.id}
+                        className="mt-1 w-full rounded-lg border border-danger px-1 py-0.5 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {removingImageId === image.id ? "删除中…" : "删除"}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            <div className="mb-4">
+              <PostImagePicker value={images} onChange={setImages} />
+            </div>
+
+            {/* 单个"描述"输入框：第一行会在提交时被当作标题（见
+                publish-validation.ts 的 deriveTitleFromDescription），整段
+                原文原样存进 description 列，标题行会在描述正文里重复出现
+                一次——刻意的简化，换取不用处理"剔除第一行后描述变空"这个
+                边界情况。placeholder 里提示这个规则，不再另起一个"标题"
+                label。上限沿用 DESCRIPTION_MAX_LENGTH，没有下限（整段为空
+                由校验函数提示"请至少写点什么"）。 */}
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">描述</span>
+              <textarea
+                value={description}
+                onChange={(event) => setDescription(event.target.value)}
+                maxLength={DESCRIPTION_MAX_LENGTH}
+                placeholder="第一行将作为标题…详细说说你的帖子"
+                className="min-h-[160px] w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
+              />
+            </label>
+
+            {isWantedCategory ? (
+              <>
+                {/* 31 号卡：性别/年龄只在求租分类下渲染，位置
+                    原来在"地区"和"标题"之间；发布页简化改版（任务卡 7）后
+                    挪到描述框下面、价格/地区上面（任务卡原话，位置可调整
+                    不是强约束）。两个
+                    都是可选字段，label 文案跟"价格（可选）"一样带上
+                    "（可选）"提示，不强制填写。 */}
+                <label className="mb-4 block">
+                  <span className="mb-2 block text-xs font-semibold text-text">性别（可选）</span>
+                  <span className="relative block">
+                    <select
+                      value={posterGender}
+                      onChange={(event) => setPosterGender(event.target.value)}
+                      className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                    >
+                      <option value="">请选择性别</option>
+                      {GENDER_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      aria-hidden="true"
+                      size={16}
+                      className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
+                    />
+                  </span>
+                </label>
+
+                <label className="mb-4 block">
+                  <span className="mb-2 block text-xs font-semibold text-text">年龄（可选）</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={posterAge}
+                    onChange={(event) => setPosterAge(event.target.value)}
+                    className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                  />
+                </label>
+              </>
+            ) : null}
+
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
+              <input
+                type="number"
+                min={0}
+                step="0.01"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+              />
+            </label>
 
             <div className="mb-4">
               {/* design_handoff_saminest_ios 第 6 项（README「发布帖子：原
@@ -832,150 +964,6 @@ export function PublishPage() {
                 placeholder="比如：曼哈顿 / 近地铁站"
               />
             </label>
-
-            {isWantedCategory ? (
-              <>
-                {/* 31 号卡：性别/年龄只在求租分类下渲染，位置在"地区"和
-                    "标题"之间（任务卡原话，位置可调整不是强约束）。两个
-                    都是可选字段，label 文案跟"价格（可选）"一样带上
-                    "（可选）"提示，不强制填写。 */}
-                <label className="mb-4 block">
-                  <span className="mb-2 block text-xs font-semibold text-text">性别（可选）</span>
-                  <span className="relative block">
-                    <select
-                      value={posterGender}
-                      onChange={(event) => setPosterGender(event.target.value)}
-                      className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-                    >
-                      <option value="">请选择性别</option>
-                      {GENDER_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown
-                      aria-hidden="true"
-                      size={16}
-                      className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
-                    />
-                  </span>
-                </label>
-
-                <label className="mb-4 block">
-                  <span className="mb-2 block text-xs font-semibold text-text">年龄（可选）</span>
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    value={posterAge}
-                    onChange={(event) => setPosterAge(event.target.value)}
-                    className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-                  />
-                </label>
-              </>
-            ) : null}
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">标题</span>
-              <input
-                type="text"
-                value={title}
-                onChange={(event) => setTitle(event.target.value)}
-                minLength={TITLE_MIN_LENGTH}
-                maxLength={TITLE_MAX_LENGTH}
-                placeholder="起个标题"
-                required
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
-              />
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">描述</span>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                minLength={DESCRIPTION_MIN_LENGTH}
-                maxLength={DESCRIPTION_MAX_LENGTH}
-                placeholder="详细描述一下…"
-                required
-                className="min-h-[120px] w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
-              />
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={price}
-                onChange={(event) => setPrice(event.target.value)}
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-              />
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">联系方式类型</span>
-              <span className="relative block">
-                <select
-                  value={contactMethod}
-                  onChange={(event) => setContactMethod(event.target.value)}
-                  className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-                >
-                  <option value="">请选择联系方式</option>
-                  {CONTACT_METHOD_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  aria-hidden="true"
-                  size={16}
-                  className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-chevron"
-                />
-              </span>
-            </label>
-
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">联系方式内容</span>
-              <input
-                type="text"
-                value={contactValue}
-                onChange={(event) => setContactValue(event.target.value)}
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-              />
-            </label>
-
-            {isEditMode && existingImages.length > 0 ? (
-              <div className="mb-4">
-                <p className="mb-2 text-xs font-semibold text-text">已上传的图片</p>
-                <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {existingImages.map((image) => (
-                    <li key={image.id} className="relative rounded-xl bg-card p-1">
-                      {image.publicUrl ? (
-                        <img
-                          src={image.publicUrl}
-                          alt=""
-                          width={80}
-                          height={80}
-                          className="h-20 w-20 rounded-lg object-cover"
-                        />
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveExistingImage(image.id)}
-                        disabled={removingImageId === image.id}
-                        className="mt-1 w-full rounded-lg border border-danger px-1 py-0.5 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        {removingImageId === image.id ? "删除中…" : "删除"}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            <PostImagePicker value={images} onChange={setImages} />
           </form>
         )}
       </div>
