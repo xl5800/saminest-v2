@@ -60,6 +60,7 @@ function renderShell(path = "/") {
           { path: "community", element: <p>community page</p> },
           { path: "community/new", element: <p>community-new page</p> },
           { path: "community/post/:id", element: <p>community-post page</p> },
+          { path: "community/post/:id/report", element: <p>community-post-report page</p> },
           // 26 号卡新迁移的 17 条 nav-only 路由 + 单独处理的 /my-posts，
           // stub 元素只需要能渲染、不需要还原真实页面内容。
           { path: "activities/:id/report", element: <p>report-activity page</p> },
@@ -275,6 +276,7 @@ describe("AppShell", () => {
     it.each([
       ["/activities/123/report", "report-activity page"],
       ["/post/123/report", "report-post page"],
+      ["/community/post/123/report", "report-community-post page"],
       ["/users/123/report", "report-user page"],
       ["/feedback", "feedback page"],
       ["/profile/edit", "edit-profile page"],

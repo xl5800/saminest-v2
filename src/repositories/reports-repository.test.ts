@@ -291,6 +291,78 @@ describe("listReportsForModeration", () => {
     expect(result[0].targetTitle).toBe("全新沙发出售");
   });
 
+  describe("community_post target type", () => {
+    function communityPostReport(targetId = "cp-1") {
+      return {
+        id: "report-cp",
+        reason_code: "spam",
+        description: null,
+        created_at: "2026-07-01T00:00:00.000Z",
+        target_type: "community_post",
+        target_id: targetId,
+        reporter: { display_name: "Bob" }
+      };
+    }
+
+    it("looks up community_posts and attaches the post's title (no commentPreview)", async () => {
+      overrideTypesMock.mockResolvedValue({ data: [communityPostReport()], error: null });
+      inMock.mockResolvedValue({
+        data: [{ id: "cp-1", title: "有人去过 Tysons 吗", body: "正文" }],
+        error: null
+      });
+
+      const result = await listReportsForModeration();
+
+      expect(fromMock).toHaveBeenCalledWith("community_posts");
+      expect(queryBuilder.select).toHaveBeenCalledWith("id, title, body");
+      expect(inMock).toHaveBeenCalledWith("id", ["cp-1"]);
+      expect(result[0].targetType).toBe("community_post");
+      expect(result[0].targetTitle).toBe("有人去过 Tysons 吗");
+      expect(result[0].commentPreview).toBeNull();
+    });
+
+    it("falls back to the first 40 characters of the body plus an ellipsis when the post has no title", async () => {
+      overrideTypesMock.mockResolvedValue({ data: [communityPostReport()], error: null });
+      const body = "一二三四五六七八九十".repeat(5);
+      inMock.mockResolvedValue({ data: [{ id: "cp-1", title: null, body }], error: null });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].targetTitle).toBe(`${body.slice(0, 40)}…`);
+    });
+
+    it("keeps a short untitled body as is (no ellipsis) and flattens newlines to spaces", async () => {
+      overrideTypesMock.mockResolvedValue({ data: [communityPostReport()], error: null });
+      inMock.mockResolvedValue({
+        data: [{ id: "cp-1", title: null, body: "第一行\n\n第二行" }],
+        error: null
+      });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].targetTitle).toBe("第一行 第二行");
+    });
+
+    it("does not split a surrogate pair when truncating", async () => {
+      overrideTypesMock.mockResolvedValue({ data: [communityPostReport()], error: null });
+      const body = "😀".repeat(50);
+      inMock.mockResolvedValue({ data: [{ id: "cp-1", title: null, body }], error: null });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].targetTitle).toBe(`${"😀".repeat(40)}…`);
+    });
+
+    it("falls back to a null title, without throwing, when the community_posts lookup errors", async () => {
+      overrideTypesMock.mockResolvedValue({ data: [communityPostReport()], error: null });
+      inMock.mockResolvedValue({ data: null, error: { message: "network down", code: "500" } });
+
+      const result = await listReportsForModeration();
+
+      expect(result[0].targetTitle).toBeNull();
+    });
+  });
+
   it("looks up and attaches the target activity's title", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [

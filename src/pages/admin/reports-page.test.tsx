@@ -161,6 +161,61 @@ describe("AdminReportsPage", () => {
   });
 
   // UGC 安全功能补齐任务卡 2（举报用户）。
+  it("renders the target as a clickable link to /community/post/:id when target_type is 'community_post'", async () => {
+    listReportsForModeration.mockResolvedValue([
+      {
+        ...sampleReport,
+        id: "report-cp-1",
+        targetType: "community_post",
+        targetId: "cp-1",
+        targetTitle: "有人去过 Tysons 吗"
+      }
+    ]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(await screen.findByRole("link", { name: "有人去过 Tysons 吗" })).toHaveAttribute(
+      "href",
+      "/community/post/cp-1"
+    );
+  });
+
+  it("falls back to 'community_post / :id' as the link text when the community post's title isn't available", async () => {
+    listReportsForModeration.mockResolvedValue([
+      { ...sampleReport, id: "report-cp-1", targetType: "community_post", targetId: "cp-1" }
+    ]);
+
+    renderWithProviders(<AdminReportsPage />);
+
+    expect(
+      await screen.findByRole("link", { name: "community_post / cp-1" })
+    ).toHaveAttribute("href", "/community/post/cp-1");
+  });
+
+  it("offers no delete/take-down checkbox or direct action for community_post reports, but resolve/dismiss still work", async () => {
+    listReportsForModeration.mockResolvedValue([
+      { ...sampleReport, id: "report-cp-1", targetType: "community_post", targetId: "cp-1" }
+    ]);
+    resolveReport.mockResolvedValue(undefined);
+
+    renderWithProviders(<AdminReportsPage />);
+    await screen.findByText("广告/垃圾信息");
+
+    expect(screen.queryByRole("button", { name: "下架帖子" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "删除帖子" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "驳回举报" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+    expect(screen.queryByText("同时删除该帖子")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("处理说明"), { target: { value: "已核实" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
+    });
+    expect(resolveReport).toHaveBeenCalledWith("report-cp-1", "已核实");
+  });
+
   it("renders the reported user's nickname plus a link to /admin/users when target_type is 'user'", async () => {
     const userReport = {
       ...sampleReport,

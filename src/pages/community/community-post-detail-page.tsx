@@ -1,5 +1,5 @@
 import { MessageCircle } from "lucide-react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { CommunityPostFavoriteButton } from "../../components/community-post-favorite-button";
@@ -17,8 +17,11 @@ import {
  *
  * 展示：类型 pill、标题（有则显示）、正文（whitespace-pre-wrap 保留换行）、
  * 作者头像+昵称+相对时间（formatRelativeTimeAgo，复用 utils/format.ts 已有
- * 函数）。操作行：收藏（Star，icon 变体）+ 评论数展示；这次不做分享/举报
- * 按钮（举报功能阶段四再接）。下面挂 <CommentSection communityPostId>。
+ * 函数）。操作行：收藏（Star，icon 变体）+ 评论数展示；不做分享按钮。
+ * 举报入口放在顶栏 detail 变体的"…"更多菜单里（一个"举报"链接，跳
+ * /community/post/:id/report，未登录由那条路由的 RequireAuth 挡回登录页）；
+ * 链接用路由参数 id，不需要等帖子详情加载完。下面挂
+ * <CommentSection communityPostId>。
  *
  * 找不到帖子（isError，包括 .single() 查不到行、RLS 看不到）时展示"帖子不存在
  * 或已被删除"，不做额外跳转。
@@ -97,7 +100,21 @@ export function CommunityPostDetailPage() {
 
   return (
     <main data-testid="community-post-detail-page">
-      <TopBar variant="nav-only" title="帖子详情" />
+      <TopBar
+        variant="detail"
+        title="帖子详情"
+        moreMenu={{
+          label: "更多",
+          content: (
+            <Link
+              to={`/community/post/${id}/report`}
+              className="block px-4 py-2 text-left text-sm text-text hover:bg-bg hover:text-primary"
+            >
+              举报
+            </Link>
+          )
+        }}
+      />
       <div className="mx-auto max-w-2xl px-4 py-4 pb-24 md:pb-6">{renderContent()}</div>
     </main>
   );

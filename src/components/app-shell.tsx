@@ -155,6 +155,7 @@ const TOPBAR_MIGRATED_PATTERNS = [
   // 漏登记，见本文件顶部这次改动的说明。
   "/activities/:id/notify",
   "/post/:id/report",
+  "/community/post/:id/report",
   "/users/:userId/report",
   "/feedback",
   "/profile/edit",

@@ -223,6 +223,7 @@ import { PublishPage } from "../pages/publish/publish-page";
 import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
+import { ReportCommunityPostPage } from "../pages/report/report-community-post-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
@@ -286,6 +287,14 @@ function renderAt(path: string | string[]) {
             )
           },
           { path: "community/post/:id", element: <CommunityPostDetailPage /> },
+          {
+            path: "community/post/:id/report",
+            element: (
+              <RequireAuth>
+                <ReportCommunityPostPage />
+              </RequireAuth>
+            )
+          },
           {
             path: "publish",
             element: (
@@ -722,6 +731,22 @@ describe("app routes", () => {
     renderAt("/community/post/cp-1");
 
     expect(await screen.findByText("帖子不存在或已被删除。")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+  });
+
+  // 社区功能阶段四：举报社区帖子表单页。
+  it("redirects /community/post/:id/report to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/community/post/cp-1/report");
+
+    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+  });
+
+  it("renders the report form at /community/post/:id/report when a session exists, without the global AppHeader", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/community/post/cp-1/report");
+
+    expect(screen.getByRole("heading", { name: "举报帖子" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
   });
 

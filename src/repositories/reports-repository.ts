@@ -33,7 +33,7 @@ export type ReportReasonCode = (typeof REPORT_REASON_OPTIONS)[number]["value"];
 
 export interface CreateReportInput {
   reporterId: string;
-  targetType: "post" | "comment" | "activity" | "user";
+  targetType: "post" | "comment" | "activity" | "user" | "community_post";
   targetId: string;
   reasonCode: string;
   description: string | null;
@@ -165,6 +165,23 @@ interface CommentPreviewRow {
   post: { title: string } | null;
 }
 
+const COMMUNITY_POST_PREVIEW_LENGTH = 40;
+
+/**
+ * 社区帖子没有标题时，管理员列表里退化成正文前 40 个字符（超出才加"…"）。
+ * 跟 Feed 卡片"没有标题就把 body 当标题用"是同一个产品逻辑，只是这里是纯
+ * 文本预览：先把换行/连续空白压成单个空格，列表里只占一行。用 Array.from
+ * 按码点切，避免把 emoji 之类的代理对从中间截断。
+ */
+function getCommunityPostTargetTitle(title: string | null, body: string): string {
+  if (title) return title;
+  const singleLine = body.replace(/\s+/g, " ").trim();
+  const chars = Array.from(singleLine);
+  return chars.length > COMMUNITY_POST_PREVIEW_LENGTH
+    ? `${chars.slice(0, COMMUNITY_POST_PREVIEW_LENGTH).join("")}…`
+    : singleLine;
+}
+
 interface FetchTargetTitlesResult {
   titles: Map<string, string>;
   commentPreviews: Map<string, CommentPreview>;
@@ -172,7 +189,7 @@ interface FetchTargetTitlesResult {
 
 /**
  * reports.target_id 是多态引用——同一列根据 target_type 指向 posts /
- * activities / profiles / comments 的 id，数据库层面没有（也不可能有）
+ * activities / profiles / comments / community_posts 的 id，数据库层面没有（也不可能有）
  * 外键约束，PostgREST 没法用嵌套 select 一次性把标题/内容带出来。这里
  * 按 target_type 分组，各自去对应的表批量查一次，再在内存里拼回去，跟
  * 外键 join 效果等价，只是分开查询。
@@ -193,6 +210,11 @@ interface FetchTargetTitlesResult {
  * 同一个"核心数据与辅助信息分开判定成败"的原则，查不到就让调用方用
  * targetId 兜底展示。
  *
+ * community_posts：社区帖子本身就是举报目标（不是"附属于另一个目标"的东西，
+ * 跟评论不同），所以只需要一个字符串标题（title，没有就用 body 摘要），
+ * 放进 titles，不新增 commentPreview 那种嵌套对象。community_posts 的 RLS
+ * 对管理员同样不受 status/deleted_at 限制，已下架的帖子也能查到。
+ *
  * 其它未来可能出现的 target_type 直接跳过，不去查任何表。
  */
 async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTitlesResult> {
@@ -203,6 +225,9 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTit
     .filter((row) => row.target_type === "activity")
     .map((row) => row.target_id);
   const userIds = rows.filter((row) => row.target_type === "user").map((row) => row.target_id);
+  const communityPostIds = rows
+    .filter((row) => row.target_type === "community_post")
+    .map((row) => row.target_id);
   const commentIds = rows
     .filter((row) => row.target_type === "comment")
     .map((row) => row.target_id);
@@ -211,6 +236,7 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTit
     postIds.length === 0 &&
     activityIds.length === 0 &&
     userIds.length === 0 &&
+    communityPostIds.length === 0 &&
     commentIds.length === 0
   ) {
     return { titles, commentPreviews };
@@ -246,6 +272,20 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTit
       if (error) throw error;
       for (const profile of data ?? []) {
         titles.set(`user:${profile.id}`, profile.display_name);
+      }
+    }
+
+    if (communityPostIds.length > 0) {
+      const { data, error } = await client
+        .from("community_posts")
+        .select("id, title, body")
+        .in("id", communityPostIds);
+      if (error) throw error;
+      for (const communityPost of data ?? []) {
+        titles.set(
+          `community_post:${communityPost.id}`,
+          getCommunityPostTargetTitle(communityPost.title, communityPost.body)
+        );
       }
     }
 

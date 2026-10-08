@@ -37,6 +37,7 @@ import { PublishPage } from "../pages/publish/publish-page";
 import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
+import { ReportCommunityPostPage } from "../pages/report/report-community-post-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
@@ -128,6 +129,16 @@ export const router = createBrowserRouter([
       {
         path: "community/post/:id",
         element: <CommunityPostDetailPage />
+      },
+      {
+        // 跟 post/:id/report 同一类"从详情页跳出来的举报表单页"，用 RequireAuth
+        // 包裹——未登录点击详情页"…"菜单里的"举报"会被挡回登录页。
+        path: "community/post/:id/report",
+        element: (
+          <RequireAuth>
+            <ReportCommunityPostPage />
+          </RequireAuth>
+        )
       },
       {
         path: "publish",

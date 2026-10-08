@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { useCommunityPostDetailQuery } = vi.hoisted(() => ({
@@ -102,6 +102,34 @@ describe("CommunityPostDetailPage", () => {
 
     expect(screen.getByTestId("favorite-button")).toHaveTextContent("cp-1/icon");
     expect(screen.getByTestId("comment-section")).toHaveTextContent("comments for cp-1");
+  });
+
+  it("puts a 举报 link to /community/post/:id/report in the top bar's … menu", () => {
+    renderPage();
+
+    expect(screen.queryByRole("link", { name: "举报" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+
+    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
+      "href",
+      "/community/post/cp-1/report"
+    );
+  });
+
+  it("still offers the 举报 link (built from the route id) before the post has loaded", () => {
+    useCommunityPostDetailQuery.mockReturnValue({
+      data: undefined,
+      isPending: true,
+      isError: false
+    });
+
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "更多" }));
+
+    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
+      "href",
+      "/community/post/cp-1/report"
+    );
   });
 
   it("shows a loading status while the post is pending", () => {

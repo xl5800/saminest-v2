@@ -617,6 +617,13 @@ export function AdminReportsPage() {
                     <Link to={`/activities/${report.targetId}`} className="text-primary hover:underline">
                       {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
                     </Link>
+                  ) : report.targetType === "community_post" ? (
+                    <Link
+                      to={`/community/post/${report.targetId}`}
+                      className="text-primary hover:underline"
+                    >
+                      {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
+                    </Link>
                   ) : report.targetType === "user" ? (
                     <>
                       {report.targetTitle ?? `${report.targetType} / ${report.targetId}`}
