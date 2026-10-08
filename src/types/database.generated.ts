@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       account_deletion_requests: {
@@ -214,6 +239,7 @@ export type Database = {
       comments: {
         Row: {
           activity_id: string | null
+          community_post_id: string | null
           content: string
           created_at: string
           deleted_at: string | null
@@ -225,6 +251,7 @@ export type Database = {
         }
         Insert: {
           activity_id?: string | null
+          community_post_id?: string | null
           content: string
           created_at?: string
           deleted_at?: string | null
@@ -236,6 +263,7 @@ export type Database = {
         }
         Update: {
           activity_id?: string | null
+          community_post_id?: string | null
           content?: string
           created_at?: string
           deleted_at?: string | null
@@ -251,6 +279,13 @@ export type Database = {
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_community_post_id_fkey"
+            columns: ["community_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
             referencedColumns: ["id"]
           },
           {
@@ -272,6 +307,141 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      communities: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_official: boolean
+          member_count: number
+          name: string
+          slug: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_official?: boolean
+          member_count?: number
+          name: string
+          slug: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_official?: boolean
+          member_count?: number
+          name?: string
+          slug?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_posts: {
+        Row: {
+          author_id: string
+          body: string
+          comment_count: number
+          community_id: string
+          created_at: string
+          deleted_at: string | null
+          favorite_count: number
+          id: string
+          pinned: boolean
+          post_type: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          body: string
+          comment_count?: number
+          community_id: string
+          created_at?: string
+          deleted_at?: string | null
+          favorite_count?: number
+          id?: string
+          pinned?: boolean
+          post_type?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          body?: string
+          comment_count?: number
+          community_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          favorite_count?: number
+          id?: string
+          pinned?: boolean
+          post_type?: string
+          status?: string
+          title?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_posts_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_posts_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
             referencedColumns: ["id"]
           },
         ]
@@ -403,6 +573,7 @@ export type Database = {
       favorites: {
         Row: {
           activity_id: string | null
+          community_post_id: string | null
           created_at: string
           id: string
           post_id: string | null
@@ -410,6 +581,7 @@ export type Database = {
         }
         Insert: {
           activity_id?: string | null
+          community_post_id?: string | null
           created_at?: string
           id?: string
           post_id?: string | null
@@ -417,6 +589,7 @@ export type Database = {
         }
         Update: {
           activity_id?: string | null
+          community_post_id?: string | null
           created_at?: string
           id?: string
           post_id?: string | null
@@ -428,6 +601,13 @@ export type Database = {
             columns: ["activity_id"]
             isOneToOne: false
             referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_community_post_id_fkey"
+            columns: ["community_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
             referencedColumns: ["id"]
           },
           {
@@ -1179,6 +1359,7 @@ export type Database = {
         Args: { target_id: string }
         Returns: {
           activity_id: string | null
+          community_post_id: string | null
           content: string
           created_at: string
           deleted_at: string | null
@@ -1191,6 +1372,30 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "comments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_community_post_snapshot: {
+        Args: { target_id: string }
+        Returns: {
+          author_id: string
+          body: string
+          comment_count: number
+          community_id: string
+          created_at: string
+          deleted_at: string | null
+          favorite_count: number
+          id: string
+          pinned: boolean
+          post_type: string
+          status: string
+          title: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "community_posts"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1491,6 +1696,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       post_status: [
