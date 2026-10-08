@@ -7,6 +7,7 @@ import {
   Settings,
   Shield,
   Star,
+  Users,
   type LucideIcon
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -289,6 +290,7 @@ export function ProfilePage() {
         <nav aria-label="我的发布与收藏">
           <GroupCard>
             <GroupRow to="/my-posts" icon={FileText} label="我的发布" />
+            <GroupRow to="/my-community-posts" icon={Users} label="我的社区发帖" />
             <GroupRow to="/favorites" icon={Star} label="我的收藏" />
           </GroupCard>
         </nav>

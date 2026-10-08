@@ -154,7 +154,10 @@ vi.mock("../repositories/community-repository", () => ({
   joinCommunity: vi.fn().mockResolvedValue(undefined),
   listCommunityPosts: vi.fn().mockResolvedValue({ posts: [], hasNextPage: false }),
   getCommunityPostDetail: vi.fn().mockRejectedValue(new Error("not found")),
-  createCommunityPost: vi.fn().mockResolvedValue({ id: "cp-1" })
+  createCommunityPost: vi.fn().mockResolvedValue({ id: "cp-1" }),
+  listMyCommunityPosts: vi.fn().mockResolvedValue([]),
+  updateCommunityPost: vi.fn().mockResolvedValue(undefined),
+  deleteCommunityPost: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock("../repositories/favorites-repository", () => ({
   listFavoritedPostIds,
@@ -208,6 +211,7 @@ import { LoginPage } from "../pages/login/login-page";
 import { CommunityFeedPage } from "../pages/community/community-feed-page";
 import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
 import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
+import { MyCommunityPostsPage } from "../pages/community/my-community-posts-page";
 import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { MyActivitiesPage } from "../pages/my-activities/my-activities-page";
@@ -287,6 +291,22 @@ function renderAt(path: string | string[]) {
             )
           },
           { path: "community/post/:id", element: <CommunityPostDetailPage /> },
+          {
+            path: "community/post/:id/edit",
+            element: (
+              <RequireAuth>
+                <CreateCommunityPostPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "my-community-posts",
+            element: (
+              <RequireAuth>
+                <MyCommunityPostsPage />
+              </RequireAuth>
+            )
+          },
           {
             path: "community/post/:id/report",
             element: (
@@ -748,6 +768,35 @@ describe("app routes", () => {
 
     expect(screen.getByRole("heading", { name: "举报帖子" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+  });
+
+  // 社区功能阶段六：编辑自己的社区帖子 / 我的社区发帖管理页，都需要登录。
+  it("redirects /community/post/:id/edit to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/community/post/cp-1/edit");
+
+    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+  });
+
+  it("renders the edit page at /community/post/:id/edit when a session exists (not-found state when the post doesn't resolve)", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/community/post/cp-1/edit");
+
+    expect(await screen.findByRole("heading", { name: "编辑帖子" })).toBeInTheDocument();
+  });
+
+  it("redirects /my-community-posts to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/my-community-posts");
+
+    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+  });
+
+  it("renders the my-community-posts page at /my-community-posts when a session exists", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/my-community-posts");
+
+    expect(await screen.findByRole("heading", { name: "我的社区发帖" })).toBeInTheDocument();
   });
 
   it("renders the login page at /login without the global header/bottom nav chrome", () => {

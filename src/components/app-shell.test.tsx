@@ -61,6 +61,8 @@ function renderShell(path = "/") {
           { path: "community/new", element: <p>community-new page</p> },
           { path: "community/post/:id", element: <p>community-post page</p> },
           { path: "community/post/:id/report", element: <p>community-post-report page</p> },
+          { path: "community/post/:id/edit", element: <p>community-post-edit page</p> },
+          { path: "my-community-posts", element: <p>my-community-posts page</p> },
           // 26 号卡新迁移的 17 条 nav-only 路由 + 单独处理的 /my-posts，
           // stub 元素只需要能渲染、不需要还原真实页面内容。
           { path: "activities/:id/report", element: <p>report-activity page</p> },
@@ -269,6 +271,13 @@ describe("AppShell", () => {
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     });
 
+    it("renders neither AppHeader nor BottomNav on the fully-immersive edit-community-post page (\"/community/post/123/edit\")", () => {
+      renderShell("/community/post/123/edit");
+
+      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+    });
+
     // 26 号卡（18 条旧 AppHeader 路由统一迁移到 TopBar）：这 18 条路由全部
     // 换成了各自的 TopBar nav-only 变体，同样只关 AppHeader、留着
     // BottomNav——用 "/activities/123/report" 这种带参数的路径验证
@@ -284,6 +293,7 @@ describe("AppShell", () => {
       ["/settings/delete-account", "delete-account page"],
       ["/blocked-users", "blocked-users page"],
       ["/my-posts", "my-posts page"],
+      ["/my-community-posts", "my-community-posts page"],
       ["/admin/posts", "admin-posts page"],
       ["/admin/posts/all", "admin-all-posts page"],
       ["/admin/reports", "admin-reports page"],

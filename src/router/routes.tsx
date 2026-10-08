@@ -17,6 +17,7 @@ import { CategoriesPage } from "../pages/categories/categories-page";
 import { CommunityFeedPage } from "../pages/community/community-feed-page";
 import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
 import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
+import { MyCommunityPostsPage } from "../pages/community/my-community-posts-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
 import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
@@ -129,6 +130,24 @@ export const router = createBrowserRouter([
       {
         path: "community/post/:id",
         element: <CommunityPostDetailPage />
+      },
+      {
+        // 阶段六：编辑自己的社区帖子，复用发帖页（带 :id 就是编辑模式）。
+        path: "community/post/:id/edit",
+        element: (
+          <RequireAuth>
+            <CreateCommunityPostPage />
+          </RequireAuth>
+        )
+      },
+      {
+        // 阶段六：我的社区发帖管理页（查看/编辑/删除）。
+        path: "my-community-posts",
+        element: (
+          <RequireAuth>
+            <MyCommunityPostsPage />
+          </RequireAuth>
+        )
       },
       {
         // 跟 post/:id/report 同一类"从详情页跳出来的举报表单页"，用 RequireAuth

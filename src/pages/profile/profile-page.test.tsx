@@ -313,15 +313,21 @@ describe("ProfilePage", () => {
   // 改成跟"我的活动/已屏蔽"一样的整行 GroupRow，单独一张 GroupCard，在
   // 身份卡下面、"我的内容"卡片之前。
   describe("'我的发布与收藏' group card (加回简介+年龄任务卡)", () => {
-    it("contains exactly 我的发布/我的收藏 two rows, in that order, linking to the existing pages", async () => {
+    // 社区功能阶段六：在"我的发布"下面新增"我的社区发帖"一行。
+    it("contains exactly 我的发布/我的社区发帖/我的收藏 three rows, in that order, linking to the existing pages", async () => {
       renderWithProviders(<ProfilePage />);
 
       await screen.findByText("Alice");
       const group = screen.getByRole("navigation", { name: "我的发布与收藏" });
       const links = within(group).getAllByRole("link");
-      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual(["我的发布", "我的收藏"]);
+      expect(links.map((link) => link.textContent?.replace("›", ""))).toEqual([
+        "我的发布",
+        "我的社区发帖",
+        "我的收藏"
+      ]);
       expect(links[0]).toHaveAttribute("href", "/my-posts");
-      expect(links[1]).toHaveAttribute("href", "/favorites");
+      expect(links[1]).toHaveAttribute("href", "/my-community-posts");
+      expect(links[2]).toHaveAttribute("href", "/favorites");
     });
 
     it("is not nested inside the avatar (ProfileSummary) card", async () => {

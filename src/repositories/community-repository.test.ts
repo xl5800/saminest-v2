@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { queryBuilder, singleMock, overrideTypesMock, insertMock } = vi.hoisted(() => {
+const { queryBuilder, singleMock, maybeSingleMock, updateMock, overrideTypesMock, insertMock } = vi.hoisted(() => {
   const singleMock = vi.fn();
+  const maybeSingleMock = vi.fn();
+  const updateMock = vi.fn();
   const overrideTypesMock = vi.fn();
   const insertMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
@@ -10,8 +12,10 @@ const { queryBuilder, singleMock, overrideTypesMock, insertMock } = vi.hoisted((
   }
   builder.insert = insertMock;
   builder.single = singleMock;
+  builder.maybeSingle = maybeSingleMock;
+  builder.update = updateMock;
   builder.overrideTypes = overrideTypesMock;
-  return { queryBuilder: builder, singleMock, overrideTypesMock, insertMock };
+  return { queryBuilder: builder, singleMock, maybeSingleMock, updateMock, overrideTypesMock, insertMock };
 });
 
 const fromMock = vi.fn(() => queryBuilder);
@@ -22,10 +26,13 @@ vi.mock("../integrations/supabase/client", () => ({
 
 import {
   createCommunityPost,
+  deleteCommunityPost,
   getCommunityBySlug,
   getCommunityPostDetail,
   joinCommunity,
-  listCommunityPosts
+  listCommunityPosts,
+  listMyCommunityPosts,
+  updateCommunityPost
 } from "./community-repository";
 
 const RESTRICTED_MESSAGE = "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
@@ -53,6 +60,9 @@ beforeEach(() => {
   singleMock.mockReset();
   overrideTypesMock.mockReset();
   insertMock.mockReset();
+  maybeSingleMock.mockReset();
+  updateMock.mockReset();
+  updateMock.mockReturnValue(queryBuilder);
   // insert() 既要能直接 resolve（joinCommunity），也要能继续链式调用
   // （createCommunityPost: insert().select().single()），按用例各自覆盖。
   insertMock.mockReturnValue(queryBuilder);
@@ -339,6 +349,141 @@ describe("createCommunityPost", () => {
 
     await expect(createCommunityPost(input)).rejects.toMatchObject({
       code: "COMMUNITY_POST_CREATE_ID_MISSING"
+    });
+  });
+});
+
+describe("listMyCommunityPosts", () => {
+  it("queries only the author's own non-deleted posts, newest first, and maps rows", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "cp-1",
+          post_type: "question",
+          title: null,
+          body: "正文",
+          status: "approved",
+          comment_count: 2,
+          favorite_count: 3,
+          created_at: "2026-08-01T00:00:00.000Z"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyCommunityPosts("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("community_posts");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("author_id", "user-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result).toEqual([
+      {
+        id: "cp-1",
+        postType: "question",
+        title: null,
+        body: "正文",
+        status: "approved",
+        commentCount: 2,
+        favoriteCount: 3,
+        createdAt: "2026-08-01T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("returns an empty array when there are no rows", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(listMyCommunityPosts("user-1")).resolves.toEqual([]);
+  });
+
+  it("throws MY_COMMUNITY_POSTS_LIST_FAILED on a query error", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom", code: "500" } });
+
+    await expect(listMyCommunityPosts("user-1")).rejects.toMatchObject({
+      code: "MY_COMMUNITY_POSTS_LIST_FAILED"
+    });
+  });
+});
+
+describe("updateCommunityPost", () => {
+  const input = {
+    id: "cp-1",
+    authorId: "user-1",
+    postType: "help" as const,
+    title: "新标题",
+    body: "新正文"
+  };
+
+  it("updates only post_type/title/body, scoped to the post's id, author and non-deleted rows", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "cp-1" }, error: null });
+
+    await updateCommunityPost(input);
+
+    expect(updateMock).toHaveBeenCalledWith({
+      post_type: "help",
+      title: "新标题",
+      body: "新正文"
+    });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "cp-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("author_id", "user-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+  });
+
+  it("throws instead of silently succeeding when the filter matched zero rows (not found / not yours / already deleted)", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(updateCommunityPost(input)).rejects.toMatchObject({
+      code: "COMMUNITY_POST_UPDATE_FAILED",
+      message: "帖子不存在，或没有权限编辑。"
+    });
+  });
+
+  it("maps 42501 to ACCOUNT_RESTRICTED", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: "rls", code: "42501" } });
+
+    await expect(updateCommunityPost(input)).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: RESTRICTED_MESSAGE
+    });
+  });
+
+  it("throws COMMUNITY_POST_UPDATE_FAILED for other errors", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: "boom", code: "500" } });
+
+    await expect(updateCommunityPost(input)).rejects.toMatchObject({
+      code: "COMMUNITY_POST_UPDATE_FAILED"
+    });
+  });
+});
+
+describe("deleteCommunityPost", () => {
+  it("soft-deletes by setting deleted_at, scoped to the author's own not-yet-deleted post", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: "cp-1" }, error: null });
+
+    await deleteCommunityPost("cp-1", "user-1");
+
+    const payload = updateMock.mock.calls[0][0] as { deleted_at: string };
+    expect(Number.isNaN(Date.parse(payload.deleted_at))).toBe(false);
+    expect(Object.keys(payload)).toEqual(["deleted_at"]);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("id", "cp-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("author_id", "user-1");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+  });
+
+  it("throws instead of silently succeeding when zero rows were affected", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(deleteCommunityPost("cp-1", "user-1")).rejects.toMatchObject({
+      code: "COMMUNITY_POST_DELETE_FAILED"
+    });
+  });
+
+  it("throws COMMUNITY_POST_DELETE_FAILED on a query error", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: "boom", code: "500" } });
+
+    await expect(deleteCommunityPost("cp-1", "user-1")).rejects.toMatchObject({
+      code: "COMMUNITY_POST_DELETE_FAILED"
     });
   });
 });

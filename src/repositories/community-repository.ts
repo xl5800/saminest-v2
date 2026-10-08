@@ -1,5 +1,5 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
-import type { TablesInsert } from "../types/database.generated";
+import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
 import { type PostFeedImageRow, resolveCoverImageUrl } from "./posts-repository";
 
@@ -259,4 +259,132 @@ export async function createCommunityPost(
   }
 
   return { id: data.id };
+}
+
+export interface MyCommunityPostListItem {
+  id: string;
+  postType: CommunityPostType;
+  title: string | null;
+  body: string;
+  status: string;
+  commentCount: number;
+  favoriteCount: number;
+  createdAt: string;
+}
+
+interface MyCommunityPostRow {
+  id: string;
+  post_type: CommunityPostType;
+  title: string | null;
+  body: string;
+  status: string;
+  comment_count: number;
+  favorite_count: number;
+  created_at: string;
+}
+
+/**
+ * "我的社区发帖"管理页用：只查当前用户自己、未被软删除的帖子，按 created_at
+ * 降序——跟 my-posts-page.tsx 对自己帖子列表的排序方向一致。显式带
+ * `deleted_at is null`：作者自己的 SELECT 策略不一定把软删除的行挡掉，不能
+ * 靠 RLS 保证"已删除的帖子不再出现在自己的列表里"。
+ */
+export async function listMyCommunityPosts(authorId: string): Promise<MyCommunityPostListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("community_posts")
+    .select("id, post_type, title, body, status, comment_count, favorite_count, created_at")
+    .eq("author_id", authorId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .overrideTypes<MyCommunityPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_COMMUNITY_POSTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    postType: row.post_type,
+    title: row.title,
+    body: row.body,
+    status: row.status,
+    commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
+    createdAt: row.created_at
+  }));
+}
+
+export interface UpdateCommunityPostInput {
+  id: string;
+  authorId: string;
+  postType: CommunityPostType;
+  title: string | null;
+  body: string;
+}
+
+const COMMUNITY_POST_NOT_EDITABLE_MESSAGE = "帖子不存在，或没有权限编辑。";
+const COMMUNITY_POST_NOT_DELETABLE_MESSAGE = "帖子不存在，或没有权限删除。";
+
+/**
+ * 普通 UPDATE，不是 RPC——community_posts_update_own_or_admin 这条 RLS 策略
+ * 的作者分支本来就允许改 title/body/post_type，不需要新的数据库对象。
+ *
+ * UPDATE 后面接 `.select("id").maybeSingle()` 确认真的改到了一行（跟
+ * posts-repository.ts 那几个作者自助操作、comments-repository.ts 的
+ * softDeleteComment 同一个防御写法）：RLS 把目标行过滤掉时 Supabase 只会
+ * 静默影响 0 行、error 仍然是 null，不能只看 error 判断成功。.eq("id").
+ * .eq("author_id") 过滤完一行都没有（帖子不存在、不是自己的、已经被删了）
+ * 时 data 是 null，抛 COMMUNITY_POST_UPDATE_FAILED，不当成静默成功。
+ */
+export async function updateCommunityPost(input: UpdateCommunityPostInput): Promise<void> {
+  const payload: TablesUpdate<"community_posts"> = {
+    post_type: input.postType,
+    title: input.title,
+    body: input.body
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("community_posts")
+    .update(payload)
+    .eq("id", input.id)
+    .eq("author_id", input.authorId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === RLS_VIOLATION_CODE) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    throw new AppError(error.message, "COMMUNITY_POST_UPDATE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(COMMUNITY_POST_NOT_EDITABLE_MESSAGE, "COMMUNITY_POST_UPDATE_FAILED");
+  }
+}
+
+/**
+ * 软删除：设置 deleted_at，跟 comments-repository.ts 的 softDeleteComment
+ * 同一个模式，同样用 .select("id").maybeSingle() 确认真的改到了一行。
+ */
+export async function deleteCommunityPost(id: string, authorId: string): Promise<void> {
+  const payload: TablesUpdate<"community_posts"> = {
+    deleted_at: new Date().toISOString()
+  };
+
+  const { data, error } = await getSupabaseClient()
+    .from("community_posts")
+    .update(payload)
+    .eq("id", id)
+    .eq("author_id", authorId)
+    .is("deleted_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POST_DELETE_FAILED", error);
+  }
+  if (!data) {
+    throw new AppError(COMMUNITY_POST_NOT_DELETABLE_MESSAGE, "COMMUNITY_POST_DELETE_FAILED");
+  }
 }

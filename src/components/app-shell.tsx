@@ -51,8 +51,12 @@ const NO_CHROME_PATTERNS = [
   "/admin/support/:conversationId",
   // 社区功能阶段二：发帖页用 TopBar create 变体（关闭 + 标题 + 发布），跟
   // /publish、/activities/new 同一类创建流程页面，AppHeader 和 BottomNav 都
-  // 不要。
-  "/community/new"
+  // 不要。阶段六：编辑自己的社区帖子复用同一个发帖页（TopBar create 变体），
+  // 同样不要 AppHeader 和 BottomNav——不登记的话 /community/post/:id/edit 会
+  // 落进"尚未迁移"的默认分支，叠加旧 AppHeader（"/community/post/:id" 那条
+  // 用 end: true 匹配，不会匹配到 /edit）。
+  "/community/new",
+  "/community/post/:id/edit"
 ];
 
 /**
@@ -182,7 +186,10 @@ const TOPBAR_MIGRATED_PATTERNS = [
   // 内边距。不加进这个数组的话，这两个路径会落进"尚未迁移"的默认分支，
   // 同时渲染旧 AppHeader 和页面自己的 TopBar，出现双重顶部栏。
   "/community",
-  "/community/post/:id"
+  "/community/post/:id",
+  // 社区功能阶段六：我的社区发帖管理页（TopBar nav-only 变体），跟 /my-posts
+  // 同一类，只关 AppHeader、留 BottomNav。
+  "/my-community-posts"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {
