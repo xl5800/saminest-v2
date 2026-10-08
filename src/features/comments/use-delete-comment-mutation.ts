@@ -24,7 +24,11 @@ export type DeleteCommentMutationInput = CommentTarget & {
  * ["post-detail", postId]）；activityId 分支是
  * ["activity-comments", activityId] + ["activity-detail", activityId]——
  * 评论列表要重新拉取（展示成"该评论已删除"占位），comment_count 由数据库
- * 触发器同步减一，详情页头部的留言数也要跟着刷新。
+ * 触发器同步减一，详情页头部的留言数也要跟着刷新。社区功能阶段二新增第
+ * 三个分支：communityPostId → ["community-post-comments", id] +
+ * ["community-post-detail", id]，跟 use-create-comment-mutation.ts 同一套
+ * key（任务卡没提到这个文件，但 comment-item.tsx 的删除按钮会带着社区
+ * 帖子的 target 走到这里，不补的话删完评论列表/评论数不会刷新）。
  */
 export function useDeleteCommentMutation() {
   const queryClient = useQueryClient();
@@ -39,6 +43,15 @@ export function useDeleteCommentMutation() {
         });
         void queryClient.invalidateQueries({
           queryKey: ["post-detail", variables.postId]
+        });
+        return;
+      }
+      if ("communityPostId" in variables) {
+        void queryClient.invalidateQueries({
+          queryKey: ["community-post-comments", variables.communityPostId]
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["community-post-detail", variables.communityPostId]
         });
         return;
       }

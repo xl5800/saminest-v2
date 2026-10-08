@@ -4,7 +4,9 @@ import { Link } from "react-router-dom";
 
 import { useActivityDetailQuery } from "../features/activities/use-activity-detail-query";
 import { useActivityCommentsQuery } from "../features/comments/use-activity-comments-query";
+import { useCommunityPostCommentsQuery } from "../features/comments/use-community-post-comments-query";
 import { useCreateCommentMutation } from "../features/comments/use-create-comment-mutation";
+import { useCommunityPostDetailQuery } from "../features/community/use-community-post-detail-query";
 import { usePostCommentsQuery } from "../features/comments/use-post-comments-query";
 import { usePostDetailQuery } from "../features/posts/use-post-detail-query";
 import type { Comment } from "../repositories/comments-repository";
@@ -18,9 +20,13 @@ import { CommentItem } from "./comment-item";
  * 找搭子留言区任务卡：帖子评论区/活动留言区二选一，跟
  * comments-repository.ts 的 CommentTarget 是同一个两成员联合类型写法（不
  * 加 `?: never` 排他标记，理由见那边的注释——那种写法在下面
- * `"postId" in props` 这类窄化点会让 TypeScript 推断不准）。
+ * `"postId" in props` 这类窄化点会让 TypeScript 推断不准）。社区功能阶段二
+ * 加了第三个成员 communityPostId（社区帖子评论区）。
  */
-export type CommentSectionProps = { postId: string } | { activityId: string };
+export type CommentSectionProps =
+  | { postId: string }
+  | { activityId: string }
+  | { communityPostId: string };
 
 const DEFAULT_ERROR_MESSAGE = "发表评论失败，请稍后重试。";
 
@@ -80,7 +86,10 @@ export function CommentSection(props: CommentSectionProps) {
   if ("postId" in props) {
     return <PostCommentSection postId={props.postId} />;
   }
-  return <ActivityCommentSection activityId={props.activityId} />;
+  if ("activityId" in props) {
+    return <ActivityCommentSection activityId={props.activityId} />;
+  }
+  return <CommunityPostCommentSection communityPostId={props.communityPostId} />;
 }
 
 /**
@@ -135,6 +144,32 @@ function ActivityCommentSection({ activityId }: { activityId: string }) {
       ownerId={activityDetail?.organizerId ?? null}
       onSubmit={(content, userId) =>
         createCommentMutation.mutateAsync({ activityId, userId, parentId: null, content })
+      }
+    />
+  );
+}
+
+/**
+ * 社区帖子评论区（社区功能阶段二）——逐字照抄 PostCommentSection 的结构
+ * （不是 ActivityCommentSection：社区帖子的"作者"概念跟帖子一致，不是活动的
+ * "发起人"）。useCommunityPostDetailQuery 命中的是社区帖子详情页自己已经
+ * 在查的同一个 queryKey ["community-post-detail", id]，不会多发请求。
+ */
+function CommunityPostCommentSection({ communityPostId }: { communityPostId: string }) {
+  const { data: postDetail } = useCommunityPostDetailQuery(communityPostId);
+  const { data: comments, isPending, isError } = useCommunityPostCommentsQuery(communityPostId);
+  const createCommentMutation = useCreateCommentMutation();
+
+  return (
+    <CommentSectionBody
+      commentCount={postDetail?.commentCount ?? 0}
+      comments={comments}
+      isPending={isPending}
+      isError={isError}
+      isSubmitting={createCommentMutation.isPending}
+      ownerId={postDetail?.authorId ?? null}
+      onSubmit={(content, userId) =>
+        createCommentMutation.mutateAsync({ communityPostId, userId, parentId: null, content })
       }
     />
   );

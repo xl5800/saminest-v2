@@ -8,12 +8,19 @@ import { AppError } from "../utils/app-error";
  * 非空）、favorites 表 post_id/activity_id 二选一是同一个模式。两个成员都
  * 只声明各自那一个字段（不给另一个字段加 `?: never` 之类的排他标记）——
  * 试过之后发现那种写法会让 TypeScript 的 `in` 窄化在某些调用点判断不出
+ * 社区功能阶段二：评论现在可以挂在第三种目标——社区帖子（communityPostId，
+ * 对应 comments.community_post_id，跟 comments_target_check 现在是"三个
+ * 外键恰好一个非空"一致）。联合类型多一个成员，写法不变。
+ *
  * 具体分支（"postId" in target 之后 target.postId 仍然被推断成
  * string | undefined），这个更朴素的两成员联合类型反而是 TypeScript 处理
  * 得最可靠的写法，跟任务卡给出的 `listComments(target: { postId: string }
  * | { activityId: string })` 签名逐字一致。
  */
-export type CommentTarget = { postId: string } | { activityId: string };
+export type CommentTarget =
+  | { postId: string }
+  | { activityId: string }
+  | { communityPostId: string };
 
 export interface Comment {
   id: string;
@@ -21,6 +28,8 @@ export interface Comment {
    *  postId 非空、activityId 为 null；活动留言反过来。 */
   postId: string | null;
   activityId: string | null;
+  /** 社区功能阶段二新增：社区帖子评论 communityPostId 非空，另外两个为 null。 */
+  communityPostId: string | null;
   userId: string;
   parentId: string | null;
   content: string;
@@ -39,6 +48,7 @@ interface CommentRow {
   id: string;
   post_id: string | null;
   activity_id: string | null;
+  community_post_id: string | null;
   user_id: string;
   parent_id: string | null;
   content: string;
@@ -75,14 +85,16 @@ export async function listComments(target: CommentTarget): Promise<Comment[]> {
   const baseQuery = getSupabaseClient()
     .from("comments")
     .select(
-      "id, post_id, activity_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
+      "id, post_id, activity_id, community_post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
     )
     .order("created_at", { ascending: true });
 
   const query =
     "postId" in target
       ? baseQuery.eq("post_id", target.postId)
-      : baseQuery.eq("activity_id", target.activityId);
+      : "activityId" in target
+        ? baseQuery.eq("activity_id", target.activityId)
+        : baseQuery.eq("community_post_id", target.communityPostId);
 
   const { data, error } = await query.overrideTypes<CommentRow[]>();
 
@@ -94,6 +106,7 @@ export async function listComments(target: CommentTarget): Promise<Comment[]> {
     id: row.id,
     postId: row.post_id,
     activityId: row.activity_id,
+    communityPostId: row.community_post_id,
     userId: row.user_id,
     parentId: row.parent_id,
     content: row.content,
@@ -135,7 +148,11 @@ export async function createComment(
   // 数据库列本身默认就是 null，插入时不带这一列跟显式传 null 效果一样，
   // 这样写不需要每次都拼一个"另一半恒为 null"的对象字面量。
   const payload: TablesInsert<"comments"> = {
-    ...("postId" in input ? { post_id: input.postId } : { activity_id: input.activityId }),
+    ...("postId" in input
+      ? { post_id: input.postId }
+      : "activityId" in input
+        ? { activity_id: input.activityId }
+        : { community_post_id: input.communityPostId }),
     user_id: input.userId,
     parent_id: input.parentId,
     content: input.content

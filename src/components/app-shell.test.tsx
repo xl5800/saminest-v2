@@ -57,6 +57,9 @@ function renderShell(path = "/") {
           { path: "my-activities", element: <p>my-activities page</p> },
           { path: "favorites", element: <p>favorites page</p> },
           { path: "post/:id", element: <p>post-detail page</p> },
+          { path: "community", element: <p>community page</p> },
+          { path: "community/new", element: <p>community-new page</p> },
+          { path: "community/post/:id", element: <p>community-post page</p> },
           // 26 号卡新迁移的 17 条 nav-only 路由 + 单独处理的 /my-posts，
           // stub 元素只需要能渲染、不需要还原真实页面内容。
           { path: "activities/:id/report", element: <p>report-activity page</p> },
@@ -240,6 +243,26 @@ describe("AppShell", () => {
     // "/post/:id" 验证 matchPath 对动态路径参数也生效。
     it("renders neither AppHeader nor BottomNav on the fully-immersive post detail page (\"/post/123\")", () => {
       renderShell("/post/123");
+
+      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+    });
+
+    // 社区功能阶段二：Feed 和帖子详情页有自己的 TopBar，只关 AppHeader、
+    // 留着 BottomNav；发帖页是沉浸式表单（TopBar create 变体），两者都关。
+    // 不登记的话这三个页面会叠加旧的全局 AppHeader（双重顶部栏）。
+    it.each([
+      ["/community", "community feed"],
+      ["/community/post/123", "community post detail"]
+    ])("renders BottomNav but NOT AppHeader on the %s page (%s)", (path) => {
+      renderShell(path);
+
+      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+    });
+
+    it("renders neither AppHeader nor BottomNav on the fully-immersive create-community-post page (\"/community/new\")", () => {
+      renderShell("/community/new");
 
       expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();

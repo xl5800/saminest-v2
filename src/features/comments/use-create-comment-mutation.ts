@@ -25,6 +25,10 @@ import {
  *   ["activity-detail", activityId]——activities.comment_count 由数据库
  *   触发器同步更新，跟 posts.comment_count 是同一个模式，见
  *   activities-repository.ts 里 getActivityDetail 的注释。
+ * - communityPostId 分支（社区功能阶段二）：["community-post-comments",
+ *   communityPostId] + ["community-post-detail", communityPostId]——
+ *   community_posts.comment_count 同样由触发器维护（见
+ *   20261008035059_sync_comment_count_for_community_posts.sql）。
  */
 export function useCreateCommentMutation() {
   const queryClient = useQueryClient();
@@ -38,6 +42,15 @@ export function useCreateCommentMutation() {
         });
         void queryClient.invalidateQueries({
           queryKey: ["post-detail", variables.postId]
+        });
+        return;
+      }
+      if ("communityPostId" in variables) {
+        void queryClient.invalidateQueries({
+          queryKey: ["community-post-comments", variables.communityPostId]
+        });
+        void queryClient.invalidateQueries({
+          queryKey: ["community-post-detail", variables.communityPostId]
         });
         return;
       }

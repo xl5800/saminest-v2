@@ -37,6 +37,7 @@ function makeNode(overrides: Partial<CommentNode> = {}): CommentNode {
     id: "c1",
     postId: "post-1",
     activityId: null,
+    communityPostId: null,
     userId: "user-2",
     parentId: null,
     content: "hello there",
@@ -54,6 +55,13 @@ function makeNode(overrides: Partial<CommentNode> = {}): CommentNode {
 // 硬编码 postId。
 function makeActivityNode(overrides: Partial<CommentNode> = {}): CommentNode {
   return makeNode({ postId: null, activityId: "act-1", ...overrides });
+}
+
+// 社区功能阶段二：挂在社区帖子下面（postId/activityId 都是 null，
+// communityPostId 非空）的节点夹具，验证回复/删除会正确切到 communityPostId
+// 这个 target，而不是把"不是帖子"误当成"一定是活动"。
+function makeCommunityNode(overrides: Partial<CommentNode> = {}): CommentNode {
+  return makeNode({ postId: null, activityId: null, communityPostId: "cp-1", ...overrides });
 }
 
 // 33 号卡：必须跟 comment-item.tsx 里的同名常量保持一致——这里没有从源码
@@ -171,6 +179,30 @@ describe("CommentItem", () => {
     });
   });
 
+  // 社区功能阶段二：节点挂在社区帖子下面时，回复必须带 communityPostId——
+  // 之前"不是 postId 就当成 activityId"的两路判断会在这里提交 activityId: null。
+  it("submits a reply with communityPostId (not postId/activityId) when the node belongs to a community post", async () => {
+    createCommentMutateAsync.mockResolvedValue({ id: "reply-3", createdAt: "now" });
+    const node = makeCommunityNode({ id: "c1" });
+
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "回复" }));
+    fireEvent.change(screen.getByLabelText(/回复 Bob/), {
+      target: { value: "同意" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+
+    await waitFor(() => {
+      expect(createCommentMutateAsync).toHaveBeenCalledWith({
+        communityPostId: "cp-1",
+        userId: "user-1",
+        parentId: "c1",
+        content: "同意"
+      });
+    });
+  });
+
   it("shows a validation error and does not submit when the reply is empty", async () => {
     render(<CommentItem node={makeNode()} depth={0} currentUserId="user-1" ownerId={null} />);
 
@@ -217,6 +249,24 @@ describe("CommentItem", () => {
         commentId: "c1",
         userId: "user-1",
         activityId: "act-1"
+      });
+    });
+  });
+
+  it("deletes with communityPostId (not postId/activityId) when the node belongs to a community post", async () => {
+    deleteCommentMutateAsync.mockResolvedValue(undefined);
+    const node = makeCommunityNode({ id: "c1", userId: "user-1" });
+
+    render(<CommentItem node={node} depth={0} currentUserId="user-1" ownerId={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "删除" }));
+    fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+    await waitFor(() => {
+      expect(deleteCommentMutateAsync).toHaveBeenCalledWith({
+        commentId: "c1",
+        userId: "user-1",
+        communityPostId: "cp-1"
       });
     });
   });
