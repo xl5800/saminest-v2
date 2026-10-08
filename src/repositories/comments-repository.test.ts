@@ -43,7 +43,7 @@ describe("listComments", () => {
 
     expect(fromMock).toHaveBeenCalledWith("comments");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, post_id, activity_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
+      "id, post_id, activity_id, community_post_id, user_id, parent_id, content, created_at, deleted_at, author:profiles(display_name, avatar_url)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("post_id", "post-1");
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
@@ -59,6 +59,58 @@ describe("listComments", () => {
     expect(fromMock).toHaveBeenCalledWith("comments");
     expect(queryBuilder.eq).toHaveBeenCalledWith("activity_id", "act-1");
     expect(queryBuilder.eq).not.toHaveBeenCalledWith("post_id", expect.anything());
+  });
+
+  // 社区功能阶段二：communityPostId 版本，同一个函数，只是 eq() 换成
+  // community_post_id 这一列。
+  it("queries all comments for a community post by community_post_id instead of post_id/activity_id", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listComments({ communityPostId: "cp-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("comments");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("community_post_id", "cp-1");
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("post_id", expect.anything());
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("activity_id", expect.anything());
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
+  });
+
+  it("maps a community post comment row with postId/activityId null and communityPostId set", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "c4",
+          post_id: null,
+          activity_id: null,
+          community_post_id: "cp-1",
+          user_id: "user-1",
+          parent_id: null,
+          content: "欢迎",
+          created_at: "2026-08-04T00:00:00.000Z",
+          deleted_at: null,
+          author: { display_name: "Dave", avatar_url: null }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listComments({ communityPostId: "cp-1" });
+
+    expect(result).toEqual([
+      {
+        id: "c4",
+        postId: null,
+        activityId: null,
+        communityPostId: "cp-1",
+        userId: "user-1",
+        parentId: null,
+        content: "欢迎",
+        authorDisplayName: "Dave",
+        authorAvatarUrl: null,
+        createdAt: "2026-08-04T00:00:00.000Z",
+        isDeleted: false
+      }
+    ]);
   });
 
   it("returns both active and soft-deleted comments, mapping deleted_at !== null to isDeleted: true", async () => {
@@ -217,6 +269,30 @@ describe("createComment", () => {
       content: "算我一个"
     });
     expect(result).toEqual({ id: "c2", createdAt: "2026-08-04T00:00:00.000Z" });
+  });
+
+  // 社区功能阶段二：communityPostId 版本，insert payload 只带
+  // community_post_id，不带 post_id/activity_id。
+  it("inserts a community post comment with community_post_id only", async () => {
+    singleMock.mockResolvedValue({
+      data: { id: "c5", created_at: "2026-08-04T00:00:00.000Z" },
+      error: null
+    });
+
+    const result = await createComment({
+      communityPostId: "cp-1",
+      userId: "user-1",
+      parentId: null,
+      content: "同意"
+    });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith({
+      community_post_id: "cp-1",
+      user_id: "user-1",
+      parent_id: null,
+      content: "同意"
+    });
+    expect(result).toEqual({ id: "c5", createdAt: "2026-08-04T00:00:00.000Z" });
   });
 
   it("maps a 42501 RLS failure to a generic COMMENT_CREATE_FORBIDDEN error", async () => {

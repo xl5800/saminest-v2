@@ -27,11 +27,14 @@ vi.mock("../integrations/supabase/client", () => ({
 
 import {
   addActivityFavorite,
+  addCommunityPostFavorite,
   addFavorite,
   listFavoritedActivityIds,
+  listFavoritedCommunityPostIds,
   listFavoritedPostIds,
   listFavoritedPosts,
   removeActivityFavorite,
+  removeCommunityPostFavorite,
   removeFavorite
 } from "./favorites-repository";
 
@@ -467,5 +470,121 @@ describe("removeActivityFavorite", () => {
     await expect(
       removeActivityFavorite({ userId: "user-1", activityId: "act-1" })
     ).rejects.toMatchObject({ code: "ACTIVITY_FAVORITE_REMOVE_FAILED" });
+  });
+});
+
+describe("listFavoritedCommunityPostIds", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.delete.mockClear();
+    eqMock.mockReset();
+    notMock.mockReset();
+    insertMock.mockReset();
+    matchMock.mockReset();
+    eqMock.mockReturnValue(queryBuilder);
+  });
+
+  it("returns the community post ids favorited by the given user, filtering out rows whose community_post_id is null", async () => {
+    notMock.mockResolvedValue({
+      data: [{ community_post_id: "cp-1" }, { community_post_id: null }, { community_post_id: "cp-2" }],
+      error: null
+    });
+
+    const result = await listFavoritedCommunityPostIds("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(queryBuilder.select).toHaveBeenCalledWith("community_post_id");
+    expect(eqMock).toHaveBeenCalledWith("user_id", "user-1");
+    expect(notMock).toHaveBeenCalledWith("community_post_id", "is", null);
+    expect(result).toEqual(["cp-1", "cp-2"]);
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    notMock.mockResolvedValue({ data: null, error: { message: "network down", code: "500" } });
+
+    await expect(listFavoritedCommunityPostIds("user-1")).rejects.toMatchObject({
+      code: "COMMUNITY_POST_FAVORITES_LIST_FAILED"
+    });
+  });
+});
+
+describe("addCommunityPostFavorite", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.delete.mockClear();
+    eqMock.mockReset();
+    notMock.mockReset();
+    insertMock.mockReset();
+    matchMock.mockReset();
+  });
+
+  it("inserts a favorites row carrying only community_post_id", async () => {
+    insertMock.mockResolvedValue({ error: null });
+
+    await addCommunityPostFavorite({ userId: "user-1", communityPostId: "cp-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(insertMock).toHaveBeenCalledWith({ user_id: "user-1", community_post_id: "cp-1" });
+  });
+
+  it("treats a unique-violation error as an idempotent success", async () => {
+    insertMock.mockResolvedValue({ error: { message: "duplicate key value", code: "23505" } });
+
+    await expect(
+      addCommunityPostFavorite({ userId: "user-1", communityPostId: "cp-1" })
+    ).resolves.toBeUndefined();
+  });
+
+  it("throws an AppError for any other insert failure", async () => {
+    insertMock.mockResolvedValue({ error: { message: "insert failed", code: "500" } });
+
+    await expect(
+      addCommunityPostFavorite({ userId: "user-1", communityPostId: "cp-1" })
+    ).rejects.toMatchObject({ code: "COMMUNITY_POST_FAVORITE_ADD_FAILED" });
+  });
+
+  it("throws ACCOUNT_RESTRICTED with a friendly message on an RLS violation (42501)", async () => {
+    insertMock.mockResolvedValue({
+      error: { message: "new row violates row-level security policy", code: "42501" }
+    });
+
+    await expect(
+      addCommunityPostFavorite({ userId: "user-1", communityPostId: "cp-1" })
+    ).rejects.toMatchObject({
+      code: "ACCOUNT_RESTRICTED",
+      message: "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
+    });
+  });
+});
+
+describe("removeCommunityPostFavorite", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    queryBuilder.select.mockClear();
+    queryBuilder.delete.mockClear();
+    eqMock.mockReset();
+    notMock.mockReset();
+    insertMock.mockReset();
+    matchMock.mockReset();
+  });
+
+  it("deletes the favorites row matching the user and community post", async () => {
+    matchMock.mockResolvedValue({ error: null });
+
+    await removeCommunityPostFavorite({ userId: "user-1", communityPostId: "cp-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(queryBuilder.delete).toHaveBeenCalled();
+    expect(matchMock).toHaveBeenCalledWith({ user_id: "user-1", community_post_id: "cp-1" });
+  });
+
+  it("throws an AppError when the delete fails", async () => {
+    matchMock.mockResolvedValue({ error: { message: "delete failed", code: "500" } });
+
+    await expect(
+      removeCommunityPostFavorite({ userId: "user-1", communityPostId: "cp-1" })
+    ).rejects.toMatchObject({ code: "COMMUNITY_POST_FAVORITE_REMOVE_FAILED" });
   });
 });

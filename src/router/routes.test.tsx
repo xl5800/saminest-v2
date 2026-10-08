@@ -145,6 +145,17 @@ vi.mock("../repositories/profiles-repository", () => ({
   updateMyAvatarUrl,
   getPublicProfile
 }));
+// 社区功能阶段二：三个社区页面只在路由层面被验证（路径是否登记、是否被
+// RequireAuth 包裹、是否叠加旧 AppHeader），数据层用最小 mock 兜住。
+vi.mock("../repositories/community-repository", () => ({
+  getCommunityBySlug: vi
+    .fn()
+    .mockResolvedValue({ id: "c-1", name: "DMV 社区", slug: "dmv" }),
+  joinCommunity: vi.fn().mockResolvedValue(undefined),
+  listCommunityPosts: vi.fn().mockResolvedValue({ posts: [], hasNextPage: false }),
+  getCommunityPostDetail: vi.fn().mockRejectedValue(new Error("not found")),
+  createCommunityPost: vi.fn().mockResolvedValue({ id: "cp-1" })
+}));
 vi.mock("../repositories/favorites-repository", () => ({
   listFavoritedPostIds,
   listFavoritedPosts
@@ -194,6 +205,9 @@ import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
+import { CommunityFeedPage } from "../pages/community/community-feed-page";
+import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
+import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
 import { ConversationListPage } from "../pages/messages/conversation-list-page";
 import { MessageConversationPage } from "../pages/messages/conversation-page";
 import { MyActivitiesPage } from "../pages/my-activities/my-activities-page";
@@ -262,6 +276,16 @@ function renderAt(path: string | string[]) {
           { path: "categories", element: <CategoriesPage /> },
           { path: "region-select", element: <RegionSelectPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
+          { path: "community", element: <CommunityFeedPage /> },
+          {
+            path: "community/new",
+            element: (
+              <RequireAuth>
+                <CreateCommunityPostPage />
+              </RequireAuth>
+            )
+          },
+          { path: "community/post/:id", element: <CommunityPostDetailPage /> },
           {
             path: "publish",
             element: (
@@ -665,6 +689,39 @@ describe("app routes", () => {
     renderAt("/activities/act-1/notify");
 
     expect(await screen.findByRole("heading", { name: "通知参与者" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+  });
+
+  // 社区功能阶段二：/community 和 /community/post/:id 公开可浏览，
+  // /community/new 需要登录；三个页面都有自己的 TopBar，不应该叠加旧的
+  // 全局 AppHeader（见 app-shell.tsx 的 pattern 登记）。
+  it("renders the community feed at /community without a session and without the global AppHeader", async () => {
+    renderAt("/community");
+
+    expect(await screen.findByRole("heading", { name: "DMV 社区" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+  });
+
+  it("redirects /community/new to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/community/new");
+
+    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+  });
+
+  it("renders the create-community-post page at /community/new when a session exists, with neither the global AppHeader nor BottomNav", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/community/new");
+
+    expect(screen.getByPlaceholderText("说点什么吧…")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+  });
+
+  it("renders the community post detail page at /community/post/:id without a session (not-found state when the post doesn't resolve)", async () => {
+    renderAt("/community/post/cp-1");
+
+    expect(await screen.findByText("帖子不存在或已被删除。")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
   });
 

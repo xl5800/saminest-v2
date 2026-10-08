@@ -14,6 +14,9 @@ import { AdminSupportConversationPage } from "../pages/admin/support-conversatio
 import { AdminSupportConversationsPage } from "../pages/admin/support-conversations-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
+import { CommunityFeedPage } from "../pages/community/community-feed-page";
+import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
+import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
 import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
@@ -107,6 +110,24 @@ export const router = createBrowserRouter([
       {
         path: "post/:id",
         element: <PostDetailPage />
+      },
+      {
+        // 社区功能阶段二：DMV 社区 Feed / 发帖 / 帖子详情。Feed 和详情公开
+        // 可浏览（跟 post/:id、首页一样），发帖需要登录（RequireAuth）。
+        path: "community",
+        element: <CommunityFeedPage />
+      },
+      {
+        path: "community/new",
+        element: (
+          <RequireAuth>
+            <CreateCommunityPostPage />
+          </RequireAuth>
+        )
+      },
+      {
+        path: "community/post/:id",
+        element: <CommunityPostDetailPage />
       },
       {
         path: "publish",

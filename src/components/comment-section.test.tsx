@@ -6,6 +6,8 @@ const {
   usePostCommentsQuery,
   useActivityDetailQuery,
   useActivityCommentsQuery,
+  useCommunityPostDetailQuery,
+  useCommunityPostCommentsQuery,
   useCreateCommentMutation,
   useDeleteCommentMutation,
   useCreateReportMutation,
@@ -15,6 +17,8 @@ const {
   usePostCommentsQuery: vi.fn(),
   useActivityDetailQuery: vi.fn(),
   useActivityCommentsQuery: vi.fn(),
+  useCommunityPostDetailQuery: vi.fn(),
+  useCommunityPostCommentsQuery: vi.fn(),
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
   useCreateReportMutation: vi.fn(),
@@ -30,6 +34,13 @@ vi.mock("../features/activities/use-activity-detail-query", () => ({
 }));
 vi.mock("../features/comments/use-activity-comments-query", () => ({
   useActivityCommentsQuery
+}));
+// 社区功能阶段二：CommentSection 新增的社区帖子分支依赖这两个 hook。
+vi.mock("../features/community/use-community-post-detail-query", () => ({
+  useCommunityPostDetailQuery
+}));
+vi.mock("../features/comments/use-community-post-comments-query", () => ({
+  useCommunityPostCommentsQuery
 }));
 vi.mock("../features/comments/use-create-comment-mutation", () => ({
   useCreateCommentMutation
@@ -259,6 +270,124 @@ describe("CommentSection", () => {
 
       expect(screen.queryByText("作者")).not.toBeInTheDocument();
     });
+  });
+});
+
+// 社区功能阶段二：社区帖子详情页评论区，同样只是换 target + 换两个 hook，
+// 渲染/提交行为走同一个 CommentSectionBody。
+describe("CommentSection (community post target)", () => {
+  const communityRootComment = {
+    id: "c1",
+    postId: null,
+    activityId: null,
+    communityPostId: "cp-1",
+    userId: "user-2",
+    parentId: null,
+    content: "同意楼主",
+    authorDisplayName: "Dave",
+    createdAt: "2026-08-04T00:00:00.000Z",
+    isDeleted: false
+  };
+
+  function renderCommunitySection() {
+    return renderWithProviders(<CommentSection communityPostId="cp-1" />);
+  }
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  beforeEach(() => {
+    useAuthStore.setState(initialAuthState, true);
+    usePostDetailQuery.mockReset();
+    useActivityDetailQuery.mockReset();
+    useCommunityPostDetailQuery.mockReset();
+    useCommunityPostCommentsQuery.mockReset();
+    useCreateCommentMutation.mockReset();
+    useDeleteCommentMutation.mockReset();
+    useCreateReportMutation.mockReset();
+    createCommentMutateAsync.mockReset();
+
+    usePostDetailQuery.mockReturnValue({ data: undefined });
+    useActivityDetailQuery.mockReturnValue({ data: undefined });
+    useCommunityPostDetailQuery.mockReturnValue({ data: { commentCount: 0, authorId: "user-9" } });
+    useCommunityPostCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    useCreateCommentMutation.mockReturnValue({
+      mutateAsync: createCommentMutateAsync,
+      isPending: false
+    });
+    useDeleteCommentMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+    useCreateReportMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
+  });
+
+  it("shows the comment count from useCommunityPostDetailQuery, not comments.length", () => {
+    useCommunityPostDetailQuery.mockReturnValue({ data: { commentCount: 9, authorId: "user-9" } });
+    useCommunityPostCommentsQuery.mockReturnValue({
+      data: [communityRootComment],
+      isPending: false,
+      isError: false
+    });
+
+    renderCommunitySection();
+
+    expect(screen.getByRole("heading", { name: "留言 (9)" })).toBeInTheDocument();
+    expect(useCommunityPostCommentsQuery).toHaveBeenCalledWith("cp-1");
+  });
+
+  it("submits a top-level comment with communityPostId (not postId/activityId) when logged in", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    createCommentMutateAsync.mockResolvedValue({ id: "new-comment", createdAt: "now" });
+
+    renderCommunitySection();
+
+    fireEvent.change(screen.getByPlaceholderText("写下你的评论…"), {
+      target: { value: "社区新评论" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发表评论" }));
+
+    await waitFor(() => {
+      expect(createCommentMutateAsync).toHaveBeenCalledWith({
+        communityPostId: "cp-1",
+        userId: "user-1",
+        parentId: null,
+        content: "社区新评论"
+      });
+    });
+  });
+
+  it("shows a 登录 link instead of the composer when logged out", () => {
+    renderCommunitySection();
+
+    expect(screen.queryByPlaceholderText("写下你的评论…")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
+  });
+
+  it("shows loading, error and empty states", () => {
+    useCommunityPostCommentsQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    const first = renderCommunitySection();
+    expect(screen.getByRole("status")).toHaveTextContent("加载中…");
+    first.unmount();
+
+    useCommunityPostCommentsQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    const second = renderCommunitySection();
+    expect(screen.getByRole("alert")).toHaveTextContent("评论加载失败，请稍后重试。");
+    second.unmount();
+
+    useCommunityPostCommentsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    renderCommunitySection();
+    expect(screen.getByText("暂无评论，来发表第一条评论吧。")).toBeInTheDocument();
+  });
+
+  it("renders the comment tree from useCommunityPostCommentsQuery", () => {
+    useCommunityPostCommentsQuery.mockReturnValue({
+      data: [communityRootComment],
+      isPending: false,
+      isError: false
+    });
+
+    renderCommunitySection();
+
+    expect(screen.getByText("同意楼主")).toBeInTheDocument();
   });
 });
 

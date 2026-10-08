@@ -48,7 +48,11 @@ const NO_CHROME_PATTERNS = [
   // /messages/:conversationId 是同一类，不是"顶部栏换了、底部 Tab 栏
   // 还在"。/admin/support 那张列表页不在这里，它是常规的 TopBar
   // nav-only + AdminNav 页面，见下面 TOPBAR_MIGRATED_PATTERNS。
-  "/admin/support/:conversationId"
+  "/admin/support/:conversationId",
+  // 社区功能阶段二：发帖页用 TopBar create 变体（关闭 + 标题 + 发布），跟
+  // /publish、/activities/new 同一类创建流程页面，AppHeader 和 BottomNav 都
+  // 不要。
+  "/community/new"
 ];
 
 /**
@@ -170,7 +174,14 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/admin/users",
   "/admin/categories",
   "/terms",
-  "/privacy"
+  "/privacy",
+  // 社区功能阶段二：Feed（TopBar tab 变体）和帖子详情（TopBar nav-only
+  // 变体）都自己渲染 TopBar，需要关掉全局 AppHeader；底部导航这次不动（第 6
+  // 个 Tab 是阶段三的事），页面仍然保留 BottomNav，这两个页面都留了底部
+  // 内边距。不加进这个数组的话，这两个路径会落进"尚未迁移"的默认分支，
+  // 同时渲染旧 AppHeader 和页面自己的 TopBar，出现双重顶部栏。
+  "/community",
+  "/community/post/:id"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {

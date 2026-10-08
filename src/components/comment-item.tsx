@@ -42,15 +42,24 @@ const INDENT_PX_PER_LEVEL = 16;
 /**
  * 找搭子留言区任务卡：从节点自己的 postId/activityId 反推出回复/删除这条
  * 评论时该用哪个 target——comments_target_check 约束保证两者恰好一个非
- * 空，postId 为 null 时 activityId 必然非空，这里的类型断言是安全的。
+ * 空。社区功能阶段二起评论目标有三种（postId / activityId /
+ * communityPostId），postId、activityId 都为 null 时 communityPostId 必然
+ * 非空——不能再沿用"不是帖子就一定是活动"的两路判断，否则社区帖子下的
+ * 回复/删除会带着 activityId: null 提交，违反 comments_target_check。
  * 只写目标那一列（不带另一列 = null 的 key），这样传给
  * createCommentMutation/deleteCommentMutation 的对象形状恰好是
- * { postId } 或 { activityId } 之一，跟 comments-repository.ts 里
- * createComment 的 payload 构造是同一个"只出现目标列，不显式带 null"的
- * 约定。
+ * { postId } / { activityId } / { communityPostId } 之一，跟
+ * comments-repository.ts 里 createComment 的 payload 构造是同一个"只出现
+ * 目标列，不显式带 null"的约定。
  */
 function targetFromNode(node: CommentNode): CommentTarget {
-  return node.postId !== null ? { postId: node.postId } : { activityId: node.activityId as string };
+  if (node.postId !== null) {
+    return { postId: node.postId };
+  }
+  if (node.activityId !== null) {
+    return { activityId: node.activityId };
+  }
+  return { communityPostId: node.communityPostId as string };
 }
 
 const REPORT_REASON_REQUIRED_MESSAGE = "请选择举报原因。";

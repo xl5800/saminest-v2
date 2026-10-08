@@ -194,6 +194,87 @@ export async function removeActivityFavorite(input: RemoveActivityFavoriteInput)
   }
 }
 
+export interface AddCommunityPostFavoriteInput {
+  userId: string;
+  communityPostId: string;
+}
+
+export interface RemoveCommunityPostFavoriteInput {
+  userId: string;
+  communityPostId: string;
+}
+
+/**
+ * 社区功能阶段二：收藏社区帖子三件套，照抄上面活动那三个函数的风格——帖子/
+ * 活动/社区帖子各自独立一套函数，不写成多态入口（理由见
+ * addActivityFavorite 上方那段注释）。只做"按钮能读/写"，不做收藏列表页。
+ *
+ * favorites.community_post_id 有值时 post_id/activity_id 必然为 null（数据库
+ * favorites_target_check 保证三个外键恰好一个非空），所以这里查询按
+ * community_post_id 过滤、并在 JS 里再过滤一遍 null，写法跟
+ * listFavoritedActivityIds 一致。
+ */
+export async function listFavoritedCommunityPostIds(userId: string): Promise<string[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("favorites")
+    .select("community_post_id")
+    .eq("user_id", userId)
+    .not("community_post_id", "is", null);
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POST_FAVORITES_LIST_FAILED", error);
+  }
+
+  return (data ?? [])
+    .map((row) => row.community_post_id)
+    .filter((communityPostId): communityPostId is string => communityPostId !== null);
+}
+
+/**
+ * 收藏一个社区帖子。favorites_user_id_community_post_id_key 唯一约束保证同一
+ * 用户不会重复收藏同一帖子；撞上这个约束（23505）当成"已经收藏成功"处理，
+ * 跟 addFavorite/addActivityFavorite 完全一样。
+ */
+export async function addCommunityPostFavorite(
+  input: AddCommunityPostFavoriteInput
+): Promise<void> {
+  const payload: TablesInsert<"favorites"> = {
+    user_id: input.userId,
+    community_post_id: input.communityPostId
+  };
+
+  const { error } = await getSupabaseClient().from("favorites").insert(payload);
+
+  if (error) {
+    if (error.code === UNIQUE_VIOLATION_CODE) {
+      return;
+    }
+    // 跟 addFavorite 同一个归因逻辑：user_id 只可能来自当前登录用户自己的
+    // session.user.id（唯一调用方 use-toggle-community-post-favorite-
+    // mutation.ts 只会传这个），42501 只可能是账号被限制。
+    if (error.code === RLS_VIOLATION_CODE) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    throw new AppError(error.message, "COMMUNITY_POST_FAVORITE_ADD_FAILED", error);
+  }
+}
+
+/**
+ * 取消收藏社区帖子。同 removeFavorite，物理删除对应行。
+ */
+export async function removeCommunityPostFavorite(
+  input: RemoveCommunityPostFavoriteInput
+): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from("favorites")
+    .delete()
+    .match({ user_id: input.userId, community_post_id: input.communityPostId });
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POST_FAVORITE_REMOVE_FAILED", error);
+  }
+}
+
 interface FavoritedPostRow {
   post: {
     id: string;
