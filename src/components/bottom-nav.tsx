@@ -1,4 +1,4 @@
-import { Handshake, Home, LayoutGrid, MessageCircle, UserRound } from "lucide-react";
+import { Handshake, Home, LayoutGrid, MessageCircle, UserRound, Users } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 import { useHasPendingActivityParticipantsQuery } from "../features/activities/use-has-pending-activity-participants-query";
@@ -13,6 +13,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "首页", Icon: Home },
   { to: "/categories", label: "分类", Icon: LayoutGrid },
+  { to: "/community", label: "社区", Icon: Users },
   { to: "/activities", label: "找搭子", Icon: Handshake },
   { to: "/messages", label: "消息", Icon: MessageCircle },
   { to: "/profile", label: "我的", Icon: UserRound }
@@ -34,7 +35,13 @@ function isActivePath(pathname: string, to: string): boolean {
  * 都显示（目前没有单独的桌面端导航替代方案，之前 md 以上隐藏会导致桌面
  * 浏览器访问时完全看不到导航栏，这里去掉宽度限制，统一显示）。
  *
- * 5 个平级目的地，没有中间的"发布"圆形按钮——全局发布入口已经统一收到
+ * 社区功能阶段三（导航入口）：原来 5 个平级目的地加了"社区"这一项，变成 6
+ * 个，插在"分类"和"找搭子"之间——纯内容排序上的选择，不涉及任何特殊逻辑，
+ * isActivePath 的前缀匹配对新项同样生效（/community/post/:id、
+ * /community/new 这些子路径都能让这一项高亮），NAV_ITEMS 数组继续靠
+ * flex-1 自动均分宽度，不需要额外适配。
+ *
+ * 6 个平级目的地，没有中间的"发布"圆形按钮——全局发布入口已经统一收到
  * AppHeader 右上角（点开 Action Sheet 选发布类型，见 publish-action-sheet.tsx），
  * 底部导航只负责"去哪"，不再混一个"做什么"的操作型按钮进来，跟其它 4 个
  * 目的地的语义保持一致，也避免同一个"发布"动作在 App 里出现两个入口。

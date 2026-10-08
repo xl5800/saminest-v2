@@ -29,15 +29,19 @@ describe("BottomNav", () => {
     useHasPendingActivityParticipantsQuery.mockReturnValue({ data: false });
   });
 
-  it("renders exactly 5 flat destination links, with no separate publish button", () => {
+  it("renders exactly 6 flat destination links, with no separate publish button", () => {
     renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(5);
+    expect(links).toHaveLength(6);
     expect(screen.getByRole("link", { name: /首页/ })).toHaveAttribute("href", "/");
     expect(screen.getByRole("link", { name: /分类/ })).toHaveAttribute(
       "href",
       "/categories"
+    );
+    expect(screen.getByRole("link", { name: /社区/ })).toHaveAttribute(
+      "href",
+      "/community"
     );
     expect(screen.getByRole("link", { name: /找搭子/ })).toHaveAttribute(
       "href",
@@ -66,6 +70,27 @@ describe("BottomNav", () => {
     );
     expect(screen.getByRole("link", { name: /找搭子/ })).not.toHaveAttribute(
       "aria-current"
+    );
+  });
+
+  it("marks '社区' as the active item with aria-current when on /community", () => {
+    renderWithProviders(<BottomNav />, { initialEntries: ["/community"] });
+
+    expect(screen.getByRole("link", { name: /社区/ })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
+    expect(screen.getByRole("link", { name: /首页/ })).not.toHaveAttribute(
+      "aria-current"
+    );
+  });
+
+  it("marks '社区' as active on a nested community path (e.g. a community post detail page)", () => {
+    renderWithProviders(<BottomNav />, { initialEntries: ["/community/post/post-1"] });
+
+    expect(screen.getByRole("link", { name: /社区/ })).toHaveAttribute(
+      "aria-current",
+      "page"
     );
   });
 
