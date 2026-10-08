@@ -1255,6 +1255,10 @@ export type Database = {
         Args: { delete_reason: string; target_activity_id: string }
         Returns: undefined
       }
+      admin_delete_community_post: {
+        Args: { delete_reason: string; target_community_post_id: string }
+        Returns: undefined
+      }
       admin_list_activities: {
         Args: { search_term?: string }
         Returns: {

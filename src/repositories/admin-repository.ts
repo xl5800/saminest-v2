@@ -165,6 +165,32 @@ export async function adminDeleteActivity(
 }
 
 /**
+ * 管理员强制删除社区帖子（软删除：设置 community_posts.deleted_at + 记一条
+ * moderation_actions 日志，原子性由 admin_delete_community_post 这个
+ * security definer 函数保证，见
+ * supabase/migrations/20261008070000_admin_delete_community_post_function.sql）。
+ * 社区功能阶段七：community_posts 的 UPDATE 策略管理员分支要求 status/
+ * deleted_at 必须保持原值，管理员没有任何合法的直接 UPDATE 路径，必须走这个
+ * 函数。跟阶段六作者自助删帖（community-repository.ts 的删除函数）是同一个
+ * deleted_at 字段的两条独立授权路径，不共用同一个前端函数——跟 deletePost /
+ * posts-repository.ts 作者自助删帖是同一个模式。参数名
+ * target_community_post_id / delete_reason 跟该迁移文件里函数签名完全一致。
+ */
+export async function adminDeleteCommunityPost(
+  communityPostId: string,
+  deleteReason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_delete_community_post", {
+    target_community_post_id: communityPostId,
+    delete_reason: deleteReason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_DELETE_COMMUNITY_POST_FAILED", error);
+  }
+}
+
+/**
  * 管理员下架帖子（把 posts.status 改成 'archived' + 写 archive_reason +
  * 记一条 moderation_actions 日志，原子性由 admin_archive_post 这个
  * security definer 函数保证，见

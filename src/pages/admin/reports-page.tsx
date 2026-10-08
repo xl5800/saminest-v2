@@ -7,6 +7,7 @@ import { TopBar } from "../../components/top-bar";
 import { useAdminArchivePostMutation } from "../../features/admin/use-admin-archive-post-mutation";
 import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
 import { useAdminDeleteActivityMutation } from "../../features/admin/use-admin-delete-activity-mutation";
+import { useAdminDeleteCommunityPostMutation } from "../../features/admin/use-admin-delete-community-post-mutation";
 import { useDeleteCommentMutation } from "../../features/admin/use-delete-comment-mutation";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
@@ -78,10 +79,24 @@ const ACTIVITY_CANCEL_COPY: DeleteActionCopy = {
     "举报已处理，但下架活动失败，请稍后重试，或前往该活动详情页确认处理结果。"
 };
 
+// 社区功能阶段七：社区帖子没有"全部帖子"那样的管理后台列表页可以手动重试，
+// 降级提示用跟 COMMENT_DELETE_COPY 一样"建议去详情页确认"的说法，不是
+// POST_DELETE_COPY 那种指向具体管理页面的说法。这里是"删除"不是"下架"——
+// 社区帖子这次只做删除（deleted_at），见
+// 20261008070000_admin_delete_community_post_function.sql 顶部说明。
+const COMMUNITY_POST_DELETE_COPY: DeleteActionCopy = {
+  checkboxLabel: "同时删除该社区帖子",
+  reasonLabel: "删除原因",
+  reasonRequiredMessage: "请填写删除原因。",
+  partialFailureMessage:
+    "举报已处理，但删除社区帖子失败，请稍后重试，或前往该社区帖子详情页确认处理结果。"
+};
+
 function getDeleteActionCopy(targetType: string): DeleteActionCopy | null {
   if (targetType === "post") return POST_DELETE_COPY;
   if (targetType === "comment") return COMMENT_DELETE_COPY;
   if (targetType === "activity") return ACTIVITY_CANCEL_COPY;
+  if (targetType === "community_post") return COMMUNITY_POST_DELETE_COPY;
   return null;
 }
 
@@ -246,6 +261,7 @@ export function AdminReportsPage() {
   const deletePostMutation = useDeletePostMutation();
   const deleteCommentMutation = useDeleteCommentMutation();
   const adminCancelActivityMutation = useAdminCancelActivityMutation();
+  const adminDeleteCommunityPostMutation = useAdminDeleteCommunityPostMutation();
   // 功能改动清单第 7 项："下架帖子"/"删除帖子"/"下架活动"/"删除活动"这两对
   // 直接操作用的 mutation，跟上面几个是同一批但服务不同的交互（见
   // getDirectActionCopy 的注释）。adminCancelActivityMutation/
@@ -481,6 +497,15 @@ export function AdminReportsPage() {
             await adminCancelActivityMutation.mutateAsync({
               activityId: report.targetId,
               cancelReason: deleteReason
+            });
+          } else if (report.targetType === "community_post") {
+            // 社区功能阶段七：必须有这个显式分支——上面 getDeleteActionCopy
+            // 现在会给 community_post 返回非空文案（复选框会显示），如果
+            // 漏了这里，会落进下面兜底的 deletePost，拿社区帖子 id 去调
+            // delete_post，必然"帖子不存在"失败，还会被误报成降级提示。
+            await adminDeleteCommunityPostMutation.mutateAsync({
+              postId: report.targetId,
+              deleteReason
             });
           } else {
             await deletePostMutation.mutateAsync({

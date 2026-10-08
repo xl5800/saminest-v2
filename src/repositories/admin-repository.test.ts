@@ -10,6 +10,7 @@ import {
   adminArchivePost,
   adminCancelActivity,
   adminDeleteActivity,
+  adminDeleteCommunityPost,
   approvePost,
   deleteComment,
   deletePost,
@@ -269,6 +270,39 @@ describe("adminDeleteActivity", () => {
 
     await expect(adminDeleteActivity("act-1", "")).rejects.toMatchObject({
       code: "ADMIN_DELETE_ACTIVITY_FAILED"
+    });
+  });
+});
+
+// 社区功能阶段七：参数名 target_community_post_id / delete_reason 必须跟
+// 20261008070000_admin_delete_community_post_function.sql 里的函数签名
+// 完全一致——这条断言就是防止以后有人照抄 deletePost 的 target_post_id
+// 命名习惯、悄悄改错参数名（RPC 参数名对不上不会有类型错误，只会在运行时
+// 报"找不到函数"）。
+describe("adminDeleteCommunityPost", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_delete_community_post with target_community_post_id and delete_reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminDeleteCommunityPost("cp-1", "违反社区规范");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_delete_community_post", {
+      target_community_post_id: "cp-1",
+      delete_reason: "违反社区规范"
+    });
+  });
+
+  it("throws an AppError when the RPC returns an error (e.g. empty reason, already deleted, not an admin)", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "only admins can delete community posts" }
+    });
+
+    await expect(adminDeleteCommunityPost("cp-1", "x")).rejects.toMatchObject({
+      code: "ADMIN_DELETE_COMMUNITY_POST_FAILED"
     });
   });
 });

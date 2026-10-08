@@ -9,7 +9,8 @@ const {
   deleteComment,
   adminCancelActivity,
   adminArchivePost,
-  adminDeleteActivity
+  adminDeleteActivity,
+  adminDeleteCommunityPost
 } = vi.hoisted(() => ({
   listReportsForModeration: vi.fn(),
   resolveReport: vi.fn(),
@@ -22,7 +23,9 @@ const {
   // adminDeleteActivity（活动删除，deletePost/adminCancelActivity 两个
   // 已经在用了）。
   adminArchivePost: vi.fn(),
-  adminDeleteActivity: vi.fn()
+  adminDeleteActivity: vi.fn(),
+  // 社区功能阶段七：社区帖子举报的"同时删除该社区帖子"走这个函数。
+  adminDeleteCommunityPost: vi.fn()
 }));
 
 vi.mock("../../repositories/reports-repository", async () => {
@@ -53,7 +56,8 @@ vi.mock("../../repositories/admin-repository", () => ({
   deleteComment,
   adminCancelActivity,
   adminArchivePost,
-  adminDeleteActivity
+  adminDeleteActivity,
+  adminDeleteCommunityPost
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -83,6 +87,7 @@ describe("AdminReportsPage", () => {
     adminCancelActivity.mockReset();
     adminArchivePost.mockReset();
     adminDeleteActivity.mockReset();
+    adminDeleteCommunityPost.mockReset();
   });
 
   it("shows an empty state when there are no reports", async () => {
@@ -192,7 +197,13 @@ describe("AdminReportsPage", () => {
     ).toHaveAttribute("href", "/community/post/cp-1");
   });
 
-  it("offers no delete/take-down checkbox or direct action for community_post reports, but resolve/dismiss still work", async () => {
+  // 阶段四当时断言社区帖子举报"没有任何同时删除复选框"；社区功能阶段七补上
+  // 管理员删除社区帖子之后，复选框（"同时删除该社区帖子"）现在会出现在处理
+  // 表单里——这条断言随之更新。直接操作按钮（"下架帖子"/"删除帖子"这组，
+  // 只对 post/activity 提供，且包含社区帖子这次明确不做的"下架"）依然不
+  // 对社区帖子出现；不勾选复选框时处理举报的行为跟以前完全一样，不会去调
+  // 任何删除函数。
+  it("offers the 同时删除该社区帖子 checkbox (but no 下架/删除 direct-action buttons) for community_post reports, and resolving without ticking it deletes nothing", async () => {
     listReportsForModeration.mockResolvedValue([
       { ...sampleReport, id: "report-cp-1", targetType: "community_post", targetId: "cp-1" }
     ]);
@@ -206,6 +217,7 @@ describe("AdminReportsPage", () => {
     expect(screen.getByRole("button", { name: "驳回举报" })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+    expect(screen.getByText("同时删除该社区帖子")).toBeInTheDocument();
     expect(screen.queryByText("同时删除该帖子")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("处理说明"), { target: { value: "已核实" } });
     fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
@@ -214,6 +226,8 @@ describe("AdminReportsPage", () => {
       expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
     });
     expect(resolveReport).toHaveBeenCalledWith("report-cp-1", "已核实");
+    expect(adminDeleteCommunityPost).not.toHaveBeenCalled();
+    expect(deletePost).not.toHaveBeenCalled();
   });
 
   it("renders the reported user's nickname plus a link to /admin/users when target_type is 'user'", async () => {
@@ -744,6 +758,113 @@ describe("AdminReportsPage", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent(
         "举报已处理，但下架活动失败"
       );
+    });
+  });
+
+  // 社区功能阶段七：社区帖子走 adminDeleteCommunityPost，跟上面评论/活动
+  // 两组是同一个模式。这里特别断言 deletePost 没有被调用——handleConfirm
+  // 里"其它类型"兜底分支是 deletePost，如果漏了 community_post 的显式分支，
+  // 会拿社区帖子 id 去调普通帖子的删除 RPC（必然失败），这条断言就是防这个。
+  describe("community_post reports — 同时删除该社区帖子", () => {
+    const communityPostReport = {
+      ...sampleReport,
+      id: "report-cp-1",
+      targetType: "community_post",
+      targetId: "cp-1"
+    };
+
+    it("calls both resolveReport and adminDeleteCommunityPost (never deletePost) with correct args and removes the row on full success", async () => {
+      listReportsForModeration.mockResolvedValue([communityPostReport]);
+      resolveReport.mockResolvedValue(undefined);
+      adminDeleteCommunityPost.mockResolvedValue(undefined);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+      fireEvent.change(screen.getByLabelText("处理说明"), {
+        target: { value: "已核实并处理" }
+      });
+      fireEvent.click(screen.getByLabelText("同时删除该社区帖子"));
+      fireEvent.change(screen.getByLabelText("删除原因"), {
+        target: { value: "违反社区规范" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
+      });
+      expect(resolveReport).toHaveBeenCalledWith("report-cp-1", "已核实并处理");
+      expect(adminDeleteCommunityPost).toHaveBeenCalledWith("cp-1", "违反社区规范");
+      expect(deletePost).not.toHaveBeenCalled();
+    });
+
+    it("also deletes the community post when dismissing the report with the checkbox ticked", async () => {
+      listReportsForModeration.mockResolvedValue([communityPostReport]);
+      dismissReport.mockResolvedValue(undefined);
+      adminDeleteCommunityPost.mockResolvedValue(undefined);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "驳回举报" }));
+      fireEvent.change(screen.getByLabelText("处理说明"), { target: { value: "内容确实违规" } });
+      fireEvent.click(screen.getByLabelText("同时删除该社区帖子"));
+      fireEvent.change(screen.getByLabelText("删除原因"), { target: { value: "违规" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认驳回举报" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
+      });
+      expect(dismissReport).toHaveBeenCalledWith("report-cp-1", "内容确实违规");
+      expect(adminDeleteCommunityPost).toHaveBeenCalledWith("cp-1", "违规");
+    });
+
+    it("removes the row and shows a distinct partial-failure message when resolveReport succeeds but adminDeleteCommunityPost fails", async () => {
+      listReportsForModeration.mockResolvedValue([communityPostReport]);
+      resolveReport.mockResolvedValue(undefined);
+      adminDeleteCommunityPost.mockRejectedValue(new Error("delete failed"));
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+      fireEvent.change(screen.getByLabelText("处理说明"), {
+        target: { value: "已核实并处理" }
+      });
+      fireEvent.click(screen.getByLabelText("同时删除该社区帖子"));
+      fireEvent.change(screen.getByLabelText("删除原因"), {
+        target: { value: "违反社区规范" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
+      });
+      expect(adminDeleteCommunityPost).toHaveBeenCalledWith("cp-1", "违反社区规范");
+      expect(deletePost).not.toHaveBeenCalled();
+      expect(await screen.findByRole("alert")).toHaveTextContent(
+        "举报已处理，但删除社区帖子失败"
+      );
+    });
+
+    it("requires a delete reason when the checkbox is ticked: shows 请填写删除原因。, keeps the row, and calls neither resolveReport nor adminDeleteCommunityPost", async () => {
+      listReportsForModeration.mockResolvedValue([communityPostReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+      fireEvent.change(screen.getByLabelText("处理说明"), {
+        target: { value: "已核实并处理" }
+      });
+      fireEvent.click(screen.getByLabelText("同时删除该社区帖子"));
+      fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
+
+      expect(await screen.findByText("请填写删除原因。")).toBeInTheDocument();
+      expect(screen.getByText("广告/垃圾信息")).toBeInTheDocument();
+      expect(resolveReport).not.toHaveBeenCalled();
+      expect(adminDeleteCommunityPost).not.toHaveBeenCalled();
     });
   });
 
