@@ -131,21 +131,35 @@ export function CommunityFeedPage() {
                   {getCommunityPostTypeLabel(post.postType)}
                 </span>
                 {/* 有标题：标题单行截断 + body 预览两行；没有标题：直接把
-                    body 前一两行当标题用（两行截断），不再重复展示预览。 */}
-                {hasTitle ? (
-                  <>
-                    <p className="mt-2 line-clamp-1 break-words text-base font-medium text-text">
-                      {post.title}
-                    </p>
-                    <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">
-                      {post.body}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-2 line-clamp-2 break-words text-base font-medium text-text">
-                    {post.body}
-                  </p>
-                )}
+                    body 前一两行当标题用（两行截断），不再重复展示预览。
+                    有封面图时在文字右侧放一张小缩略图（文字为主、图片为辅）；
+                    没有封面图时不渲染任何占位块，保持纯文字卡片。 */}
+                <div className="flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    {hasTitle ? (
+                      <>
+                        <p className="mt-2 line-clamp-1 break-words text-base font-medium text-text">
+                          {post.title}
+                        </p>
+                        <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">
+                          {post.body}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-2 line-clamp-2 break-words text-base font-medium text-text">
+                        {post.body}
+                      </p>
+                    )}
+                  </div>
+                  {post.coverImageUrl ? (
+                    <img
+                      src={post.coverImageUrl}
+                      alt=""
+                      loading="lazy"
+                      className="mt-2 h-16 w-16 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : null}
+                </div>
                 <div className="mt-3 flex items-center gap-2">
                   {post.authorAvatarUrl ? (
                     <img

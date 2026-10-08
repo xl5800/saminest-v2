@@ -1,6 +1,7 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
+import { type PostFeedImageRow, resolveCoverImageUrl } from "./posts-repository";
 
 const RLS_VIOLATION_CODE = "42501";
 const UNIQUE_VIOLATION_CODE = "23505";
@@ -76,6 +77,9 @@ export interface CommunityPostListItem {
   authorId: string;
   authorDisplayName: string;
   authorAvatarUrl: string | null;
+  /** 封面图（sort_order 最小的未软删除图片），没有图片时是 null——Feed 卡片
+   *  此时保持纯文字样子，不渲染占位块。 */
+  coverImageUrl: string | null;
 }
 
 export interface ListCommunityPostsInput {
@@ -100,9 +104,17 @@ interface CommunityPostRow {
   created_at: string;
   author_id: string;
   author: { display_name: string; avatar_url: string | null } | null;
+  // community_post_images 的列名跟 post_images 逐字一致（见阶段五迁移），所以
+  // 直接复用 posts-repository.ts 的 PostFeedImageRow / resolveCoverImageUrl。
+  community_post_images: PostFeedImageRow[] | null;
 }
 
 /**
+ * 图片：内嵌 select community_post_images(public_url, sort_order, deleted_at)，
+ * 不在 SQL 层面 .limit(1, { foreignTable })——原因见 posts-repository.ts 里
+ * resolveCoverImageUrl 上面的大段注释（软删除 + 重新上传历史下，SQL 层面限到
+ * 一条会选错封面图）。取全部之后在 JS 里用 resolveCoverImageUrl 选封面。
+ *
  * 分页写法照抄 posts-repository.ts 的 listApprovedPosts：range(from, to)
  * 里 to = from + pageSize（多取一条），靠返回行数是否超过 pageSize 判断
  * hasNextPage，不额外发一次 COUNT(*)。
@@ -117,13 +129,14 @@ export async function listCommunityPosts(
   const { data, error } = await getSupabaseClient()
     .from("community_posts")
     .select(
-      "id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url)"
+      "id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url), community_post_images(public_url, sort_order, deleted_at)"
     )
     .eq("community_id", communityId)
     .eq("status", "approved")
     .is("deleted_at", null)
     .order("pinned", { ascending: false })
     .order("created_at", { ascending: false })
+    .order("sort_order", { foreignTable: "community_post_images", ascending: true })
     .range(from, to)
     .overrideTypes<CommunityPostRow[]>();
 
@@ -147,7 +160,8 @@ export async function listCommunityPosts(
       createdAt: row.created_at,
       authorId: row.author_id,
       authorDisplayName: row.author?.display_name ?? "未知用户",
-      authorAvatarUrl: row.author?.avatar_url ?? null
+      authorAvatarUrl: row.author?.avatar_url ?? null,
+      coverImageUrl: resolveCoverImageUrl(row.community_post_images)
     })),
     hasNextPage
   };
@@ -155,21 +169,31 @@ export async function listCommunityPosts(
 
 export interface CommunityPostDetail extends CommunityPostListItem {
   communityId: string;
+  /** 全部未软删除图片的 public_url，按 sort_order 升序，供详情页
+   *  ImageLightbox 用；Feed 列表不需要，只有 getCommunityPostDetail 会填。 */
+  images: string[];
 }
 
 export async function getCommunityPostDetail(id: string): Promise<CommunityPostDetail> {
   const { data, error } = await getSupabaseClient()
     .from("community_posts")
     .select(
-      "id, community_id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url)"
+      "id, community_id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url), community_post_images(public_url, sort_order, deleted_at)"
     )
     .eq("id", id)
+    .order("sort_order", { foreignTable: "community_post_images", ascending: true })
     .single()
     .overrideTypes<CommunityPostRow & { community_id: string }>();
 
   if (error) {
     throw new AppError(error.message, "COMMUNITY_POST_DETAIL_FAILED", error);
   }
+
+  const images = (data.community_post_images ?? [])
+    .filter((image) => image.deleted_at === null)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((image) => image.public_url)
+    .filter((publicUrl): publicUrl is string => publicUrl !== null);
 
   return {
     id: data.id,
@@ -183,7 +207,9 @@ export async function getCommunityPostDetail(id: string): Promise<CommunityPostD
     createdAt: data.created_at,
     authorId: data.author_id,
     authorDisplayName: data.author?.display_name ?? "未知用户",
-    authorAvatarUrl: data.author?.avatar_url ?? null
+    authorAvatarUrl: data.author?.avatar_url ?? null,
+    coverImageUrl: resolveCoverImageUrl(data.community_post_images),
+    images
   };
 }
 

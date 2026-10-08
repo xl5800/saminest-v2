@@ -1,8 +1,10 @@
 import { MessageCircle } from "lucide-react";
-import { Link, useParams } from "react-router-dom";
+import { useState } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { CommunityPostFavoriteButton } from "../../components/community-post-favorite-button";
+import { ImageLightbox } from "../../components/image-lightbox";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
@@ -11,6 +13,10 @@ import {
   COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
   getCommunityPostTypeLabel
 } from "./community-post-type";
+
+interface CommunityPostDetailLocationState {
+  publishSuccessMessage?: string;
+}
 
 /**
  * 社区帖子详情页（/community/post/:id，公开可见）。
@@ -28,7 +34,13 @@ import {
  */
 export function CommunityPostDetailPage() {
   const { id = "" } = useParams<{ id: string }>();
+  const location = useLocation();
+  // 发帖页在"帖子已创建、但部分图片上传失败"时带着这条提示跳转过来（跟
+  // post-detail-page.tsx 读 publishSuccessMessage 是同一个 location.state 约定）。
+  const publishSuccessMessage = (location.state as CommunityPostDetailLocationState | null)
+    ?.publishSuccessMessage;
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   function renderContent() {
     if (isPending) {
@@ -78,6 +90,21 @@ export function CommunityPostDetailPage() {
             </div>
           </div>
           <p className="mt-4 whitespace-pre-wrap break-words text-base text-text">{post.body}</p>
+          {post.images.length > 0 ? (
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              {post.images.map((imageUrl, index) => (
+                <button
+                  key={imageUrl}
+                  type="button"
+                  aria-label={`查看大图 ${index + 1}`}
+                  onClick={() => setLightboxIndex(index)}
+                  className="aspect-square overflow-hidden rounded-lg bg-bg"
+                >
+                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          ) : null}
         </article>
 
         <div className="mt-6 flex items-center gap-8 border-t border-divider pt-4">
@@ -94,6 +121,14 @@ export function CommunityPostDetailPage() {
         <div className="mt-6">
           <CommentSection communityPostId={post.id} />
         </div>
+
+        {lightboxIndex !== null ? (
+          <ImageLightbox
+            images={post.images}
+            initialIndex={lightboxIndex}
+            onClose={() => setLightboxIndex(null)}
+          />
+        ) : null}
       </>
     );
   }
@@ -115,7 +150,14 @@ export function CommunityPostDetailPage() {
           )
         }}
       />
-      <div className="mx-auto max-w-2xl px-4 py-4 pb-24 md:pb-6">{renderContent()}</div>
+      <div className="mx-auto max-w-2xl px-4 py-4 pb-24 md:pb-6">
+        {publishSuccessMessage ? (
+          <p role="status" className="mb-4 text-sm text-text-muted">
+            {publishSuccessMessage}
+          </p>
+        ) : null}
+        {renderContent()}
+      </div>
     </main>
   );
 }

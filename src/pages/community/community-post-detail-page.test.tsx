@@ -8,6 +8,24 @@ const { useCommunityPostDetailQuery } = vi.hoisted(() => ({
 vi.mock("../../features/community/use-community-post-detail-query", () => ({
   useCommunityPostDetailQuery
 }));
+vi.mock("../../components/image-lightbox", () => ({
+  ImageLightbox: ({
+    images,
+    initialIndex,
+    onClose
+  }: {
+    images: string[];
+    initialIndex: number;
+    onClose: () => void;
+  }) => (
+    <div data-testid="lightbox">
+      {initialIndex}/{images.length}
+      <button type="button" onClick={onClose}>
+        关闭大图
+      </button>
+    </div>
+  )
+}));
 vi.mock("../../components/comment-section", () => ({
   CommentSection: ({ communityPostId }: { communityPostId: string }) => (
     <div data-testid="comment-section">comments for {communityPostId}</div>
@@ -42,12 +60,16 @@ const samplePost = {
   createdAt: "2026-08-01T00:00:00.000Z",
   authorId: "user-2",
   authorDisplayName: "Bob",
-  authorAvatarUrl: null
+  authorAvatarUrl: null,
+  coverImageUrl: null,
+  images: [] as string[]
 };
 
-function renderPage() {
+const IMAGE_URLS = ["https://x/1.webp", "https://x/2.webp", "https://x/3.webp"];
+
+function renderPage(state?: unknown) {
   return renderWithProviders(<CommunityPostDetailPage />, {
-    initialEntries: ["/community/post/cp-1"],
+    initialEntries: [{ pathname: "/community/post/cp-1", state }] as never,
     route: "/community/post/:id"
   });
 }
@@ -130,6 +152,57 @@ describe("CommunityPostDetailPage", () => {
       "href",
       "/community/post/cp-1/report"
     );
+  });
+
+  it("renders no image grid and no lightbox for a post without images", () => {
+    renderPage();
+
+    expect(screen.queryByRole("button", { name: /查看大图/ })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("lightbox")).not.toBeInTheDocument();
+  });
+
+  describe("with images", () => {
+    beforeEach(() => {
+      useCommunityPostDetailQuery.mockReturnValue({
+        data: { ...samplePost, images: IMAGE_URLS },
+        isPending: false,
+        isError: false
+      });
+    });
+
+    it("renders a 3-column grid of thumbnails in order", () => {
+      const { container } = renderPage();
+
+      const buttons = screen.getAllByRole("button", { name: /查看大图/ });
+      expect(buttons).toHaveLength(3);
+      expect(buttons[0]?.closest("div")).toHaveClass("grid", "grid-cols-3");
+      expect(Array.from(container.querySelectorAll("button img")).map((img) => img.getAttribute("src"))).toEqual(
+        IMAGE_URLS
+      );
+    });
+
+    it("opens the lightbox at the clicked image and closes it again", () => {
+      renderPage();
+
+      expect(screen.queryByTestId("lightbox")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "查看大图 2" }));
+      expect(screen.getByTestId("lightbox")).toHaveTextContent("1/3");
+
+      fireEvent.click(screen.getByRole("button", { name: "关闭大图" }));
+      expect(screen.queryByTestId("lightbox")).not.toBeInTheDocument();
+    });
+  });
+
+  it("shows the publish notice passed through location.state (partial image upload failure)", () => {
+    renderPage({ publishSuccessMessage: "帖子已发布，但部分图片上传失败。" });
+
+    expect(screen.getByRole("status")).toHaveTextContent("帖子已发布，但部分图片上传失败。");
+  });
+
+  it("shows no notice when arriving without location.state", () => {
+    renderPage();
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("shows a loading status while the post is pending", () => {

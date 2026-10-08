@@ -383,6 +383,69 @@ export type Database = {
           },
         ]
       }
+      community_post_images: {
+        Row: {
+          alt_text: string | null
+          community_post_id: string
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string | null
+          owner_id: string
+          public_url: string | null
+          size_bytes: number | null
+          sort_order: number
+          storage_path: string
+          width: number | null
+        }
+        Insert: {
+          alt_text?: string | null
+          community_post_id: string
+          created_at?: string
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          owner_id: string
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          storage_path: string
+          width?: number | null
+        }
+        Update: {
+          alt_text?: string | null
+          community_post_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          height?: number | null
+          id?: string
+          mime_type?: string | null
+          owner_id?: string
+          public_url?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          storage_path?: string
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_images_community_post_id_fkey"
+            columns: ["community_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_post_images_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_posts: {
         Row: {
           author_id: string
@@ -1372,6 +1435,30 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "comments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      get_community_post_image_snapshot: {
+        Args: { target_id: string }
+        Returns: {
+          alt_text: string | null
+          community_post_id: string
+          created_at: string
+          deleted_at: string | null
+          height: number | null
+          id: string
+          mime_type: string | null
+          owner_id: string
+          public_url: string | null
+          size_bytes: number | null
+          sort_order: number
+          storage_path: string
+          width: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "community_post_images"
           isOneToOne: true
           isSetofReturn: false
         }

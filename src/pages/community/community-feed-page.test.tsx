@@ -44,7 +44,8 @@ const samplePost = {
   createdAt: "2026-08-01T00:00:00.000Z",
   authorId: "user-2",
   authorDisplayName: "Bob",
-  authorAvatarUrl: null
+  authorAvatarUrl: null,
+  coverImageUrl: null as string | null
 };
 
 function postsResult(overrides: Record<string, unknown> = {}) {
@@ -110,6 +111,30 @@ describe("CommunityFeedPage", () => {
     renderWithProviders(<CommunityFeedPage />);
 
     expect(screen.getAllByText("周末想去逛逛，求推荐")).toHaveLength(1);
+  });
+
+  it("shows the cover image thumbnail on a card that has one", () => {
+    useCommunityPostsInfiniteQuery.mockReturnValue(
+      postsResult({
+        data: {
+          pages: [{ posts: [{ ...samplePost, coverImageUrl: "https://x/cover.webp" }], hasNextPage: false }]
+        }
+      })
+    );
+
+    const { container } = renderWithProviders(<CommunityFeedPage />);
+
+    const img = container.querySelector("a img");
+    expect(img).toHaveAttribute("src", "https://x/cover.webp");
+    expect(img).toHaveClass("h-16", "w-16", "object-cover");
+  });
+
+  it("renders no image or placeholder block on a card without a cover image", () => {
+    const { container } = renderWithProviders(<CommunityFeedPage />);
+
+    expect(container.querySelector("a img")).toBeNull();
+    // 头像是首字母占位（aria-hidden），不是图片占位块。
+    expect(container.querySelectorAll("a [class*='h-16']")).toHaveLength(0);
   });
 
   it("shows a loading status while the first page is pending", () => {

@@ -42,6 +42,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
     author_id: "user-1",
     author: { display_name: "Alice", avatar_url: "https://x/a.png" },
+    community_post_images: [],
     ...overrides
   };
 }
@@ -129,6 +130,46 @@ describe("listCommunityPosts", () => {
     expect(queryBuilder.range).toHaveBeenCalledWith(40, 60);
   });
 
+  it("embeds community_post_images, ordered by sort_order on the embedded table, without limiting it in SQL", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      expect.stringContaining("community_post_images(public_url, sort_order, deleted_at)")
+    );
+    expect(queryBuilder.order).toHaveBeenCalledWith("sort_order", {
+      foreignTable: "community_post_images",
+      ascending: true
+    });
+  });
+
+  it("uses the lowest-sort_order non-deleted image as coverImageUrl, and null when there are no images", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        makeRow({
+          id: "with-images",
+          community_post_images: [
+            { public_url: "https://x/deleted.webp", sort_order: 0, deleted_at: "2026-08-02T00:00:00.000Z" },
+            { public_url: "https://x/second.webp", sort_order: 2, deleted_at: null },
+            { public_url: "https://x/first.webp", sort_order: 1, deleted_at: null }
+          ]
+        }),
+        makeRow({ id: "no-images", community_post_images: [] }),
+        makeRow({ id: "null-images", community_post_images: null })
+      ],
+      error: null
+    });
+
+    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+
+    expect(result.posts.map((p) => [p.id, p.coverImageUrl])).toEqual([
+      ["with-images", "https://x/first.webp"],
+      ["no-images", null],
+      ["null-images", null]
+    ]);
+  });
+
   it("maps rows and reports hasNextPage=false when rows do not exceed pageSize", async () => {
     overrideTypesMock.mockResolvedValue({ data: [makeRow()], error: null });
 
@@ -147,7 +188,8 @@ describe("listCommunityPosts", () => {
         createdAt: "2026-08-01T00:00:00.000Z",
         authorId: "user-1",
         authorDisplayName: "Alice",
-        authorAvatarUrl: "https://x/a.png"
+        authorAvatarUrl: "https://x/a.png",
+        coverImageUrl: null
       }
     ]);
   });
@@ -203,6 +245,42 @@ describe("getCommunityPostDetail", () => {
       favoriteCount: 3,
       authorDisplayName: "Alice"
     });
+  });
+
+  it("returns all non-deleted image urls in sort_order order (dropping soft-deleted and url-less rows) plus the cover", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: makeRow({
+        community_id: "c-1",
+        community_post_images: [
+          { public_url: "https://x/3.webp", sort_order: 2, deleted_at: null },
+          { public_url: "https://x/deleted.webp", sort_order: 1, deleted_at: "2026-08-02T00:00:00.000Z" },
+          { public_url: null, sort_order: 3, deleted_at: null },
+          { public_url: "https://x/1.webp", sort_order: 0, deleted_at: null }
+        ]
+      }),
+      error: null
+    });
+
+    const result = await getCommunityPostDetail("cp-1");
+
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      expect.stringContaining("community_post_images(public_url, sort_order, deleted_at)")
+    );
+    expect(queryBuilder.order).toHaveBeenCalledWith("sort_order", {
+      foreignTable: "community_post_images",
+      ascending: true
+    });
+    expect(result.images).toEqual(["https://x/1.webp", "https://x/3.webp"]);
+    expect(result.coverImageUrl).toBe("https://x/1.webp");
+  });
+
+  it("returns an empty images array and a null cover for a post without images", async () => {
+    overrideTypesMock.mockResolvedValue({ data: makeRow({ community_id: "c-1" }), error: null });
+
+    const result = await getCommunityPostDetail("cp-1");
+
+    expect(result.images).toEqual([]);
+    expect(result.coverImageUrl).toBeNull();
   });
 
   it("throws COMMUNITY_POST_DETAIL_FAILED when the row cannot be read", async () => {
