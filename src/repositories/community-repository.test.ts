@@ -71,15 +71,32 @@ beforeEach(() => {
 describe("getCommunityBySlug", () => {
   it("queries communities by slug and maps the row", async () => {
     singleMock.mockResolvedValue({
-      data: { id: "c-1", name: "DMV 社区", slug: "dmv" },
+      data: {
+        id: "c-1",
+        name: "DMV 社区",
+        slug: "dmv",
+        description: "覆盖 DC / Maryland / Virginia 的本地华人讨论区",
+        member_count: 12,
+        is_official: true
+      },
       error: null
     });
 
     const result = await getCommunityBySlug("dmv");
 
     expect(fromMock).toHaveBeenCalledWith("communities");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, name, slug, description, member_count, is_official"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("slug", "dmv");
-    expect(result).toEqual({ id: "c-1", name: "DMV 社区", slug: "dmv" });
+    expect(result).toEqual({
+      id: "c-1",
+      name: "DMV 社区",
+      slug: "dmv",
+      description: "覆盖 DC / Maryland / Virginia 的本地华人讨论区",
+      memberCount: 12,
+      isOfficial: true
+    });
   });
 
   it("throws COMMUNITY_FETCH_FAILED when the query fails", async () => {

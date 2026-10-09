@@ -11,6 +11,12 @@ export interface Community {
   id: string;
   name: string;
   slug: string;
+  /** communities.description，社区头部展示的简介文案，可空。 */
+  description: string | null;
+  /** communities.member_count，由 community_members 上的触发器维护。 */
+  memberCount: number;
+  /** 官方社区才显示头部的认证勾。 */
+  isOfficial: boolean;
 }
 
 /**
@@ -21,14 +27,21 @@ export interface Community {
 export async function getCommunityBySlug(slug: string): Promise<Community> {
   const { data, error } = await getSupabaseClient()
     .from("communities")
-    .select("id, name, slug")
+    .select("id, name, slug, description, member_count, is_official")
     .eq("slug", slug)
     .single();
 
   if (error) {
     throw new AppError(error.message, "COMMUNITY_FETCH_FAILED", error);
   }
-  return { id: data.id, name: data.name, slug: data.slug };
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    description: data.description,
+    memberCount: data.member_count,
+    isOfficial: data.is_official
+  };
 }
 
 export interface JoinCommunityInput {
