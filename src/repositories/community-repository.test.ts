@@ -73,21 +73,31 @@ beforeEach(() => {
 describe("getCommunityBySlug", () => {
   it("queries communities by slug and maps the row", async () => {
     singleMock.mockResolvedValue({
-      data: { id: "c-1", name: "DMV 社区", slug: "dmv", description: "简介", member_count: 42 },
+      data: {
+        id: "c-1",
+        name: "DMV 社区",
+        slug: "dmv",
+        description: "覆盖 DC / Maryland / Virginia 的本地华人讨论区",
+        member_count: 12,
+        is_official: true
+      },
       error: null
     });
 
     const result = await getCommunityBySlug("dmv");
 
     expect(fromMock).toHaveBeenCalledWith("communities");
-    expect(queryBuilder.select).toHaveBeenCalledWith("id, name, slug, description, member_count");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, name, slug, description, member_count, is_official"
+    );
     expect(queryBuilder.eq).toHaveBeenCalledWith("slug", "dmv");
     expect(result).toEqual({
       id: "c-1",
       name: "DMV 社区",
       slug: "dmv",
-      description: "简介",
-      memberCount: 42
+      description: "覆盖 DC / Maryland / Virginia 的本地华人讨论区",
+      memberCount: 12,
+      isOfficial: true
     });
   });
 
@@ -95,7 +105,14 @@ describe("getCommunityBySlug", () => {
   // 不能被转成空字符串或 undefined，调用方靠 null 判断要不要用兜底文案。
   it("passes a null description through unchanged", async () => {
     singleMock.mockResolvedValue({
-      data: { id: "c-1", name: "DMV 社区", slug: "dmv", description: null, member_count: 0 },
+      data: {
+        id: "c-1",
+        name: "DMV 社区",
+        slug: "dmv",
+        description: null,
+        member_count: 0,
+        is_official: false
+      },
       error: null
     });
 

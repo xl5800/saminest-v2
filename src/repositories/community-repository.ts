@@ -18,6 +18,8 @@ export interface Community {
    *  （sync_community_member_count）随 community_members 增删维护的计数列，
    *  不用前端自己 count。 */
   memberCount: number;
+  /** 阶段十新增：官方社区才显示头部的认证勾。 */
+  isOfficial: boolean;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface Community {
 export async function getCommunityBySlug(slug: string): Promise<Community> {
   const { data, error } = await getSupabaseClient()
     .from("communities")
-    .select("id, name, slug, description, member_count")
+    .select("id, name, slug, description, member_count, is_official")
     .eq("slug", slug)
     .single();
 
@@ -40,7 +42,8 @@ export async function getCommunityBySlug(slug: string): Promise<Community> {
     name: data.name,
     slug: data.slug,
     description: data.description,
-    memberCount: data.member_count
+    memberCount: data.member_count,
+    isOfficial: data.is_official
   };
 }
 
