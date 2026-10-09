@@ -20,31 +20,101 @@ export interface Community {
   memberCount: number;
   /** 阶段十新增：官方社区才显示头部的认证勾。 */
   isOfficial: boolean;
+  /** 阶段十三新增：这个社区覆盖哪些州（两位大写州代码），"附近"Tab 用它跟用户
+   *  选中的州做匹配。 */
+  stateCodes: string[];
+}
+
+const COMMUNITY_COLUMNS = "id, name, slug, description, member_count, is_official, state_codes";
+
+interface CommunityRow {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  member_count: number;
+  is_official: boolean;
+  state_codes: string[];
+}
+
+function mapCommunityRow(row: CommunityRow): Community {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    memberCount: row.member_count,
+    isOfficial: row.is_official,
+    stateCodes: row.state_codes ?? []
+  };
 }
 
 /**
- * v1 只有一个社区（slug 固定 'dmv'），不在前端硬编码它的 UUID——按 slug
- * 查一次，调用方用 react-query 长期缓存（staleTime 设大一点，这行数据
- * 几乎不会变）。
+ * 不在前端硬编码任何社区的 UUID——按 slug 查一次（dmv / dmv-pets /
+ * dmv-students ……），调用方用 react-query 长期缓存（staleTime 设大一点，
+ * 这行数据几乎不会变）。
  */
 export async function getCommunityBySlug(slug: string): Promise<Community> {
   const { data, error } = await getSupabaseClient()
     .from("communities")
-    .select("id, name, slug, description, member_count, is_official")
+    .select(COMMUNITY_COLUMNS)
     .eq("slug", slug)
     .single();
 
   if (error) {
     throw new AppError(error.message, "COMMUNITY_FETCH_FAILED", error);
   }
-  return {
-    id: data.id,
-    name: data.name,
-    slug: data.slug,
-    description: data.description,
-    memberCount: data.member_count,
-    isOfficial: data.is_official
-  };
+  return mapCommunityRow(data);
+}
+
+/**
+ * 全部社区（"社区浏览"页的"附近"/"发现"Tab 要枚举所有社区）。官方社区排前面，
+ * 同级按创建时间升序，保证展示顺序稳定。RLS 的 SELECT 策略只放行 active
+ * 状态的社区（管理员例外），这里不需要再自己过滤 status。
+ */
+export async function listCommunities(): Promise<Community[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("communities")
+    .select(COMMUNITY_COLUMNS)
+    .order("is_official", { ascending: false })
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITIES_LIST_FAILED", error);
+  }
+  return (data ?? []).map(mapCommunityRow);
+}
+
+/**
+ * 当前用户已加入的全部社区：community_members 内嵌 communities 一次查出来。
+ * community_members 的 SELECT 策略只放行本人的行（或管理员），所以按 user_id
+ * 过滤之外不需要再担心看到别人的成员关系。首页判断"要不要走全部社区兜底"和
+ * 发帖页"选择社区"下拉框共用这一个函数。
+ *
+ * 内嵌行里 communities 理论上不会是 null（外键保证），但社区被下线（status
+ * 不是 active）后 RLS 会让这条内嵌变成 null，这种成员关系对用户来说等于
+ * "已经不存在的社区"，直接跳过；最后按"官方优先、创建时间升序"排序，跟
+ * listCommunities 保持同一种展示顺序。
+ */
+export async function listMyCommunities(userId: string): Promise<Community[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("community_members")
+    .select(`community:communities(${COMMUNITY_COLUMNS}, created_at)`)
+    .eq("user_id", userId)
+    .overrideTypes<Array<{ community: (CommunityRow & { created_at: string }) | null }>, { merge: false }>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_COMMUNITIES_FETCH_FAILED", error);
+  }
+
+  return (data ?? [])
+    .map((row) => row.community)
+    .filter((community): community is CommunityRow & { created_at: string } => community !== null)
+    .sort((a, b) => {
+      if (a.is_official !== b.is_official) return a.is_official ? -1 : 1;
+      return a.created_at.localeCompare(b.created_at);
+    })
+    .map(mapCommunityRow);
 }
 
 /**
@@ -143,10 +213,15 @@ export interface CommunityPostListItem {
   /** 全部未软删除图片的 public_url，按 sort_order 升序。Feed 卡片和详情页都用
    *  这个字段渲染图片轮播（coverImageUrl 保留，Feed 列表不再使用它）。 */
   images: string[];
+  /** 帖子所属社区的名称 / slug——首页聚合 Feed 在卡片上打可点击的社区名标签用。 */
+  communityName: string;
+  communitySlug: string;
 }
 
 export interface ListCommunityPostsInput {
-  communityId: string;
+  /** 要查哪些社区的帖子：一组 communityId，或者 "all" 表示不按社区过滤（首页
+   *  "一个社区都没加入"的兜底场景）。空数组直接返回空结果，不发请求。 */
+  communityIds: string[] | "all";
   page: number;
   pageSize: number;
 }
@@ -167,10 +242,14 @@ interface CommunityPostRow {
   created_at: string;
   author_id: string;
   author: { display_name: string; avatar_url: string | null } | null;
+  community: { name: string; slug: string } | null;
   // community_post_images 的列名跟 post_images 逐字一致（见阶段五迁移），所以
   // 直接复用 posts-repository.ts 的 PostFeedImageRow / resolveCoverImageUrl。
   community_post_images: PostFeedImageRow[] | null;
 }
+
+const COMMUNITY_POST_LIST_COLUMNS =
+  "id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url), community:communities(name, slug)";
 
 /**
  * 把内嵌查询出来的 community_post_images 整理成"全部未软删除图片 URL，按
@@ -198,16 +277,27 @@ function mapPostImageUrls(rows: PostFeedImageRow[] | null): string[] {
 export async function listCommunityPosts(
   input: ListCommunityPostsInput
 ): Promise<ListCommunityPostsResult> {
-  const { communityId, page, pageSize } = input;
+  const { communityIds, page, pageSize } = input;
+
+  // 空数组：没有任何要查的社区，直接返回空结果，不要发一个
+  // .in("community_id", []) 的查询。
+  if (communityIds !== "all" && communityIds.length === 0) {
+    return { posts: [], hasNextPage: false };
+  }
+
   const from = page * pageSize;
   const to = from + pageSize;
 
-  const { data, error } = await getSupabaseClient()
+  let query = getSupabaseClient()
     .from("community_posts")
     .select(
-      "id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url), community_post_images(public_url, sort_order, deleted_at)"
-    )
-    .eq("community_id", communityId)
+      `${COMMUNITY_POST_LIST_COLUMNS}, community_post_images(public_url, sort_order, deleted_at)`
+    );
+  if (communityIds !== "all") {
+    query = query.in("community_id", communityIds);
+  }
+
+  const { data, error } = await query
     .eq("status", "approved")
     .is("deleted_at", null)
     .order("pinned", { ascending: false })
@@ -238,7 +328,9 @@ export async function listCommunityPosts(
       authorDisplayName: row.author?.display_name ?? "未知用户",
       authorAvatarUrl: row.author?.avatar_url ?? null,
       coverImageUrl: resolveCoverImageUrl(row.community_post_images),
-      images: mapPostImageUrls(row.community_post_images)
+      images: mapPostImageUrls(row.community_post_images),
+      communityName: row.community?.name ?? "",
+      communitySlug: row.community?.slug ?? ""
     })),
     hasNextPage
   };
@@ -252,7 +344,7 @@ export async function getCommunityPostDetail(id: string): Promise<CommunityPostD
   const { data, error } = await getSupabaseClient()
     .from("community_posts")
     .select(
-      "id, community_id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url), community_post_images(public_url, sort_order, deleted_at)"
+      `community_id, ${COMMUNITY_POST_LIST_COLUMNS}, community_post_images(public_url, sort_order, deleted_at)`
     )
     .eq("id", id)
     .order("sort_order", { foreignTable: "community_post_images", ascending: true })
@@ -279,7 +371,9 @@ export async function getCommunityPostDetail(id: string): Promise<CommunityPostD
     authorDisplayName: data.author?.display_name ?? "未知用户",
     authorAvatarUrl: data.author?.avatar_url ?? null,
     coverImageUrl: resolveCoverImageUrl(data.community_post_images),
-    images
+    images,
+    communityName: data.community?.name ?? "",
+    communitySlug: data.community?.slug ?? ""
   };
 }
 

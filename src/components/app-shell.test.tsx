@@ -59,6 +59,8 @@ function renderShell(path = "/") {
           { path: "post/:id", element: <p>post-detail page</p> },
           { path: "community", element: <p>community page</p> },
           { path: "community/new", element: <p>community-new page</p> },
+          { path: "community/:slug", element: <p>community-feed page</p> },
+          { path: "community/:slug/new", element: <p>community-slug-new page</p> },
           { path: "community/post/:id", element: <p>community-post page</p> },
           { path: "community/post/:id/report", element: <p>community-post-report page</p> },
           { path: "community/post/:id/edit", element: <p>community-post-edit page</p> },
@@ -256,6 +258,9 @@ describe("AppShell", () => {
     // 不登记的话这三个页面会叠加旧的全局 AppHeader（双重顶部栏）。
     it.each([
       ["/community", "community feed"],
+      // 阶段十三：单个社区 Feed 是参数化的 /community/:slug，不再只有写死的 dmv。
+      ["/community/dmv", "dmv community feed"],
+      ["/community/dmv-pets", "dmv-pets community feed"],
       ["/community/post/123", "community post detail"]
     ])("renders BottomNav but NOT AppHeader on the %s page (%s)", (path) => {
       renderShell(path);
@@ -266,6 +271,13 @@ describe("AppShell", () => {
 
     it("renders neither AppHeader nor BottomNav on the fully-immersive create-community-post page (\"/community/new\")", () => {
       renderShell("/community/new");
+
+      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+    });
+
+    it("renders neither AppHeader nor BottomNav on the community-scoped create page (\"/community/dmv-pets/new\")", () => {
+      renderShell("/community/dmv-pets/new");
 
       expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();

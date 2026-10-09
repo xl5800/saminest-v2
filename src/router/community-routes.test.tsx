@@ -7,7 +7,8 @@ import { CommunityPostDetailPage } from "../pages/community/community-post-detai
 import { router } from "./routes";
 
 /**
- * 阶段九：社区路由拆成两级（/community 浏览页、/community/dmv Feed）。
+ * 阶段九：社区路由拆成两级（/community 浏览页、单个社区 Feed）。阶段十三：Feed 路由
+ * 从字面量 community/dmv 改成参数化的 community/:slug，并新增 community/:slug/new。
  *
  * 为什么单独开这个文件：routes.test.tsx 用的是它自己手写的一份并行路由树
  * （见该文件 renderAt 里的注释），不是 routes.tsx 里真正导出的 router——
@@ -31,8 +32,19 @@ describe("real router: community routes (阶段九)", () => {
     expect(findRootChild("community")?.element?.type).toBe(CommunityBrowsePage);
   });
 
-  it("mounts the DMV feed at /community/dmv", () => {
-    expect(findRootChild("community/dmv")?.element?.type).toBe(CommunityFeedPage);
+  it("mounts the community feed at the parameterised community/:slug (and no longer at a literal community/dmv)", () => {
+    expect(findRootChild("community/:slug")?.element?.type).toBe(CommunityFeedPage);
+    expect(findRootChild("community/dmv")).toBeUndefined();
+  });
+
+  it("registers community/:slug/new (login-gated create page scoped to one community) next to the global community/new", () => {
+    const scoped = findRootChild("community/:slug/new")?.element;
+    const global = findRootChild("community/new")?.element;
+
+    expect(scoped).toBeDefined();
+    expect(scoped?.type).not.toBe(CommunityFeedPage);
+    // 两条都是 RequireAuth 包裹同一个发帖页：外层元素类型相同。
+    expect(scoped?.type).toBe(global?.type);
   });
 
   it("keeps /community/post/:id on the post detail page, unchanged", () => {
@@ -54,6 +66,6 @@ describe("real router: community routes (阶段九)", () => {
       .filter((path): path is string => typeof path === "string" && path.startsWith("community"));
 
     expect(new Set(communityPaths).size).toBe(communityPaths.length);
-    expect(communityPaths).toEqual(expect.arrayContaining(["community", "community/dmv"]));
+    expect(communityPaths).toEqual(expect.arrayContaining(["community", "community/:slug", "community/new", "community/:slug/new"]));
   });
 });

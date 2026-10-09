@@ -320,6 +320,7 @@ export type Database = {
           member_count: number
           name: string
           slug: string
+          state_codes: string[]
           status: string
           updated_at: string
         }
@@ -331,6 +332,7 @@ export type Database = {
           member_count?: number
           name: string
           slug: string
+          state_codes?: string[]
           status?: string
           updated_at?: string
         }
@@ -342,6 +344,7 @@ export type Database = {
           member_count?: number
           name?: string
           slug?: string
+          state_codes?: string[]
           status?: string
           updated_at?: string
         }

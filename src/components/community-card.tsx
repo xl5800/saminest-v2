@@ -18,6 +18,9 @@ export interface CommunityCardProps {
   to: string;
   joinState: CommunityCardJoinState;
   onJoin: () => void;
+  /** 是否显示名称旁的认证图标。多社区之后只有官方社区（communities.is_official）
+   *  才该带；默认 true 保持原来"总是显示"的行为，调用方按需传 false。 */
+  isOfficial?: boolean;
 }
 
 /**
@@ -45,7 +48,8 @@ export function CommunityCard({
   description,
   to,
   joinState,
-  onJoin
+  onJoin,
+  isOfficial = true
 }: CommunityCardProps) {
   const meta =
     todayPostCount === undefined
@@ -65,7 +69,9 @@ export function CommunityCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <h2 className="truncate text-base font-semibold text-text">{name}</h2>
-            <BadgeCheck aria-hidden="true" size={16} className="shrink-0 text-primary" />
+            {isOfficial ? (
+              <BadgeCheck aria-hidden="true" size={16} className="shrink-0 text-primary" />
+            ) : null}
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{meta}</p>
         </div>

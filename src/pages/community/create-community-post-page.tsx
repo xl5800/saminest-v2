@@ -1,14 +1,15 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
+import { useCommunityBySlugQuery } from "../../features/community/use-community-by-slug-query";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
 import { useCreateCommunityPostMutation } from "../../features/community/use-create-community-post-mutation";
-import { useDmvCommunityQuery } from "../../features/community/use-dmv-community-query";
 import { useJoinCommunityMutation } from "../../features/community/use-join-community-mutation";
+import { useMyCommunitiesQuery } from "../../features/community/use-my-communities-query";
 import { useUpdateCommunityPostMutation } from "../../features/community/use-update-community-post-mutation";
 import {
   type CreateCommunityPostImageInput,
@@ -28,6 +29,9 @@ const EDIT_DEFAULT_ERROR_MESSAGE = "保存失败，请稍后重试。";
 const EDIT_LOAD_ERROR_MESSAGE = "帖子不存在，或没有权限编辑。";
 const SESSION_EXPIRED_MESSAGE = "登录状态已失效，请重新登录后再发布。";
 const COMMUNITY_NOT_READY_MESSAGE = "社区信息还没加载完成，请稍后再试。";
+const COMMUNITY_REQUIRED_MESSAGE = "请先选择要发布到的社区。";
+const NO_JOINED_COMMUNITY_MESSAGE = "你还没有加入任何社区，发帖前请先加入一个社区。";
+const MY_COMMUNITIES_LOAD_ERROR_MESSAGE = "已加入的社区加载失败，请稍后重试。";
 const BODY_REQUIRED_MESSAGE = "请写点内容再发布。";
 const BODY_TOO_LONG_MESSAGE = `内容不能超过 ${COMMUNITY_BODY_MAX_LENGTH} 字。`;
 const TITLE_TOO_LONG_MESSAGE = `标题不能超过 ${COMMUNITY_TITLE_MAX_LENGTH} 字。`;
@@ -137,7 +141,15 @@ async function uploadAndInsertCommunityPostImages(input: {
 }
 
 /**
- * 社区发帖页（/community/new，RequireAuth 包裹，见 routes.tsx）。
+ * 社区发帖页（RequireAuth 包裹，见 routes.tsx），有两个新建入口 + 一个编辑入口：
+ * - /community/:slug/new（从某个社区自己的 Feed 页的"＋发布"进来）：自动归到
+ *   这个社区，不显示"选择社区"下拉框；
+ * - /community/new（首页发布弹层的"发布社区帖子"，不属于任何单一社区的全局
+ *   入口）：表单顶部是必填的"选择社区"下拉框，选项只列用户**已经加入**的社区
+ *   （参考 Reddit：必须是成员才能发帖），默认选中第一项。一个社区都没加入时
+ *   不渲染表单，改成一句提示 + 跳 /community（社区浏览页）的按钮；
+ * - /community/post/:id/edit：编辑模式，见下面"我的社区帖子管理"，跟 slug /
+ *   选择器这套逻辑没有任何交集。
  *
  * 表单字段：帖子类型（下拉，默认"讨论"）、标题（可选，留空提交 null）、
  * 内容（必填，1-10000 字，textarea 随输入自动撑高，写法照抄
@@ -145,12 +157,14 @@ async function uploadAndInsertCommunityPostImages(input: {
  * 封顶高度靠 max-h + overflow-y-auto 内部滚动）。
  *
  * 加入社区：createCommunityPost 依赖 community_posts_insert_own RLS 要求
- * 用户已经是 community_members 成员。这个页面挂载时就静默调一次
- * joinCommunity（防御性——用户可能直接从 URL 进来、没经过 Feed 页那次静默
- * 加入），而且提交时再 await 一次（joinCommunity 对重复加入是幂等的，撞
- * 主键冲突直接吞掉）：这样即使挂载时那次加入还在飞行中、或者失败了，发帖
- * 前也一定已经确认过成员身份，createCommunityPost 里的 42501 才能放心
- * 归因为"账号受限"。
+ * 用户已经是 community_members 成员。带 slug 进来（用户主动点了某个社区的
+ * "发布"，发帖意图明确）时，页面挂载就调一次 joinCommunity（防御性——用户可能
+ * 直接从 URL 进来、还不是成员），这不属于"静默自动加入"（那条产品决策说的是
+ * 浏览首页/社区 Feed 时不再偷偷加入）；选择器模式下选项本来就只有已加入的
+ * 社区，挂载时不需要加入。两种模式提交时都再 await 一次（joinCommunity 对重复
+ * 加入是幂等的，撞主键冲突直接吞掉）：这样即使挂载时那次加入还在飞行中、或者
+ * 失败了，发帖前也一定已经确认过成员身份，createCommunityPost 里的 42501 才能
+ * 放心归因为"账号受限"。
  *
  * 图片：复用通用的 PostImagePicker（原样接入、不传任何新 prop，数量/大小/格式
  * 上限就是组件自己硬编码的那套，跟普通帖子一样）。帖子本身先创建成功拿到 id，
@@ -178,14 +192,27 @@ async function uploadAndInsertCommunityPostImages(input: {
  */
 export function CreateCommunityPostPage() {
   const navigate = useNavigate();
-  const { id: communityPostId } = useParams<{ id: string }>();
+  const { id: communityPostId, slug } = useParams<{ id?: string; slug?: string }>();
   const isEditMode = Boolean(communityPostId);
+  // 选择器模式：新建 + 路由里没有 slug（全局入口 /community/new）。
+  const isPickerMode = !isEditMode && !slug;
   const queryClient = useQueryClient();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
-  const { data: community } = useDmvCommunityQuery();
-  const communityId = community?.id;
+  const { data: community } = useCommunityBySlugQuery(isEditMode ? undefined : slug);
+  const {
+    data: myCommunities,
+    isPending: myCommunitiesPending,
+    isError: myCommunitiesError
+  } = useMyCommunitiesQuery(isPickerMode ? userId : undefined);
+  // 下拉框默认选中已加入列表的第一项；用户手动选过之后以用户的选择为准。
+  const [pickedCommunityId, setPickedCommunityId] = useState("");
+  const pickedIsStillJoined = myCommunities?.some((c) => c.id === pickedCommunityId) ?? false;
+  const selectedCommunityId = pickedIsStillJoined
+    ? pickedCommunityId
+    : (myCommunities?.[0]?.id ?? "");
+  const communityId = isPickerMode ? selectedCommunityId || undefined : community?.id;
 
   const joinCommunity = useJoinCommunityMutation();
   const { mutate: joinCommunityMutate } = joinCommunity;
@@ -216,10 +243,11 @@ export function CreateCommunityPostPage() {
   }, [isEditMode, existingPost]);
 
   useEffect(() => {
-    // 编辑模式不需要（也不应该）静默加入社区。
-    if (isEditMode || !communityId || !userId) return;
+    // 只有带 slug 的新建模式才在挂载时加入，见组件顶部注释；编辑模式不需要
+    // （也不应该）加入社区，选择器模式的选项本来就都是已加入的。
+    if (isEditMode || isPickerMode || !communityId || !userId) return;
     joinCommunityMutate({ communityId, userId });
-  }, [isEditMode, communityId, userId, joinCommunityMutate]);
+  }, [isEditMode, isPickerMode, communityId, userId, joinCommunityMutate]);
 
   function handleBodyChange(event: ChangeEvent<HTMLTextAreaElement>): void {
     setBody(event.target.value);
@@ -238,7 +266,7 @@ export function CreateCommunityPostPage() {
       return;
     }
     if (!isEditMode && !communityId) {
-      setError(COMMUNITY_NOT_READY_MESSAGE);
+      setError(isPickerMode ? COMMUNITY_REQUIRED_MESSAGE : COMMUNITY_NOT_READY_MESSAGE);
       return;
     }
 
@@ -342,6 +370,53 @@ export function CreateCommunityPostPage() {
   const idleSubmitLabel = isEditMode ? "保存修改" : "发布";
   const busySubmitLabel = isEditMode ? "保存中…" : "发布中…";
 
+  // 选择器模式下"还不能展示表单"的三种情况：已加入列表加载中 / 加载失败 / 一个
+  // 社区都没加入（引导去社区浏览页加入，不渲染表单）。
+  const pickerLoading = isPickerMode && myCommunitiesPending;
+  const pickerLoadError = isPickerMode && !myCommunitiesPending && myCommunitiesError;
+  const pickerEmpty =
+    isPickerMode &&
+    !myCommunitiesPending &&
+    !myCommunitiesError &&
+    (myCommunities?.length ?? 0) === 0;
+
+  if (pickerLoading || pickerLoadError || pickerEmpty) {
+    return (
+      <main className="min-h-dvh bg-bg pb-10">
+        <TopBar
+          variant="create"
+          title={topBarTitle}
+          onSubmit={() => undefined}
+          submitLabel={idleSubmitLabel}
+          submitDisabled
+        />
+        <div className="px-4 pb-6">
+          {pickerLoading ? (
+            <div role="status">
+              <span className="sr-only">加载中…</span>
+              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="mt-4 h-40 w-full rounded-xl" />
+            </div>
+          ) : pickerLoadError ? (
+            <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+              {MY_COMMUNITIES_LOAD_ERROR_MESSAGE}
+            </p>
+          ) : (
+            <div role="status" className="flex flex-col items-center gap-3 px-6 py-12 text-center">
+              <p className="text-sm text-text-muted">{NO_JOINED_COMMUNITY_MESSAGE}</p>
+              <Link
+                to="/community"
+                className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
+              >
+                去加入社区
+              </Link>
+            </div>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   if (loadingExistingPost || loadError) {
     return (
       <main className="min-h-dvh bg-bg pb-10">
@@ -384,6 +459,24 @@ export function CreateCommunityPostPage() {
             <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
               {error}
             </p>
+          ) : null}
+
+          {isPickerMode ? (
+            <label className="mb-4 block">
+              <span className="mb-2 block text-xs font-semibold text-text">选择社区</span>
+              <select
+                value={selectedCommunityId}
+                onChange={(event) => setPickedCommunityId(event.target.value)}
+                required
+                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+              >
+                {(myCommunities ?? []).map((joined) => (
+                  <option key={joined.id} value={joined.id}>
+                    {joined.name}
+                  </option>
+                ))}
+              </select>
+            </label>
           ) : null}
 
           <label className="mb-4 block">

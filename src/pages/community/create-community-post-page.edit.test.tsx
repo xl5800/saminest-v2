@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   useCommunityPostDetailQuery,
   useUpdateCommunityPostMutation,
-  useDmvCommunityQuery,
+  useCommunityBySlugQuery,
   useJoinCommunityMutation,
   useCreateCommunityPostMutation,
   updateMutateAsync,
@@ -17,7 +17,7 @@ const {
 } = vi.hoisted(() => ({
   useCommunityPostDetailQuery: vi.fn(),
   useUpdateCommunityPostMutation: vi.fn(),
-  useDmvCommunityQuery: vi.fn(),
+  useCommunityBySlugQuery: vi.fn(),
   useJoinCommunityMutation: vi.fn(),
   useCreateCommunityPostMutation: vi.fn(),
   updateMutateAsync: vi.fn(),
@@ -32,7 +32,7 @@ vi.mock("../../features/community/use-community-post-detail-query", () => ({
 vi.mock("../../features/community/use-update-community-post-mutation", () => ({
   useUpdateCommunityPostMutation
 }));
-vi.mock("../../features/community/use-dmv-community-query", () => ({ useDmvCommunityQuery }));
+vi.mock("../../features/community/use-community-by-slug-query", () => ({ useCommunityBySlugQuery }));
 vi.mock("../../features/community/use-join-community-mutation", () => ({
   useJoinCommunityMutation
 }));
@@ -99,7 +99,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
       mutateAsync: updateMutateAsync,
       isPending: false
     });
-    useDmvCommunityQuery.mockReturnValue({ data: { id: "c-1", name: "DMV 社区", slug: "dmv" } });
+    useCommunityBySlugQuery.mockReturnValue({ data: { id: "c-1", name: "DMV 社区", slug: "dmv" } });
     useJoinCommunityMutation.mockReturnValue({
       mutate: joinMutate,
       mutateAsync: vi.fn(),
@@ -292,7 +292,7 @@ describe("CreateCommunityPostPage (create mode) detail-query gating", () => {
       isError: false
     });
     useUpdateCommunityPostMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
-    useDmvCommunityQuery.mockReturnValue({ data: { id: "c-1", name: "DMV 社区", slug: "dmv" } });
+    useCommunityBySlugQuery.mockReturnValue({ data: { id: "c-1", name: "DMV 社区", slug: "dmv" } });
     useJoinCommunityMutation.mockReturnValue({
       mutate: joinMutate,
       mutateAsync: vi.fn(),
@@ -300,7 +300,11 @@ describe("CreateCommunityPostPage (create mode) detail-query gating", () => {
     });
     useCreateCommunityPostMutation.mockReturnValue({ mutateAsync: vi.fn(), isPending: false });
 
-    renderWithProviders(<CreateCommunityPostPage />);
+    // 新建模式（带 slug 的入口）：路由里没有 :id。
+    renderWithProviders(<CreateCommunityPostPage />, {
+      initialEntries: ["/community/dmv/new"],
+      route: "/community/:slug/new"
+    });
 
     expect(useCommunityPostDetailQuery).toHaveBeenCalledWith("", { enabled: false });
     expect(screen.getByRole("heading", { name: "发布到社区" })).toBeInTheDocument();

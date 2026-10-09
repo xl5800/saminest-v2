@@ -35,6 +35,15 @@ describe("CommunityCard", () => {
     expect(screen.getByText("DC / MD / VA 华人交流")).toBeInTheDocument();
   });
 
+  it("shows the verified icon by default, and hides it when isOfficial is false (non-official communities)", () => {
+    const { container, unmount } = renderCard();
+    expect(container.querySelector("svg.lucide-badge-check")).not.toBeNull();
+    unmount();
+
+    const second = renderCard({ isOfficial: false });
+    expect(second.container.querySelector("svg.lucide-badge-check")).toBeNull();
+  });
+
   it("omits the '今日 N 个新帖子' segment (instead of showing a jumpy 0) while the count is still loading", () => {
     renderCard({ todayPostCount: undefined });
 

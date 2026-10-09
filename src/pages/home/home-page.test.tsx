@@ -1,26 +1,15 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  useDmvCommunityQuery,
-  useCommunityPostsInfiniteQuery,
-  useJoinCommunityMutation,
-  joinMutate,
-  navigateMock
-} = vi.hoisted(() => ({
-  useDmvCommunityQuery: vi.fn(),
+const { useMyCommunitiesQuery, useCommunityPostsInfiniteQuery, navigateMock } = vi.hoisted(() => ({
+  useMyCommunitiesQuery: vi.fn(),
   useCommunityPostsInfiniteQuery: vi.fn(),
-  useJoinCommunityMutation: vi.fn(),
-  joinMutate: vi.fn(),
   navigateMock: vi.fn()
 }));
 
-vi.mock("../../features/community/use-dmv-community-query", () => ({ useDmvCommunityQuery }));
+vi.mock("../../features/community/use-my-communities-query", () => ({ useMyCommunitiesQuery }));
 vi.mock("../../features/community/use-community-posts-query", () => ({
   useCommunityPostsInfiniteQuery
-}));
-vi.mock("../../features/community/use-join-community-mutation", () => ({
-  useJoinCommunityMutation
 }));
 // 收藏按钮自己的 hook 会打 Supabase，这里只验证首页把它放进了操作行。
 vi.mock("../../components/community-post-favorite-button", () => ({
@@ -53,8 +42,23 @@ const samplePost = {
   authorId: "user-2",
   authorDisplayName: "Bob",
   authorAvatarUrl: null,
-  coverImageUrl: null as string | null
+  coverImageUrl: null as string | null,
+  images: [] as string[],
+  communityName: "DMV 宠物社区",
+  communitySlug: "dmv-pets"
 };
+
+function joined(id: string, slug: string, name: string) {
+  return {
+    id,
+    slug,
+    name,
+    description: null,
+    memberCount: 1,
+    isOfficial: false,
+    stateCodes: ["DC", "MD", "VA"]
+  };
+}
 
 function postsResult(overrides: Record<string, unknown> = {}) {
   return {
@@ -79,18 +83,17 @@ describe("HomePage (community aggregate feed)", () => {
     useSelectedRegionStore.setState(initialRegionState, true);
     localStorage.clear();
     navigateMock.mockReset();
-    joinMutate.mockReset();
-    useDmvCommunityQuery.mockReset();
+    useMyCommunitiesQuery.mockReset();
     useCommunityPostsInfiniteQuery.mockReset();
-    useJoinCommunityMutation.mockReset();
 
-    useDmvCommunityQuery.mockReturnValue({
-      data: { id: "c-1", name: "DMV 社区", slug: "dmv" },
-      isError: false
-    });
+    // 默认：游客，没有已加入列表（useMyCommunitiesQuery 在没有 userId 时不发请求）。
+    useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
     useCommunityPostsInfiniteQuery.mockReturnValue(postsResult());
-    useJoinCommunityMutation.mockReturnValue({ mutate: joinMutate });
   });
+
+  function loginAs(userId: string): void {
+    useAuthStore.getState().setSession({ user: { id: userId } } as never);
+  }
 
   describe("top bar (TopBar home variant)", () => {
     it("renders the 'Saminest' brand name with no stray separator when no region has been selected", () => {
@@ -150,31 +153,81 @@ describe("HomePage (community aggregate feed)", () => {
     });
   });
 
-  describe("我的社区 row", () => {
-    it("renders the DMV community card and a '加入更多' card, both linking to /community", () => {
+  describe("feed scope (personalised first, all communities as the fallback)", () => {
+    it('queries ALL communities for a logged-out visitor and shows the join-a-community banner linking to /community', () => {
       renderWithProviders(<HomePage />);
 
-      expect(screen.getByRole("link", { name: /DMV 社区/ })).toHaveAttribute("href", "/community");
-      expect(screen.getByRole("link", { name: /加入更多/ })).toHaveAttribute("href", "/community");
+      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith("all");
+      expect(useMyCommunitiesQuery).toHaveBeenCalledWith(undefined);
+      expect(screen.getByRole("link", { name: /还没加入任何社区/ })).toHaveAttribute(
+        "href",
+        "/community"
+      );
     });
 
-    it("still renders the community cards while the community is loading", () => {
-      useDmvCommunityQuery.mockReturnValue({ data: undefined, isError: false });
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({ data: undefined, isPending: true })
-      );
+    it("queries only the joined communities, with no banner, once the user has joined at least one", () => {
+      loginAs("user-1");
+      useMyCommunitiesQuery.mockReturnValue({
+        data: [joined("c-2", "dmv-pets", "DMV 宠物社区"), joined("c-3", "dmv-students", "DMV 留学生社区")],
+        isError: false
+      });
 
       renderWithProviders(<HomePage />);
 
-      expect(screen.getByRole("link", { name: /加入更多/ })).toBeInTheDocument();
+      expect(useMyCommunitiesQuery).toHaveBeenCalledWith("user-1");
+      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith(["c-2", "c-3"]);
+      expect(screen.queryByRole("link", { name: /还没加入任何社区/ })).not.toBeInTheDocument();
+    });
+
+    it("falls back to ALL communities (with the banner) for a logged-in user who has joined nothing yet", () => {
+      loginAs("user-1");
+      useMyCommunitiesQuery.mockReturnValue({ data: [], isError: false });
+
+      renderWithProviders(<HomePage />);
+
+      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith("all");
+      expect(screen.getByRole("link", { name: /还没加入任何社区/ })).toBeInTheDocument();
+    });
+
+    it("does not query posts (scope undefined, skeleton shown) until a logged-in user's joined list has loaded, and shows no banner meanwhile", () => {
+      loginAs("user-1");
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
+      useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
+
+      renderWithProviders(<HomePage />);
+
+      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith(undefined);
+      expect(screen.getByRole("status")).toHaveTextContent("加载中…");
+      expect(screen.queryByRole("link", { name: /还没加入任何社区/ })).not.toBeInTheDocument();
+    });
+
+    it("falls back to ALL communities without the banner when the joined list fails to load (can't tell the user joined nothing)", () => {
+      loginAs("user-1");
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: true });
+
+      renderWithProviders(<HomePage />);
+
+      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith("all");
+      expect(screen.queryByRole("link", { name: /还没加入任何社区/ })).not.toBeInTheDocument();
+    });
+
+    it("no longer renders the 我的社区 card row or the dashed 加入更多 card", () => {
+      renderWithProviders(<HomePage />);
+
+      expect(screen.queryByRole("region", { name: "我的社区" })).not.toBeInTheDocument();
+      expect(screen.queryByText("加入更多")).not.toBeInTheDocument();
     });
   });
 
   describe("post feed", () => {
-    it("queries posts for the DMV community id", () => {
+    it("renders a clickable community-name tag on each post that links to that community's feed, outside the detail link", () => {
       renderWithProviders(<HomePage />);
 
-      expect(useCommunityPostsInfiniteQuery).toHaveBeenCalledWith("c-1");
+      const tag = screen.getByRole("link", { name: "DMV 宠物社区" });
+      expect(tag).toHaveAttribute("href", "/community/dmv-pets");
+      const detailLink = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
+      expect(detailLink).not.toContainElement(tag);
+      expect(tag).not.toContainElement(detailLink);
     });
 
     it("renders a post row linking to its detail page with separate title and body, author, and comment count", () => {
@@ -184,7 +237,10 @@ describe("HomePage (community aggregate feed)", () => {
       expect(link).toHaveAttribute("href", "/community/post/cp-1");
       expect(screen.getByText("有人去过 Tysons 吗")).toBeInTheDocument();
       expect(screen.getByText("周末想去逛逛，求推荐")).toBeInTheDocument();
-      expect(link).toHaveTextContent("Bob");
+      expect(screen.getByRole("link", { name: /Bob/ })).toHaveAttribute(
+        "href",
+        "/community/post/cp-1"
+      );
       expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
     });
 
@@ -216,28 +272,44 @@ describe("HomePage (community aggregate feed)", () => {
       expect(screen.getAllByText("周末想去逛逛，求推荐")).toHaveLength(1);
     });
 
-    it("shows the cover image thumbnail only on a post that has one", () => {
+    function renderWithImages(images: string[]) {
       useCommunityPostsInfiniteQuery.mockReturnValue(
         postsResult({
-          data: {
-            pages: [
-              {
-                posts: [
-                  { ...samplePost, coverImageUrl: "https://x/cover.webp" },
-                  { ...samplePost, id: "cp-2", title: "无图帖" }
-                ],
-                hasNextPage: false
-              }
-            ]
-          }
+          data: { pages: [{ posts: [{ ...samplePost, images }], hasNextPage: false }] }
         })
       );
+      return renderWithProviders(<HomePage />);
+    }
 
-      const { container } = renderWithProviders(<HomePage />);
+    // 跟 community-feed-page.test.tsx 的图片区域测试同一套断言——首页帖子卡片
+    // 的图片区域直接复用同一个 PostImageCarousel（文字下方满宽展示，不是旁边
+    // 的小方块缩略图），行为理应逐条保持一致。
+    it("renders no image area (no carousel, no placeholder) on a card without images", () => {
+      const { container } = renderWithImages([]);
 
-      const images = container.querySelectorAll("li a img");
-      expect(images).toHaveLength(1);
-      expect(images[0]).toHaveAttribute("src", "https://x/cover.webp");
+      expect(container.querySelector("li a img")).toBeNull();
+      expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
+    });
+
+    it("renders a single image full-width under the text, without a scroller or dots", () => {
+      const { container } = renderWithImages(["https://x/cover.webp"]);
+
+      const img = container.querySelector("li a img");
+      expect(img).toHaveAttribute("src", "https://x/cover.webp");
+      expect(img).toHaveClass("object-cover");
+      expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: /第 \d+ 张/ })).not.toBeInTheDocument();
+    });
+
+    it("renders every image in a swipeable carousel with dots when the post has several", () => {
+      const urls = ["https://x/1.webp", "https://x/2.webp", "https://x/3.webp"];
+      const { container } = renderWithImages(urls);
+
+      expect(screen.getByTestId("post-image-carousel-scroller")).toBeInTheDocument();
+      expect(
+        Array.from(container.querySelectorAll("li a img")).map((i) => i.getAttribute("src"))
+      ).toEqual(urls);
+      expect(screen.getByRole("img", { name: "第 1 张，共 3 张" })).toBeInTheDocument();
     });
 
     it("shows a loading status while the first page is pending", () => {
@@ -312,22 +384,6 @@ describe("HomePage (community aggregate feed)", () => {
       renderWithProviders(<HomePage />);
 
       expect(observe).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("silent join", () => {
-    it("silently joins the community once the user is logged in", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-
-      renderWithProviders(<HomePage />);
-
-      expect(joinMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
-    });
-
-    it("does not try to join when logged out", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(joinMutate).not.toHaveBeenCalled();
     });
   });
 });

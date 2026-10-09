@@ -1,17 +1,17 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useCommunityPostDetailQuery, useDmvCommunityQuery, clipboardWrite } = vi.hoisted(() => ({
+const { useCommunityPostDetailQuery, useCommunityBySlugQuery, clipboardWrite } = vi.hoisted(() => ({
   useCommunityPostDetailQuery: vi.fn(),
-  useDmvCommunityQuery: vi.fn(),
+  useCommunityBySlugQuery: vi.fn(),
   clipboardWrite: vi.fn()
 }));
 
 vi.mock("../../features/community/use-community-post-detail-query", () => ({
   useCommunityPostDetailQuery
 }));
-vi.mock("../../features/community/use-dmv-community-query", () => ({
-  useDmvCommunityQuery
+vi.mock("../../features/community/use-community-by-slug-query", () => ({
+  useCommunityBySlugQuery
 }));
 vi.mock("@capacitor/clipboard", () => ({
   Clipboard: { write: clipboardWrite }
@@ -94,8 +94,8 @@ describe("CommunityPostDetailPage", () => {
       isPending: false,
       isError: false
     });
-    useDmvCommunityQuery.mockReset();
-    useDmvCommunityQuery.mockReturnValue({
+    useCommunityBySlugQuery.mockReset();
+    useCommunityBySlugQuery.mockReturnValue({
       data: { id: "c-1", name: "DMV 社区", slug: "dmv", memberCount: 128 }
     });
     clipboardWrite.mockReset();
@@ -107,9 +107,21 @@ describe("CommunityPostDetailPage", () => {
     expect(screen.getByRole("heading", { level: 1, name: "DMV 社区 · 128 位成员" })).toBeInTheDocument();
     unmount();
 
-    useDmvCommunityQuery.mockReturnValue({ data: undefined });
+    useCommunityBySlugQuery.mockReturnValue({ data: undefined });
     renderPage();
     expect(screen.getByRole("heading", { level: 1, name: "帖子详情" })).toBeInTheDocument();
+  });
+
+  it("looks the community up by the post's own communitySlug (not a hard-coded dmv)", () => {
+    useCommunityPostDetailQuery.mockReturnValue({
+      data: { ...samplePost, communitySlug: "dmv-pets", communityName: "DMV 宠物社区" },
+      isPending: false,
+      isError: false
+    });
+
+    renderPage();
+
+    expect(useCommunityBySlugQuery).toHaveBeenCalledWith("dmv-pets");
   });
 
   it("renders the body at 17px with 1.6 line height", () => {

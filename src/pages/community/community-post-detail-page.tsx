@@ -9,8 +9,8 @@ import { ImageLightbox } from "../../components/image-lightbox";
 import { PostImageCarousel } from "../../components/post-image-carousel";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
+import { useCommunityBySlugQuery } from "../../features/community/use-community-by-slug-query";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
-import { useDmvCommunityQuery } from "../../features/community/use-dmv-community-query";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatRelativeTimeAgo } from "../../utils/format";
 import {
@@ -32,8 +32,8 @@ interface CommunityPostDetailLocationState {
  * 生产域名拼的帖子链接写入剪贴板，同 post-share-action-sheet.tsx 的复制
  * 链接用法：@capacitor/clipboard，网页端自动降级 navigator.clipboard；
  * 这里没有抽 src/utils/share.ts，跟阶段十的卡各自内联，避免两边建同名文件
- * 冲突）。顶栏 title 是"社区名 · N 位成员"（useDmvCommunityQuery，v1 只有
- * 一个社区），社区还没加载出来/加载失败时退回"帖子详情"。
+ * 冲突）。顶栏 title 是"社区名 · N 位成员"（按帖子自己的 communitySlug 查所属
+ * 社区，useCommunityBySlugQuery），帖子/社区还没加载出来或加载失败时退回"帖子详情"。
  * 举报入口放在顶栏 detail 变体的"…"更多菜单里（一个"举报"链接，跳
  * /community/post/:id/report，未登录由那条路由的 RequireAuth 挡回登录页）；
  * 链接用路由参数 id，不需要等帖子详情加载完。下面挂
@@ -51,7 +51,7 @@ export function CommunityPostDetailPage() {
     ?.publishSuccessMessage;
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const { data: community } = useDmvCommunityQuery();
+  const { data: community } = useCommunityBySlugQuery(post?.communitySlug);
   const topBarTitle = community
     ? `${community.name} · ${community.memberCount} 位成员`
     : "帖子详情";

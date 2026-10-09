@@ -177,7 +177,7 @@ describe("useToggleCommunityPostFavoriteMutation", () => {
 });
 
 describe("useCreateCommunityPostMutation", () => {
-  it("creates the post and invalidates the community's feed cache", async () => {
+  it("creates the post and invalidates every community-posts feed cache (single-community and home aggregate)", async () => {
     createCommunityPost.mockResolvedValue({ id: "cp-9" });
     const { wrapper, invalidateSpy } = setup();
     const { result } = renderHook(() => useCreateCommunityPostMutation(), { wrapper });
@@ -197,6 +197,6 @@ describe("useCreateCommunityPostMutation", () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(createCommunityPost.mock.calls[0]?.[0]).toEqual(input);
     expect(created).toEqual({ id: "cp-9" });
-    expect(invalidatedKeys(invalidateSpy)).toEqual([["community-posts", "c-1"]]);
+    expect(invalidatedKeys(invalidateSpy)).toEqual([["community-posts"]]);
   });
 });

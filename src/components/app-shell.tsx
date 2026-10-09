@@ -56,6 +56,8 @@ const NO_CHROME_PATTERNS = [
   // 落进"尚未迁移"的默认分支，叠加旧 AppHeader（"/community/post/:id" 那条
   // 用 end: true 匹配，不会匹配到 /edit）。
   "/community/new",
+  // 阶段十三：从某个社区 Feed 页进来发帖（/community/:slug/new），同一个发帖页。
+  "/community/:slug/new",
   "/community/post/:id/edit"
 ];
 
@@ -186,13 +188,13 @@ const TOPBAR_MIGRATED_PATTERNS = [
   // 内边距。不加进这个数组的话，这两个路径会落进"尚未迁移"的默认分支，
   // 同时渲染旧 AppHeader 和页面自己的 TopBar，出现双重顶部栏。
   "/community",
-  // 社区功能阶段九：/community 变成新的浏览页（自己渲染大标题顶栏），原来的
-  // DMV Feed（自己渲染 TopBar tab 变体）挪到了 /community/dmv。这里用的是
-  // end: true 的精确匹配（见 matchesAnyPattern），"/community" 不会自动覆盖
-  // 子路径——不登记的话 /community/dmv 会落进"尚未迁移"的默认分支，Feed 自己
-  // 的 TopBar 上面再叠一层旧 AppHeader，出现双重顶部栏（跟上面阶段二注释
-  // 说的是同一个问题）。
-  "/community/dmv",
+  // 社区功能阶段九：/community 变成新的浏览页（自己渲染大标题顶栏），单个社区
+  // 的 Feed（自己渲染 TopBar tab 变体）在 /community/:slug（阶段十三之前是写死
+  // 的 /community/dmv）。这里用的是 end: true 的精确匹配（见
+  // matchesAnyPattern），"/community" 不会自动覆盖子路径——不登记的话
+  // /community/:slug 会落进"尚未迁移"的默认分支，Feed 自己的 TopBar 上面再叠一层
+  // 旧 AppHeader，出现双重顶部栏（跟上面阶段二注释说的是同一个问题）。
+  "/community/:slug",
   "/community/post/:id",
   // 社区功能阶段六：我的社区发帖管理页（TopBar nav-only 变体），跟 /my-posts
   // 同一类，只关 AppHeader、留 BottomNav。

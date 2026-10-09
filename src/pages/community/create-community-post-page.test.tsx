@@ -1,8 +1,9 @@
-import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  useDmvCommunityQuery,
+  useCommunityBySlugQuery,
+  useMyCommunitiesQuery,
   useJoinCommunityMutation,
   useCreateCommunityPostMutation,
   joinMutate,
@@ -10,7 +11,8 @@ const {
   createMutateAsync,
   navigateMock
 } = vi.hoisted(() => ({
-  useDmvCommunityQuery: vi.fn(),
+  useCommunityBySlugQuery: vi.fn(),
+  useMyCommunitiesQuery: vi.fn(),
   useJoinCommunityMutation: vi.fn(),
   useCreateCommunityPostMutation: vi.fn(),
   joinMutate: vi.fn(),
@@ -19,7 +21,10 @@ const {
   navigateMock: vi.fn()
 }));
 
-vi.mock("../../features/community/use-dmv-community-query", () => ({ useDmvCommunityQuery }));
+vi.mock("../../features/community/use-community-by-slug-query", () => ({
+  useCommunityBySlugQuery
+}));
+vi.mock("../../features/community/use-my-communities-query", () => ({ useMyCommunitiesQuery }));
 vi.mock("../../features/community/use-join-community-mutation", () => ({
   useJoinCommunityMutation
 }));
@@ -80,6 +85,34 @@ import { CreateCommunityPostPage } from "./create-community-post-page";
 
 const initialAuthState = useAuthStore.getState();
 
+/** 从某个社区 Feed 页进来发帖：/community/:slug/new，社区由 slug 解析、不显示选择器。 */
+function renderCreate(entry = "/community/dmv/new") {
+  return renderWithProviders(<CreateCommunityPostPage />, {
+    initialEntries: [entry],
+    route: "/community/:slug/new"
+  });
+}
+
+/** 从首页发布弹层进来发帖：全局入口 /community/new，没有 slug，表单里选社区。 */
+function renderPicker() {
+  return renderWithProviders(<CreateCommunityPostPage />, {
+    initialEntries: ["/community/new"],
+    route: "/community/new"
+  });
+}
+
+function joined(id: string, slug: string, name: string) {
+  return {
+    id,
+    slug,
+    name,
+    description: null,
+    memberCount: 1,
+    isOfficial: false,
+    stateCodes: ["DC", "MD", "VA"]
+  };
+}
+
 function fillBody(value: string) {
   fireEvent.change(screen.getByPlaceholderText("说点什么吧…"), { target: { value } });
 }
@@ -100,11 +133,13 @@ describe("CreateCommunityPostPage", () => {
     joinMutate.mockReset();
     joinMutateAsync.mockReset();
     createMutateAsync.mockReset();
-    useDmvCommunityQuery.mockReset();
+    useCommunityBySlugQuery.mockReset();
+    useMyCommunitiesQuery.mockReset();
     useJoinCommunityMutation.mockReset();
     useCreateCommunityPostMutation.mockReset();
 
-    useDmvCommunityQuery.mockReturnValue({ data: { id: "c-1", name: "DMV 社区", slug: "dmv" } });
+    useCommunityBySlugQuery.mockReturnValue({ data: { id: "c-1", name: "DMV 社区", slug: "dmv" } });
+    useMyCommunitiesQuery.mockReturnValue({ data: undefined, isPending: false, isError: false });
     useJoinCommunityMutation.mockReturnValue({
       mutate: joinMutate,
       mutateAsync: joinMutateAsync
@@ -130,14 +165,22 @@ describe("CreateCommunityPostPage", () => {
     removeCommunityPostImageFiles.mockResolvedValue(undefined);
   });
 
-  it("silently joins the community on mount", () => {
-    renderWithProviders(<CreateCommunityPostPage />);
+  it("resolves the community from the route's :slug and confirms membership on mount (explicit publish intent, not a silent auto-join)", () => {
+    renderCreate("/community/dmv-pets/new");
 
+    expect(useCommunityBySlugQuery).toHaveBeenCalledWith("dmv-pets");
     expect(joinMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
   });
 
+  it("does not render a 选择社区 picker (and never asks for the joined list) when coming from a community's own feed", () => {
+    renderCreate();
+
+    expect(screen.queryByLabelText("选择社区")).not.toBeInTheDocument();
+    expect(useMyCommunitiesQuery).toHaveBeenCalledWith(undefined);
+  });
+
   it("rejects an empty body without calling the mutations", async () => {
-    renderWithProviders(<CreateCommunityPostPage />);
+    renderCreate();
 
     fillBody("   ");
     submit();
@@ -148,7 +191,7 @@ describe("CreateCommunityPostPage", () => {
   });
 
   it("confirms membership, creates the post with a null title when the title is blank, then navigates to the detail page", async () => {
-    renderWithProviders(<CreateCommunityPostPage />);
+    renderCreate();
 
     fillBody("  有人知道吗  ");
     submit();
@@ -170,7 +213,7 @@ describe("CreateCommunityPostPage", () => {
   });
 
   it("sends the trimmed title when one is given", async () => {
-    renderWithProviders(<CreateCommunityPostPage />);
+    renderCreate();
 
     fireEvent.change(screen.getByPlaceholderText("起个标题"), { target: { value: " 标题 " } });
     fillBody("正文");
@@ -186,7 +229,7 @@ describe("CreateCommunityPostPage", () => {
     createMutateAsync.mockRejectedValue(
       new AppError("您的账号当前处于限制状态", "ACCOUNT_RESTRICTED")
     );
-    renderWithProviders(<CreateCommunityPostPage />);
+    renderCreate();
 
     fillBody("正文");
     submit();
@@ -197,7 +240,7 @@ describe("CreateCommunityPostPage", () => {
 
   it("shows a generic retry message for any other failure and re-enables submitting", async () => {
     createMutateAsync.mockRejectedValueOnce(new Error("network down"));
-    renderWithProviders(<CreateCommunityPostPage />);
+    renderCreate();
 
     fillBody("正文");
     submit();
@@ -212,7 +255,7 @@ describe("CreateCommunityPostPage", () => {
 
   it("does not create a post when confirming membership fails", async () => {
     joinMutateAsync.mockRejectedValue(new Error("join failed"));
-    renderWithProviders(<CreateCommunityPostPage />);
+    renderCreate();
 
     fillBody("正文");
     submit();
@@ -229,14 +272,14 @@ describe("CreateCommunityPostPage", () => {
     }
 
     it("mounts the shared PostImagePicker with its own id and no extra props", () => {
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       expect(screen.getByTestId("image-picker")).toHaveAttribute("data-id", "community-post-image-picker");
       expect(screen.getByTestId("image-picker")).toHaveAttribute("data-count", "0");
     });
 
     it("does not touch Storage or the images table when no image is selected", async () => {
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       fillBody("纯文字");
       submit();
@@ -247,7 +290,7 @@ describe("CreateCommunityPostPage", () => {
     });
 
     it("uploads every selected image after the post exists, inserts them with sort_order 0..n-1 in selection order, and navigates without a notice", async () => {
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       pickThreeAndSubmit();
 
@@ -279,7 +322,7 @@ describe("CreateCommunityPostPage", () => {
         .mockResolvedValueOnce({ storagePath: "p/0.webp", publicUrl: "u0", sizeBytes: 1, mimeType: "image/webp" })
         .mockRejectedValueOnce(new Error("upload failed"))
         .mockResolvedValueOnce({ storagePath: "p/2.webp", publicUrl: "u2", sizeBytes: 1, mimeType: "image/webp" });
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       pickThreeAndSubmit();
 
@@ -297,7 +340,7 @@ describe("CreateCommunityPostPage", () => {
     it("when every upload fails, skips the insert but still navigates to the detail page with the failure notice", async () => {
       uploadCommunityPostImage.mockReset();
       uploadCommunityPostImage.mockRejectedValue(new Error("upload failed"));
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       pickThreeAndSubmit();
 
@@ -310,7 +353,7 @@ describe("CreateCommunityPostPage", () => {
 
     it("when the batch insert fails, cleans up exactly the just-uploaded Storage files and still navigates with the failure notice", async () => {
       insertCommunityPostImages.mockRejectedValue(new Error("insert failed"));
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       pickThreeAndSubmit();
 
@@ -328,7 +371,7 @@ describe("CreateCommunityPostPage", () => {
     it("a failing cleanup does not block navigation", async () => {
       insertCommunityPostImages.mockRejectedValue(new Error("insert failed"));
       removeCommunityPostImageFiles.mockRejectedValue(new Error("cleanup failed"));
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       pickThreeAndSubmit();
 
@@ -340,7 +383,7 @@ describe("CreateCommunityPostPage", () => {
 
     it("does not upload anything when creating the post itself fails", async () => {
       createMutateAsync.mockRejectedValue(new Error("create failed"));
-      renderWithProviders(<CreateCommunityPostPage />);
+      renderCreate();
 
       pickThreeAndSubmit();
 
@@ -352,13 +395,103 @@ describe("CreateCommunityPostPage", () => {
   });
 
   it("tells the user to wait when the community has not loaded yet", async () => {
-    useDmvCommunityQuery.mockReturnValue({ data: undefined });
-    renderWithProviders(<CreateCommunityPostPage />);
+    useCommunityBySlugQuery.mockReturnValue({ data: undefined });
+    renderCreate();
 
     fillBody("正文");
     submit();
 
     expect(await screen.findByRole("alert")).toHaveTextContent("社区信息还没加载完成");
     expect(createMutateAsync).not.toHaveBeenCalled();
+  });
+
+  describe("community picker (global entry /community/new, no slug)", () => {
+    beforeEach(() => {
+      useCommunityBySlugQuery.mockReturnValue({ data: undefined });
+      useMyCommunitiesQuery.mockReturnValue({
+        data: [joined("c-2", "dmv-pets", "DMV 宠物社区"), joined("c-3", "dmv-students", "DMV 留学生社区")],
+        isPending: false,
+        isError: false
+      });
+    });
+
+    it("asks for the current user's joined communities and renders a required 选择社区 select listing exactly those, first one selected by default", () => {
+      renderPicker();
+
+      expect(useMyCommunitiesQuery).toHaveBeenCalledWith("user-1");
+      const select = screen.getByLabelText("选择社区");
+      expect(select).toBeRequired();
+      expect(select).toHaveValue("c-2");
+      expect(within(select).getAllByRole("option").map((o) => o.textContent)).toEqual([
+        "DMV 宠物社区",
+        "DMV 留学生社区"
+      ]);
+    });
+
+    it("does not join anything on mount (no silent join, the options are already joined communities)", () => {
+      renderPicker();
+
+      expect(joinMutate).not.toHaveBeenCalled();
+    });
+
+    it("posts into the community picked in the select, confirming membership of that same community first", async () => {
+      renderPicker();
+
+      fireEvent.change(screen.getByLabelText("选择社区"), { target: { value: "c-3" } });
+      fillBody("正文");
+      submit();
+
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9"));
+      expect(joinMutateAsync).toHaveBeenCalledWith({ communityId: "c-3", userId: "user-1" });
+      expect(createMutateAsync).toHaveBeenCalledWith(
+        expect.objectContaining({ communityId: "c-3", postType: "discussion" })
+      );
+    });
+
+    it("posts into the default (first) community when the user never touches the select", async () => {
+      renderPicker();
+
+      fillBody("正文");
+      submit();
+
+      await waitFor(() => expect(createMutateAsync).toHaveBeenCalled());
+      expect(createMutateAsync).toHaveBeenCalledWith(expect.objectContaining({ communityId: "c-2" }));
+    });
+
+    it("shows the join-a-community prompt (no form) with a link to /community when the user has joined nothing", () => {
+      useMyCommunitiesQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+
+      renderPicker();
+
+      expect(screen.getByText("你还没有加入任何社区，发帖前请先加入一个社区。")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "去加入社区" })).toHaveAttribute("href", "/community");
+      expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("选择社区")).not.toBeInTheDocument();
+    });
+
+    it("shows a skeleton (not the prompt, not the form) while the joined list is loading", () => {
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+
+      renderPicker();
+
+      expect(screen.getByRole("status")).toHaveTextContent("加载中…");
+      expect(screen.queryByText(/你还没有加入任何社区/)).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+    });
+
+    it("shows an error alert (not the prompt, not the form) when the joined list fails to load", () => {
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+
+      renderPicker();
+
+      expect(screen.getByRole("alert")).toHaveTextContent("已加入的社区加载失败，请稍后重试。");
+      expect(screen.queryByText(/你还没有加入任何社区/)).not.toBeInTheDocument();
+    });
+
+    it("keeps the hidden post type at 讨论 (no 类型 field comes back with the picker)", () => {
+      renderPicker();
+
+      expect(screen.queryByLabelText(/类型/)).not.toBeInTheDocument();
+    });
   });
 });

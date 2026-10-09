@@ -1,16 +1,18 @@
 import { Clipboard } from "@capacitor/clipboard";
 import { BadgeCheck, Check, Heart, MessageCircle, Plus, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { PostImageCarousel } from "../../components/post-image-carousel";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
+import { useCommunityBySlugQuery } from "../../features/community/use-community-by-slug-query";
+import { useCommunityMembershipQuery } from "../../features/community/use-community-membership-query";
 import { useCommunityPostsInfiniteQuery } from "../../features/community/use-community-posts-query";
-import { useDmvCommunityQuery } from "../../features/community/use-dmv-community-query";
 import { useJoinCommunityMutation } from "../../features/community/use-join-community-mutation";
 import { useAuthStore } from "../../store/auth-store";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
+import { getCommunityAbbreviation } from "./community-abbreviation";
 import {
   COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
   getCommunityPostTypeLabel
@@ -19,7 +21,9 @@ import {
 const SKELETON_COUNT = 4;
 
 /**
- * 社区 Feed 页（/community，公开可浏览，不需要登录——跟首页/帖子详情页一样）。
+ * 社区 Feed 页（/community/:slug，公开可浏览，不需要登录——跟首页/帖子详情页
+ * 一样）。slug 从路由参数读（dmv / dmv-pets / dmv-students ……），页面里没有任何
+ * 写死的社区。
  *
  * 结构（视觉改版，设计稿"C 社区详情"）：
  * - TopBar tab 变体，只放标题（社区名），不再有右上角发布按钮；
@@ -29,11 +33,12 @@ const SKELETON_COUNT = 4;
  * - 扁平帖子列表（border-b 分隔，不是整张描边卡片）；
  * - 右下角悬浮的"＋ 发布"胶囊按钮。
  *
- * 加入状态：v1 只有一个 DMV 社区，已登录用户进来时在后台调一次 joinCommunity
- * （撞主键重复就当已经是成员，见 community-repository.ts），失败也不阻塞
- * 浏览。按钮据此展示——已登录且加入没有失败：纯状态展示的"✓ 已加入"（不可点，
- * 这次不做退出社区）；已登录但加入请求失败：回退成可点的"加入"重试；未登录：
- * "加入"，点击跳登录页。
+ * 加入状态：没有任何"静默自动加入"（阶段十三产品决策）——用户必须自己点头部的
+ * "加入"按钮才算数。按钮状态来自真实的成员关系查询（useCommunityMembershipQuery）
+ * 加上本次会话里刚加入成功的结果：已是成员：纯状态展示的"✓ 已加入"（不可点，
+ * 这次不做退出社区）；请求进行中：禁用的"加入中…"；其它：可点的"加入"——已登录
+ * 调 joinCommunity（撞主键重复就当已经是成员，见 community-repository.ts），失败
+ * 时按钮保持可点方便重试；未登录点击跳登录页。
  *
  * 分享：复制当前页面的生产环境链接到剪贴板（@capacitor/clipboard，跟
  * post-share-action-sheet.tsx 同一个写法，纯浏览器环境自动降级成
@@ -41,8 +46,9 @@ const SKELETON_COUNT = 4;
  * 控制台，不打扰用户。链接用当前 location.pathname 拼，路由以后改路径
  * （比如 /community/dmv）不需要同步改这里。
  *
- * 发布：悬浮按钮跳 /community/new；未登录会被那条路由上的 RequireAuth 挡回
- * 登录页，页面自己不判断登录态，跟全站既有规则一致。按钮位置避开底部 Tab 栏
+ * 发布：悬浮按钮跳 /community/:slug/new——带上当前社区，发帖页自动归属到这个
+ * 社区、不显示"选择社区"下拉框；未登录会被那条路由上的 RequireAuth 挡回登录页，
+ * 页面自己不判断登录态，跟全站既有规则一致。按钮位置避开底部 Tab 栏
  * （同 fab.tsx 的 bottom 偏移），列表底部预留足够 padding 不被它遮住。
  *
  * 置顶：listCommunityPosts 已经是 pinned desc 排序，置顶帖天然在最前面，这里
@@ -58,16 +64,13 @@ export function CommunityFeedPage() {
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
-  const { data: community, isError: communityError } = useDmvCommunityQuery();
+  const { slug } = useParams<{ slug: string }>();
+  const { data: community, isError: communityError } = useCommunityBySlugQuery(slug);
   const communityId = community?.id;
 
   const joinCommunity = useJoinCommunityMutation();
   const { mutate: joinCommunityMutate } = joinCommunity;
-  useEffect(() => {
-    if (!communityId || !userId) return;
-    // 静默加入：成功/失败都不展示提示，见组件顶部注释。
-    joinCommunityMutate({ communityId, userId });
-  }, [communityId, userId, joinCommunityMutate]);
+  const membership = useCommunityMembershipQuery(communityId, userId);
 
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
 
@@ -84,7 +87,7 @@ export function CommunityFeedPage() {
   }
 
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useCommunityPostsInfiniteQuery(communityId);
+    useCommunityPostsInfiniteQuery(communityId ? [communityId] : undefined);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -104,9 +107,20 @@ export function CommunityFeedPage() {
 
   const posts = data?.pages.flatMap((page) => page.posts) ?? [];
 
-  const isJoined = Boolean(userId) && !joinCommunity.isError;
+  const isJoined = membership.data === true || joinCommunity.isSuccess;
 
   function renderJoinButton() {
+    if (joinCommunity.isPending) {
+      return (
+        <button
+          type="button"
+          disabled
+          className="h-10 flex-1 rounded-full bg-primary text-sm font-semibold text-white opacity-60"
+        >
+          加入中…
+        </button>
+      );
+    }
     if (isJoined) {
       return (
         <span className="flex h-10 flex-1 items-center justify-center gap-1 rounded-full bg-primary-light text-sm font-semibold text-primary">
@@ -153,7 +167,7 @@ export function CommunityFeedPage() {
             aria-hidden="true"
             className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-2xl bg-primary-light text-sm font-bold text-primary"
           >
-            {community.slug.toUpperCase()}
+            {getCommunityAbbreviation(community.slug)}
           </span>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1">
@@ -225,7 +239,7 @@ export function CommunityFeedPage() {
         <div role="status" className="flex flex-col items-center gap-3 px-6 py-12 text-center">
           <p className="text-sm text-text-muted">暂无帖子，欢迎发布第一条</p>
           <Link
-            to="/community/new"
+            to={`/community/${slug}/new`}
             className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
           >
             去发布
@@ -337,7 +351,7 @@ export function CommunityFeedPage() {
       </div>
       <button
         type="button"
-        onClick={() => navigate("/community/new")}
+        onClick={() => navigate(`/community/${slug}/new`)}
         style={{ bottom: "calc(4.5rem + env(safe-area-inset-bottom))" }}
         className="fixed right-4 z-20 flex h-[50px] items-center gap-1 whitespace-nowrap rounded-full bg-primary px-5 text-base font-semibold text-white shadow-[0_6px_16px_rgba(49,91,234,0.35)]"
       >

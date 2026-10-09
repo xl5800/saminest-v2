@@ -1,27 +1,27 @@
-import { act, cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  useDmvCommunityQuery,
+  useListCommunitiesQuery,
+  useMyCommunitiesQuery,
   useCommunityMembershipQuery,
   useCommunityPostsTodayCountQuery,
   useJoinCommunityMutation,
   navigateMock,
-  mutateMock,
-  invalidateQueriesMock
+  mutateMock
 } = vi.hoisted(() => ({
-  useDmvCommunityQuery: vi.fn(),
+  useListCommunitiesQuery: vi.fn(),
+  useMyCommunitiesQuery: vi.fn(),
   useCommunityMembershipQuery: vi.fn(),
   useCommunityPostsTodayCountQuery: vi.fn(),
   useJoinCommunityMutation: vi.fn(),
   navigateMock: vi.fn(),
-  mutateMock: vi.fn(),
-  invalidateQueriesMock: vi.fn()
+  mutateMock: vi.fn()
 }));
 
-vi.mock("../../features/community/use-dmv-community-query", () => ({ useDmvCommunityQuery }));
+vi.mock("../../features/community/use-list-communities-query", () => ({ useListCommunitiesQuery }));
+vi.mock("../../features/community/use-my-communities-query", () => ({ useMyCommunitiesQuery }));
 vi.mock("../../features/community/use-community-membership-query", () => ({
-  COMMUNITY_MEMBERSHIP_QUERY_KEY: "community-membership",
   useCommunityMembershipQuery
 }));
 vi.mock("../../features/community/use-community-posts-today-count-query", () => ({
@@ -33,12 +33,6 @@ vi.mock("../../features/community/use-join-community-mutation", () => ({
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
-});
-// 页面里只用 useQueryClient().invalidateQueries——单独换掉它来断言"加入成功后
-// 刷新了哪些 query"，其余（QueryClientProvider 等）保持真实实现。
-vi.mock("@tanstack/react-query", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
-  return { ...actual, useQueryClient: () => ({ invalidateQueries: invalidateQueriesMock }) };
 });
 
 import { useAuthStore } from "../../store/auth-store";
@@ -54,7 +48,37 @@ const dmvCommunity = {
   name: "DMV 华人社区",
   slug: "dmv",
   description: "来自数据库的简介",
-  memberCount: 128
+  memberCount: 128,
+  isOfficial: true,
+  stateCodes: ["DC", "MD", "VA"]
+};
+const petsCommunity = {
+  id: "c-2",
+  name: "DMV 宠物社区",
+  slug: "dmv-pets",
+  description: null,
+  memberCount: 5,
+  isOfficial: false,
+  stateCodes: ["DC", "MD", "VA"]
+};
+const studentsCommunity = {
+  id: "c-3",
+  name: "DMV 留学生社区",
+  slug: "dmv-students",
+  description: "留学生交流",
+  memberCount: 9,
+  isOfficial: false,
+  stateCodes: ["DC", "MD", "VA"]
+};
+// 一个只覆盖加州的社区，用来验证"按每个社区自己的 stateCodes 匹配"而不是写死 DC/MD/VA。
+const californiaCommunity = {
+  id: "c-4",
+  name: "湾区华人社区",
+  slug: "bay-area",
+  description: null,
+  memberCount: 1,
+  isOfficial: false,
+  stateCodes: ["CA"]
 };
 
 function setRegion(stateCode: string | null) {
@@ -79,8 +103,12 @@ describe("CommunityBrowsePage", () => {
     setRegion(null);
     navigateMock.mockReset();
     mutateMock.mockReset();
-    invalidateQueriesMock.mockReset();
-    useDmvCommunityQuery.mockReturnValue({ data: dmvCommunity, isPending: false, isError: false });
+    useListCommunitiesQuery.mockReturnValue({
+      data: [dmvCommunity, petsCommunity, studentsCommunity],
+      isPending: false,
+      isError: false
+    });
+    useMyCommunitiesQuery.mockReturnValue({ data: undefined, isPending: false, isError: false });
     useCommunityMembershipQuery.mockReturnValue({ data: false, isPending: false, isError: false });
     useCommunityPostsTodayCountQuery.mockReturnValue({ data: 3 });
     useJoinCommunityMutation.mockReturnValue({
@@ -142,73 +170,118 @@ describe("CommunityBrowsePage", () => {
   });
 
   describe("附近 tab", () => {
-    it.each(["VA", "MD", "DC"])("shows the DMV community card when the selected state is %s", (code) => {
-      setRegion(code);
+    it.each(["VA", "MD", "DC"])(
+      "shows all three DMV community cards when the selected state is %s",
+      (code) => {
+        setRegion(code);
 
-      renderPage();
+        renderPage();
 
-      expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
-      expect(screen.queryByText(/目前只开放了 DMV/)).not.toBeInTheDocument();
-    });
+        expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "DMV 宠物社区" })).toBeInTheDocument();
+        expect(screen.getByRole("heading", { name: "DMV 留学生社区" })).toBeInTheDocument();
+        expect(screen.queryByText(/目前只开放了 DMV/)).not.toBeInTheDocument();
+      }
+    );
 
     // null 既是新用户的默认值，也是「全美」选项恢复到的状态——意思是"看全部
-    // 内容"，DMV 社区应该出现，不能被当成"其它州"显示"暂未开放"。
-    it("shows the DMV card when no region is selected (null = see everything)", () => {
+    // 内容"，所有社区都应该出现，不能被当成"其它州"显示"暂未开放"。
+    it("shows every community when no region is selected (null = see everything)", () => {
+      useListCommunitiesQuery.mockReturnValue({
+        data: [dmvCommunity, petsCommunity, californiaCommunity],
+        isPending: false,
+        isError: false
+      });
+
       renderPage();
 
-      expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
+      expect(screen.getAllByRole("heading", { level: 2 })).toHaveLength(3);
     });
 
-    it("shows the 暂未开放 empty state, not an error or blank page, for a state outside DC/MD/VA", () => {
+    it("matches each community by its OWN stateCodes: only the community covering the selected state shows up", () => {
+      useListCommunitiesQuery.mockReturnValue({
+        data: [dmvCommunity, petsCommunity, californiaCommunity],
+        isPending: false,
+        isError: false
+      });
+      setRegion("CA");
+
+      renderPage();
+
+      expect(screen.getByRole("heading", { name: "湾区华人社区" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "DMV 华人社区" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "DMV 宠物社区" })).not.toBeInTheDocument();
+    });
+
+    it("shows the 暂未开放 empty state, not an error or blank page, when no community covers the selected state", () => {
       setRegion("CA");
 
       renderPage();
 
       expect(
-        screen.getByText("目前只开放了 DMV（DC / MD / VA）一个社区，其它州还没有开放，敬请期待")
+        screen.getByText("目前只开放了 DMV（DC / MD / VA）地区的社区，其它州还没有开放，敬请期待")
       ).toBeInTheDocument();
-      expect(screen.queryByRole("heading", { name: "DMV 华人社区" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     });
 
-    it("shows a skeleton while the community is loading", () => {
-      useDmvCommunityQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    it("shows a skeleton while the communities are loading", () => {
+      useListCommunitiesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
       renderPage();
 
       expect(screen.getByRole("status")).toHaveTextContent("加载中…");
     });
 
-    it("shows an error alert when the community fails to load", () => {
-      useDmvCommunityQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    it("shows an error alert when the communities fail to load", () => {
+      useListCommunitiesQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
 
       renderPage();
 
       expect(screen.getByRole("alert")).toHaveTextContent("社区加载失败，请稍后重试。");
     });
 
-    it("renders member count and today's new post count on the card, and links the card to /community/dmv", () => {
+    it("renders member count and today's new post count on a card, and links each card to its own /community/:slug", () => {
       renderPage();
 
-      expect(screen.getByText("128 位成员 · 今日 3 个新帖子")).toBeInTheDocument();
+      expect(screen.getAllByText("128 位成员 · 今日 3 个新帖子")).toHaveLength(1);
       expect(screen.getByRole("link", { name: "DMV 华人社区" })).toHaveAttribute(
         "href",
         "/community/dmv"
       );
+      expect(screen.getByRole("link", { name: "DMV 宠物社区" })).toHaveAttribute(
+        "href",
+        "/community/dmv-pets"
+      );
+      expect(screen.getByRole("link", { name: "DMV 留学生社区" })).toHaveAttribute(
+        "href",
+        "/community/dmv-students"
+      );
     });
 
     it("uses the community's own description when set, and a fallback line when it is null", () => {
-      const { unmount } = renderPage();
-      expect(screen.getByText("来自数据库的简介")).toBeInTheDocument();
-      unmount();
-
-      useDmvCommunityQuery.mockReturnValue({
-        data: { ...dmvCommunity, description: null },
-        isPending: false,
-        isError: false
-      });
       renderPage();
-      expect(screen.getByText("DC / MD / VA 地区华人的本地生活交流社区")).toBeInTheDocument();
+
+      expect(screen.getByText("来自数据库的简介")).toBeInTheDocument();
+      expect(screen.getByText("暂无简介")).toBeInTheDocument();
+    });
+
+    it("shows the verified icon only on official communities' cards", () => {
+      const { container } = renderPage();
+
+      // 三张卡片：华人（官方）/ 宠物 / 留学生（非官方）。
+      expect(container.querySelectorAll("svg.lucide-badge-check")).toHaveLength(1);
+    });
+
+    it("each card asks for its own membership and today's post count", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+      renderPage();
+
+      expect(useCommunityMembershipQuery).toHaveBeenCalledWith("c-1", "user-1");
+      expect(useCommunityMembershipQuery).toHaveBeenCalledWith("c-2", "user-1");
+      expect(useCommunityMembershipQuery).toHaveBeenCalledWith("c-3", "user-1");
+      expect(useCommunityPostsTodayCountQuery).toHaveBeenCalledWith("c-2");
     });
   });
 
@@ -226,33 +299,39 @@ describe("CommunityBrowsePage", () => {
       expect(screen.queryByRole("heading", { name: "DMV 华人社区" })).not.toBeInTheDocument();
     });
 
-    it("shows the DMV card for a logged-in member", () => {
+    it("renders one card per community the user has really joined (multiple, not just one)", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useMyCommunitiesQuery.mockReturnValue({
+        data: [dmvCommunity, studentsCommunity],
+        isPending: false,
+        isError: false
+      });
       useCommunityMembershipQuery.mockReturnValue({ data: true, isPending: false, isError: false });
 
       renderPage();
       openMineTab();
 
-      expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
+      expect(useMyCommunitiesQuery).toHaveBeenCalledWith("user-1");
+      const panel = screen.getByRole("tabpanel");
+      expect(within(panel).getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
+      expect(within(panel).getByRole("heading", { name: "DMV 留学生社区" })).toBeInTheDocument();
+      expect(within(panel).queryByRole("heading", { name: "DMV 宠物社区" })).not.toBeInTheDocument();
     });
 
-    it("shows the empty message for a logged-in user who has not joined", () => {
+    it("shows the empty message for a logged-in user who has not joined any community", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useMyCommunitiesQuery.mockReturnValue({ data: [], isPending: false, isError: false });
 
       renderPage();
       openMineTab();
 
       expect(screen.getByText("你还没有加入任何社区")).toBeInTheDocument();
-      expect(screen.queryByRole("heading", { name: "DMV 华人社区" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
     });
 
-    it("shows a skeleton (not the empty message) while membership is still being determined", () => {
+    it("shows a skeleton (not the empty message) while the joined list is still loading", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-      useCommunityMembershipQuery.mockReturnValue({
-        data: undefined,
-        isPending: true,
-        isError: false
-      });
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
       renderPage();
       openMineTab();
@@ -260,10 +339,20 @@ describe("CommunityBrowsePage", () => {
       expect(screen.getByRole("status")).toHaveTextContent("加载中…");
       expect(screen.queryByText("你还没有加入任何社区")).not.toBeInTheDocument();
     });
+
+    it("shows an error alert when the joined list fails to load", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+
+      renderPage();
+      openMineTab();
+
+      expect(screen.getByRole("alert")).toHaveTextContent("社区加载失败，请稍后重试。");
+    });
   });
 
   describe("发现 tab and the search icon", () => {
-    it("renders a search input and a 热门搜索 chip that links to /community/dmv", () => {
+    it("renders a search input and one 热门搜索 chip per community, each linking to its own feed", () => {
       renderPage();
       fireEvent.click(screen.getByRole("tab", { name: "发现" }));
 
@@ -271,6 +360,14 @@ describe("CommunityBrowsePage", () => {
       expect(screen.getByRole("link", { name: "DMV 华人社区" })).toHaveAttribute(
         "href",
         "/community/dmv"
+      );
+      expect(screen.getByRole("link", { name: "DMV 宠物社区" })).toHaveAttribute(
+        "href",
+        "/community/dmv-pets"
+      );
+      expect(screen.getByRole("link", { name: "DMV 留学生社区" })).toHaveAttribute(
+        "href",
+        "/community/dmv-students"
       );
     });
 
@@ -312,49 +409,46 @@ describe("CommunityBrowsePage", () => {
     });
   });
 
-  describe("join button", () => {
+  describe("join button (per card)", () => {
+    function joinButtons() {
+      return screen.getAllByRole("button", { name: "加入" });
+    }
+
     it("navigates a guest to /login and does not call the mutation", () => {
       renderPage();
 
-      fireEvent.click(screen.getByRole("button", { name: "加入" }));
+      fireEvent.click(joinButtons()[0]);
 
       expect(navigateMock).toHaveBeenCalledWith("/login");
       expect(mutateMock).not.toHaveBeenCalled();
     });
 
-    it("joins the community for a logged-in user", () => {
+    it("joins exactly the community whose card was clicked, for a logged-in user", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
 
       renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "加入" }));
+      // 三张卡片按列表顺序：华人 / 宠物 / 留学生，点第二张（宠物）。
+      fireEvent.click(joinButtons()[1]);
 
+      expect(mutateMock).toHaveBeenCalledTimes(1);
       expect(mutateMock).toHaveBeenCalledWith(
-        { communityId: "c-1", userId: "user-1" },
-        expect.objectContaining({ onSuccess: expect.any(Function), onError: expect.any(Function) })
+        { communityId: "c-2", userId: "user-1" },
+        expect.objectContaining({ onError: expect.any(Function) })
       );
     });
 
-    it("refreshes both the membership state and the community (member count) after a successful join", () => {
+    it("shows ✓ 已加入 (no button) only on the cards of communities the user is already a member of", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-
-      renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "加入" }));
-      mutateMock.mock.calls[0][1].onSuccess();
-
-      expect(invalidateQueriesMock).toHaveBeenCalledWith({
-        queryKey: ["community-membership", "c-1", "user-1"]
-      });
-      expect(invalidateQueriesMock).toHaveBeenCalledWith({ queryKey: ["community", "dmv"] });
-    });
-
-    it("shows ✓ 已加入 (no button) when the user is already a member", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-      useCommunityMembershipQuery.mockReturnValue({ data: true, isPending: false, isError: false });
+      useCommunityMembershipQuery.mockImplementation((communityId: string) => ({
+        data: communityId === "c-1",
+        isPending: false,
+        isError: false
+      }));
 
       renderPage();
 
-      expect(screen.getByText("✓ 已加入")).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "加入" })).not.toBeInTheDocument();
+      expect(screen.getAllByText("✓ 已加入")).toHaveLength(1);
+      expect(joinButtons()).toHaveLength(2);
     });
 
     // 加入成功到成员状态 refetch 回来之间，按钮不能闪回"加入"。
@@ -368,7 +462,7 @@ describe("CommunityBrowsePage", () => {
 
       renderPage();
 
-      expect(screen.getByText("✓ 已加入")).toBeInTheDocument();
+      expect(screen.getAllByText("✓ 已加入").length).toBeGreaterThan(0);
     });
 
     it("disables the button with 加入中… while the join is pending", () => {
@@ -381,14 +475,14 @@ describe("CommunityBrowsePage", () => {
 
       renderPage();
 
-      expect(screen.getByRole("button", { name: "加入中…" })).toBeDisabled();
+      expect(screen.getAllByRole("button", { name: "加入中…" })[0]).toBeDisabled();
     });
 
     it("shows the account-restricted message when the join fails with ACCOUNT_RESTRICTED", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
 
       renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "加入" }));
+      fireEvent.click(joinButtons()[0]);
       act(() => {
         mutateMock.mock.calls[0][1].onError(new AppError("账号受限提示", "ACCOUNT_RESTRICTED"));
       });
@@ -400,7 +494,7 @@ describe("CommunityBrowsePage", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
 
       renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "加入" }));
+      fireEvent.click(joinButtons()[0]);
       act(() => {
         mutateMock.mock.calls[0][1].onError(new Error("network down"));
       });

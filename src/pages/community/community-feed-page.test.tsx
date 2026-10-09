@@ -4,20 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const clipboardWriteMock = vi.hoisted(() => vi.fn());
 
 const {
-  useDmvCommunityQuery,
+  useCommunityBySlugQuery,
+  useCommunityMembershipQuery,
   useCommunityPostsInfiniteQuery,
   useJoinCommunityMutation,
   joinMutate,
   navigateMock
 } = vi.hoisted(() => ({
-  useDmvCommunityQuery: vi.fn(),
+  useCommunityBySlugQuery: vi.fn(),
+  useCommunityMembershipQuery: vi.fn(),
   useCommunityPostsInfiniteQuery: vi.fn(),
   useJoinCommunityMutation: vi.fn(),
   joinMutate: vi.fn(),
   navigateMock: vi.fn()
 }));
 
-vi.mock("../../features/community/use-dmv-community-query", () => ({ useDmvCommunityQuery }));
+vi.mock("../../features/community/use-community-by-slug-query", () => ({
+  useCommunityBySlugQuery
+}));
+vi.mock("../../features/community/use-community-membership-query", () => ({
+  useCommunityMembershipQuery
+}));
 vi.mock("../../features/community/use-community-posts-query", () => ({
   useCommunityPostsInfiniteQuery
 }));
@@ -74,11 +81,12 @@ describe("CommunityFeedPage", () => {
     useAuthStore.setState(initialAuthState, true);
     navigateMock.mockReset();
     joinMutate.mockReset();
-    useDmvCommunityQuery.mockReset();
+    useCommunityBySlugQuery.mockReset();
+    useCommunityMembershipQuery.mockReset();
     useCommunityPostsInfiniteQuery.mockReset();
     useJoinCommunityMutation.mockReset();
 
-    useDmvCommunityQuery.mockReturnValue({
+    useCommunityBySlugQuery.mockReturnValue({
       data: {
         id: "c-1",
         name: "DMV 社区",
@@ -91,19 +99,44 @@ describe("CommunityFeedPage", () => {
     });
     clipboardWriteMock.mockReset();
     clipboardWriteMock.mockResolvedValue(undefined);
+    // 默认：不是成员（没有任何静默加入，成员状态只来自真实的成员关系查询）。
+    useCommunityMembershipQuery.mockReturnValue({ data: false });
     useCommunityPostsInfiniteQuery.mockReturnValue(postsResult());
     useJoinCommunityMutation.mockReturnValue({ mutate: joinMutate });
   });
 
-  it("shows the community name in the top bar and queries posts for the community id", () => {
-    renderWithProviders(<CommunityFeedPage />);
+  /** 路由参数 :slug 来自 URL，页面靠 useParams 读它。 */
+  function renderFeed(entry = "/community/dmv") {
+    return renderWithProviders(<CommunityFeedPage />, {
+      route: "/community/:slug",
+      initialEntries: [entry]
+    });
+  }
+
+  it("shows the community name in the top bar and queries posts for that community only", () => {
+    renderFeed();
 
     expect(screen.getByRole("heading", { name: "DMV 社区" })).toBeInTheDocument();
-    expect(useCommunityPostsInfiniteQuery).toHaveBeenCalledWith("c-1");
+    expect(useCommunityPostsInfiniteQuery).toHaveBeenCalledWith(["c-1"]);
+  });
+
+  it("resolves the community from the :slug route param (not a hard-coded dmv)", () => {
+    renderFeed("/community/dmv-students");
+
+    expect(useCommunityBySlugQuery).toHaveBeenCalledWith("dmv-students");
+  });
+
+  it("waits (no posts query scope) until the community id is known", () => {
+    useCommunityBySlugQuery.mockReturnValue({ data: undefined, isError: false });
+    useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
+
+    renderFeed();
+
+    expect(useCommunityPostsInfiniteQuery).toHaveBeenCalledWith(undefined);
   });
 
   it("renders a post card linking to its detail page with type pill, title, preview, author and counts", () => {
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     const link = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
     expect(link).toHaveAttribute("href", "/community/post/cp-1");
@@ -121,14 +154,14 @@ describe("CommunityFeedPage", () => {
       })
     );
 
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     expect(screen.getAllByText("周末想去逛逛，求推荐")).toHaveLength(1);
   });
 
   describe("community header", () => {
     it("shows the abbreviated avatar, name, official badge, member count and description from the community row", () => {
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       const header = screen.getByRole("region", { name: "社区信息" });
       expect(header).toHaveTextContent("DMV");
@@ -138,42 +171,78 @@ describe("CommunityFeedPage", () => {
       expect(screen.getByLabelText("官方认证")).toBeInTheDocument();
     });
 
+    it("keeps the square avatar abbreviation short for multi-part slugs (dmv-students -> DMV)", () => {
+      useCommunityBySlugQuery.mockReturnValue({
+        data: {
+          id: "c-3",
+          name: "DMV 留学生社区",
+          slug: "dmv-students",
+          description: null,
+          memberCount: 0,
+          isOfficial: false
+        },
+        isError: false
+      });
+
+      renderFeed("/community/dmv-students");
+
+      const header = screen.getByRole("region", { name: "社区信息" });
+      expect(header).toHaveTextContent(/^DMVDMV 留学生社区/);
+      expect(header).not.toHaveTextContent("STUDENTS");
+    });
+
     it("hides the verified badge for a non-official community and the description when it is empty", () => {
-      useDmvCommunityQuery.mockReturnValue({
+      useCommunityBySlugQuery.mockReturnValue({
         data: { id: "c-1", name: "DMV 社区", slug: "dmv", description: null, memberCount: 0, isOfficial: false },
         isError: false
       });
 
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       expect(screen.queryByLabelText("官方认证")).not.toBeInTheDocument();
       expect(screen.getByRole("region", { name: "社区信息" })).toHaveTextContent("0 位成员");
     });
 
     it("shows a header skeleton (no header content) while the community is loading", () => {
-      useDmvCommunityQuery.mockReturnValue({ data: undefined, isError: false });
+      useCommunityBySlugQuery.mockReturnValue({ data: undefined, isError: false });
       useCommunityPostsInfiniteQuery.mockReturnValue(
         postsResult({ data: undefined, isPending: true })
       );
 
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       expect(screen.queryByRole("region", { name: "社区信息" })).not.toBeInTheDocument();
     });
   });
 
   describe("join button", () => {
-    it("shows a non-clickable ✓ 已加入 state for a logged-in user", () => {
+    it("shows a non-clickable ✓ 已加入 state when the user really is a member", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useCommunityMembershipQuery.mockReturnValue({ data: true });
 
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       expect(screen.getByText("已加入")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "加入" })).not.toBeInTheDocument();
+      expect(useCommunityMembershipQuery).toHaveBeenCalledWith("c-1", "user-1");
+    });
+
+    it("shows a clickable 加入 button for a logged-in non-member and joins on click (never on its own)", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+      renderFeed();
+
+      expect(screen.queryByText("已加入")).not.toBeInTheDocument();
+      expect(joinMutate).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "加入" }));
+
+      expect(joinMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
+      expect(navigateMock).not.toHaveBeenCalled();
     });
 
     it("shows a 加入 button that sends a logged-out user to /login without joining", () => {
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       expect(screen.queryByText("已加入")).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "加入" }));
@@ -182,37 +251,52 @@ describe("CommunityFeedPage", () => {
       expect(joinMutate).not.toHaveBeenCalled();
     });
 
-    it("falls back to a retry 加入 button when the silent join failed", () => {
+    it("switches to ✓ 已加入 right after a successful manual join, before the membership refetch lands", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useJoinCommunityMutation.mockReturnValue({ mutate: joinMutate, isSuccess: true });
+
+      renderFeed();
+
+      expect(screen.getByText("已加入")).toBeInTheDocument();
+    });
+
+    it("shows a disabled 加入中… button while the join request is in flight", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useJoinCommunityMutation.mockReturnValue({ mutate: joinMutate, isPending: true });
+
+      renderFeed();
+
+      expect(screen.getByRole("button", { name: "加入中…" })).toBeDisabled();
+    });
+
+    it("keeps the 加入 button clickable for a retry when the join failed", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
       useJoinCommunityMutation.mockReturnValue({ mutate: joinMutate, isError: true });
 
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
-      expect(screen.queryByText("已加入")).not.toBeInTheDocument();
-      joinMutate.mockClear();
       fireEvent.click(screen.getByRole("button", { name: "加入" }));
 
       expect(joinMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
-      expect(navigateMock).not.toHaveBeenCalled();
     });
   });
 
   describe("share button", () => {
     it("copies the production URL of the current page and confirms", async () => {
-      renderWithProviders(<CommunityFeedPage />, { initialEntries: ["/community"] });
+      renderFeed("/community/dmv-pets");
 
       fireEvent.click(screen.getByRole("button", { name: "分享" }));
 
       expect(await screen.findByText("链接已复制")).toBeInTheDocument();
       expect(clipboardWriteMock).toHaveBeenCalledWith({
-        string: "https://www.saminest.com/community"
+        string: "https://www.saminest.com/community/dmv-pets"
       });
     });
 
     it("stays silent (no confirmation, no alert) when copying fails", async () => {
       clipboardWriteMock.mockRejectedValue(new Error("denied"));
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       fireEvent.click(screen.getByRole("button", { name: "分享" }));
 
@@ -225,7 +309,7 @@ describe("CommunityFeedPage", () => {
 
   describe("floating publish button", () => {
     it("is a fixed bottom-right pill, and the top bar no longer has its own publish button", () => {
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       const buttons = screen.getAllByRole("button", { name: "发布" });
       expect(buttons).toHaveLength(1);
@@ -233,7 +317,7 @@ describe("CommunityFeedPage", () => {
     });
 
     it("leaves enough bottom padding in the list container so the last post is not covered", () => {
-      const { container } = renderWithProviders(<CommunityFeedPage />);
+      const { container } = renderFeed();
 
       expect(container.querySelector(".pb-40")).not.toBeNull();
     });
@@ -241,7 +325,7 @@ describe("CommunityFeedPage", () => {
 
   describe("post list styling", () => {
     it("renders flat rows (border-b, no card border/shadow/rounding)", () => {
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       const row = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
       expect(row).toHaveClass("border-b");
@@ -265,7 +349,7 @@ describe("CommunityFeedPage", () => {
         })
       );
 
-      renderWithProviders(<CommunityFeedPage />);
+      renderFeed();
 
       expect(screen.getByRole("link", { name: /置顶公告/ })).toHaveTextContent("置顶");
       expect(screen.getByRole("link", { name: /普通帖子/ })).not.toHaveTextContent("置顶");
@@ -280,7 +364,7 @@ describe("CommunityFeedPage", () => {
         })
       );
 
-      const { container } = renderWithProviders(<CommunityFeedPage />);
+      const { container } = renderFeed();
 
       const comments = screen.getByLabelText("7 条评论");
       const favorites = screen.getByLabelText("9 人收藏");
@@ -298,7 +382,7 @@ describe("CommunityFeedPage", () => {
         data: { pages: [{ posts: [{ ...samplePost, images }], hasNextPage: false }] }
       })
     );
-    return renderWithProviders(<CommunityFeedPage />);
+    return renderFeed();
   }
 
   it("renders no image area (no carousel, no placeholder) on a card without images", () => {
@@ -338,7 +422,7 @@ describe("CommunityFeedPage", () => {
       })
     );
 
-    const { container } = renderWithProviders(<CommunityFeedPage />);
+    const { container } = renderFeed();
 
     expect(container.querySelector("a img")).toBeNull();
   });
@@ -348,7 +432,7 @@ describe("CommunityFeedPage", () => {
       postsResult({ data: undefined, isPending: true })
     );
 
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     expect(screen.getByRole("status")).toHaveTextContent("加载中…");
   });
@@ -358,18 +442,18 @@ describe("CommunityFeedPage", () => {
       postsResult({ data: undefined, isPending: false, isError: true })
     );
 
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     expect(screen.getByRole("alert")).toHaveTextContent("社区加载失败，请稍后重试。");
   });
 
   it("shows an error alert when the community itself fails to load", () => {
-    useDmvCommunityQuery.mockReturnValue({ data: undefined, isError: true });
+    useCommunityBySlugQuery.mockReturnValue({ data: undefined, isError: true });
     useCommunityPostsInfiniteQuery.mockReturnValue(
       postsResult({ data: undefined, isPending: true })
     );
 
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     expect(screen.getByRole("alert")).toHaveTextContent("社区加载失败，请稍后重试。");
   });
@@ -379,39 +463,27 @@ describe("CommunityFeedPage", () => {
       postsResult({ data: { pages: [{ posts: [], hasNextPage: false }] } })
     );
 
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     expect(screen.getByText("暂无帖子，欢迎发布第一条")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "去发布" })).toHaveAttribute("href", "/community/new");
+    expect(screen.getByRole("link", { name: "去发布" })).toHaveAttribute(
+      "href",
+      "/community/dmv/new"
+    );
   });
 
-  it("navigates to /community/new from the floating publish button", () => {
-    renderWithProviders(<CommunityFeedPage />);
+  it("navigates to /community/:slug/new (current community pre-selected) from the floating publish button", () => {
+    renderFeed("/community/dmv-pets");
 
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/community/new");
+    expect(navigateMock).toHaveBeenCalledWith("/community/dmv-pets/new");
   });
 
-  it("silently joins the community once the user is logged in", () => {
+  it("never silently joins on mount, logged in or not (no auto-join any more)", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
 
-    renderWithProviders(<CommunityFeedPage />);
-
-    expect(joinMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
-  });
-
-  it("does not try to join when logged out", () => {
-    renderWithProviders(<CommunityFeedPage />);
-
-    expect(joinMutate).not.toHaveBeenCalled();
-  });
-
-  it("does not try to join before the community id is known", () => {
-    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-    useDmvCommunityQuery.mockReturnValue({ data: undefined, isError: false });
-
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     expect(joinMutate).not.toHaveBeenCalled();
   });
@@ -431,7 +503,7 @@ describe("CommunityFeedPage", () => {
       postsResult({ hasNextPage: true, fetchNextPage })
     );
 
-    renderWithProviders(<CommunityFeedPage />);
+    renderFeed();
 
     callback?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
 

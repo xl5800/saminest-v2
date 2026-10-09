@@ -117,19 +117,34 @@ export const router = createBrowserRouter([
       {
         // 社区功能阶段二：DMV 社区 Feed / 发帖 / 帖子详情。Feed 和详情公开
         // 可浏览（跟 post/:id、首页一样），发帖需要登录（RequireAuth）。
-        // 阶段九：路由拆成两级——/community 是新的浏览/发现页，原来这里的
-        // DMV 帖子列表（CommunityFeedPage）原样挪到 community/dmv。两条都是
-        // 公开路由，没有 RequireAuth、没有 loader，所以不需要额外迁移任何
-        // 路由级配置。
+        // 阶段九：路由拆成两级——/community 是新的浏览/发现页，单个社区的帖子
+        // 列表（CommunityFeedPage）在下面的 community/:slug。两条都是公开路由，
+        // 没有 RequireAuth、没有 loader，所以不需要额外迁移任何路由级配置。
         path: "community",
         element: <CommunityBrowsePage />
       },
       {
-        path: "community/dmv",
+        // 阶段十三：多社区通用化——原来写死的字面量 community/dmv 改成参数化的
+        // :slug，同时匹配 dmv / dmv-pets / dmv-students，已经分享出去的
+        // /community/dmv 链接形状不变。community/new、community/post/:id 这些
+        // 更具体的固定路径各自单独声明，React Router 按特异性排序匹配，固定
+        // 段优先于 :slug，不会被它吞掉。
+        path: "community/:slug",
         element: <CommunityFeedPage />
       },
       {
+        // 全局发帖入口（首页发布弹层的"发布社区帖子"）：不属于任何单一社区，
+        // 发帖页顶部会让用户从已加入的社区里选一个。
         path: "community/new",
+        element: (
+          <RequireAuth>
+            <CreateCommunityPostPage />
+          </RequireAuth>
+        )
+      },
+      {
+        // 从某个社区自己的 Feed 页进来发帖：自动归到这个社区，不显示选择器。
+        path: "community/:slug/new",
         element: (
           <RequireAuth>
             <CreateCommunityPostPage />

@@ -153,8 +153,23 @@ vi.mock("../repositories/community-repository", () => ({
     name: "DMV 社区",
     slug: "dmv",
     description: null,
-    memberCount: 7
+    memberCount: 7,
+    isOfficial: true,
+    stateCodes: ["DC", "MD", "VA"]
   }),
+  // 阶段十三：浏览页"附近"Tab 枚举全部社区，发帖页/首页查已加入的社区。
+  listCommunities: vi.fn().mockResolvedValue([
+    {
+      id: "c-1",
+      name: "DMV 社区",
+      slug: "dmv",
+      description: null,
+      memberCount: 7,
+      isOfficial: true,
+      stateCodes: ["DC", "MD", "VA"]
+    }
+  ]),
+  listMyCommunities: vi.fn().mockResolvedValue([]),
   // 阶段九：浏览页（/community）新增的两个查询。
   isCommunityMember: vi.fn().mockResolvedValue(false),
   countCommunityPostsSince: vi.fn().mockResolvedValue(0),
@@ -242,6 +257,7 @@ import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { TermsPage } from "../pages/terms/terms-page";
 import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
+import { listMyCommunities } from "../repositories/community-repository";
 import { useAuthStore } from "../store/auth-store";
 
 const initialAuthState = useAuthStore.getState();
@@ -289,13 +305,22 @@ function renderAt(path: string | string[]) {
           { path: "categories", element: <CategoriesPage /> },
           { path: "region-select", element: <RegionSelectPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
-          // 阶段九：跟 routes.tsx 保持一致——/community 是浏览页，原来的 Feed
-          // 挪到 /community/dmv。（这份并行路由树不会自动跟着 routes.tsx
-          // 变，真正的 routes.tsx 另有 community-routes.test.tsx 单独验证。）
+          // 跟 routes.tsx 保持一致——/community 是浏览页，单个社区 Feed 在
+          // community/:slug（阶段十三），发帖页有全局入口和按社区入口两条。
+          // （这份并行路由树不会自动跟着 routes.tsx 变，真正的 routes.tsx
+          // 另有 community-routes.test.tsx 单独验证。）
           { path: "community", element: <CommunityBrowsePage /> },
-          { path: "community/dmv", element: <CommunityFeedPage /> },
+          { path: "community/:slug", element: <CommunityFeedPage /> },
           {
             path: "community/new",
+            element: (
+              <RequireAuth>
+                <CreateCommunityPostPage />
+              </RequireAuth>
+            )
+          },
+          {
+            path: "community/:slug/new",
             element: (
               <RequireAuth>
                 <CreateCommunityPostPage />
@@ -785,14 +810,52 @@ describe("app routes", () => {
     expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
   });
 
-  it("renders the create-community-post page at /community/new when a session exists, with neither the global AppHeader nor BottomNav", () => {
+  it("renders the create-community-post page at /community/:slug/new when a session exists, with neither the global AppHeader nor BottomNav and no community picker", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderAt("/community/dmv/new");
+
+    expect(await screen.findByPlaceholderText("说点什么吧…")).toBeInTheDocument();
+    expect(screen.queryByLabelText("选择社区")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+  });
+
+  it("redirects /community/:slug/new to /login when there is no session (reuses RequireAuth)", () => {
+    renderAt("/community/dmv/new");
+
+    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+  });
+
+  it("at the global /community/new, a user who joined nothing sees the join-a-community prompt instead of the form (still without AppHeader/BottomNav)", async () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
 
     renderAt("/community/new");
 
-    expect(screen.getByPlaceholderText("说点什么吧…")).toBeInTheDocument();
+    expect(await screen.findByText("你还没有加入任何社区，发帖前请先加入一个社区。")).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
+  });
+
+  it("at the global /community/new, a user who joined a community sees the form with the community picker", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+    vi.mocked(listMyCommunities).mockResolvedValueOnce([
+      {
+        id: "c-1",
+        name: "DMV 社区",
+        slug: "dmv",
+        description: null,
+        memberCount: 7,
+        isOfficial: true,
+        stateCodes: ["DC", "MD", "VA"]
+      }
+    ]);
+
+    renderAt("/community/new");
+
+    expect(await screen.findByLabelText("选择社区")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("说点什么吧…")).toBeInTheDocument();
   });
 
   it("renders the community post detail page at /community/post/:id without a session (not-found state when the post doesn't resolve)", async () => {

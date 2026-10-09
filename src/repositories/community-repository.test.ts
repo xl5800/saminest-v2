@@ -7,7 +7,7 @@ const { queryBuilder, singleMock, maybeSingleMock, updateMock, overrideTypesMock
   const overrideTypesMock = vi.fn();
   const insertMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const name of ["select", "eq", "is", "order", "range", "gte"]) {
+  for (const name of ["select", "eq", "in", "is", "order", "range", "gte"]) {
     builder[name] = vi.fn(() => builder);
   }
   builder.insert = insertMock;
@@ -32,7 +32,9 @@ import {
   getCommunityPostDetail,
   isCommunityMember,
   joinCommunity,
+  listCommunities,
   listCommunityPosts,
+  listMyCommunities,
   listMyCommunityPosts,
   updateCommunityPost
 } from "./community-repository";
@@ -51,6 +53,7 @@ function makeRow(overrides: Record<string, unknown> = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
     author_id: "user-1",
     author: { display_name: "Alice", avatar_url: "https://x/a.png" },
+    community: { name: "DMV 华人社区", slug: "dmv" },
     community_post_images: [],
     ...overrides
   };
@@ -79,7 +82,8 @@ describe("getCommunityBySlug", () => {
         slug: "dmv",
         description: "覆盖 DC / Maryland / Virginia 的本地华人讨论区",
         member_count: 12,
-        is_official: true
+        is_official: true,
+        state_codes: ["DC", "MD", "VA"]
       },
       error: null
     });
@@ -88,7 +92,7 @@ describe("getCommunityBySlug", () => {
 
     expect(fromMock).toHaveBeenCalledWith("communities");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, name, slug, description, member_count, is_official"
+      "id, name, slug, description, member_count, is_official, state_codes"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("slug", "dmv");
     expect(result).toEqual({
@@ -97,7 +101,8 @@ describe("getCommunityBySlug", () => {
       slug: "dmv",
       description: "覆盖 DC / Maryland / Virginia 的本地华人讨论区",
       memberCount: 12,
-      isOfficial: true
+      isOfficial: true,
+      stateCodes: ["DC", "MD", "VA"]
     });
   });
 
@@ -111,7 +116,8 @@ describe("getCommunityBySlug", () => {
         slug: "dmv",
         description: null,
         member_count: 0,
-        is_official: false
+        is_official: false,
+        state_codes: []
       },
       error: null
     });
@@ -119,6 +125,7 @@ describe("getCommunityBySlug", () => {
     const result = await getCommunityBySlug("dmv");
 
     expect(result.description).toBeNull();
+    expect(result.stateCodes).toEqual([]);
     expect(result.memberCount).toBe(0);
   });
 
@@ -222,14 +229,130 @@ describe("joinCommunity", () => {
   });
 });
 
+describe("listCommunities", () => {
+  const communityRow = (overrides: Record<string, unknown>) => ({
+    id: "c-1",
+    name: "DMV 华人社区",
+    slug: "dmv",
+    description: null,
+    member_count: 2,
+    is_official: true,
+    state_codes: ["DC", "MD", "VA"],
+    ...overrides
+  });
+
+  it("queries every community, official first then oldest first, and maps state_codes to stateCodes", async () => {
+    // 第二个 order() 是链上最后一环，直接 resolve。
+    queryBuilder.order.mockReturnValueOnce(queryBuilder).mockResolvedValueOnce({
+      data: [
+        communityRow({}),
+        communityRow({ id: "c-2", name: "DMV 宠物社区", slug: "dmv-pets", is_official: false })
+      ],
+      error: null
+    });
+
+    const result = await listCommunities();
+
+    expect(fromMock).toHaveBeenCalledWith("communities");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "id, name, slug, description, member_count, is_official, state_codes"
+    );
+    expect(queryBuilder.eq).not.toHaveBeenCalled();
+    expect(queryBuilder.order).toHaveBeenNthCalledWith(1, "is_official", { ascending: false });
+    expect(queryBuilder.order).toHaveBeenNthCalledWith(2, "created_at", { ascending: true });
+    expect(result.map((c) => [c.slug, c.isOfficial, c.stateCodes])).toEqual([
+      ["dmv", true, ["DC", "MD", "VA"]],
+      ["dmv-pets", false, ["DC", "MD", "VA"]]
+    ]);
+  });
+
+  it("throws COMMUNITIES_LIST_FAILED when the query fails", async () => {
+    queryBuilder.order.mockReturnValueOnce(queryBuilder).mockResolvedValueOnce({
+      data: null,
+      error: { message: "boom", code: "XX000" }
+    });
+
+    await expect(listCommunities()).rejects.toMatchObject({ code: "COMMUNITIES_LIST_FAILED" });
+  });
+});
+
+describe("listMyCommunities", () => {
+  const joined = (overrides: Record<string, unknown>) => ({
+    community: {
+      id: "c-1",
+      name: "DMV 华人社区",
+      slug: "dmv",
+      description: null,
+      member_count: 2,
+      is_official: true,
+      state_codes: ["DC", "MD", "VA"],
+      created_at: "2026-10-08T00:00:00.000Z",
+      ...overrides
+    }
+  });
+
+  it("queries community_members of the user with the community embedded", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [joined({})], error: null });
+
+    const result = await listMyCommunities("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("community_members");
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      "community:communities(id, name, slug, description, member_count, is_official, state_codes, created_at)"
+    );
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(result).toEqual([
+      {
+        id: "c-1",
+        name: "DMV 华人社区",
+        slug: "dmv",
+        description: null,
+        memberCount: 2,
+        isOfficial: true,
+        stateCodes: ["DC", "MD", "VA"]
+      }
+    ]);
+  });
+
+  it("sorts official communities first then by creation time, and skips memberships whose community is hidden by RLS (null)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        joined({ id: "c-3", slug: "dmv-students", is_official: false, created_at: "2026-10-09T02:00:00.000Z" }),
+        { community: null },
+        joined({ id: "c-2", slug: "dmv-pets", is_official: false, created_at: "2026-10-09T01:00:00.000Z" }),
+        joined({})
+      ],
+      error: null
+    });
+
+    const result = await listMyCommunities("user-1");
+
+    expect(result.map((c) => c.slug)).toEqual(["dmv", "dmv-pets", "dmv-students"]);
+  });
+
+  it("returns an empty list when the user has joined nothing", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    expect(await listMyCommunities("user-1")).toEqual([]);
+  });
+
+  it("throws MY_COMMUNITIES_FETCH_FAILED when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom", code: "XX000" } });
+
+    await expect(listMyCommunities("user-1")).rejects.toMatchObject({
+      code: "MY_COMMUNITIES_FETCH_FAILED"
+    });
+  });
+});
+
 describe("listCommunityPosts", () => {
   it("filters approved, non-deleted posts of the community, pinned first then newest, and fetches pageSize + 1 rows", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
-    await listCommunityPosts({ communityId: "c-1", page: 2, pageSize: 20 });
+    await listCommunityPosts({ communityIds: ["c-1"], page: 2, pageSize: 20 });
 
     expect(fromMock).toHaveBeenCalledWith("community_posts");
-    expect(queryBuilder.eq).toHaveBeenCalledWith("community_id", "c-1");
+    expect(queryBuilder.in).toHaveBeenCalledWith("community_id", ["c-1"]);
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.order).toHaveBeenNthCalledWith(1, "pinned", { ascending: false });
@@ -237,10 +360,56 @@ describe("listCommunityPosts", () => {
     expect(queryBuilder.range).toHaveBeenCalledWith(40, 60);
   });
 
+  it("filters with .in() over every given community id", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listCommunityPosts({ communityIds: ["c-1", "c-2"], page: 0, pageSize: 20 });
+
+    expect(queryBuilder.in).toHaveBeenCalledWith("community_id", ["c-1", "c-2"]);
+  });
+
+  it('adds no community_id filter at all when communityIds is "all"', async () => {
+    overrideTypesMock.mockResolvedValue({ data: [makeRow()], error: null });
+
+    const result = await listCommunityPosts({ communityIds: "all", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.in).not.toHaveBeenCalled();
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("community_id", expect.anything());
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(result.posts).toHaveLength(1);
+  });
+
+  it("short-circuits to an empty result without querying when communityIds is an empty array", async () => {
+    const result = await listCommunityPosts({ communityIds: [], page: 0, pageSize: 20 });
+
+    expect(result).toEqual({ posts: [], hasNextPage: false });
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("embeds the community name/slug and maps them to communityName/communitySlug", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        makeRow({ id: "a", community: { name: "DMV 宠物社区", slug: "dmv-pets" } }),
+        makeRow({ id: "b", community: null })
+      ],
+      error: null
+    });
+
+    const result = await listCommunityPosts({ communityIds: "all", page: 0, pageSize: 20 });
+
+    expect(queryBuilder.select).toHaveBeenCalledWith(
+      expect.stringContaining("community:communities(name, slug)")
+    );
+    expect(result.posts.map((p) => [p.id, p.communityName, p.communitySlug])).toEqual([
+      ["a", "DMV 宠物社区", "dmv-pets"],
+      ["b", "", ""]
+    ]);
+  });
+
   it("embeds community_post_images, ordered by sort_order on the embedded table, without limiting it in SQL", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
-    await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+    await listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 20 });
 
     expect(queryBuilder.select).toHaveBeenCalledWith(
       expect.stringContaining("community_post_images(public_url, sort_order, deleted_at)")
@@ -268,7 +437,7 @@ describe("listCommunityPosts", () => {
       error: null
     });
 
-    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+    const result = await listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 20 });
 
     expect(result.posts.map((p) => [p.id, p.coverImageUrl])).toEqual([
       ["with-images", "https://x/first.webp"],
@@ -280,7 +449,7 @@ describe("listCommunityPosts", () => {
   it("maps rows and reports hasNextPage=false when rows do not exceed pageSize", async () => {
     overrideTypesMock.mockResolvedValue({ data: [makeRow()], error: null });
 
-    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+    const result = await listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 20 });
 
     expect(result.hasNextPage).toBe(false);
     expect(result.posts).toEqual([
@@ -297,7 +466,9 @@ describe("listCommunityPosts", () => {
         authorDisplayName: "Alice",
         authorAvatarUrl: "https://x/a.png",
         coverImageUrl: null,
-        images: []
+        images: [],
+        communityName: "DMV 华人社区",
+        communitySlug: "dmv"
       }
     ]);
   });
@@ -321,7 +492,7 @@ describe("listCommunityPosts", () => {
       error: null
     });
 
-    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+    const result = await listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 20 });
 
     expect(result.posts.map((p) => [p.id, p.images])).toEqual([
       ["with-images", ["https://x/first.webp", "https://x/second.webp", "https://x/third.webp"]],
@@ -337,7 +508,7 @@ describe("listCommunityPosts", () => {
       error: null
     });
 
-    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 2 });
+    const result = await listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 2 });
 
     expect(result.hasNextPage).toBe(true);
     expect(result.posts.map((p) => p.id)).toEqual(["a", "b"]);
@@ -346,7 +517,7 @@ describe("listCommunityPosts", () => {
   it("falls back to a placeholder author when the profile join is null", async () => {
     overrideTypesMock.mockResolvedValue({ data: [makeRow({ author: null })], error: null });
 
-    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+    const result = await listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 20 });
 
     expect(result.posts[0]).toMatchObject({ authorDisplayName: "未知用户", authorAvatarUrl: null });
   });
@@ -355,7 +526,7 @@ describe("listCommunityPosts", () => {
     overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom", code: "500" } });
 
     await expect(
-      listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 })
+      listCommunityPosts({ communityIds: ["c-1"], page: 0, pageSize: 20 })
     ).rejects.toMatchObject({ code: "COMMUNITY_POSTS_LIST_FAILED" });
   });
 });
@@ -380,7 +551,9 @@ describe("getCommunityPostDetail", () => {
       communityId: "c-1",
       commentCount: 2,
       favoriteCount: 3,
-      authorDisplayName: "Alice"
+      authorDisplayName: "Alice",
+      communityName: "DMV 华人社区",
+      communitySlug: "dmv"
     });
   });
 
