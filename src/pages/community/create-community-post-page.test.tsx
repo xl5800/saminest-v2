@@ -136,21 +136,6 @@ describe("CreateCommunityPostPage", () => {
     expect(joinMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
   });
 
-  it("offers the six post types with 讨论 selected by default", () => {
-    renderWithProviders(<CreateCommunityPostPage />);
-
-    const select = screen.getByRole("combobox") as HTMLSelectElement;
-    expect(select.value).toBe("discussion");
-    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
-      "讨论",
-      "提问",
-      "求助",
-      "推荐",
-      "本地资讯",
-      "分享"
-    ]);
-  });
-
   it("rejects an empty body without calling the mutations", async () => {
     renderWithProviders(<CreateCommunityPostPage />);
 
@@ -165,7 +150,6 @@ describe("CreateCommunityPostPage", () => {
   it("confirms membership, creates the post with a null title when the title is blank, then navigates to the detail page", async () => {
     renderWithProviders(<CreateCommunityPostPage />);
 
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "question" } });
     fillBody("  有人知道吗  ");
     submit();
 
@@ -176,7 +160,7 @@ describe("CreateCommunityPostPage", () => {
     expect(createMutateAsync).toHaveBeenCalledWith({
       communityId: "c-1",
       authorId: "user-1",
-      postType: "question",
+      postType: "discussion",
       title: null,
       body: "有人知道吗"
     });

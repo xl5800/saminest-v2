@@ -19,7 +19,11 @@ interface PublishOption {
  * 页面打开时顺带把发起搭子排前面"这种按路径变化的场景，所以不需要也不应该
  * 再按 pathname 重新排序/加粗，那是这次改版之前的旧逻辑。
  */
+// 产品决策更新：固定第一项 + 固定高亮改成了「发布社区帖子」，不再是「发起搭子」。
+// 上面这段历史注释仍然描述的是旧规则，仅供参考背景，如需精简请一并更新
+// docs/saminest_codex_reference_pack/design-reference/05-publish-flow.md 5.1 节。
 const OPTIONS: PublishOption[] = [
+  { key: "community", emoji: "💬", label: "发布社区帖子", to: "/community/new" },
   { key: "activity", emoji: "🤝", label: "发起搭子", to: "/activities/new" },
   { key: "rent", emoji: "🏠", label: "发布租房", to: "/publish?category=rent" },
   { key: "wanted", emoji: "🔑", label: "发布求租", to: "/publish?category=wanted" },

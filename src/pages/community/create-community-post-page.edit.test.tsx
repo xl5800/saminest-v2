@@ -127,7 +127,6 @@ describe("CreateCommunityPostPage (edit mode)", () => {
       expect(screen.getByPlaceholderText("起个标题")).toHaveValue("原标题");
     });
     expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
-    expect(screen.getByRole("combobox")).toHaveValue("question");
   });
 
   it("only seeds once: a later background refetch does not overwrite what the user has typed", async () => {
@@ -169,14 +168,13 @@ describe("CreateCommunityPostPage (edit mode)", () => {
 
     fireEvent.change(screen.getByPlaceholderText("起个标题"), { target: { value: "  新标题  " } });
     fireEvent.change(screen.getByPlaceholderText("说点什么吧…"), { target: { value: "新正文" } });
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "help" } });
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 
     await waitFor(() => {
       expect(updateMutateAsync).toHaveBeenCalledWith({
         id: "cp-1",
         authorId: "user-1",
-        postType: "help",
+        postType: "question",
         title: "新标题",
         body: "新正文"
       });

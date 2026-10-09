@@ -16,7 +16,7 @@ describe("PublishActionSheet", () => {
     cleanup();
   });
 
-  it("renders the four publish options in the fixed order defined by 05-publish-flow.md, with '发起搭子' first", () => {
+  it("renders the five publish options in the fixed order defined by 05-publish-flow.md, with '发布社区帖子' first", () => {
     navigateMock.mockReset();
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
       initialEntries: ["/"]
@@ -24,6 +24,7 @@ describe("PublishActionSheet", () => {
 
     const buttons = screen.getAllByRole("button").filter((button) => button.textContent !== "取消");
     expect(buttons.map((button) => button.textContent)).toEqual([
+      "💬发布社区帖子",
       "🤝发起搭子",
       "🏠发布租房",
       "🔑发布求租",
@@ -31,24 +32,24 @@ describe("PublishActionSheet", () => {
     ]);
   });
 
-  it("always emphasizes '发起搭子' (blue-light background), regardless of which page opened the sheet", () => {
+  it("always emphasizes '发布社区帖子' (blue-light background), regardless of which page opened the sheet", () => {
     navigateMock.mockReset();
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
       initialEntries: ["/activities"]
     });
 
-    const activityButton = screen.getByRole("button", { name: /发起搭子/ });
-    expect(activityButton.className).toContain("bg-primary-light");
-    expect(activityButton.className).toContain("text-primary");
+    const communityButton = screen.getByRole("button", { name: /发布社区帖子/ });
+    expect(communityButton.className).toContain("bg-primary-light");
+    expect(communityButton.className).toContain("text-primary");
   });
 
-  it("does not emphasize the other three options", () => {
+  it("does not emphasize the other four options", () => {
     navigateMock.mockReset();
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
       initialEntries: ["/"]
     });
 
-    for (const name of [/发布租房/, /发布求租/, /发布二手/]) {
+    for (const name of [/发起搭子/, /发布租房/, /发布求租/, /发布二手/]) {
       const button = screen.getByRole("button", { name });
       expect(button.className).not.toContain("bg-primary-light");
       expect(button.className).toContain("bg-bg");
@@ -99,6 +100,17 @@ describe("PublishActionSheet", () => {
     fireEvent.click(screen.getByRole("button", { name: /发起搭子/ }));
 
     expect(navigateMock).toHaveBeenCalledWith("/activities/new");
+  });
+
+  it("navigates to /community/new when '发布社区帖子' is clicked", () => {
+    navigateMock.mockReset();
+    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
+      initialEntries: ["/"]
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /发布社区帖子/ }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/community/new");
   });
 
   it("calls onClose when the backdrop is clicked", () => {

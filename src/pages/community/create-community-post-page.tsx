@@ -20,7 +20,6 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import {
   COMMUNITY_BODY_MAX_LENGTH,
-  COMMUNITY_POST_TYPE_OPTIONS,
   COMMUNITY_TITLE_MAX_LENGTH
 } from "./community-post-type";
 
@@ -386,21 +385,6 @@ export function CreateCommunityPostPage() {
               {error}
             </p>
           ) : null}
-
-          <label className="mb-4 block">
-            <span className="mb-2 block text-xs font-semibold text-text">类型</span>
-            <select
-              value={postType}
-              onChange={(event) => setPostType(event.target.value as CommunityPostType)}
-              className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-            >
-              {COMMUNITY_POST_TYPE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <label className="mb-4 block">
             <span className="mb-2 block text-xs font-semibold text-text">标题（可选）</span>
