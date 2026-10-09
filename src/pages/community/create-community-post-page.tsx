@@ -295,7 +295,8 @@ export function CreateCommunityPostPage() {
           title: trimmedTitle || null,
           body: trimmedBody
         });
-        navigate(`/community/post/${communityPostId}`);
+        // 编辑保存后同样 replace 掉编辑页，返回时不会再回到编辑表单。
+        navigate(`/community/post/${communityPostId}`, { replace: true });
         return;
       }
 
@@ -335,12 +336,17 @@ export function CreateCommunityPostPage() {
         }
       }
 
-      const detailPath = `/community/post/${created.id}`;
-      if (imageFailed) {
-        navigate(detailPath, { state: { publishSuccessMessage: IMAGE_FAILURE_MESSAGE } });
-      } else {
-        navigate(detailPath);
-      }
+      // replace：发帖页从历史栈里换掉，发完帖在详情页点返回不会再回到已经提交过的
+      // 发帖表单；publishBackTo 告诉详情页返回按钮该去哪（见
+      // community-post-detail-page.tsx）：从某个社区页"＋发布"进来的（带 slug）
+      // 回那个社区页，全局入口（首页发布弹层）回首页。
+      const publishBackTo = slug ? `/community/${slug}` : "/";
+      navigate(`/community/post/${created.id}`, {
+        replace: true,
+        state: imageFailed
+          ? { publishBackTo, publishSuccessMessage: IMAGE_FAILURE_MESSAGE }
+          : { publishBackTo }
+      });
     } catch (submitError) {
       // 账号受限是明确、可操作的失败原因（重试没用，需要联系管理员），跟其它
       // 未知失败原因共用一条"请稍后重试"会误导用户——跟 publish-page.tsx 同

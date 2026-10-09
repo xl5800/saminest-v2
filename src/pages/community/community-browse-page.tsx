@@ -2,19 +2,15 @@ import { ChevronRight, MapPin, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { CommunityCard } from "../../components/community-card";
 import { Skeleton } from "../../components/skeleton";
 import { formatSelectedRegionLabel } from "../../data/us-states";
-import { useCommunityMembershipQuery } from "../../features/community/use-community-membership-query";
-import { useCommunityPostsTodayCountQuery } from "../../features/community/use-community-posts-today-count-query";
-import { useJoinCommunityMutation } from "../../features/community/use-join-community-mutation";
 import { useListCommunitiesQuery } from "../../features/community/use-list-communities-query";
 import { useMyCommunitiesQuery } from "../../features/community/use-my-communities-query";
 import type { Community } from "../../repositories/community-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
-import { AppError } from "../../utils/app-error";
-import { getCommunityAbbreviation } from "./community-abbreviation";
+import { BrowseCommunityCard } from "./browse-community-card";
+import { filterCommunitiesByKeyword } from "./community-search";
 
 const REGION_SELECT_PATH = "/region-select";
 function getCommunityPath(slug: string): string {
@@ -26,10 +22,7 @@ const NEARBY_UNAVAILABLE_MESSAGE =
 const MINE_EMPTY_MESSAGE = "你还没有加入任何社区";
 const MINE_GUEST_MESSAGE = "登录后可以看到你加入的社区";
 const LOAD_ERROR_MESSAGE = "社区加载失败，请稍后重试。";
-const JOIN_ERROR_MESSAGE = "加入失败，请稍后重试。";
-// communities.description 是可空列，没有简介的社区卡片上退回一句占位，数据库里
-// 填了就自动用数据库的。
-const DESCRIPTION_FALLBACK = "暂无简介";
+const SEARCH_EMPTY_MESSAGE = "没有找到相关社区";
 const REGION_PLACEHOLDER = "选择地区";
 
 type BrowseTab = "nearby" | "mine" | "discover";
@@ -44,76 +37,6 @@ const TAB_OPTIONS: { value: BrowseTab; label: string }[] = [
 // 没有导出，这里照抄一份，不为这一处样式去改 top-bar.tsx 的导出）。
 const ICON_BUTTON_CLASS_NAME =
   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-card text-text";
-
-/**
- * 浏览页里的单张社区卡片。每张卡片自己持有"成员状态 / 今日新帖子数 / 加入 mutation
- * / 加入失败提示"——多个社区同时出现在列表里，这些状态都是按社区区分的，不能再像
- * 只有一个 DMV 社区时那样提到页面层用单个变量。三个 Tab 里的卡片共用这一个
- * 组件，"我的社区"Tab 里的卡片成员状态自然是"已加入"。
- *
- * 加入：已登录调用 joinCommunity（撞主键重复就当已是成员，见仓库函数），成功后
- * 由 useJoinCommunityMutation 统一失效成员状态/我的社区/社区本身（刷新成员数）；
- * 游客点"加入"跳 /login，跟 favorite-button.tsx 同一个模式，不在页面里判断路由
- * 权限。
- */
-function BrowseCommunityCard({ community }: { community: Community }) {
-  const navigate = useNavigate();
-  const userId = useAuthStore((s) => s.session)?.user.id;
-  const [joinError, setJoinError] = useState<string | null>(null);
-
-  const membership = useCommunityMembershipQuery(community.id, userId);
-  const { data: todayPostCount } = useCommunityPostsTodayCountQuery(community.id);
-  const joinCommunity = useJoinCommunityMutation();
-
-  const isMember = membership.data === true || joinCommunity.isSuccess;
-  const joinState = joinCommunity.isPending ? "joining" : isMember ? "joined" : "join";
-
-  function handleJoin(): void {
-    if (!userId) {
-      navigate("/login");
-      return;
-    }
-    if (joinCommunity.isPending) return;
-
-    setJoinError(null);
-    joinCommunity.mutate(
-      { communityId: community.id, userId },
-      {
-        onError: (error) => {
-          // 跟 favorite-button.tsx 同一个原则：账号受限是明确、可操作的失败
-          // 原因，直接展示；其它未知失败退回通用文案。
-          setJoinError(
-            error instanceof AppError && error.code === "ACCOUNT_RESTRICTED"
-              ? error.message
-              : JOIN_ERROR_MESSAGE
-          );
-        }
-      }
-    );
-  }
-
-  return (
-    <div>
-      <CommunityCard
-        name={community.name}
-        abbreviation={getCommunityAbbreviation(community.slug)}
-        memberCount={community.memberCount}
-        todayPostCount={todayPostCount}
-        tag="州社区"
-        description={community.description ?? DESCRIPTION_FALLBACK}
-        to={getCommunityPath(community.slug)}
-        joinState={joinState}
-        onJoin={handleJoin}
-        isOfficial={community.isOfficial}
-      />
-      {joinError ? (
-        <p role="alert" className="mt-2 text-sm text-danger">
-          {joinError}
-        </p>
-      ) : null}
-    </div>
-  );
-}
 
 /**
  * 社区浏览页（/community，公开可浏览，不需要登录）。阶段九把路由拆成两级：
@@ -135,14 +58,16 @@ function BrowseCommunityCard({ community }: { community: Community }) {
  * - 我的社区：listMyCommunities(userId) 一次拿到当前用户已加入的全部社区
  *   （community_members 内嵌 communities），逐个渲染卡片；一个都没有展示空文案；
  *   游客提示登录。
- * - 发现：搜索框目前只是 UI（没接真实搜索）+ 每个社区一个热门搜索 chip 直达
- *   对应社区。
+ * - 发现：社区搜索框——输入关键词后按社区名称/简介匹配（filterCommunitiesByKeyword，
+ *   只搜社区、不搜帖子；帖子搜索在全站搜索页 /search），结果渲染成社区卡片；
+ *   没输入时展示每个社区一个热门搜索 chip 直达对应社区。
  *
  * 搜索图标点击：切到"发现"并聚焦搜索框。聚焦用一个一次性的
  * focusRequested 标记而不是依赖 tab 变化——否则用户之后手动切到"发现"
  * 也会被抢走焦点、弹出键盘。
  *
- * 加入逻辑在 BrowseCommunityCard 里（每张卡片各自一份状态）。
+ * 加入/退出逻辑在 BrowseCommunityCard 里（每张卡片各自一份状态，见
+ * browse-community-card.tsx）。
  */
 export function CommunityBrowsePage() {
   const navigate = useNavigate();
@@ -243,6 +168,40 @@ export function CommunityBrowsePage() {
     return renderCardList(myCommunities);
   }
 
+  function renderDiscoverResults() {
+    if (communitiesError) return <p role="alert">{LOAD_ERROR_MESSAGE}</p>;
+    if (communitiesPending) return cardSkeleton;
+
+    if (!searchText.trim()) {
+      return (
+        <>
+          <p className="mt-4 text-sm font-medium text-text-muted">热门搜索</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(communities ?? []).map((community) => (
+              <Link
+                key={community.id}
+                to={getCommunityPath(community.slug)}
+                className="rounded-full border border-border bg-card-white px-3 py-1.5 text-sm text-text"
+              >
+                {community.name}
+              </Link>
+            ))}
+          </div>
+        </>
+      );
+    }
+
+    const matched = filterCommunitiesByKeyword(communities ?? [], searchText);
+    if (matched.length === 0) {
+      return (
+        <p role="status" className="px-2 py-10 text-center text-sm text-text-muted">
+          {SEARCH_EMPTY_MESSAGE}
+        </p>
+      );
+    }
+    return <div className="mt-4">{renderCardList(matched)}</div>;
+  }
+
   function renderDiscover() {
     return (
       <div>
@@ -255,18 +214,7 @@ export function CommunityBrowsePage() {
           onChange={(event) => setSearchText(event.target.value)}
           className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
         />
-        <p className="mt-4 text-sm font-medium text-text-muted">热门搜索</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {(communities ?? []).map((community) => (
-            <Link
-              key={community.id}
-              to={getCommunityPath(community.slug)}
-              className="rounded-full border border-border bg-card-white px-3 py-1.5 text-sm text-text"
-            >
-              {community.name}
-            </Link>
-          ))}
-        </div>
+        {renderDiscoverResults()}
       </div>
     );
   }

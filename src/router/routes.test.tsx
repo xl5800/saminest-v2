@@ -174,6 +174,7 @@ vi.mock("../repositories/community-repository", () => ({
   isCommunityMember: vi.fn().mockResolvedValue(false),
   countCommunityPostsSince: vi.fn().mockResolvedValue(0),
   joinCommunity: vi.fn().mockResolvedValue(undefined),
+  leaveCommunity: vi.fn().mockResolvedValue(undefined),
   listCommunityPosts: vi.fn().mockResolvedValue({ posts: [], hasNextPage: false }),
   getCommunityPostDetail: vi.fn().mockRejectedValue(new Error("not found")),
   createCommunityPost: vi.fn().mockResolvedValue({ id: "cp-1" }),

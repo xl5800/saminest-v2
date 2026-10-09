@@ -1,8 +1,9 @@
 import { Clipboard } from "@capacitor/clipboard";
-import { BadgeCheck, Check, Heart, MessageCircle, Plus, Share2 } from "lucide-react";
+import { BadgeCheck, Heart, MessageCircle, Plus, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { LeaveCommunityConfirmDialog } from "../../components/leave-community-confirm-dialog";
 import { PostImageCarousel } from "../../components/post-image-carousel";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
@@ -10,13 +11,10 @@ import { useCommunityBySlugQuery } from "../../features/community/use-community-
 import { useCommunityMembershipQuery } from "../../features/community/use-community-membership-query";
 import { useCommunityPostsInfiniteQuery } from "../../features/community/use-community-posts-query";
 import { useJoinCommunityMutation } from "../../features/community/use-join-community-mutation";
+import { useLeaveCommunityMutation } from "../../features/community/use-leave-community-mutation";
 import { useAuthStore } from "../../store/auth-store";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { getCommunityAbbreviation } from "./community-abbreviation";
-import {
-  COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
-  getCommunityPostTypeLabel
-} from "./community-post-type";
 
 const SKELETON_COUNT = 4;
 
@@ -35,10 +33,12 @@ const SKELETON_COUNT = 4;
  *
  * 加入状态：没有任何"静默自动加入"（阶段十三产品决策）——用户必须自己点头部的
  * "加入"按钮才算数。按钮状态来自真实的成员关系查询（useCommunityMembershipQuery）
- * 加上本次会话里刚加入成功的结果：已是成员：纯状态展示的"✓ 已加入"（不可点，
- * 这次不做退出社区）；请求进行中：禁用的"加入中…"；其它：可点的"加入"——已登录
- * 调 joinCommunity（撞主键重复就当已经是成员，见 community-repository.ts），失败
- * 时按钮保持可点方便重试；未登录点击跳登录页。
+ * （加入/退出成功后由 applyCommunityMembershipChange 直接写入最新值）：已是成员：
+ * 描边样式的"退出"按钮，点了先弹 LeaveCommunityConfirmDialog 确认，确认后才调
+ * leaveCommunity；请求进行中：禁用的"加入中…"/
+ * "退出中…"；其它：可点的"加入"——已登录调 joinCommunity（撞主键重复就当已经是
+ * 成员，见 community-repository.ts），失败时按钮保持可点方便重试；未登录点击跳
+ * 登录页。
  *
  * 分享：复制当前页面的生产环境链接到剪贴板（@capacitor/clipboard，跟
  * post-share-action-sheet.tsx 同一个写法，纯浏览器环境自动降级成
@@ -52,7 +52,8 @@ const SKELETON_COUNT = 4;
  * （同 fab.tsx 的 bottom 偏移），列表底部预留足够 padding 不被它遮住。
  *
  * 置顶：listCommunityPosts 已经是 pinned desc 排序，置顶帖天然在最前面，这里
- * 只负责在卡片上打"置顶"标签。没有做点赞（这次改版明确不做）。
+ * 只负责在卡片上打"置顶"标签。帖子类型（"讨论"）蓝色标签已去掉——发帖页早就
+ * 不让用户选类型了，每条都显示"讨论"没有信息量。没有做点赞（这次改版明确不做）。
  *
  * 列表没有复用 PostList（那个组件深度绑定 posts 表的分类/图片/价格概念），
  * 分页用跟 post-list.tsx 完全同一套"哨兵元素 + IntersectionObserver"无限
@@ -70,9 +71,11 @@ export function CommunityFeedPage() {
 
   const joinCommunity = useJoinCommunityMutation();
   const { mutate: joinCommunityMutate } = joinCommunity;
+  const leaveCommunity = useLeaveCommunityMutation();
   const membership = useCommunityMembershipQuery(communityId, userId);
 
   const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   async function handleShare(): Promise<void> {
     setShareFeedback(null);
@@ -107,26 +110,29 @@ export function CommunityFeedPage() {
 
   const posts = data?.pages.flatMap((page) => page.posts) ?? [];
 
-  const isJoined = membership.data === true || joinCommunity.isSuccess;
+  const isJoined = Boolean(userId) && membership.data === true;
 
   function renderJoinButton() {
-    if (joinCommunity.isPending) {
+    if (joinCommunity.isPending || leaveCommunity.isPending) {
       return (
         <button
           type="button"
           disabled
           className="h-10 flex-1 rounded-full bg-primary text-sm font-semibold text-white opacity-60"
         >
-          加入中…
+          {joinCommunity.isPending ? "加入中…" : "退出中…"}
         </button>
       );
     }
     if (isJoined) {
       return (
-        <span className="flex h-10 flex-1 items-center justify-center gap-1 rounded-full bg-primary-light text-sm font-semibold text-primary">
-          <Check size={16} aria-hidden="true" />
-          已加入
-        </span>
+        <button
+          type="button"
+          onClick={() => setConfirmLeaveOpen(true)}
+          className="h-10 flex-1 rounded-full border border-border bg-card text-sm font-semibold text-text-muted"
+        >
+          退出
+        </button>
       );
     }
     return (
@@ -202,6 +208,18 @@ export function CommunityFeedPage() {
             {shareFeedback}
           </p>
         ) : null}
+        {confirmLeaveOpen ? (
+          <LeaveCommunityConfirmDialog
+            communityName={community.name}
+            onCancel={() => setConfirmLeaveOpen(false)}
+            onConfirm={() => {
+              setConfirmLeaveOpen(false);
+              if (userId && communityId) {
+                leaveCommunity.mutate({ communityId, userId });
+              }
+            }}
+          />
+        ) : null}
       </section>
     );
   }
@@ -220,8 +238,7 @@ export function CommunityFeedPage() {
           <div className="flex flex-col">
             {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
               <div key={index} className="border-b border-border py-4">
-                <Skeleton className="h-5 w-12 rounded-full" />
-                <Skeleton className="mt-2 h-5 w-4/5" />
+                <Skeleton className="h-5 w-4/5" />
                 <Skeleton className="mt-1.5 h-4 w-full" />
                 <div className="mt-3 flex items-center gap-2">
                   <Skeleton className="h-6 w-6 shrink-0 rounded-full" />
@@ -259,16 +276,11 @@ export function CommunityFeedPage() {
                 to={`/community/post/${post.id}`}
                 className="block border-b border-border py-4"
               >
-                <div className="flex items-center gap-1.5">
-                  {post.pinned ? (
-                    <span className="inline-block rounded-full bg-primary-light px-2 py-0.5 text-xs font-medium text-primary">
-                      置顶
-                    </span>
-                  ) : null}
-                  <span className={COMMUNITY_POST_TYPE_PILL_CLASS_NAME}>
-                    {getCommunityPostTypeLabel(post.postType)}
+                {post.pinned ? (
+                  <span className="inline-block rounded-full bg-primary-light px-2 py-0.5 text-xs font-medium text-primary">
+                    置顶
                   </span>
-                </div>
+                ) : null}
                 {/* 有标题：标题单行截断 + body 预览两行；没有标题：直接把
                     body 前一两行当标题用（两行截断），不再重复展示预览。
                     文字在上、图片在下：图片区域是满宽的 PostImageCarousel

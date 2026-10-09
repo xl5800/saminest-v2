@@ -180,7 +180,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
       });
     });
     expect(createMutateAsync).not.toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-1");
+    expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-1", { replace: true });
   });
 
   it("sends title: null when the title is cleared", async () => {

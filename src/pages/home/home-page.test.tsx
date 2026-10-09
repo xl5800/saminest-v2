@@ -138,12 +138,12 @@ describe("HomePage (community aggregate feed)", () => {
       expect(await screen.findByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
     });
 
-    it("navigates to /community from the search icon (placeholder until community search exists)", () => {
+    it("navigates to the site-wide search page /search from the search icon", () => {
       renderWithProviders(<HomePage />);
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
 
-      expect(navigateMock).toHaveBeenCalledWith("/community");
+      expect(navigateMock).toHaveBeenCalledWith("/search");
     });
 
     it("shows the fixed '推荐' tab", () => {

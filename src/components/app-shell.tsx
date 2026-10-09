@@ -198,7 +198,9 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/community/post/:id",
   // 社区功能阶段六：我的社区发帖管理页（TopBar nav-only 变体），跟 /my-posts
   // 同一类，只关 AppHeader、留 BottomNav。
-  "/my-community-posts"
+  "/my-community-posts",
+  // 全站搜索页（首页顶栏搜索图标进入），自己渲染 TopBar nav-only 变体 + 搜索框。
+  "/search"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {

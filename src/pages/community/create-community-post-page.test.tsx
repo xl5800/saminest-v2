@@ -121,6 +121,11 @@ function submit() {
   fireEvent.click(screen.getByRole("button", { name: "发布" }));
 }
 
+// 发帖成功：replace 掉发帖页 + 告诉详情页返回按钮该去哪——从社区页（/community/dmv/new）
+// 发帖回那个社区页，从全局入口（/community/new）发帖回首页。
+const PUBLISHED_NAVIGATION = { replace: true, state: { publishBackTo: "/community/dmv" } };
+const PUBLISHED_FROM_PICKER_NAVIGATION = { replace: true, state: { publishBackTo: "/" } };
+
 describe("CreateCommunityPostPage", () => {
   afterEach(() => {
     cleanup();
@@ -197,7 +202,7 @@ describe("CreateCommunityPostPage", () => {
     submit();
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9");
+      expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", PUBLISHED_NAVIGATION);
     });
     expect(joinMutateAsync).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
     expect(createMutateAsync).toHaveBeenCalledWith({
@@ -250,7 +255,7 @@ describe("CreateCommunityPostPage", () => {
 
     // 失败后按钮恢复可点，再次提交会成功。
     submit();
-    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9"));
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", PUBLISHED_NAVIGATION));
   });
 
   it("does not create a post when confirming membership fails", async () => {
@@ -284,7 +289,7 @@ describe("CreateCommunityPostPage", () => {
       fillBody("纯文字");
       submit();
 
-      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9"));
+      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", PUBLISHED_NAVIGATION));
       expect(uploadCommunityPostImage).not.toHaveBeenCalled();
       expect(insertCommunityPostImages).not.toHaveBeenCalled();
     });
@@ -312,7 +317,7 @@ describe("CreateCommunityPostPage", () => {
         [2, "cp-9", "user-1"]
       ]);
       expect(navigateMock).toHaveBeenCalledTimes(1);
-      expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9");
+      expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", PUBLISHED_NAVIGATION);
       expect(removeCommunityPostImageFiles).not.toHaveBeenCalled();
     });
 
@@ -333,7 +338,8 @@ describe("CreateCommunityPostPage", () => {
         ["p/2.webp", 2]
       ]);
       expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", {
-        state: { publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
+        replace: true,
+        state: { publishBackTo: "/community/dmv", publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
       });
     });
 
@@ -347,7 +353,8 @@ describe("CreateCommunityPostPage", () => {
       await waitFor(() => expect(navigateMock).toHaveBeenCalled());
       expect(insertCommunityPostImages).not.toHaveBeenCalled();
       expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", {
-        state: { publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
+        replace: true,
+        state: { publishBackTo: "/community/dmv", publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
       });
     });
 
@@ -364,7 +371,8 @@ describe("CreateCommunityPostPage", () => {
         "user-1/cp-9/img-3.webp"
       ]);
       expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", {
-        state: { publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
+        replace: true,
+        state: { publishBackTo: "/community/dmv", publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
       });
     });
 
@@ -377,7 +385,8 @@ describe("CreateCommunityPostPage", () => {
 
       await waitFor(() => expect(navigateMock).toHaveBeenCalled());
       expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", {
-        state: { publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
+        replace: true,
+        state: { publishBackTo: "/community/dmv", publishSuccessMessage: "帖子已发布，但部分图片上传失败。" }
       });
     });
 
@@ -441,7 +450,9 @@ describe("CreateCommunityPostPage", () => {
       fillBody("正文");
       submit();
 
-      await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9"));
+      await waitFor(() =>
+        expect(navigateMock).toHaveBeenCalledWith("/community/post/cp-9", PUBLISHED_FROM_PICKER_NAVIGATION)
+      );
       expect(joinMutateAsync).toHaveBeenCalledWith({ communityId: "c-3", userId: "user-1" });
       expect(createMutateAsync).toHaveBeenCalledWith(
         expect.objectContaining({ communityId: "c-3", postType: "discussion" })

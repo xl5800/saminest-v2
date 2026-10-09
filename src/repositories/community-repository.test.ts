@@ -7,7 +7,7 @@ const { queryBuilder, singleMock, maybeSingleMock, updateMock, overrideTypesMock
   const overrideTypesMock = vi.fn();
   const insertMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const name of ["select", "eq", "in", "is", "order", "range", "gte"]) {
+  for (const name of ["select", "eq", "in", "is", "order", "range", "gte", "delete", "or", "limit"]) {
     builder[name] = vi.fn(() => builder);
   }
   builder.insert = insertMock;
@@ -32,10 +32,12 @@ import {
   getCommunityPostDetail,
   isCommunityMember,
   joinCommunity,
+  leaveCommunity,
   listCommunities,
   listCommunityPosts,
   listMyCommunities,
   listMyCommunityPosts,
+  searchCommunityPosts,
   updateCommunityPost
 } from "./community-repository";
 
@@ -225,6 +227,71 @@ describe("joinCommunity", () => {
 
     await expect(joinCommunity({ communityId: "c-1", userId: "user-1" })).rejects.toMatchObject({
       code: "COMMUNITY_JOIN_FAILED"
+    });
+  });
+});
+
+describe("leaveCommunity", () => {
+  it("deletes only the caller's own community_members row for that community", async () => {
+    // delete().eq().eq() 最后一个 eq 的返回值会被 await。
+    queryBuilder.eq
+      .mockImplementationOnce(() => queryBuilder)
+      .mockImplementationOnce(() => Promise.resolve({ error: null }) as never);
+
+    await leaveCommunity({ communityId: "c-1", userId: "user-1" });
+
+    expect(fromMock).toHaveBeenCalledWith("community_members");
+    expect(queryBuilder.delete).toHaveBeenCalled();
+    expect(queryBuilder.eq).toHaveBeenCalledWith("community_id", "c-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("throws COMMUNITY_LEAVE_FAILED on error", async () => {
+    queryBuilder.eq
+      .mockImplementationOnce(() => queryBuilder)
+      .mockImplementationOnce(
+        () => Promise.resolve({ error: { message: "boom", code: "500" } }) as never
+      );
+
+    await expect(leaveCommunity({ communityId: "c-1", userId: "user-1" })).rejects.toMatchObject({
+      code: "COMMUNITY_LEAVE_FAILED"
+    });
+  });
+});
+
+describe("searchCommunityPosts", () => {
+  it("does not query at all for a blank keyword", async () => {
+    await expect(searchCommunityPosts("   ")).resolves.toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("matches title OR body with ilike across all communities' visible posts and maps rows", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [makeRow()], error: null });
+
+    const posts = await searchCommunityPosts(" 租房 ");
+
+    expect(fromMock).toHaveBeenCalledWith("community_posts");
+    expect(queryBuilder.or).toHaveBeenCalledWith("title.ilike.%租房%,body.ilike.%租房%");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.in).not.toHaveBeenCalled();
+    expect(posts).toHaveLength(1);
+    expect(posts[0]).toMatchObject({ id: "cp-1", title: "标题", communityName: "DMV 华人社区" });
+  });
+
+  it("strips characters that would break the PostgREST or-filter", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await searchCommunityPosts("a,b(c)%");
+
+    expect(queryBuilder.or).toHaveBeenCalledWith("title.ilike.%a b c%,body.ilike.%a b c%");
+  });
+
+  it("throws COMMUNITY_POSTS_SEARCH_FAILED on error", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+
+    await expect(searchCommunityPosts("x")).rejects.toMatchObject({
+      code: "COMMUNITY_POSTS_SEARCH_FAILED"
     });
   });
 });

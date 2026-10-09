@@ -187,6 +187,25 @@ export async function joinCommunity(input: JoinCommunityInput): Promise<void> {
   }
 }
 
+/**
+ * 退出社区：删除自己在 community_members 里的那一行。community_members_delete_own
+ * RLS 策略只允许删 user_id = auth.uid() 的行，member_count 由
+ * sync_community_member_count 触发器在删除时自动减一，不需要新的数据库对象。
+ * 本来就不是成员（删到 0 行）对用户来说结果一样，当成功处理，跟 joinCommunity
+ * 对重复加入的幂等处理是同一个态度。
+ */
+export async function leaveCommunity(input: JoinCommunityInput): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from("community_members")
+    .delete()
+    .eq("community_id", input.communityId)
+    .eq("user_id", input.userId);
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_LEAVE_FAILED", error);
+  }
+}
+
 export type CommunityPostType =
   | "discussion"
   | "question"
@@ -334,6 +353,62 @@ export async function listCommunityPosts(
     })),
     hasNextPage
   };
+}
+
+const COMMUNITY_POST_SEARCH_LIMIT = 50;
+
+/**
+ * PostgREST 的 or=(...) 过滤串里逗号/括号是语法字符，ilike 里 % _ 是通配符，
+ * 用户输入里的这些字符一律去掉（替换成空格），避免拼出非法过滤串或意外的通配。
+ */
+function sanitizeSearchKeyword(keyword: string): string {
+  return keyword.replace(/[%_,()\\*"]/g, " ").trim();
+}
+
+/**
+ * 全站搜索页用：按标题或正文模糊匹配所有社区里对外可见的帖子（approved 且未
+ * 软删除），按发布时间倒序，最多 COMMUNITY_POST_SEARCH_LIMIT 条，不分页。
+ * 返回结构跟 Feed 列表同一个 CommunityPostListItem。
+ */
+export async function searchCommunityPosts(keyword: string): Promise<CommunityPostListItem[]> {
+  const sanitized = sanitizeSearchKeyword(keyword);
+  if (!sanitized) return [];
+  const pattern = `%${sanitized}%`;
+
+  const { data, error } = await getSupabaseClient()
+    .from("community_posts")
+    .select(
+      `${COMMUNITY_POST_LIST_COLUMNS}, community_post_images(public_url, sort_order, deleted_at)`
+    )
+    .or(`title.ilike.${pattern},body.ilike.${pattern}`)
+    .eq("status", "approved")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .order("sort_order", { foreignTable: "community_post_images", ascending: true })
+    .limit(COMMUNITY_POST_SEARCH_LIMIT)
+    .overrideTypes<CommunityPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POSTS_SEARCH_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    postType: row.post_type,
+    title: row.title,
+    body: row.body,
+    pinned: row.pinned,
+    commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
+    createdAt: row.created_at,
+    authorId: row.author_id,
+    authorDisplayName: row.author?.display_name ?? "未知用户",
+    authorAvatarUrl: row.author?.avatar_url ?? null,
+    coverImageUrl: resolveCoverImageUrl(row.community_post_images),
+    images: mapPostImageUrls(row.community_post_images),
+    communityName: row.community?.name ?? "",
+    communitySlug: row.community?.slug ?? ""
+  }));
 }
 
 export interface CommunityPostDetail extends CommunityPostListItem {

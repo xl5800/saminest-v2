@@ -9,26 +9,35 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  * key 的形状、加入社区后失效哪些缓存。
  */
 
-const { getCommunityBySlug, listCommunities, listMyCommunities, listCommunityPosts, joinCommunity } =
-  vi.hoisted(() => ({
-    getCommunityBySlug: vi.fn(),
-    listCommunities: vi.fn(),
-    listMyCommunities: vi.fn(),
-    listCommunityPosts: vi.fn(),
-    joinCommunity: vi.fn()
-  }));
+const {
+  getCommunityBySlug,
+  listCommunities,
+  listMyCommunities,
+  listCommunityPosts,
+  joinCommunity,
+  leaveCommunity
+} = vi.hoisted(() => ({
+  getCommunityBySlug: vi.fn(),
+  listCommunities: vi.fn(),
+  listMyCommunities: vi.fn(),
+  listCommunityPosts: vi.fn(),
+  joinCommunity: vi.fn(),
+  leaveCommunity: vi.fn()
+}));
 
 vi.mock("../../repositories/community-repository", () => ({
   getCommunityBySlug,
   listCommunities,
   listMyCommunities,
   listCommunityPosts,
-  joinCommunity
+  joinCommunity,
+  leaveCommunity
 }));
 
 import { useCommunityBySlugQuery } from "./use-community-by-slug-query";
 import { useCommunityPostsInfiniteQuery } from "./use-community-posts-query";
 import { useJoinCommunityMutation } from "./use-join-community-mutation";
+import { useLeaveCommunityMutation } from "./use-leave-community-mutation";
 import { useListCommunitiesQuery } from "./use-list-communities-query";
 import { useMyCommunitiesQuery } from "./use-my-communities-query";
 
@@ -147,18 +156,46 @@ describe("useCommunityPostsInfiniteQuery", () => {
 });
 
 describe("useJoinCommunityMutation", () => {
-  it("invalidates the community, membership, my-communities and community-posts caches after joining", async () => {
+  it("writes membership=true and invalidates the community, membership, my-communities and community-posts caches after joining", async () => {
     joinCommunity.mockResolvedValue(undefined);
-    const { wrapper, invalidateSpy } = setup();
+    const { wrapper, queryClient, invalidateSpy } = setup();
     const { result } = renderHook(() => useJoinCommunityMutation(), { wrapper });
 
     await act(async () => {
       await result.current.mutateAsync({ communityId: "c-1", userId: "user-1" });
     });
 
+    expect(queryClient.getQueryData(["community-membership", "c-1", "user-1"])).toBe(true);
     const keys = invalidateSpy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
     expect(keys).toEqual([
       ["community"],
+      ["communities"],
+      ["community-membership"],
+      ["my-communities"],
+      ["community-posts"]
+    ]);
+  });
+});
+
+describe("useLeaveCommunityMutation", () => {
+  it("calls leaveCommunity, writes membership=false and invalidates the same caches as joining", async () => {
+    leaveCommunity.mockResolvedValue(undefined);
+    const { wrapper, queryClient, invalidateSpy } = setup();
+    const { result } = renderHook(() => useLeaveCommunityMutation(), { wrapper });
+
+    await act(async () => {
+      await result.current.mutateAsync({ communityId: "c-1", userId: "user-1" });
+    });
+
+    expect(leaveCommunity).toHaveBeenCalledWith(
+      { communityId: "c-1", userId: "user-1" },
+      expect.anything()
+    );
+    expect(queryClient.getQueryData(["community-membership", "c-1", "user-1"])).toBe(false);
+    const keys = invalidateSpy.mock.calls.map((call) => (call[0] as { queryKey: unknown[] }).queryKey);
+    expect(keys).toEqual([
+      ["community"],
+      ["communities"],
       ["community-membership"],
       ["my-communities"],
       ["community-posts"]

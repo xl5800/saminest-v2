@@ -9,10 +9,6 @@ import { useMyCommunityPostsQuery } from "../../features/community/use-my-commun
 import type { MyCommunityPostListItem } from "../../repositories/community-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { formatPublishedAt } from "../../utils/format";
-import {
-  COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
-  getCommunityPostTypeLabel
-} from "./community-post-type";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const MY_COMMUNITY_POSTS_SKELETON_COUNT = 3;
@@ -133,18 +129,15 @@ export function MyCommunityPostsPage() {
 
             return (
               <li key={post.id} className="rounded-2xl border border-border bg-card p-3 shadow-card">
-                <span className={COMMUNITY_POST_TYPE_PILL_CLASS_NAME}>
-                  {getCommunityPostTypeLabel(post.postType)}
-                </span>
                 {hasTitle ? (
                   <>
-                    <p className="mt-2 line-clamp-1 break-words text-base font-medium text-text">
+                    <p className="line-clamp-1 break-words text-base font-medium text-text">
                       {post.title}
                     </p>
                     <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">{post.body}</p>
                   </>
                 ) : (
-                  <p className="mt-2 line-clamp-2 break-words text-base font-medium text-text">
+                  <p className="line-clamp-2 break-words text-base font-medium text-text">
                     {post.body}
                   </p>
                 )}

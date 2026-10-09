@@ -1,7 +1,7 @@
 import { BadgeCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export type CommunityCardJoinState = "join" | "joining" | "joined";
+export type CommunityCardJoinState = "join" | "joining" | "joined" | "leaving";
 
 export interface CommunityCardProps {
   name: string;
@@ -18,6 +18,8 @@ export interface CommunityCardProps {
   to: string;
   joinState: CommunityCardJoinState;
   onJoin: () => void;
+  /** 已加入状态下点"退出"。 */
+  onLeave: () => void;
   /** 是否显示名称旁的认证图标。多社区之后只有官方社区（communities.is_official）
    *  才该带；默认 true 保持原来"总是显示"的行为，调用方按需传 false。 */
   isOfficial?: boolean;
@@ -33,7 +35,8 @@ export interface CommunityCardProps {
  * `relative z-10` 浮在它上面单独响应点击。不能把整张卡片包成 <Link>——那样
  * "加入"按钮就成了 <a> 里嵌套的 <button>，是非法的 HTML 结构，点按钮还会
  * 同时触发外层导航（activity-card.tsx 同样的理由，见该文件注释）。已加入
- * 状态没有"退出"操作，所以渲染成纯展示的 <span>，不是一个点了没反应的按钮。
+ * 状态下按钮变成描边样式的"退出"，点了调 onLeave；请求进行中分别显示禁用的
+ * "加入中…"/"退出中…"。
  *
  * 认证图标是装饰性的（aria-hidden），没有给它配"官方社区"这类可访问文案：
  * 前端目前没有读 communities.is_official 这一列，这个图标代表什么不由本组件
@@ -49,6 +52,7 @@ export function CommunityCard({
   to,
   joinState,
   onJoin,
+  onLeave,
   isOfficial = true
 }: CommunityCardProps) {
   const meta =
@@ -75,10 +79,15 @@ export function CommunityCard({
           </div>
           <p className="mt-0.5 text-xs text-text-muted">{meta}</p>
         </div>
-        {joinState === "joined" ? (
-          <span className="relative z-10 shrink-0 rounded-full bg-primary-light px-3 py-1.5 text-xs font-semibold text-primary">
-            ✓ 已加入
-          </span>
+        {joinState === "joined" || joinState === "leaving" ? (
+          <button
+            type="button"
+            disabled={joinState === "leaving"}
+            onClick={onLeave}
+            className="relative z-10 shrink-0 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {joinState === "leaving" ? "退出中…" : "退出"}
+          </button>
         ) : (
           <button
             type="button"

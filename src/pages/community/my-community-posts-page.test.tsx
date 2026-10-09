@@ -84,11 +84,11 @@ describe("MyCommunityPostsPage", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("社区帖子加载失败，请稍后重试。");
   });
 
-  it("renders type pill, title + body preview, and comment/favorite counts for a titled post", async () => {
+  it("renders title + body preview (no type pill), and comment/favorite counts for a titled post", async () => {
     renderWithProviders(<MyCommunityPostsPage />);
 
     await screen.findByText("有标题的帖子");
-    expect(screen.getByText("提问")).toBeInTheDocument();
+    expect(screen.queryByText("提问")).not.toBeInTheDocument();
     expect(screen.getByText("这是正文摘要")).toBeInTheDocument();
     expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
     expect(screen.getByLabelText("5 次收藏")).toBeInTheDocument();
@@ -99,7 +99,7 @@ describe("MyCommunityPostsPage", () => {
 
     await screen.findByText("没有标题只有正文");
     expect(screen.getAllByText("没有标题只有正文")).toHaveLength(1);
-    expect(screen.getByText("分享")).toBeInTheDocument();
+    expect(screen.queryByText("分享")).not.toBeInTheDocument();
   });
 
   it("links 查看/编辑 to the post detail and edit routes", async () => {

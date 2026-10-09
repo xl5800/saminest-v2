@@ -13,14 +13,11 @@ import { useMyCommunitiesQuery } from "../../features/community/use-my-communiti
 import { useAuthStore } from "../../store/auth-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { formatRelativeTimeAgo } from "../../utils/format";
-import {
-  COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
-  getCommunityPostTypeLabel
-} from "../community/community-post-type";
 
 const SKELETON_COUNT = 4;
 
 const REGION_SELECT_PATH = "/region-select";
+const SEARCH_PATH = "/search";
 
 /** 社区入口统一路径。这里直接写死字符串而不是从 router/routes.tsx 引常量：
  *  routes.tsx 是并行任务卡（阶段九/十/十一）也在改的文件，这张卡不碰它。 */
@@ -49,8 +46,7 @@ const COMMUNITY_PATH = "/community";
  * 结构（自上而下）：
  * - TopBar home 变体：Saminest + 地区按钮（点击去 /region-select，地区目前
  *   只是展示，社区帖子没有地区维度，不做筛选）、"＋"打开 PublishActionSheet、
- *   搜索图标。社区暂时没有搜索能力，搜索图标先跳 /community 当占位——等社区
- *   搜索做出来再换成真正的搜索。
+ *   搜索图标（跳全站搜索页 /search，同时搜社区和社区帖子）。
  * - "推荐"Tab：固定的蓝色下划线标题，没有任何切换逻辑，只是给后面"关注/最新"
  *   之类的 Tab 预留视觉位置。
  * - （零加入时）引导加入社区的横幅。原来顶部的"我的社区"横向卡片区已经删掉——
@@ -199,10 +195,7 @@ export function HomePage() {
                 {/* 内容区是一个整体链接去详情页；操作行（收藏/分享）在链接
                     外面，避免按钮嵌进 <a> 里，也不依赖 stopPropagation。 */}
                 <Link to={`${COMMUNITY_PATH}/post/${post.id}`} className="mt-2 block">
-                  <span className={COMMUNITY_POST_TYPE_PILL_CLASS_NAME}>
-                    {getCommunityPostTypeLabel(post.postType)}
-                  </span>
-                  <div className="mt-2 min-w-0">
+                  <div className="min-w-0">
                     {/* 有标题：标题 + 正文预览分开；没有标题：正文前两行
                         当标题，不重复展示预览——跟 /community 页同一规则。 */}
                     {hasTitle ? (
@@ -267,7 +260,7 @@ export function HomePage() {
         regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onCreateClick={() => setPublishSheetOpen(true)}
-        onSearchClick={() => navigate(COMMUNITY_PATH)}
+        onSearchClick={() => navigate(SEARCH_PATH)}
         bottomSlot={
           <div className="px-4">
             <span

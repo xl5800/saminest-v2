@@ -1,7 +1,7 @@
 import { Clipboard } from "@capacitor/clipboard";
 import { MessageCircle, Share2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { CommunityPostFavoriteButton } from "../../components/community-post-favorite-button";
@@ -13,19 +13,19 @@ import { useCommunityBySlugQuery } from "../../features/community/use-community-
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatRelativeTimeAgo } from "../../utils/format";
-import {
-  COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
-  getCommunityPostTypeLabel
-} from "./community-post-type";
 
 interface CommunityPostDetailLocationState {
   publishSuccessMessage?: string;
+  /** 刚发布完从发帖页跳过来时带上（发帖页用 replace 跳转，历史栈里已经没有
+   *  发帖页）：顶栏返回按钮直接去这个路径（从社区页发帖 = 那个社区页，全局入口
+   *  发帖 = 首页），不再 navigate(-1)。 */
+  publishBackTo?: string;
 }
 
 /**
  * 社区帖子详情页（/community/post/:id，公开可见）。
  *
- * 展示：类型 pill、标题（有则显示）、正文（whitespace-pre-wrap 保留换行）、
+ * 展示：标题（有则显示，帖子类型 pill 已去掉——发帖页不再让用户选类型）、正文（whitespace-pre-wrap 保留换行）、
  * 作者头像+昵称+相对时间（formatRelativeTimeAgo，复用 utils/format.ts 已有
  * 函数）。操作行（视觉改版任务卡）：三等分——评论数展示（不可点，页面
  * 本身就在评论区上方）/ 收藏（Star，icon 变体）/ 分享（Share2，点击把
@@ -47,8 +47,10 @@ export function CommunityPostDetailPage() {
   const location = useLocation();
   // 发帖页在"帖子已创建、但部分图片上传失败"时带着这条提示跳转过来（跟
   // post-detail-page.tsx 读 publishSuccessMessage 是同一个 location.state 约定）。
-  const publishSuccessMessage = (location.state as CommunityPostDetailLocationState | null)
-    ?.publishSuccessMessage;
+  const navigate = useNavigate();
+  const locationState = location.state as CommunityPostDetailLocationState | null;
+  const publishSuccessMessage = locationState?.publishSuccessMessage;
+  const publishBackTo = locationState?.publishBackTo;
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { data: community } = useCommunityBySlugQuery(post?.communitySlug);
@@ -79,8 +81,7 @@ export function CommunityPostDetailPage() {
       return (
         <div role="status">
           <span className="sr-only">加载中…</span>
-          <Skeleton className="h-5 w-12 rounded-full" />
-          <Skeleton className="mt-3 h-6 w-4/5" />
+          <Skeleton className="h-6 w-4/5" />
           <Skeleton className="mt-3 h-4 w-full" />
           <Skeleton className="mt-1.5 h-4 w-full" />
           <Skeleton className="mt-1.5 h-4 w-3/5" />
@@ -95,11 +96,8 @@ export function CommunityPostDetailPage() {
     return (
       <>
         <article>
-          <span className={COMMUNITY_POST_TYPE_PILL_CLASS_NAME}>
-            {getCommunityPostTypeLabel(post.postType)}
-          </span>
           {post.title ? (
-            <h1 className="mt-2 break-words text-xl font-semibold text-text">{post.title}</h1>
+            <h1 className="break-words text-xl font-semibold text-text">{post.title}</h1>
           ) : null}
           <div className="mt-3 flex items-center gap-2">
             {post.authorAvatarUrl ? (
@@ -182,6 +180,7 @@ export function CommunityPostDetailPage() {
       <TopBar
         variant="detail"
         title={topBarTitle}
+        onBack={publishBackTo ? () => navigate(publishBackTo, { replace: true }) : undefined}
         moreMenu={{
           label: "更多",
           content: (

@@ -58,6 +58,19 @@ describe("BottomNav", () => {
     expect(screen.queryByRole("link", { name: /^发布$/ })).not.toBeInTheDocument();
   });
 
+  it("orders the tabs 首页 / 社区 / 分类 / 找搭子 / 消息 / 我的 (社区 in the second slot)", () => {
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
+      "首页",
+      "社区",
+      "分类",
+      "找搭子",
+      "消息",
+      "我的"
+    ]);
+  });
+
   it("marks '首页' as the active item with aria-current when on /", () => {
     renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
 

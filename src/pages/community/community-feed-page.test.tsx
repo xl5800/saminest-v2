@@ -8,14 +8,18 @@ const {
   useCommunityMembershipQuery,
   useCommunityPostsInfiniteQuery,
   useJoinCommunityMutation,
+  useLeaveCommunityMutation,
   joinMutate,
+  leaveMutate,
   navigateMock
 } = vi.hoisted(() => ({
   useCommunityBySlugQuery: vi.fn(),
   useCommunityMembershipQuery: vi.fn(),
   useCommunityPostsInfiniteQuery: vi.fn(),
   useJoinCommunityMutation: vi.fn(),
+  useLeaveCommunityMutation: vi.fn(),
   joinMutate: vi.fn(),
+  leaveMutate: vi.fn(),
   navigateMock: vi.fn()
 }));
 
@@ -30,6 +34,9 @@ vi.mock("../../features/community/use-community-posts-query", () => ({
 }));
 vi.mock("../../features/community/use-join-community-mutation", () => ({
   useJoinCommunityMutation
+}));
+vi.mock("../../features/community/use-leave-community-mutation", () => ({
+  useLeaveCommunityMutation
 }));
 vi.mock("@capacitor/clipboard", () => ({ Clipboard: { write: clipboardWriteMock } }));
 vi.mock("react-router-dom", async (importOriginal) => {
@@ -81,6 +88,9 @@ describe("CommunityFeedPage", () => {
     useAuthStore.setState(initialAuthState, true);
     navigateMock.mockReset();
     joinMutate.mockReset();
+    leaveMutate.mockReset();
+    useLeaveCommunityMutation.mockReset();
+    useLeaveCommunityMutation.mockReturnValue({ mutate: leaveMutate, isPending: false });
     useCommunityBySlugQuery.mockReset();
     useCommunityMembershipQuery.mockReset();
     useCommunityPostsInfiniteQuery.mockReset();
@@ -135,12 +145,12 @@ describe("CommunityFeedPage", () => {
     expect(useCommunityPostsInfiniteQuery).toHaveBeenCalledWith(undefined);
   });
 
-  it("renders a post card linking to its detail page with type pill, title, preview, author and counts", () => {
+  it("renders a post card linking to its detail page with title, preview, author and counts (no type pill)", () => {
     renderFeed();
 
     const link = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
     expect(link).toHaveAttribute("href", "/community/post/cp-1");
-    expect(link).toHaveTextContent("提问");
+    expect(link).not.toHaveTextContent("提问");
     expect(link).toHaveTextContent("周末想去逛逛，求推荐");
     expect(link).toHaveTextContent("Bob");
     expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
@@ -216,15 +226,46 @@ describe("CommunityFeedPage", () => {
   });
 
   describe("join button", () => {
-    it("shows a non-clickable ✓ 已加入 state when the user really is a member", () => {
+    it("shows a 退出 button (instead of 加入) when the user really is a member, and leaves only after confirming", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
       useCommunityMembershipQuery.mockReturnValue({ data: true });
 
       renderFeed();
 
-      expect(screen.getByText("已加入")).toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "加入" })).not.toBeInTheDocument();
       expect(useCommunityMembershipQuery).toHaveBeenCalledWith("c-1", "user-1");
+
+      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      expect(screen.getByRole("dialog", { name: "确认退出社区" })).toHaveTextContent("DMV 社区");
+      expect(leaveMutate).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "确认退出" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(leaveMutate).toHaveBeenCalledWith({ communityId: "c-1", userId: "user-1" });
+      expect(joinMutate).not.toHaveBeenCalled();
+    });
+
+    it("closes the confirmation without leaving when 取消 is clicked", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useCommunityMembershipQuery.mockReturnValue({ data: true });
+
+      renderFeed();
+      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(leaveMutate).not.toHaveBeenCalled();
+    });
+
+    it("shows a disabled 退出中… button while the leave request is in flight", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useCommunityMembershipQuery.mockReturnValue({ data: true });
+      useLeaveCommunityMutation.mockReturnValue({ mutate: leaveMutate, isPending: true });
+
+      renderFeed();
+
+      expect(screen.getByRole("button", { name: "退出中…" })).toBeDisabled();
     });
 
     it("shows a clickable 加入 button for a logged-in non-member and joins on click (never on its own)", () => {
@@ -232,7 +273,7 @@ describe("CommunityFeedPage", () => {
 
       renderFeed();
 
-      expect(screen.queryByText("已加入")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "退出" })).not.toBeInTheDocument();
       expect(joinMutate).not.toHaveBeenCalled();
 
       fireEvent.click(screen.getByRole("button", { name: "加入" }));
@@ -244,20 +285,11 @@ describe("CommunityFeedPage", () => {
     it("shows a 加入 button that sends a logged-out user to /login without joining", () => {
       renderFeed();
 
-      expect(screen.queryByText("已加入")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "退出" })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "加入" }));
 
       expect(navigateMock).toHaveBeenCalledWith("/login");
       expect(joinMutate).not.toHaveBeenCalled();
-    });
-
-    it("switches to ✓ 已加入 right after a successful manual join, before the membership refetch lands", () => {
-      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-      useJoinCommunityMutation.mockReturnValue({ mutate: joinMutate, isSuccess: true });
-
-      renderFeed();
-
-      expect(screen.getByText("已加入")).toBeInTheDocument();
     });
 
     it("shows a disabled 加入中… button while the join request is in flight", () => {

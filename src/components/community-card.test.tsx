@@ -15,6 +15,7 @@ function renderCard(overrides: Partial<CommunityCardProps> = {}) {
     to: "/community/dmv",
     joinState: "join",
     onJoin: vi.fn(),
+    onLeave: vi.fn(),
     ...overrides
   };
   return { props, ...renderWithProviders(<CommunityCard {...props} />) };
@@ -87,10 +88,19 @@ describe("CommunityCard", () => {
     expect(screen.getByRole("button", { name: "加入中…" })).toBeDisabled();
   });
 
-  it("renders a non-interactive ✓ 已加入 label (no button) once joined", () => {
-    renderCard({ joinState: "joined" });
+  it("turns the button into 退出 once joined, calling onLeave (not onJoin) on click", () => {
+    const { props } = renderCard({ joinState: "joined" });
 
-    expect(screen.getByText("✓ 已加入")).toBeInTheDocument();
-    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "加入" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "退出" }));
+
+    expect(props.onLeave).toHaveBeenCalledTimes(1);
+    expect(props.onJoin).not.toHaveBeenCalled();
+  });
+
+  it("disables the button with 退出中… while leaving", () => {
+    renderCard({ joinState: "leaving" });
+
+    expect(screen.getByRole("button", { name: "退出中…" })).toBeDisabled();
   });
 });

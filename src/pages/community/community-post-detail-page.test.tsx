@@ -1,11 +1,18 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useCommunityPostDetailQuery, useCommunityBySlugQuery, clipboardWrite } = vi.hoisted(() => ({
-  useCommunityPostDetailQuery: vi.fn(),
-  useCommunityBySlugQuery: vi.fn(),
-  clipboardWrite: vi.fn()
-}));
+const { useCommunityPostDetailQuery, useCommunityBySlugQuery, clipboardWrite, navigateMock } =
+  vi.hoisted(() => ({
+    useCommunityPostDetailQuery: vi.fn(),
+    useCommunityBySlugQuery: vi.fn(),
+    clipboardWrite: vi.fn(),
+    navigateMock: vi.fn()
+  }));
+
+vi.mock("react-router-dom", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router-dom")>();
+  return { ...actual, useNavigate: () => navigateMock };
+});
 
 vi.mock("../../features/community/use-community-post-detail-query", () => ({
   useCommunityPostDetailQuery
@@ -177,14 +184,41 @@ describe("CommunityPostDetailPage", () => {
     expect(useCommunityPostDetailQuery).toHaveBeenCalledWith("cp-1");
   });
 
-  it("renders the type pill, title, author, body and comment count", () => {
+  it("renders the title, author, body and comment count, without a post-type pill", () => {
     renderPage();
 
-    expect(screen.getByText("推荐")).toBeInTheDocument();
+    expect(screen.queryByText("推荐")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 1, name: "推荐一家中餐馆" })).toBeInTheDocument();
     expect(screen.getByText("Bob")).toBeInTheDocument();
     expect(screen.getByText(/第一行/)).toHaveClass("whitespace-pre-wrap");
     expect(screen.getByLabelText("4 条评论")).toBeInTheDocument();
+  });
+
+  it("goes straight back to the home page from the back button after publishing from the global entry", () => {
+    navigateMock.mockReset();
+    renderPage({ publishBackTo: "/" });
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+  });
+
+  it("goes back to that community's page after publishing from a community page", () => {
+    navigateMock.mockReset();
+    renderPage({ publishBackTo: "/community/dmv-pets" });
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/community/dmv-pets", { replace: true });
+  });
+
+  it("uses the normal history back when not coming from the publish page", () => {
+    navigateMock.mockReset();
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith(-1);
   });
 
   it("omits the title heading when the post has no title", () => {

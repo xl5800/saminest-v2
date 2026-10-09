@@ -40,6 +40,7 @@ import { RegionSelectPage } from "../pages/region-select/region-select-page";
 import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportCommunityPostPage } from "../pages/report/report-community-post-page";
+import { SearchPage } from "../pages/search/search-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
@@ -113,6 +114,11 @@ export const router = createBrowserRouter([
       {
         path: "post/:id",
         element: <PostDetailPage />
+      },
+      {
+        // 全站搜索页（首页顶栏搜索图标进入），同时搜社区和社区帖子，公开可用。
+        path: "search",
+        element: <SearchPage />
       },
       {
         // 社区功能阶段二：DMV 社区 Feed / 发帖 / 帖子详情。Feed 和详情公开

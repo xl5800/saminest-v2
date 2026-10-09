@@ -7,16 +7,20 @@ const {
   useCommunityMembershipQuery,
   useCommunityPostsTodayCountQuery,
   useJoinCommunityMutation,
+  useLeaveCommunityMutation,
   navigateMock,
-  mutateMock
+  mutateMock,
+  leaveMutateMock
 } = vi.hoisted(() => ({
   useListCommunitiesQuery: vi.fn(),
   useMyCommunitiesQuery: vi.fn(),
   useCommunityMembershipQuery: vi.fn(),
   useCommunityPostsTodayCountQuery: vi.fn(),
   useJoinCommunityMutation: vi.fn(),
+  useLeaveCommunityMutation: vi.fn(),
   navigateMock: vi.fn(),
-  mutateMock: vi.fn()
+  mutateMock: vi.fn(),
+  leaveMutateMock: vi.fn()
 }));
 
 vi.mock("../../features/community/use-list-communities-query", () => ({ useListCommunitiesQuery }));
@@ -29,6 +33,9 @@ vi.mock("../../features/community/use-community-posts-today-count-query", () => 
 }));
 vi.mock("../../features/community/use-join-community-mutation", () => ({
   useJoinCommunityMutation
+}));
+vi.mock("../../features/community/use-leave-community-mutation", () => ({
+  useLeaveCommunityMutation
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -103,6 +110,8 @@ describe("CommunityBrowsePage", () => {
     setRegion(null);
     navigateMock.mockReset();
     mutateMock.mockReset();
+    leaveMutateMock.mockReset();
+    useLeaveCommunityMutation.mockReturnValue({ mutate: leaveMutateMock, isPending: false });
     useListCommunitiesQuery.mockReturnValue({
       data: [dmvCommunity, petsCommunity, studentsCommunity],
       isPending: false,
@@ -371,6 +380,35 @@ describe("CommunityBrowsePage", () => {
       );
     });
 
+    it("searches communities (not posts) by name or description as the user types", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("tab", { name: "发现" }));
+
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索社区" }), {
+        target: { value: "宠物" }
+      });
+
+      expect(screen.getByRole("heading", { name: "DMV 宠物社区" })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: "DMV 华人社区" })).not.toBeInTheDocument();
+      expect(screen.queryByText("热门搜索")).not.toBeInTheDocument();
+
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索社区" }), {
+        target: { value: "留学生交流" }
+      });
+      expect(screen.getByRole("heading", { name: "DMV 留学生社区" })).toBeInTheDocument();
+    });
+
+    it("shows a no-result message when no community matches the keyword", () => {
+      renderPage();
+      fireEvent.click(screen.getByRole("tab", { name: "发现" }));
+
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索社区" }), {
+        target: { value: "不存在的社区" }
+      });
+
+      expect(screen.getByRole("status")).toHaveTextContent("没有找到相关社区");
+    });
+
     it("switches to 发现 and focuses the search input when the search icon is clicked", () => {
       renderPage();
 
@@ -437,7 +475,7 @@ describe("CommunityBrowsePage", () => {
       );
     });
 
-    it("shows ✓ 已加入 (no button) only on the cards of communities the user is already a member of", () => {
+    it("shows a 退出 button (instead of 加入) only on the cards of communities the user is already a member of", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
       useCommunityMembershipQuery.mockImplementation((communityId: string) => ({
         data: communityId === "c-1",
@@ -447,22 +485,77 @@ describe("CommunityBrowsePage", () => {
 
       renderPage();
 
-      expect(screen.getAllByText("✓ 已加入")).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: "退出" })).toHaveLength(1);
       expect(joinButtons()).toHaveLength(2);
     });
 
-    // 加入成功到成员状态 refetch 回来之间，按钮不能闪回"加入"。
-    it("shows ✓ 已加入 immediately after the join mutation succeeds, before membership refetches", () => {
+    it("asks for confirmation before leaving, and 取消 leaves nothing", () => {
       useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
-      useJoinCommunityMutation.mockReturnValue({
-        mutate: mutateMock,
+      useCommunityMembershipQuery.mockImplementation((communityId: string) => ({
+        data: communityId === "c-2",
         isPending: false,
-        isSuccess: true
-      });
+        isError: false
+      }));
+
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+
+      const dialog = screen.getByRole("dialog", { name: "确认退出社区" });
+      expect(dialog).toHaveTextContent("DMV 宠物社区");
+      expect(leaveMutateMock).not.toHaveBeenCalled();
+
+      fireEvent.click(within(dialog).getByRole("button", { name: "取消" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(leaveMutateMock).not.toHaveBeenCalled();
+    });
+
+    it("leaves exactly the community whose 退出 button was clicked, after confirming", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useCommunityMembershipQuery.mockImplementation((communityId: string) => ({
+        data: communityId === "c-2",
+        isPending: false,
+        isError: false
+      }));
+
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      fireEvent.click(screen.getByRole("button", { name: "确认退出" }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(leaveMutateMock).toHaveBeenCalledWith(
+        { communityId: "c-2", userId: "user-1" },
+        expect.objectContaining({ onError: expect.any(Function) })
+      );
+      expect(mutateMock).not.toHaveBeenCalled();
+    });
+
+    it("disables the button with 退出中… while the leave is pending", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useCommunityMembershipQuery.mockReturnValue({ data: true, isPending: false, isError: false });
+      useLeaveCommunityMutation.mockReturnValue({ mutate: leaveMutateMock, isPending: true });
 
       renderPage();
 
-      expect(screen.getAllByText("✓ 已加入").length).toBeGreaterThan(0);
+      expect(screen.getAllByRole("button", { name: "退出中…" })[0]).toBeDisabled();
+    });
+
+    it("shows a generic message when leaving fails", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useCommunityMembershipQuery.mockImplementation((communityId: string) => ({
+        data: communityId === "c-1",
+        isPending: false,
+        isError: false
+      }));
+
+      renderPage();
+      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      fireEvent.click(screen.getByRole("button", { name: "确认退出" }));
+      act(() => {
+        leaveMutateMock.mock.calls[0][1].onError(new Error("network down"));
+      });
+
+      expect(screen.getByRole("alert")).toHaveTextContent("退出失败，请稍后重试。");
     });
 
     it("disables the button with 加入中… while the join is pending", () => {

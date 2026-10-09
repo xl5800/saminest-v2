@@ -12,8 +12,8 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "首页", Icon: Home },
-  { to: "/categories", label: "分类", Icon: LayoutGrid },
   { to: "/community", label: "社区", Icon: Users },
+  { to: "/categories", label: "分类", Icon: LayoutGrid },
   { to: "/activities", label: "找搭子", Icon: Handshake },
   { to: "/messages", label: "消息", Icon: MessageCircle },
   { to: "/profile", label: "我的", Icon: UserRound }
@@ -36,7 +36,7 @@ function isActivePath(pathname: string, to: string): boolean {
  * 浏览器访问时完全看不到导航栏，这里去掉宽度限制，统一显示）。
  *
  * 社区功能阶段三（导航入口）：原来 5 个平级目的地加了"社区"这一项，变成 6
- * 个，插在"分类"和"找搭子"之间——纯内容排序上的选择，不涉及任何特殊逻辑，
+ * 个；后来按产品要求把"社区"挪到第二位、"分类"挪到第三位——纯内容排序上的选择，不涉及任何特殊逻辑，
  * isActivePath 的前缀匹配对新项同样生效（/community/post/:id、
  * /community/new 这些子路径都能让这一项高亮），NAV_ITEMS 数组继续靠
  * flex-1 自动均分宽度，不需要额外适配。
