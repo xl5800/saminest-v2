@@ -241,15 +241,29 @@ describe("CommunityPostDetailPage", () => {
       });
     });
 
-    it("renders a 3-column grid of thumbnails in order", () => {
+    it("renders the images in a swipeable carousel (not a grid), in order, one clickable button per image", () => {
       const { container } = renderPage();
 
       const buttons = screen.getAllByRole("button", { name: /查看大图/ });
       expect(buttons).toHaveLength(3);
-      expect(buttons[0]?.closest("div")).toHaveClass("grid", "grid-cols-3");
+      expect(container.querySelector(".grid-cols-3.gap-2")).toBeNull();
+      expect(screen.getByTestId("post-image-carousel-scroller")).toBeInTheDocument();
       expect(Array.from(container.querySelectorAll("button img")).map((img) => img.getAttribute("src"))).toEqual(
         IMAGE_URLS
       );
+    });
+
+    it("renders a single image as one full-width clickable image without a scroller", () => {
+      useCommunityPostDetailQuery.mockReturnValue({
+        data: { ...samplePost, images: [IMAGE_URLS[0]] },
+        isPending: false,
+        isError: false
+      });
+
+      renderPage();
+
+      expect(screen.getAllByRole("button", { name: /查看大图/ })).toHaveLength(1);
+      expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
     });
 
     it("opens the lightbox at the clicked image and closes it again", () => {
@@ -261,6 +275,14 @@ describe("CommunityPostDetailPage", () => {
 
       fireEvent.click(screen.getByRole("button", { name: "关闭大图" }));
       expect(screen.queryByTestId("lightbox")).not.toBeInTheDocument();
+    });
+
+    it("opens the lightbox at the third image when the third image is clicked", () => {
+      renderPage();
+
+      fireEvent.click(screen.getByRole("button", { name: "查看大图 3" }));
+
+      expect(screen.getByTestId("lightbox")).toHaveTextContent("2/3");
     });
   });
 

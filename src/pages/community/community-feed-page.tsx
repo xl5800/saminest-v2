@@ -3,6 +3,7 @@ import { BadgeCheck, Check, Heart, MessageCircle, Plus, Share2 } from "lucide-re
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { PostImageCarousel } from "../../components/post-image-carousel";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { useCommunityPostsInfiniteQuery } from "../../features/community/use-community-posts-query";
@@ -256,34 +257,32 @@ export function CommunityFeedPage() {
                 </div>
                 {/* 有标题：标题单行截断 + body 预览两行；没有标题：直接把
                     body 前一两行当标题用（两行截断），不再重复展示预览。
-                    有封面图时在文字右侧放一张小缩略图（文字为主、图片为辅）；
-                    没有封面图时不渲染任何占位块，保持纯文字。 */}
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    {hasTitle ? (
-                      <>
-                        <p className="mt-2 line-clamp-1 break-words text-base font-medium text-text">
-                          {post.title}
-                        </p>
-                        <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">
-                          {post.body}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="mt-2 line-clamp-2 break-words text-base font-medium text-text">
+                    文字在上、图片在下：图片区域是满宽的 PostImageCarousel
+                    （一次一张、多张可滑动 + 圆点指示器），没有图片时不渲染
+                    任何占位，保持纯文字。整张卡片是一个 <Link>，图片这里不
+                    传 onImageClick——静止点击图片直接冒泡给 Link 跳详情页，
+                    "纯滑动不触发点击"由 PostImageCarousel 自己保证。 */}
+                <div className="min-w-0">
+                  {hasTitle ? (
+                    <>
+                      <p className="mt-2 line-clamp-1 break-words text-base font-medium text-text">
+                        {post.title}
+                      </p>
+                      <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">
                         {post.body}
                       </p>
-                    )}
-                  </div>
-                  {post.coverImageUrl ? (
-                    <img
-                      src={post.coverImageUrl}
-                      alt=""
-                      loading="lazy"
-                      className="mt-2 h-16 w-16 shrink-0 rounded-lg object-cover"
-                    />
-                  ) : null}
+                    </>
+                  ) : (
+                    <p className="mt-2 line-clamp-2 break-words text-base font-medium text-text">
+                      {post.body}
+                    </p>
+                  )}
                 </div>
+                {post.images.length > 0 ? (
+                  <div className="mt-3">
+                    <PostImageCarousel images={post.images} aspectRatio="4 / 3" />
+                  </div>
+                ) : null}
                 <div className="mt-3 flex items-center gap-2">
                   {post.authorAvatarUrl ? (
                     <img
