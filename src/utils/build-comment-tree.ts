@@ -49,3 +49,31 @@ export function buildCommentTree(comments: Comment[]): CommentNode[] {
 
   return roots;
 }
+
+export type CommentSortMode = "latest" | "hot";
+
+/**
+ * 社区帖子详情页改版任务卡：评论区"最新/最热"切换，只排顶层评论，每条
+ * 评论自己的 children（楼中楼）保持 buildCommentTree 给出的原顺序
+ * （created_at 升序，也就是聊天式的"从旧到新"），不会把回复挪到别的
+ * 评论下面。不修改入参，返回新数组。
+ *
+ * - latest：顶层评论按 createdAt 倒序（最新的在最前）。注意这跟
+ *   buildCommentTree/listComments 的原始顺序（created_at 升序，最旧的在
+ *   最前）是相反的——"最新"这个标签只有倒序才名副其实。
+ * - hot：评论没有点赞数，"热度"目前只能拿"直接回复数"当近似——按直接
+ *   回复数倒序，已删除的回复不计入（一条被删掉的回复不应该给评论加热度）；
+ *   回复数相同的评论按"最新"的顺序排（先做倒序再做稳定排序，同分项保持
+ *   倒序）。不新增任何数据库字段/查询。
+ */
+export function sortCommentTree(nodes: CommentNode[], mode: CommentSortMode): CommentNode[] {
+  const newestFirst = [...nodes].sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)
+  );
+  if (mode === "latest") {
+    return newestFirst;
+  }
+  const replyCount = (node: CommentNode): number =>
+    node.children.filter((child) => !child.isDeleted).length;
+  return newestFirst.sort((a, b) => replyCount(b) - replyCount(a));
+}

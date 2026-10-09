@@ -11,6 +11,8 @@ export interface Community {
   id: string;
   name: string;
   slug: string;
+  /** 帖子详情页顶栏"社区名 · N 位成员"用；由 community_members 触发器同步维护。 */
+  memberCount: number;
 }
 
 /**
@@ -21,14 +23,14 @@ export interface Community {
 export async function getCommunityBySlug(slug: string): Promise<Community> {
   const { data, error } = await getSupabaseClient()
     .from("communities")
-    .select("id, name, slug")
+    .select("id, name, slug, member_count")
     .eq("slug", slug)
     .single();
 
   if (error) {
     throw new AppError(error.message, "COMMUNITY_FETCH_FAILED", error);
   }
-  return { id: data.id, name: data.name, slug: data.slug };
+  return { id: data.id, name: data.name, slug: data.slug, memberCount: data.member_count };
 }
 
 export interface JoinCommunityInput {

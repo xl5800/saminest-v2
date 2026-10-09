@@ -12,7 +12,11 @@ import { usePostDetailQuery } from "../features/posts/use-post-detail-query";
 import type { Comment } from "../repositories/comments-repository";
 import { useAuthStore } from "../store/auth-store";
 import { AppError } from "../utils/app-error";
-import { buildCommentTree } from "../utils/build-comment-tree";
+import {
+  buildCommentTree,
+  type CommentSortMode,
+  sortCommentTree
+} from "../utils/build-comment-tree";
 import { validateCommentContent } from "../utils/comment-content-validation";
 import { CommentItem } from "./comment-item";
 
@@ -29,6 +33,11 @@ export type CommentSectionProps =
   | { communityPostId: string };
 
 const DEFAULT_ERROR_MESSAGE = "发表评论失败，请稍后重试。";
+
+const SORT_OPTIONS: { mode: CommentSortMode; label: string }[] = [
+  { mode: "latest", label: "最新" },
+  { mode: "hot", label: "最热" }
+];
 
 /**
  * 帖子详情页评论区 / 活动详情页留言区，接入 post-detail-page.tsx /
@@ -168,6 +177,9 @@ function CommunityPostCommentSection({ communityPostId }: { communityPostId: str
       isError={isError}
       isSubmitting={createCommentMutation.isPending}
       ownerId={postDetail?.authorId ?? null}
+      // 社区帖子详情页改版任务卡：只有社区帖子评论区展示"最新/最热"切换，
+      // 理由见 CommentSectionBodyProps.enableSort 的注释。
+      enableSort
       onSubmit={(content, userId) =>
         createCommentMutation.mutateAsync({ communityPostId, userId, parentId: null, content })
       }
@@ -185,6 +197,14 @@ interface CommentSectionBodyProps {
    *  透传给每个顶层 CommentItem（CommentItem 自己再递归传给 children），
    *  见 comment-item.tsx 里 ownerId 的注释。 */
   ownerId: string | null;
+  /** 社区帖子详情页改版任务卡新增：标题行右侧展示"最新/最热"分段控件，
+   *  只排顶层评论（见 sortCommentTree）。默认 false——任务卡默认做法是
+   *  三个场景统一加上，但实际读代码发现现有评论顺序其实是 created_at
+   *  升序（最旧在前），不是任务卡以为的"最新"；打开这个开关意味着该场景
+   *  默认顺序会翻转成"最新在前"。帖子评论区/活动留言区是已经上线的页面，
+   *  不在这张卡的范围内，所以这次只给社区帖子打开，其余两处保持原顺序不变；
+   *  以后要统一，给另外两个包装组件也传 enableSort 即可。 */
+  enableSort?: boolean;
   onSubmit: (content: string, userId: string) => Promise<unknown>;
 }
 
@@ -202,10 +222,12 @@ function CommentSectionBody({
   isError,
   isSubmitting,
   ownerId,
+  enableSort = false,
   onSubmit
 }: CommentSectionBodyProps) {
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id ?? null;
+  const [sortMode, setSortMode] = useState<CommentSortMode>("latest");
 
   const [content, setContent] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -250,14 +272,45 @@ function CommentSectionBody({
     }
   }
 
-  const tree = comments ? buildCommentTree(comments) : [];
+  const baseTree = comments ? buildCommentTree(comments) : [];
+  const tree = enableSort ? sortCommentTree(baseTree, sortMode) : baseTree;
 
   return (
     <section aria-label="留言区" className="mt-4">
       {/* 23 号卡：标题从"评论"改成"留言"——只改这个可见标题（连同它的
           aria-label），下面输入框 placeholder/按钮文案/空态文案里的
           "评论"字样不在这次改动范围内，见完工报告。 */}
-      <h2 className="mb-3 text-base font-semibold text-text">留言 ({commentCount})</h2>
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h2 className="text-base font-semibold text-text">留言 ({commentCount})</h2>
+        {enableSort ? (
+          // 灰色胶囊底 + 选中项白底轻阴影。任务卡写的是 #F0F2F5，这里用
+          // 语义 token 而不是写死色值：页面背景本身就是 --color-bg（冷灰主题
+          // 下恰好是 #F0F2F5），胶囊再用 bg-bg 会跟页面糊成一片，所以用比
+          // 它深一档的 --color-surface-muted。
+          <div
+            role="group"
+            aria-label="评论排序"
+            className="flex shrink-0 rounded-full bg-surface-muted p-0.5"
+          >
+            {SORT_OPTIONS.map((option) => {
+              const selected = sortMode === option.mode;
+              return (
+                <button
+                  key={option.mode}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setSortMode(option.mode)}
+                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                    selected ? "bg-card-white text-text shadow-card" : "text-text-muted"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
 
       {userId ? (
         <form onSubmit={handleSubmit} className="mb-4">

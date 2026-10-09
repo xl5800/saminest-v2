@@ -1,5 +1,6 @@
-import { MessageCircle } from "lucide-react";
-import { useState } from "react";
+import { Clipboard } from "@capacitor/clipboard";
+import { MessageCircle, Share2 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
@@ -8,6 +9,8 @@ import { ImageLightbox } from "../../components/image-lightbox";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
+import { useDmvCommunityQuery } from "../../features/community/use-dmv-community-query";
+import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatRelativeTimeAgo } from "../../utils/format";
 import {
   COMMUNITY_POST_TYPE_PILL_CLASS_NAME,
@@ -23,7 +26,13 @@ interface CommunityPostDetailLocationState {
  *
  * 展示：类型 pill、标题（有则显示）、正文（whitespace-pre-wrap 保留换行）、
  * 作者头像+昵称+相对时间（formatRelativeTimeAgo，复用 utils/format.ts 已有
- * 函数）。操作行：收藏（Star，icon 变体）+ 评论数展示；不做分享按钮。
+ * 函数）。操作行（视觉改版任务卡）：三等分——评论数展示（不可点，页面
+ * 本身就在评论区上方）/ 收藏（Star，icon 变体）/ 分享（Share2，点击把
+ * 生产域名拼的帖子链接写入剪贴板，同 post-share-action-sheet.tsx 的复制
+ * 链接用法：@capacitor/clipboard，网页端自动降级 navigator.clipboard；
+ * 这里没有抽 src/utils/share.ts，跟阶段十的卡各自内联，避免两边建同名文件
+ * 冲突）。顶栏 title 是"社区名 · N 位成员"（useDmvCommunityQuery，v1 只有
+ * 一个社区），社区还没加载出来/加载失败时退回"帖子详情"。
  * 举报入口放在顶栏 detail 变体的"…"更多菜单里（一个"举报"链接，跳
  * /community/post/:id/report，未登录由那条路由的 RequireAuth 挡回登录页）；
  * 链接用路由参数 id，不需要等帖子详情加载完。下面挂
@@ -41,6 +50,28 @@ export function CommunityPostDetailPage() {
     ?.publishSuccessMessage;
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const { data: community } = useDmvCommunityQuery();
+  const topBarTitle = community
+    ? `${community.name} · ${community.memberCount} 位成员`
+    : "帖子详情";
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!copyFeedback) return;
+    const timer = window.setTimeout(() => setCopyFeedback(null), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copyFeedback]);
+
+  async function handleShare(): Promise<void> {
+    try {
+      await Clipboard.write({ string: `${PRODUCTION_ORIGIN}/community/post/${id}` });
+      setCopyFeedback("链接已复制");
+    } catch (error) {
+      // 跟 post-share-action-sheet.tsx 同一个态度：复制失败（浏览器拒绝权限
+      // 之类）不是用户能纠正的场景，只留控制台日志，不弹"复制失败"。
+      console.error("复制链接失败：", error);
+    }
+  }
 
   function renderContent() {
     if (isPending) {
@@ -89,7 +120,9 @@ export function CommunityPostDetailPage() {
               <p className="text-xs text-text-muted">{formatRelativeTimeAgo(post.createdAt)}</p>
             </div>
           </div>
-          <p className="mt-4 whitespace-pre-wrap break-words text-base text-text">{post.body}</p>
+          <p className="mt-4 whitespace-pre-wrap break-words text-[17px] leading-[1.6] text-text">
+            {post.body}
+          </p>
           {post.images.length > 0 ? (
             <div className="mt-4 grid grid-cols-3 gap-2">
               {post.images.map((imageUrl, index) => (
@@ -107,8 +140,7 @@ export function CommunityPostDetailPage() {
           ) : null}
         </article>
 
-        <div className="mt-6 flex items-center gap-8 border-t border-divider pt-4">
-          <CommunityPostFavoriteButton communityPostId={post.id} variant="icon" />
+        <div className="mt-6 grid grid-cols-3 items-start border-t border-divider pt-4">
           <span
             aria-label={`${post.commentCount} 条评论`}
             className="flex flex-col items-center gap-1 text-text-muted"
@@ -116,7 +148,24 @@ export function CommunityPostDetailPage() {
             <MessageCircle size={22} aria-hidden="true" />
             <span className="text-xs">{post.commentCount}</span>
           </span>
+          <div className="flex justify-center">
+            <CommunityPostFavoriteButton communityPostId={post.id} variant="icon" />
+          </div>
+          <button
+            type="button"
+            aria-label="分享"
+            onClick={() => void handleShare()}
+            className="flex flex-col items-center gap-1 text-text-muted"
+          >
+            <Share2 size={22} aria-hidden="true" />
+            <span className="text-xs">分享</span>
+          </button>
         </div>
+        {copyFeedback ? (
+          <p role="status" className="mt-2 text-center text-xs text-primary">
+            {copyFeedback}
+          </p>
+        ) : null}
 
         <div className="mt-6">
           <CommentSection communityPostId={post.id} />
@@ -137,7 +186,7 @@ export function CommunityPostDetailPage() {
     <main data-testid="community-post-detail-page">
       <TopBar
         variant="detail"
-        title="帖子详情"
+        title={topBarTitle}
         moreMenu={{
           label: "更多",
           content: (

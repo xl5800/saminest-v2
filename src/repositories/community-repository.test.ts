@@ -71,15 +71,16 @@ beforeEach(() => {
 describe("getCommunityBySlug", () => {
   it("queries communities by slug and maps the row", async () => {
     singleMock.mockResolvedValue({
-      data: { id: "c-1", name: "DMV 社区", slug: "dmv" },
+      data: { id: "c-1", name: "DMV 社区", slug: "dmv", member_count: 12 },
       error: null
     });
 
     const result = await getCommunityBySlug("dmv");
 
     expect(fromMock).toHaveBeenCalledWith("communities");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, name, slug, member_count");
     expect(queryBuilder.eq).toHaveBeenCalledWith("slug", "dmv");
-    expect(result).toEqual({ id: "c-1", name: "DMV 社区", slug: "dmv" });
+    expect(result).toEqual({ id: "c-1", name: "DMV 社区", slug: "dmv", memberCount: 12 });
   });
 
   it("throws COMMUNITY_FETCH_FAILED when the query fails", async () => {
