@@ -582,23 +582,36 @@ describe("app routes", () => {
     listMyBlockedUsers.mockResolvedValue([]);
   });
 
-  it("renders the home page at /", () => {
+  it("renders the community-feed home page at /", () => {
     renderAt("/");
 
     expect(screen.getByTestId("home-page")).toBeInTheDocument();
+    expect(screen.queryByTestId("categories-page")).not.toBeInTheDocument();
   });
 
-  // 03 号卡（category-tab）：独立的 /category/:slug 分类下钻页已经退役，
-  // 分类筛选态统一收进首页的 ?category=<slug> 查询参数，见下面
-  // "renders the home page filtered by ?category=" 这个测试。
-  it("navigates to the home feed filtered by ?category=<slug> when a category tile is clicked at /categories", async () => {
+  // 阶段八：原来挂在 `/` 的分类信息流整体搬到了 /categories，分类筛选态
+  // 收进 /categories?category=<slug>，`/` 本身是社区聚合 Feed。
+  it("renders the classifieds feed page (with category chips) at /categories", async () => {
+    listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
+
+    renderAt("/categories");
+
+    expect(screen.getByTestId("categories-page")).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "租房" })).toHaveAttribute(
+      "href",
+      "/categories?category=rent"
+    );
+    expect(screen.queryByTestId("home-page")).not.toBeInTheDocument();
+  });
+
+  it("stays on /categories and filters by ?category=<slug> when a category chip is clicked", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
     renderAt("/categories");
 
     fireEvent.click(await screen.findByRole("link", { name: "租房" }));
 
-    expect(await screen.findByTestId("home-page")).toBeInTheDocument();
+    expect(await screen.findByTestId("categories-page")).toBeInTheDocument();
     await waitFor(() => {
       expect(listApprovedPosts).toHaveBeenCalledWith(
         expect.objectContaining({ categoryId: "cat-1" })
@@ -606,20 +619,12 @@ describe("app routes", () => {
     });
   });
 
-  it("renders the categories page at /categories", async () => {
-    renderAt("/categories");
-
-    expect(
-      await screen.findByRole("heading", { name: "分类" })
-    ).toBeInTheDocument();
-  });
-
-  it("renders the home page pre-filtered when landing directly on /?category=<slug>", async () => {
+  it("renders the categories page pre-filtered when landing directly on /categories?category=<slug>", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
-    renderAt("/?category=rent");
+    renderAt("/categories?category=rent");
 
-    expect(screen.getByTestId("home-page")).toBeInTheDocument();
+    expect(screen.getByTestId("categories-page")).toBeInTheDocument();
     await waitFor(() => {
       expect(listApprovedPosts).toHaveBeenCalledWith(
         expect.objectContaining({ categoryId: "cat-1" })

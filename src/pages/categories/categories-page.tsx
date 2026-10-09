@@ -1,84 +1,180 @@
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
+import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { TopBar } from "../../components/top-bar";
+import { formatSelectedRegionLabel } from "../../data/us-states";
+import { CategoryNav } from "../../features/categories/category-nav";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
+import { PostList } from "../../features/posts/post-list";
+import { useSelectedRegionStore } from "../../store/selected-region-store";
+import { useDebouncedValue } from "../../utils/use-debounced-value";
+
+const SEARCH_DEBOUNCE_MS = 400;
 
 /**
- * "分类"标签页目标页面（/categories），公开可见，无需登录。跟 CategoryNav /
- * AppHeader 一样复用 useCategoriesQuery，不重新发一份分类查询。
+ * 06 号卡（地区选择）已经落地"用户当前选中的州"这个数据源
+ * （useSelectedRegionStore，纯前端 localStorage 持久化，见该文件顶部
+ * 注释），这里换成读那个 store，不再是写死的 null——跟
+ * useActivityRegionsQuery（"找搭子"列表筛选用的独立数据源）没有任何关系。
+ * store 里还没选过地区（游客/新用户第一次进来）时 selectedRegion 是
+ * null，TopBar 的 home 变体在 stateName 为 null 时只显示"Saminest"，
+ * 不会有孤零零的"· "分隔符，见 top-bar.tsx，这条行为跟 06 号卡之前的占位
+ * 实现完全一致，只是数据源从写死的 null 换成了"可能是 null 的真实状态"。
+ */
+const REGION_SELECT_PATH = "/region-select";
+
+/**
+ * 阶段八（新首页：社区聚合 Feed）：这个文件的内容原样来自旧的 home-page.tsx
+ * ——原来挂在 `/` 的"推荐/租房/二手/求租"分类信息流整体搬到了底部导航的
+ * "分类"Tab（`/categories`），`/` 本身换成了社区聚合 Feed（见
+ * pages/home/home-page.tsx）。逻辑零改动，只有两处跟着路径变：筛选态的
+ * 链接从 `/?category=<slug>` 变成 `/categories?category=<slug>`（见
+ * category-nav.tsx），以及组件名/data-testid。原来这里的"分类 tile 网格"
+ * 随之退役——CategoryNav 的分类 Chips 已经承担了同样的入口。下面的历史注释
+ * 是搬家前就积累下来的，其中说"首页"的地方现在指的都是这个页面。
  *
- * 加载中/失败态沿用 CategoryNav（role="status" / 静默）和 AdminCategoriesPage
- * （role="alert"）已有的约定，这里两种情况都展示明确的文案，不复用
- * CategoryNav 那种"失败时直接返回 null"的做法——那是导航栏组件刻意为之的
- * 静默降级，这里是一个独立页面，用户导航过来至少应该看到出错提示。
+ * 首页（Meet5 风格改版，02-home-page.md，08 号卡修订了顶部地区入口的
+ * 具体样式）。
  *
- * Meet5 风格改版（03-category-tab.md）：
- * - 顶部栏换成 TopBar 的 tab 变体，居中标题"分类"，左右都不放图标（无
- *   品牌、无发布、无"?"帮助图标）——组件本身已经是这个页面的 <h1>，删掉了
- *   原来自己手写的 <h1>，避免同一个页面出现两个 <h1>。这个路由需要加进
- *   app-shell.tsx 的 TOPBAR_MIGRATED_PATTERNS（关掉全局 AppHeader，保留
- *   BottomNav——分类 Tab 页仍然是"能在 5 个 Tab 间跳转"的常规浏览场景，
- *   不是沉浸式页面）。
- * - tile 从"边框+左对齐文字"换成"白底圆角16px、纯文字居中"，去掉了描边——
- *   参照设计稿"白底圆角16px卡片，纯文字居中，无图标也可"，这里选择不加
- *   图标（任务卡原话"无图标也可"，加图标需要额外决定每个分类配哪个中性
- *   线性图标，属于任务卡本身没有强制要求的额外设计决策，不在这次改动里
- *   顺带做）。
- * - 点击 tile 不再跳去独立的 /category/:slug 详情页——那个页面已经跟着
- *   这次改动一起退役，统一改成跳转到首页并带上 ?category=<slug> 查询
- *   参数，首页自己读这个参数筛选（复用 02 号卡已经建好的 PostList，不用
- *   再做一套列表 UI，见 home-page.tsx 的改动）。
+ * 顶部栏换成 TopBar 的 home 变体（01 号卡产出），不再是旧版"← Saminest
+ * 发布"那一整行——发布入口从文字按钮变成顶部"＋"图标（点击复用已有的
+ * PublishActionSheet，这个组件之前由 app-header.tsx 触发，现在首页自己
+ * 接管；app-header.tsx 本身不用动，它还在为其它没迁移的页面服务，见
+ * app-shell.tsx 的路由级开关）。首页不再渲染底部悬浮发布按钮——发布入口
+ * 已经统一收到顶部"＋"图标，不需要 Fab 组件。
+ *
+ * 搜索从"页面顶部一整行常驻输入框"改成"点🔍图标切换显隐"：搜索本身的
+ * 防抖/查询逻辑完全没变（还是这同一个 inputValue/debouncedSearchQuery/
+ * PostList 组合），只是外面包了一层"要不要显示这个输入框"的开关——按
+ * 任务卡"可先用现有搜索逻辑"的要求，不重新实现一套。关闭搜索时顺带清空
+ * 已输入的内容，回到浏览模式（分类 Chips + 完整信息流），不留一个隐藏起来
+ * 但仍在生效的过滤条件。
+ *
+ * 分类筛选（03-category-tab.md）：读取 `?category=<slug>` 这个 URL 查询
+ * 参数决定当前筛选态——分类 Tab 页（categories-page.tsx）的三个 tile 和
+ * 这个页面自己的 CategoryNav 分类 Chips 现在都统一导航到
+ * `/categories?category=<slug>`（见 category-nav.tsx 的改动），不再各自指向一个
+ * 独立的 `/category/:slug` 详情页；那个页面已经退役（复用同一个 PostList
+ * 组件渲染筛选后的列表，不需要单独再做一套列表 UI，见任务卡原话）。
+ * 用 URL 而不是本地 state 存这个筛选态，是为了让分类 Tab 页的 tile 链接、
+ * 浏览器前进/后退、直接分享/收藏某个分类筛选态的链接都自然工作，不需要
+ * 额外的状态同步逻辑。
+ *
+ * 08 号卡（地区选择扩展全美 + 按州筛选）：
+ * - 顶部胶囊按钮从"只显示州代码的单行文字"改成两行堆叠，第二行文案见
+ *   formatSelectedRegionLabel（14 号卡从这个文件挪到了 us-states.ts，
+ *   变成首页和找搭子列表页共用的格式化函数）；onStateClick 改名
+ *   onRegionClick，语义从"点州名"变成"点整个胶囊"，见 top-bar.tsx 对应
+ *   prop 的注释。
+ * - selectedRegion.stateCode 现在真正喂给 PostList 做服务端过滤（透传到
+ *   listApprovedPosts 的 stateCode 参数），不再只是首页胶囊按钮的展示
+ *   文本——四个分类 tab 复用的都是同一个 PostList，筛选逻辑天然对四个
+ *   tab 一致生效，不需要各自实现一遍。
+ * - PostList 的"这个地区还没有内容"空状态需要一个"去发布"入口，直接复用
+ *   这个页面已有的 publishSheetOpen/PublishActionSheet（顶部"＋"图标同一套
+ *   开关），不是另起一个入口。
+ *
+ * 31 号卡（求租板块改版）：
+ * - 求租分类的帖子不再出现在"推荐"这个未筛选混合流里，只在求租自己的
+ *   分类 Tab 下展示——用跟 activeCategoryId 完全同一个模式（categories?.
+ *   find(slug === ...)）从已经查出来的 categories 里找到求租分类的 id，
+ *   只在 activeCategorySlug 为空（"推荐" Tab）时把这个 id 传给 PostList 的
+ *   excludeCategoryId；activeCategorySlug 有值时（不管是不是求租分类
+ *   自己）都不传——用户主动点进"求租" Tab 要正常看到全部求租帖子，这两个
+ *   场景不能共用同一个开关误伤，见 posts-repository.ts 里 excludeCategoryId
+ *   的注释。
+ * - 求租 Tab 下 PostList 换成单列纯文字卡片（variant="wanted"），其它
+ *   三个 Tab（推荐/租房/二手）继续用默认的两列图片网格，见 post-list.tsx
+ *   顶部注释。
+ *
+ * 顶栏+分类 Chips 固定成一张卡片任务卡：TopBar 和 CategoryNav 原来是两个
+ * 独立的 <header>/<nav>，各自随内容一起滚动走；这次要合并成同一张固定在
+ * 屏幕最顶端的卡片，卡片底部只有一条横线（不能顶栏和分类 Chips 之间也画
+ * 一条）。改法是把 CategoryNav（连同下面这个搜索输入框）一起传给 TopBar
+ * 新增的 bottomSlot prop，渲染在 TopBar 自己的固定卡片内部——不是在外面
+ * 再包一层单独的 sticky 容器：TopBar 组件本身已经是"自带 sticky+背景+
+ * 底部横线+状态栏安全区处理"的完整卡片（见 top-bar.tsx 的
+ * STICKY_CARD_CLASS_NAME），bottomSlot 只是让这张卡片在首页这个场景下
+ * 多渲染一块内容，底部横线因此自然落在 bottomSlot 的最下面，不需要额外
+ * 判断"要不要隐藏 TopBar 自己的那条线"。这个 prop 不传时 TopBar 的行为
+ * （包括被找搭子列表页复用的那次）完全不变，不会因为这次改动变成"必须
+ * 配合外层容器才能正确显示"。
+ *
+ * 搜索输入框（isSearchOpen 为真时展开的那个 <input>）这次也一并挪进了
+ * bottomSlot，跟分类 Chips 视觉上属于同一张卡片，而不是留在卡片外面单独
+ * 悬空一段——开合搜索框只是让这张卡片自己的高度变化（sticky 元素会自动
+ * 占住自己的实际高度，下面的 PostList 内容跟着一起挪动），不会导致卡片
+ * 本身的定位或者已经在卡片下面的内容出现跳动/撕裂的效果。
  */
 export function CategoriesPage() {
-  const { data: categories, isPending, isError } = useCategoriesQuery();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
+  const [publishSheetOpen, setPublishSheetOpen] = useState(false);
+  const debouncedSearchQuery = useDebouncedValue(inputValue, SEARCH_DEBOUNCE_MS);
+  const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
-  if (isPending) {
-    return (
-      <main>
-        <TopBar variant="tab" title="分类" />
-        <p role="status" className="px-4 py-6 text-sm text-text-muted">加载中…</p>
-      </main>
-    );
-  }
+  const { data: categories } = useCategoriesQuery();
+  const activeCategorySlug = searchParams.get("category") ?? undefined;
+  const activeCategoryId = categories?.find(
+    (category) => category.slug === activeCategorySlug
+  )?.id;
+  // 31 号卡：求租分类的 id，只在"推荐"（未选中任何分类）时用来排除求租
+  // 帖子——见组件顶部注释。
+  const wantedCategoryId = categories?.find((category) => category.slug === "wanted")?.id;
 
-  if (isError) {
-    return (
-      <main>
-        <TopBar variant="tab" title="分类" />
-        <p
-          role="alert"
-          className="mx-4 mt-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
-        >
-          分类加载失败，请稍后重试。
-        </p>
-      </main>
-    );
-  }
-
-  if (categories.length === 0) {
-    return (
-      <main>
-        <TopBar variant="tab" title="分类" />
-        <p role="status" className="px-4 py-6 text-sm text-text-muted">暂无分类。</p>
-      </main>
-    );
+  function handleToggleSearch(): void {
+    setIsSearchOpen((current) => {
+      const next = !current;
+      if (!next) {
+        setInputValue("");
+      }
+      return next;
+    });
   }
 
   return (
-    <main>
-      <TopBar variant="tab" title="分类" />
-      <ul className="mx-auto grid max-w-2xl grid-cols-2 gap-3 px-4 py-4 sm:grid-cols-3">
-        {categories.map((category) => (
-          <li key={category.id}>
-            <Link
-              to={`/?category=${category.slug}`}
-              className="block rounded-2xl bg-card py-6 text-center text-base font-semibold text-text hover:text-primary"
-            >
-              {category.nameZh}
-            </Link>
-          </li>
-        ))}
-      </ul>
+    <main data-testid="categories-page">
+      <TopBar
+        variant="home"
+        regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
+        onRegionClick={() => navigate(REGION_SELECT_PATH)}
+        onCreateClick={() => setPublishSheetOpen(true)}
+        onSearchClick={handleToggleSearch}
+        bottomSlot={
+          <>
+            {isSearchOpen ? (
+              <div className="px-4 pb-2">
+                <input
+                  type="search"
+                  autoFocus
+                  placeholder="搜租房、求租、二手物品…"
+                  value={inputValue}
+                  onChange={(event) => setInputValue(event.target.value)}
+                  className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
+                />
+              </div>
+            ) : null}
+            <CategoryNav activeSlug={activeCategorySlug} />
+          </>
+        }
+      />
+
+      <PostList
+        key={activeCategoryId ?? "all"}
+        categoryId={activeCategoryId}
+        searchQuery={debouncedSearchQuery}
+        stateCode={selectedRegion?.stateCode}
+        onPublishClick={() => setPublishSheetOpen(true)}
+        excludeCategoryId={activeCategorySlug ? undefined : wantedCategoryId}
+        variant={activeCategorySlug === "wanted" ? "wanted" : "grid"}
+      />
+
+      {publishSheetOpen ? (
+        <PublishActionSheet onClose={() => setPublishSheetOpen(false)} />
+      ) : null}
     </main>
   );
 }
