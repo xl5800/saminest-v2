@@ -6,6 +6,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { CommentSection } from "../../components/comment-section";
 import { CommunityPostFavoriteButton } from "../../components/community-post-favorite-button";
 import { ImageLightbox } from "../../components/image-lightbox";
+import { PostImageCarousel } from "../../components/post-image-carousel";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
@@ -124,18 +125,12 @@ export function CommunityPostDetailPage() {
             {post.body}
           </p>
           {post.images.length > 0 ? (
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              {post.images.map((imageUrl, index) => (
-                <button
-                  key={imageUrl}
-                  type="button"
-                  aria-label={`查看大图 ${index + 1}`}
-                  onClick={() => setLightboxIndex(index)}
-                  className="aspect-square overflow-hidden rounded-lg bg-bg"
-                >
-                  <img src={imageUrl} alt="" className="h-full w-full object-cover" />
-                </button>
-              ))}
+            <div className="mt-4">
+              <PostImageCarousel
+                images={post.images}
+                onImageClick={(index) => setLightboxIndex(index)}
+                aspectRatio="3 / 4"
+              />
             </div>
           ) : null}
         </article>

@@ -140,6 +140,9 @@ export interface CommunityPostListItem {
   /** 封面图（sort_order 最小的未软删除图片），没有图片时是 null——Feed 卡片
    *  此时保持纯文字样子，不渲染占位块。 */
   coverImageUrl: string | null;
+  /** 全部未软删除图片的 public_url，按 sort_order 升序。Feed 卡片和详情页都用
+   *  这个字段渲染图片轮播（coverImageUrl 保留，Feed 列表不再使用它）。 */
+  images: string[];
 }
 
 export interface ListCommunityPostsInput {
@@ -167,6 +170,19 @@ interface CommunityPostRow {
   // community_post_images 的列名跟 post_images 逐字一致（见阶段五迁移），所以
   // 直接复用 posts-repository.ts 的 PostFeedImageRow / resolveCoverImageUrl。
   community_post_images: PostFeedImageRow[] | null;
+}
+
+/**
+ * 把内嵌查询出来的 community_post_images 整理成"全部未软删除图片 URL，按
+ * sort_order 升序"。列表和详情共用，查询本身已经把这些行带回来了，不需要额外
+ * 请求。
+ */
+function mapPostImageUrls(rows: PostFeedImageRow[] | null): string[] {
+  return (rows ?? [])
+    .filter((image) => image.deleted_at === null)
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((image) => image.public_url)
+    .filter((publicUrl): publicUrl is string => publicUrl !== null);
 }
 
 /**
@@ -221,7 +237,8 @@ export async function listCommunityPosts(
       authorId: row.author_id,
       authorDisplayName: row.author?.display_name ?? "未知用户",
       authorAvatarUrl: row.author?.avatar_url ?? null,
-      coverImageUrl: resolveCoverImageUrl(row.community_post_images)
+      coverImageUrl: resolveCoverImageUrl(row.community_post_images),
+      images: mapPostImageUrls(row.community_post_images)
     })),
     hasNextPage
   };
@@ -229,9 +246,6 @@ export async function listCommunityPosts(
 
 export interface CommunityPostDetail extends CommunityPostListItem {
   communityId: string;
-  /** 全部未软删除图片的 public_url，按 sort_order 升序，供详情页
-   *  ImageLightbox 用；Feed 列表不需要，只有 getCommunityPostDetail 会填。 */
-  images: string[];
 }
 
 export async function getCommunityPostDetail(id: string): Promise<CommunityPostDetail> {
@@ -249,11 +263,7 @@ export async function getCommunityPostDetail(id: string): Promise<CommunityPostD
     throw new AppError(error.message, "COMMUNITY_POST_DETAIL_FAILED", error);
   }
 
-  const images = (data.community_post_images ?? [])
-    .filter((image) => image.deleted_at === null)
-    .sort((a, b) => a.sort_order - b.sort_order)
-    .map((image) => image.public_url)
-    .filter((publicUrl): publicUrl is string => publicUrl !== null);
+  const images = mapPostImageUrls(data.community_post_images);
 
   return {
     id: data.id,

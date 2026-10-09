@@ -48,7 +48,8 @@ const samplePost = {
   authorId: "user-2",
   authorDisplayName: "Bob",
   authorAvatarUrl: null,
-  coverImageUrl: null as string | null
+  coverImageUrl: null as string | null,
+  images: [] as string[]
 };
 
 function postsResult(overrides: Record<string, unknown> = {}) {
@@ -291,7 +292,44 @@ describe("CommunityFeedPage", () => {
     });
   });
 
-  it("shows the cover image thumbnail on a card that has one", () => {
+  function renderWithImages(images: string[]) {
+    useCommunityPostsInfiniteQuery.mockReturnValue(
+      postsResult({
+        data: { pages: [{ posts: [{ ...samplePost, images }], hasNextPage: false }] }
+      })
+    );
+    return renderWithProviders(<CommunityFeedPage />);
+  }
+
+  it("renders no image area (no carousel, no placeholder) on a card without images", () => {
+    const { container } = renderWithImages([]);
+
+    expect(container.querySelector("a img")).toBeNull();
+    expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
+  });
+
+  it("renders a single image full-width under the text, without a scroller or dots", () => {
+    const { container } = renderWithImages(["https://x/1.webp"]);
+
+    const img = container.querySelector("a img");
+    expect(img).toHaveAttribute("src", "https://x/1.webp");
+    expect(img).toHaveClass("object-cover");
+    expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /第 \d+ 张/ })).not.toBeInTheDocument();
+  });
+
+  it("renders every image in a swipeable carousel with dots when the post has several", () => {
+    const urls = ["https://x/1.webp", "https://x/2.webp", "https://x/3.webp"];
+    const { container } = renderWithImages(urls);
+
+    expect(screen.getByTestId("post-image-carousel-scroller")).toBeInTheDocument();
+    expect(Array.from(container.querySelectorAll("a img")).map((i) => i.getAttribute("src"))).toEqual(
+      urls
+    );
+    expect(screen.getByRole("img", { name: "第 1 张，共 3 张" })).toBeInTheDocument();
+  });
+
+  it("does not render the old 64x64 side thumbnail from coverImageUrl any more", () => {
     useCommunityPostsInfiniteQuery.mockReturnValue(
       postsResult({
         data: {
@@ -302,17 +340,7 @@ describe("CommunityFeedPage", () => {
 
     const { container } = renderWithProviders(<CommunityFeedPage />);
 
-    const img = container.querySelector("a img");
-    expect(img).toHaveAttribute("src", "https://x/cover.webp");
-    expect(img).toHaveClass("h-16", "w-16", "object-cover");
-  });
-
-  it("renders no image or placeholder block on a card without a cover image", () => {
-    const { container } = renderWithProviders(<CommunityFeedPage />);
-
     expect(container.querySelector("a img")).toBeNull();
-    // 头像是首字母占位（aria-hidden），不是图片占位块。
-    expect(container.querySelectorAll("a [class*='h-16']")).toHaveLength(0);
   });
 
   it("shows a loading status while the first page is pending", () => {

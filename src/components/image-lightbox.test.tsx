@@ -105,4 +105,57 @@ describe("ImageLightbox", () => {
     expect(closeButton.parentElement).toBe(img.parentElement);
     expect(closeButton.parentElement).not.toBe(dialog);
   });
+
+  describe("touch swipe", () => {
+    function swipe(from: [number, number], to: [number, number]): void {
+      const dialog = screen.getByRole("dialog");
+      fireEvent.touchStart(dialog, { touches: [{ clientX: from[0], clientY: from[1] }] });
+      fireEvent.touchEnd(dialog, { changedTouches: [{ clientX: to[0], clientY: to[1] }] });
+    }
+
+    it("shows the next image when swiping left", () => {
+      render(<ImageLightbox images={images} initialIndex={0} onClose={vi.fn()} />);
+
+      swipe([300, 200], [100, 205]);
+
+      expect(screen.getByRole("img")).toHaveAttribute("src", images[1]);
+    });
+
+    it("shows the previous image when swiping right", () => {
+      render(<ImageLightbox images={images} initialIndex={1} onClose={vi.fn()} />);
+
+      swipe([100, 200], [300, 195]);
+
+      expect(screen.getByRole("img")).toHaveAttribute("src", images[0]);
+    });
+
+    it("ignores short movements and mostly-vertical movements", () => {
+      render(<ImageLightbox images={images} initialIndex={1} onClose={vi.fn()} />);
+
+      swipe([200, 200], [230, 200]);
+      expect(screen.getByRole("img")).toHaveAttribute("src", images[1]);
+
+      swipe([200, 100], [280, 400]);
+      expect(screen.getByRole("img")).toHaveAttribute("src", images[1]);
+    });
+
+    it("does nothing (and does not close) when swiping with only one image", () => {
+      const onClose = vi.fn();
+      render(<ImageLightbox images={[images[0]]} initialIndex={0} onClose={onClose} />);
+
+      swipe([300, 200], [100, 200]);
+
+      expect(screen.getByRole("img")).toHaveAttribute("src", images[0]);
+      expect(onClose).not.toHaveBeenCalled();
+    });
+
+    it("keeps the buttons and the N / M indicator working alongside swipe", () => {
+      render(<ImageLightbox images={images} initialIndex={0} onClose={vi.fn()} />);
+
+      swipe([300, 200], [100, 200]);
+      fireEvent.click(screen.getByRole("button", { name: "下一张" }));
+
+      expect(screen.getByText("3 / 3")).toBeInTheDocument();
+    });
+  });
 });

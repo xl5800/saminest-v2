@@ -1,11 +1,14 @@
 import { X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { type TouchEvent, useEffect, useRef, useState } from "react";
 
 export interface ImageLightboxProps {
   images: string[];
   initialIndex: number;
   onClose: () => void;
 }
+
+/** 手指滑动切换的判定：横向位移至少这么多像素，且明显大于纵向位移。 */
+const SWIPE_MIN_DISTANCE_PX = 50;
 
 const iconButtonClassName =
   "flex h-11 w-11 items-center justify-center rounded-full text-2xl text-white";
@@ -68,10 +71,16 @@ const iconButtonClassName =
  * 显式减掉这两个 env() 值，而不是简单的 max-h-full 相对 flex 容器解析
  * 百分比（那样会绕回前面提到的百分比循环依赖问题）。
  *
- * 不做的事（明确不在这次范围内）：不支持双指缩放/拖拽平移，不支持手指
- * 滑动切换——这次先用按钮，以后需要再加；‹/› 切换按钮和底部"N / M"计数
- * 保持原来挂在最外层浮层（不是图片）上的位置，这次任务卡只要求调整
- * 关闭按钮，没有要求这两个也跟着挪。
+ * 手指滑动切换（社区帖子图片改版任务卡追加）：在最外层浮层上监听
+ * touchstart/touchend，算横向位移，超过 SWIPE_MIN_DISTANCE_PX 且横向位移
+ * 明显大于纵向位移（避免上下划动被误判）时调用已有的 showPrevious /
+ * showNext——往右滑看上一张、往左滑看下一张（跟手指"拖动图片"的直觉一致）。
+ * 这是第三种切换方式，按钮/键盘/底部"N / M"计数、内部"一次只渲染一张图"
+ * 的结构、上面那些安全区适配都没有动。浏览器把手势识别成滑动后不会再派发
+ * click，所以滑动不会误触发"点背景关闭"。
+ *
+ * 不做的事：不支持双指缩放/拖拽平移；‹/› 切换按钮和底部"N / M"计数保持
+ * 原来挂在最外层浮层（不是图片）上的位置。
  */
 export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
@@ -83,6 +92,31 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
 
   function showNext(): void {
     setCurrentIndex((current) => (current + 1) % images.length);
+  }
+
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+
+  function handleTouchStart(event: TouchEvent<HTMLDivElement>): void {
+    const touch = event.touches[0];
+    touchStartRef.current = touch ? { x: touch.clientX, y: touch.clientY } : null;
+  }
+
+  function handleTouchEnd(event: TouchEvent<HTMLDivElement>): void {
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+    const touch = event.changedTouches[0];
+    if (!start || !touch || !hasMultipleImages) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < SWIPE_MIN_DISTANCE_PX || Math.abs(deltaX) <= Math.abs(deltaY) * 1.5) {
+      return;
+    }
+    if (deltaX > 0) {
+      showPrevious();
+    } else {
+      showNext();
+    }
   }
 
   useEffect(() => {
@@ -124,6 +158,8 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
         paddingBottom: "env(safe-area-inset-bottom)"
       }}
       onClick={onClose}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
     >
       <div className="relative" onClick={(event) => event.stopPropagation()}>
         <img

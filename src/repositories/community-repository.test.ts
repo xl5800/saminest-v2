@@ -296,9 +296,39 @@ describe("listCommunityPosts", () => {
         authorId: "user-1",
         authorDisplayName: "Alice",
         authorAvatarUrl: "https://x/a.png",
-        coverImageUrl: null
+        coverImageUrl: null,
+        images: []
       }
     ]);
+  });
+
+  it("returns every non-deleted image url in sort_order order as images (coverImageUrl is kept alongside)", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        makeRow({
+          id: "with-images",
+          community_post_images: [
+            { public_url: "https://x/deleted.webp", sort_order: 0, deleted_at: "2026-08-02T00:00:00.000Z" },
+            { public_url: "https://x/third.webp", sort_order: 3, deleted_at: null },
+            { public_url: "https://x/first.webp", sort_order: 1, deleted_at: null },
+            { public_url: null, sort_order: 4, deleted_at: null },
+            { public_url: "https://x/second.webp", sort_order: 2, deleted_at: null }
+          ]
+        }),
+        makeRow({ id: "no-images", community_post_images: [] }),
+        makeRow({ id: "null-images", community_post_images: null })
+      ],
+      error: null
+    });
+
+    const result = await listCommunityPosts({ communityId: "c-1", page: 0, pageSize: 20 });
+
+    expect(result.posts.map((p) => [p.id, p.images])).toEqual([
+      ["with-images", ["https://x/first.webp", "https://x/second.webp", "https://x/third.webp"]],
+      ["no-images", []],
+      ["null-images", []]
+    ]);
+    expect(result.posts[0]?.coverImageUrl).toBe("https://x/first.webp");
   });
 
   it("drops the extra row and reports hasNextPage=true when more than pageSize rows come back", async () => {
