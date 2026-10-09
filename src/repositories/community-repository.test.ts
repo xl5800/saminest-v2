@@ -7,7 +7,7 @@ const { queryBuilder, singleMock, maybeSingleMock, updateMock, overrideTypesMock
   const overrideTypesMock = vi.fn();
   const insertMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const name of ["select", "eq", "is", "order", "range"]) {
+  for (const name of ["select", "eq", "is", "order", "range", "gte"]) {
     builder[name] = vi.fn(() => builder);
   }
   builder.insert = insertMock;
@@ -25,10 +25,12 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  countCommunityPostsSince,
   createCommunityPost,
   deleteCommunityPost,
   getCommunityBySlug,
   getCommunityPostDetail,
+  isCommunityMember,
   joinCommunity,
   listCommunityPosts,
   listMyCommunityPosts,
@@ -71,15 +73,36 @@ beforeEach(() => {
 describe("getCommunityBySlug", () => {
   it("queries communities by slug and maps the row", async () => {
     singleMock.mockResolvedValue({
-      data: { id: "c-1", name: "DMV 社区", slug: "dmv" },
+      data: { id: "c-1", name: "DMV 社区", slug: "dmv", description: "简介", member_count: 42 },
       error: null
     });
 
     const result = await getCommunityBySlug("dmv");
 
     expect(fromMock).toHaveBeenCalledWith("communities");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, name, slug, description, member_count");
     expect(queryBuilder.eq).toHaveBeenCalledWith("slug", "dmv");
-    expect(result).toEqual({ id: "c-1", name: "DMV 社区", slug: "dmv" });
+    expect(result).toEqual({
+      id: "c-1",
+      name: "DMV 社区",
+      slug: "dmv",
+      description: "简介",
+      memberCount: 42
+    });
+  });
+
+  // DMV 种子行建表时没填 description，线上就是 null——必须原样透传 null，
+  // 不能被转成空字符串或 undefined，调用方靠 null 判断要不要用兜底文案。
+  it("passes a null description through unchanged", async () => {
+    singleMock.mockResolvedValue({
+      data: { id: "c-1", name: "DMV 社区", slug: "dmv", description: null, member_count: 0 },
+      error: null
+    });
+
+    const result = await getCommunityBySlug("dmv");
+
+    expect(result.description).toBeNull();
+    expect(result.memberCount).toBe(0);
   });
 
   it("throws COMMUNITY_FETCH_FAILED when the query fails", async () => {
@@ -87,6 +110,63 @@ describe("getCommunityBySlug", () => {
 
     await expect(getCommunityBySlug("dmv")).rejects.toMatchObject({
       code: "COMMUNITY_FETCH_FAILED"
+    });
+  });
+});
+
+describe("isCommunityMember", () => {
+  it("queries community_members by (community_id, user_id) and returns true when a row exists", async () => {
+    maybeSingleMock.mockResolvedValue({ data: { community_id: "c-1" }, error: null });
+
+    const result = await isCommunityMember("c-1", "user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("community_members");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("community_id", "c-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(result).toBe(true);
+  });
+
+  it("returns false (not an error) when the user has not joined", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+
+    await expect(isCommunityMember("c-1", "user-1")).resolves.toBe(false);
+  });
+
+  it("throws COMMUNITY_MEMBERSHIP_FETCH_FAILED when the query fails", async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { message: "boom", code: "500" } });
+
+    await expect(isCommunityMember("c-1", "user-1")).rejects.toMatchObject({
+      code: "COMMUNITY_MEMBERSHIP_FETCH_FAILED"
+    });
+  });
+});
+
+describe("countCommunityPostsSince", () => {
+  it("counts only visible posts (approved, not soft-deleted) created since the given time, without fetching rows", async () => {
+    queryBuilder.gte.mockResolvedValue({ count: 3, error: null });
+
+    const result = await countCommunityPostsSince("c-1", "2026-10-08T04:00:00.000Z");
+
+    expect(fromMock).toHaveBeenCalledWith("community_posts");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id", { count: "exact", head: true });
+    expect(queryBuilder.eq).toHaveBeenCalledWith("community_id", "c-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.gte).toHaveBeenCalledWith("created_at", "2026-10-08T04:00:00.000Z");
+    expect(result).toBe(3);
+  });
+
+  it("treats a null count as 0", async () => {
+    queryBuilder.gte.mockResolvedValue({ count: null, error: null });
+
+    await expect(countCommunityPostsSince("c-1", "2026-10-08T04:00:00.000Z")).resolves.toBe(0);
+  });
+
+  it("throws COMMUNITY_POST_COUNT_FAILED when the query fails", async () => {
+    queryBuilder.gte.mockResolvedValue({ count: null, error: { message: "boom", code: "500" } });
+
+    await expect(countCommunityPostsSince("c-1", "2026-10-08T04:00:00.000Z")).rejects.toMatchObject({
+      code: "COMMUNITY_POST_COUNT_FAILED"
     });
   });
 });

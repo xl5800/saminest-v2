@@ -14,6 +14,7 @@ import { AdminSupportConversationPage } from "../pages/admin/support-conversatio
 import { AdminSupportConversationsPage } from "../pages/admin/support-conversations-page";
 import { AdminUsersPage } from "../pages/admin/users-page";
 import { CategoriesPage } from "../pages/categories/categories-page";
+import { CommunityBrowsePage } from "../pages/community/community-browse-page";
 import { CommunityFeedPage } from "../pages/community/community-feed-page";
 import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
 import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
@@ -116,7 +117,15 @@ export const router = createBrowserRouter([
       {
         // 社区功能阶段二：DMV 社区 Feed / 发帖 / 帖子详情。Feed 和详情公开
         // 可浏览（跟 post/:id、首页一样），发帖需要登录（RequireAuth）。
+        // 阶段九：路由拆成两级——/community 是新的浏览/发现页，原来这里的
+        // DMV 帖子列表（CommunityFeedPage）原样挪到 community/dmv。两条都是
+        // 公开路由，没有 RequireAuth、没有 loader，所以不需要额外迁移任何
+        // 路由级配置。
         path: "community",
+        element: <CommunityBrowsePage />
+      },
+      {
+        path: "community/dmv",
         element: <CommunityFeedPage />
       },
       {

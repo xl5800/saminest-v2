@@ -148,9 +148,16 @@ vi.mock("../repositories/profiles-repository", () => ({
 // 社区功能阶段二：三个社区页面只在路由层面被验证（路径是否登记、是否被
 // RequireAuth 包裹、是否叠加旧 AppHeader），数据层用最小 mock 兜住。
 vi.mock("../repositories/community-repository", () => ({
-  getCommunityBySlug: vi
-    .fn()
-    .mockResolvedValue({ id: "c-1", name: "DMV 社区", slug: "dmv" }),
+  getCommunityBySlug: vi.fn().mockResolvedValue({
+    id: "c-1",
+    name: "DMV 社区",
+    slug: "dmv",
+    description: null,
+    memberCount: 7
+  }),
+  // 阶段九：浏览页（/community）新增的两个查询。
+  isCommunityMember: vi.fn().mockResolvedValue(false),
+  countCommunityPostsSince: vi.fn().mockResolvedValue(0),
   joinCommunity: vi.fn().mockResolvedValue(undefined),
   listCommunityPosts: vi.fn().mockResolvedValue({ posts: [], hasNextPage: false }),
   getCommunityPostDetail: vi.fn().mockRejectedValue(new Error("not found")),
@@ -208,6 +215,7 @@ import { SubmitFeedbackPage } from "../pages/feedback/submit-feedback-page";
 import { ForgotPasswordPage } from "../pages/forgot-password/forgot-password-page";
 import { HomePage } from "../pages/home/home-page";
 import { LoginPage } from "../pages/login/login-page";
+import { CommunityBrowsePage } from "../pages/community/community-browse-page";
 import { CommunityFeedPage } from "../pages/community/community-feed-page";
 import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
 import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
@@ -281,7 +289,11 @@ function renderAt(path: string | string[]) {
           { path: "categories", element: <CategoriesPage /> },
           { path: "region-select", element: <RegionSelectPage /> },
           { path: "post/:id", element: <PostDetailPage /> },
-          { path: "community", element: <CommunityFeedPage /> },
+          // 阶段九：跟 routes.tsx 保持一致——/community 是浏览页，原来的 Feed
+          // 挪到 /community/dmv。（这份并行路由树不会自动跟着 routes.tsx
+          // 变，真正的 routes.tsx 另有 community-routes.test.tsx 单独验证。）
+          { path: "community", element: <CommunityBrowsePage /> },
+          { path: "community/dmv", element: <CommunityFeedPage /> },
           {
             path: "community/new",
             element: (
@@ -722,13 +734,44 @@ describe("app routes", () => {
   });
 
   // 社区功能阶段二：/community 和 /community/post/:id 公开可浏览，
-  // /community/new 需要登录；三个页面都有自己的 TopBar，不应该叠加旧的
+  // /community/new 需要登录；这几个页面都有自己的顶栏，不应该叠加旧的
   // 全局 AppHeader（见 app-shell.tsx 的 pattern 登记）。
-  it("renders the community feed at /community without a session and without the global AppHeader", async () => {
+  // 阶段九：/community 现在是浏览页（原来这条测试断言的 DMV Feed 挪到了
+  // /community/dmv，见下一条）。
+  it("renders the community browse page (not the feed) at /community without a session, without the global AppHeader, keeping BottomNav with 社区 highlighted", async () => {
     renderAt("/community");
 
-    expect(await screen.findByRole("heading", { name: "DMV 社区" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "社区" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 2, name: "DMV 社区" })).toBeInTheDocument();
+    expect(screen.queryByText("暂无帖子，欢迎发布第一条")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "社区" })).toHaveAttribute("aria-current", "page");
+  });
+
+  // 阶段九：DMV 帖子列表挪到 /community/dmv。app-shell 的 pattern 匹配是
+  // end: true 的精确匹配，"/community" 不会自动覆盖这个子路径——不单独登记
+  // 的话这里会叠一层旧的 AppHeader（Saminest 品牌链接），这条断言就是防
+  // 这个"双重顶部栏"回归。
+  it("renders the community feed at /community/dmv without a session and without the global AppHeader, keeping BottomNav with 社区 highlighted", async () => {
+    renderAt("/community/dmv");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "DMV 社区" })).toBeInTheDocument();
+    expect(await screen.findByText("暂无帖子，欢迎发布第一条")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "社区" })).toHaveAttribute("aria-current", "page");
+  });
+
+  // 阶段九：从浏览页点 DMV 卡片能走到 Feed——端到端验证"卡片链接目标"和
+  // "路由里真有这个路径"两件事对得上（只测其中一半的话，改了一边忘了另一边
+  // 也发现不了）。
+  it("navigates from the DMV card on the browse page to the feed at /community/dmv", async () => {
+    renderAt("/community");
+
+    fireEvent.click(await screen.findByRole("link", { name: "DMV 社区" }));
+
+    expect(await screen.findByText("暂无帖子，欢迎发布第一条")).toBeInTheDocument();
   });
 
   it("redirects /community/new to /login when there is no session (reuses RequireAuth)", () => {
