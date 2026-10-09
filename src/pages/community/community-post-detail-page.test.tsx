@@ -1,12 +1,20 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useCommunityPostDetailQuery } = vi.hoisted(() => ({
-  useCommunityPostDetailQuery: vi.fn()
+const { useCommunityPostDetailQuery, useDmvCommunityQuery, clipboardWrite } = vi.hoisted(() => ({
+  useCommunityPostDetailQuery: vi.fn(),
+  useDmvCommunityQuery: vi.fn(),
+  clipboardWrite: vi.fn()
 }));
 
 vi.mock("../../features/community/use-community-post-detail-query", () => ({
   useCommunityPostDetailQuery
+}));
+vi.mock("../../features/community/use-dmv-community-query", () => ({
+  useDmvCommunityQuery
+}));
+vi.mock("@capacitor/clipboard", () => ({
+  Clipboard: { write: clipboardWrite }
 }));
 vi.mock("../../components/image-lightbox", () => ({
   ImageLightbox: ({
@@ -86,6 +94,69 @@ describe("CommunityPostDetailPage", () => {
       isPending: false,
       isError: false
     });
+    useDmvCommunityQuery.mockReset();
+    useDmvCommunityQuery.mockReturnValue({
+      data: { id: "c-1", name: "DMV 社区", slug: "dmv", memberCount: 128 }
+    });
+    clipboardWrite.mockReset();
+    clipboardWrite.mockResolvedValue(undefined);
+  });
+
+  it("shows '社区名 · N 位成员' as the top bar title, falling back to 帖子详情 until the community loads", () => {
+    const { unmount } = renderPage();
+    expect(screen.getByRole("heading", { level: 1, name: "DMV 社区 · 128 位成员" })).toBeInTheDocument();
+    unmount();
+
+    useDmvCommunityQuery.mockReturnValue({ data: undefined });
+    renderPage();
+    expect(screen.getByRole("heading", { level: 1, name: "帖子详情" })).toBeInTheDocument();
+  });
+
+  it("renders the body at 17px with 1.6 line height", () => {
+    renderPage();
+
+    expect(screen.getByText(/第一行/)).toHaveClass("text-[17px]", "leading-[1.6]");
+  });
+
+  it("lays the action row out as three equal columns: comment count, favorite, share", () => {
+    renderPage();
+
+    const commentCount = screen.getByLabelText("4 条评论");
+    const row = commentCount.parentElement;
+    expect(row).toHaveClass("grid", "grid-cols-3");
+    expect(Array.from(row?.children ?? []).map((cell) => cell.textContent)).toEqual([
+      "4",
+      "cp-1/icon",
+      "分享"
+    ]);
+  });
+
+  it("copies the production post link when 分享 is clicked and shows a transient confirmation", async () => {
+    renderPage();
+
+    expect(screen.queryByText("链接已复制")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "分享" }));
+
+    await waitFor(() => {
+      expect(clipboardWrite).toHaveBeenCalledWith({
+        string: "https://www.saminest.com/community/post/cp-1"
+      });
+    });
+    expect(await screen.findByRole("status")).toHaveTextContent("链接已复制");
+  });
+
+  it("shows no confirmation when copying fails", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    clipboardWrite.mockRejectedValue(new Error("denied"));
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "分享" }));
+
+    await waitFor(() => {
+      expect(consoleError).toHaveBeenCalled();
+    });
+    expect(screen.queryByText("链接已复制")).not.toBeInTheDocument();
+    consoleError.mockRestore();
   });
 
   it("loads the post by the :id route param", () => {
@@ -113,9 +184,9 @@ describe("CommunityPostDetailPage", () => {
 
     renderPage();
 
-    // 页面里只剩顶栏那一个 h1（"帖子详情"），没有帖子标题。
+    // 页面里只剩顶栏那一个 h1（社区名），没有帖子标题。
     expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual([
-      "帖子详情"
+      "DMV 社区 · 128 位成员"
     ]);
   });
 

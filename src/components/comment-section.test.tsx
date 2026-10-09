@@ -239,6 +239,15 @@ describe("CommentSection", () => {
     expect(screen.getByText("Bob")).toBeInTheDocument();
   });
 
+  // 社区帖子详情页改版任务卡：最新/最热切换只在社区帖子评论区打开
+  // （enableSort），帖子评论区保持原来的顺序/界面不变。
+  it("does not render the 最新/最热 sort control for the regular post comment section", () => {
+    renderSection();
+
+    expect(screen.queryByRole("group", { name: "评论排序" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "最热" })).not.toBeInTheDocument();
+  });
+
   // 评论区样式对齐小红书任务卡：帖子作者 id 来自 usePostDetailQuery，
   // 不是新发一次请求——这里验证的是 PostCommentSection 把 authorId 正确
   // 当成 ownerId 传给了 CommentItem（真实的 CommentItem，没有 mock 掉），
@@ -388,6 +397,58 @@ describe("CommentSection (community post target)", () => {
     renderCommunitySection();
 
     expect(screen.getByText("同意楼主")).toBeInTheDocument();
+  });
+
+  // 社区帖子详情页改版任务卡：最新/最热分段控件。数据按 listComments 的真实
+  // 顺序（created_at 升序）给，验证顶层顺序/楼中楼不被打乱。
+  describe("最新/最热 sort control", () => {
+    const sortComments = [
+      { ...communityRootComment, id: "a", content: "评论A", createdAt: "2026-08-01T00:00:00.000Z" },
+      { ...communityRootComment, id: "b", content: "评论B", createdAt: "2026-08-02T00:00:00.000Z" },
+      { ...communityRootComment, id: "c", content: "评论C", createdAt: "2026-08-03T00:00:00.000Z" },
+      { ...communityRootComment, id: "a1", parentId: "a", content: "回复A1", createdAt: "2026-08-04T00:00:00.000Z" },
+      { ...communityRootComment, id: "a2", parentId: "a", content: "回复A2", createdAt: "2026-08-05T00:00:00.000Z" }
+    ];
+
+    function renderedOrder(): string[] {
+      return screen
+        .getAllByText(/^(评论|回复)[A-Z]\d?$/)
+        .map((element) => element.textContent ?? "");
+    }
+
+    beforeEach(() => {
+      useCommunityPostCommentsQuery.mockReturnValue({
+        data: sortComments,
+        isPending: false,
+        isError: false
+      });
+    });
+
+    it("defaults to 最新 (newest top-level first) and marks it pressed", () => {
+      renderCommunitySection();
+
+      expect(screen.getByRole("button", { name: "最新" })).toHaveAttribute("aria-pressed", "true");
+      expect(screen.getByRole("button", { name: "最热" })).toHaveAttribute("aria-pressed", "false");
+      expect(renderedOrder()).toEqual(["评论C", "评论B", "评论A", "回复A1", "回复A2"]);
+    });
+
+    it("switches to 最热: top-level comments by direct reply count, replies stay under their parent in original order", () => {
+      renderCommunitySection();
+
+      fireEvent.click(screen.getByRole("button", { name: "最热" }));
+
+      expect(screen.getByRole("button", { name: "最热" })).toHaveAttribute("aria-pressed", "true");
+      expect(renderedOrder()).toEqual(["评论A", "回复A1", "回复A2", "评论C", "评论B"]);
+    });
+
+    it("switches back to 最新", () => {
+      renderCommunitySection();
+
+      fireEvent.click(screen.getByRole("button", { name: "最热" }));
+      fireEvent.click(screen.getByRole("button", { name: "最新" }));
+
+      expect(renderedOrder()).toEqual(["评论C", "评论B", "评论A", "回复A1", "回复A2"]);
+    });
   });
 });
 
