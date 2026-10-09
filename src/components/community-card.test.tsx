@@ -1,0 +1,87 @@
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { renderWithProviders } from "../test/render-with-providers";
+import { CommunityCard, type CommunityCardProps } from "./community-card";
+
+function renderCard(overrides: Partial<CommunityCardProps> = {}) {
+  const props: CommunityCardProps = {
+    name: "DMV 华人社区",
+    abbreviation: "DMV",
+    memberCount: 128,
+    todayPostCount: 3,
+    tag: "州社区",
+    description: "DC / MD / VA 华人交流",
+    to: "/community/dmv",
+    joinState: "join",
+    onJoin: vi.fn(),
+    ...overrides
+  };
+  return { props, ...renderWithProviders(<CommunityCard {...props} />) };
+}
+
+describe("CommunityCard", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders the avatar abbreviation, name, member count, today's post count, tag and description", () => {
+    renderCard();
+
+    expect(screen.getByText("DMV")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
+    expect(screen.getByText("128 位成员 · 今日 3 个新帖子")).toBeInTheDocument();
+    expect(screen.getByText("州社区")).toBeInTheDocument();
+    expect(screen.getByText("DC / MD / VA 华人交流")).toBeInTheDocument();
+  });
+
+  it("omits the '今日 N 个新帖子' segment (instead of showing a jumpy 0) while the count is still loading", () => {
+    renderCard({ todayPostCount: undefined });
+
+    expect(screen.getByText("128 位成员")).toBeInTheDocument();
+    expect(screen.queryByText(/今日/)).not.toBeInTheDocument();
+  });
+
+  it("shows 今日 0 个新帖子 when the count has loaded and is genuinely zero", () => {
+    renderCard({ todayPostCount: 0 });
+
+    expect(screen.getByText("128 位成员 · 今日 0 个新帖子")).toBeInTheDocument();
+  });
+
+  it("links the whole card to the given path via a stretched link named after the community", () => {
+    renderCard();
+
+    expect(screen.getByRole("link", { name: "DMV 华人社区" })).toHaveAttribute("href", "/community/dmv");
+  });
+
+  // 非法 HTML 结构回归：<a> 里不能嵌套 <button>——"加入"按钮必须是 <a>
+  // 的兄弟节点而不是后代。
+  it("does not nest the join button inside the link", () => {
+    renderCard();
+
+    const link = screen.getByRole("link", { name: "DMV 华人社区" });
+    const button = screen.getByRole("button", { name: "加入" });
+    expect(link.contains(button)).toBe(false);
+  });
+
+  it("calls onJoin (and nothing else) when the 加入 button is clicked", () => {
+    const { props } = renderCard();
+
+    fireEvent.click(screen.getByRole("button", { name: "加入" }));
+
+    expect(props.onJoin).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the button and shows 加入中… while joining", () => {
+    renderCard({ joinState: "joining" });
+
+    expect(screen.getByRole("button", { name: "加入中…" })).toBeDisabled();
+  });
+
+  it("renders a non-interactive ✓ 已加入 label (no button) once joined", () => {
+    renderCard({ joinState: "joined" });
+
+    expect(screen.getByText("✓ 已加入")).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+});

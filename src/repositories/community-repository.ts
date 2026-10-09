@@ -11,6 +11,13 @@ export interface Community {
   id: string;
   name: string;
   slug: string;
+  /** 阶段九（社区浏览页卡片）新增：社区简介。DMV 那一行种子数据建表时没有
+   *  填 description，目前线上是 null，调用方要自己处理空值。 */
+  description: string | null;
+  /** 阶段九新增：成员数。communities.member_count 是触发器
+   *  （sync_community_member_count）随 community_members 增删维护的计数列，
+   *  不用前端自己 count。 */
+  memberCount: number;
 }
 
 /**
@@ -21,14 +28,64 @@ export interface Community {
 export async function getCommunityBySlug(slug: string): Promise<Community> {
   const { data, error } = await getSupabaseClient()
     .from("communities")
-    .select("id, name, slug")
+    .select("id, name, slug, description, member_count")
     .eq("slug", slug)
     .single();
 
   if (error) {
     throw new AppError(error.message, "COMMUNITY_FETCH_FAILED", error);
   }
-  return { id: data.id, name: data.name, slug: data.slug };
+  return {
+    id: data.id,
+    name: data.name,
+    slug: data.slug,
+    description: data.description,
+    memberCount: data.member_count
+  };
+}
+
+/**
+ * 当前用户是不是某个社区的成员——阶段九社区浏览页的"加入/已加入"按钮和
+ * "我的社区"Tab 用。community_members 的 SELECT 策略只允许本人（或管理员）
+ * 读自己的行，所以这里按 (community_id, user_id) 精确查一行；没有这一行
+ * （还没加入）时 maybeSingle 返回 data = null，不是错误。
+ */
+export async function isCommunityMember(communityId: string, userId: string): Promise<boolean> {
+  const { data, error } = await getSupabaseClient()
+    .from("community_members")
+    .select("community_id")
+    .eq("community_id", communityId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_MEMBERSHIP_FETCH_FAILED", error);
+  }
+  return data !== null;
+}
+
+/**
+ * 某个社区从 sinceIso 起新发布的帖子数（"今日 N 个新帖子"用）。过滤条件跟
+ * listCommunityPosts 对外可见的集合保持一致（approved 且未软删除），否则
+ * 卡片上写"今日 3 个新帖子"、点进去 Feed 里却只看得到 2 个。head: true 只要
+ * 数量不要行，不拉帖子内容。
+ */
+export async function countCommunityPostsSince(
+  communityId: string,
+  sinceIso: string
+): Promise<number> {
+  const { count, error } = await getSupabaseClient()
+    .from("community_posts")
+    .select("id", { count: "exact", head: true })
+    .eq("community_id", communityId)
+    .eq("status", "approved")
+    .is("deleted_at", null)
+    .gte("created_at", sinceIso);
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POST_COUNT_FAILED", error);
+  }
+  return count ?? 0;
 }
 
 export interface JoinCommunityInput {

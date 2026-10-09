@@ -186,6 +186,13 @@ const TOPBAR_MIGRATED_PATTERNS = [
   // 内边距。不加进这个数组的话，这两个路径会落进"尚未迁移"的默认分支，
   // 同时渲染旧 AppHeader 和页面自己的 TopBar，出现双重顶部栏。
   "/community",
+  // 社区功能阶段九：/community 变成新的浏览页（自己渲染大标题顶栏），原来的
+  // DMV Feed（自己渲染 TopBar tab 变体）挪到了 /community/dmv。这里用的是
+  // end: true 的精确匹配（见 matchesAnyPattern），"/community" 不会自动覆盖
+  // 子路径——不登记的话 /community/dmv 会落进"尚未迁移"的默认分支，Feed 自己
+  // 的 TopBar 上面再叠一层旧 AppHeader，出现双重顶部栏（跟上面阶段二注释
+  // 说的是同一个问题）。
+  "/community/dmv",
   "/community/post/:id",
   // 社区功能阶段六：我的社区发帖管理页（TopBar nav-only 变体），跟 /my-posts
   // 同一类，只关 AppHeader、留 BottomNav。
