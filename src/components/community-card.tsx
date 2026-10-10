@@ -5,14 +5,10 @@ export type CommunityCardJoinState = "join" | "joining" | "joined" | "leaving";
 
 export interface CommunityCardProps {
   name: string;
-  /** 左侧 48px 圆角方形头像里显示的缩写（比如 "DMV"）。 */
-  abbreviation: string;
   memberCount: number;
   /** 今日新帖子数；还在加载（undefined）时整段"今日 N 个新帖子"不渲染，
    *  不展示一个会跳变的 0。 */
   todayPostCount: number | undefined;
-  /** 标签文字（"州社区"）。 */
-  tag: string;
   description: string;
   /** 整张卡片点击后跳转的路径。 */
   to: string;
@@ -26,9 +22,10 @@ export interface CommunityCardProps {
 }
 
 /**
- * 社区浏览页（community-browse-page.tsx）的社区卡片：48px 圆角方形头像 +
- * 名称/认证图标 + "成员数 · 今日 N 个新帖子" + 右侧加入状态，下面一行"州社区"
- * 标签 + 简介。
+ * 社区浏览页（community-browse-page.tsx）/ 全站搜索页的社区卡片：名称/认证图标 +
+ * "成员数 · 今日 N 个新帖子" + 右侧加入/退出按钮，下面一行简介。原来左侧的"DMV"
+ * 方块缩写头像和简介前的"州社区"标签已去掉（三个社区头像都是"DMV"、标签都是
+ * "州社区"，没有区分作用）。
  *
  * 整张卡片点击跳转 + 卡片里还有一个"加入"按钮，用"拉伸链接"写法：一个
  * `absolute inset-0` 的 <Link> 铺满卡片负责整卡点击，"加入"按钮用
@@ -44,10 +41,8 @@ export interface CommunityCardProps {
  */
 export function CommunityCard({
   name,
-  abbreviation,
   memberCount,
   todayPostCount,
-  tag,
   description,
   to,
   joinState,
@@ -64,12 +59,6 @@ export function CommunityCard({
     <div className="relative rounded-card-lg border border-border bg-card-white p-4 shadow-card">
       <Link to={to} aria-label={name} className="absolute inset-0 rounded-card-lg" />
       <div className="flex items-center gap-3">
-        <div
-          aria-hidden="true"
-          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-light text-sm font-bold text-primary"
-        >
-          {abbreviation}
-        </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <h2 className="truncate text-base font-semibold text-text">{name}</h2>
@@ -99,12 +88,7 @@ export function CommunityCard({
           </button>
         )}
       </div>
-      <div className="mt-3 flex items-start gap-2">
-        <span className="shrink-0 rounded-full bg-bg px-2 py-0.5 text-xs font-medium text-text-muted">
-          {tag}
-        </span>
-        <p className="line-clamp-2 break-words text-sm text-text-muted">{description}</p>
-      </div>
+      <p className="mt-3 line-clamp-2 break-words text-sm text-text-muted">{description}</p>
     </div>
   );
 }

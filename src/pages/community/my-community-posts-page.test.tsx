@@ -60,6 +60,15 @@ describe("MyCommunityPostsPage", () => {
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
   });
 
+  it("marks posts an admin has delisted with a 已下架 tag (and only those)", async () => {
+    listMyCommunityPosts.mockResolvedValue([{ ...titledPost, status: "archived" }, untitledPost]);
+    renderWithProviders(<MyCommunityPostsPage />);
+
+    const archivedRow = (await screen.findByText("有标题的帖子")).closest("li");
+    expect(archivedRow).toHaveTextContent("已下架");
+    expect(screen.getByText("没有标题只有正文").closest("li")).not.toHaveTextContent("已下架");
+  });
+
   it("shows a loading status while pending", () => {
     listMyCommunityPosts.mockReturnValue(new Promise(() => undefined));
 

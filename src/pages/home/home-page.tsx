@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { CommunityPostActionBar } from "../../components/community-post-action-bar";
-import { PostImageCarousel } from "../../components/post-image-carousel";
+import { CommunityPostCard } from "../../components/community-post-card";
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
@@ -11,11 +10,6 @@ import { useCommunityPostsInfiniteQuery } from "../../features/community/use-com
 import { useMyCommunitiesQuery } from "../../features/community/use-my-communities-query";
 import { useAuthStore } from "../../store/auth-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
-import { formatRelativeTimeAgo } from "../../utils/format";
-import {
-  COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME,
-  COMMUNITY_POST_LIST_TITLE_CLASS_NAME
-} from "../community/community-post-type";
 
 const SKELETON_COUNT = 4;
 
@@ -55,21 +49,10 @@ const COMMUNITY_PATH = "/community";
  * - （零加入时）引导加入社区的横幅。原来顶部的"我的社区"横向卡片区已经删掉——
  *   "我在哪些社区"这个信息改成每条帖子上可点击的社区名标签（点了去对应社区的
  *   Feed 页）。
- * - 帖子流：标题和正文分开展示，行与行之间用底部分隔线隔开，不是带边框的
- *   卡片。分页沿用社区 Feed 页同一套"哨兵元素 + IntersectionObserver"
- *   无限滚动。
- * - 操作行：CommunityPostActionBar（评论数 / 收藏 / 分享，跟详情页同一套线条
- *   图标，只放图标和数字）。**没有点赞图标**——社区帖子 v1 没有点赞。分享是
- *   复制帖子链接，跟详情页一致。
- *
- * 社区名标签是独立的 <Link>，不嵌在"去详情页"那个 <Link> 里——<a> 里嵌 <a> 是
- * 非法 HTML，而且点标签会同时触发外层导航；所以卡片顶部一行拆成"作者信息链接
- * （去详情页）+ 社区标签链接（去社区 Feed）"两个并列的链接。帖子是公开可读的，
- * 游客也能看到首页的社区帖子流。
- *
- * 图片区域跟 /community Feed 页、帖子详情页同一个样子——文字在上、满宽的
- * PostImageCarousel 在下（一次一张、多张可滑动 + 圆点指示器），不用旁边的小
- * 方块缩略图，直接复用 post.images（不再用 coverImageUrl 渲染单独的缩略图）。
+ * - 帖子流：每条帖子是共用的 CommunityPostCard（showCommunityTag，右上角带可
+ *   点击的社区名标签），跟单个社区页的帖子长得完全一样，结构说明见
+ *   community-post-card.tsx。分页沿用"哨兵元素 + IntersectionObserver"无限滚动。
+ *   **没有点赞图标**——社区帖子 v1 没有点赞。帖子是公开可读的，游客也能看到。
  */
 export function HomePage() {
   const navigate = useNavigate();
@@ -154,82 +137,11 @@ export function HomePage() {
     return (
       <div>
         <ul>
-          {posts.map((post) => {
-            const hasTitle = Boolean(post.title);
-            return (
-              <li key={post.id} className="border-b border-divider px-4 py-4">
-                {/* 顶部一行：作者信息（去详情页）+ 社区名标签（去社区 Feed）是两个
-                    并列的链接，不能嵌套，见组件顶部注释。 */}
-                <div className="flex items-center gap-2">
-                  <Link
-                    to={`${COMMUNITY_PATH}/post/${post.id}`}
-                    className="flex min-w-0 flex-1 items-center gap-2"
-                  >
-                    {post.authorAvatarUrl ? (
-                      <img
-                        src={post.authorAvatarUrl}
-                        alt=""
-                        className="h-6 w-6 shrink-0 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden="true"
-                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-light text-[10px] font-semibold text-primary"
-                      >
-                        {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
-                      </span>
-                    )}
-                    <span className="min-w-0 truncate text-sm text-text">
-                      {post.authorDisplayName}
-                    </span>
-                    <span className="shrink-0 text-xs text-text-subtle">
-                      {formatRelativeTimeAgo(post.createdAt)}
-                    </span>
-                  </Link>
-                  {post.communitySlug ? (
-                    <Link
-                      to={`${COMMUNITY_PATH}/${post.communitySlug}`}
-                      className="max-w-[45%] shrink-0 truncate rounded-full bg-primary-light px-2 py-0.5 text-xs font-medium text-primary"
-                    >
-                      {post.communityName}
-                    </Link>
-                  ) : null}
-                </div>
-                {/* 内容区是一个整体链接去详情页；操作行（收藏/分享）在链接
-                    外面，避免按钮嵌进 <a> 里，也不依赖 stopPropagation。 */}
-                <Link to={`${COMMUNITY_PATH}/post/${post.id}`} className="mt-2 block">
-                  <div className="min-w-0">
-                    {/* 有标题：标题 + 正文预览分开；没有标题：正文前两行
-                        当标题，不重复展示预览——跟 /community 页同一规则。 */}
-                    {hasTitle ? (
-                      <>
-                        <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.title}</p>
-                        <p className={`mt-1 ${COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME}`}>
-                          {post.body}
-                        </p>
-                      </>
-                    ) : (
-                      <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.body}</p>
-                    )}
-                  </div>
-                  {/* 图片在文字下方、满宽展示，跟 /community Feed 页、帖子
-                      详情页同一个 PostImageCarousel；没有图片时不渲染任何
-                      占位，保持纯文字。这里不传 onImageClick：整张卡片已经
-                      是外层的 <Link>，静止点击图片直接冒泡跳详情页。 */}
-                  {post.images.length > 0 ? (
-                    <div className="mt-3">
-                      <PostImageCarousel images={post.images} aspectRatio="4 / 3" />
-                    </div>
-                  ) : null}
-                </Link>
-                <CommunityPostActionBar
-                  communityPostId={post.id}
-                  commentCount={post.commentCount}
-                  favoriteCount={post.favoriteCount}
-                />
-              </li>
-            );
-          })}
+          {posts.map((post) => (
+            <li key={post.id}>
+              <CommunityPostCard post={post} showCommunityTag />
+            </li>
+          ))}
         </ul>
         {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
         {isFetchingNextPage ? <p role="status" className="py-3 text-center text-sm text-text-muted">加载更多…</p> : null}

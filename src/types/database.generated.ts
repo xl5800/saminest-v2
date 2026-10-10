@@ -1309,6 +1309,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_archive_community_post: {
+        Args: { archive_note: string; target_community_post_id: string }
+        Returns: undefined
+      }
       admin_archive_post: {
         Args: { archive_note: string; target_post_id: string }
         Returns: undefined
@@ -1319,6 +1323,10 @@ export type Database = {
       }
       admin_delete_activity: {
         Args: { delete_reason: string; target_activity_id: string }
+        Returns: undefined
+      }
+      admin_delete_community_post: {
+        Args: { delete_reason: string; target_community_post_id: string }
         Returns: undefined
       }
       admin_list_activities: {

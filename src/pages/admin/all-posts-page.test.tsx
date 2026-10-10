@@ -8,7 +8,10 @@ const {
   deletePost,
   adminArchivePost,
   adminDeleteActivity,
-  adminCancelActivity
+  adminCancelActivity,
+  listCommunityPostsForAdmin,
+  adminArchiveCommunityPost,
+  adminDeleteCommunityPost
 } = vi.hoisted(() => ({
   listAllPosts: vi.fn(),
   listAllActivitiesForAdmin: vi.fn(),
@@ -16,7 +19,10 @@ const {
   deletePost: vi.fn(),
   adminArchivePost: vi.fn(),
   adminDeleteActivity: vi.fn(),
-  adminCancelActivity: vi.fn()
+  adminCancelActivity: vi.fn(),
+  listCommunityPostsForAdmin: vi.fn(),
+  adminArchiveCommunityPost: vi.fn(),
+  adminDeleteCommunityPost: vi.fn()
 }));
 
 vi.mock("../../repositories/posts-repository", () => ({
@@ -37,7 +43,12 @@ vi.mock("../../repositories/admin-repository", () => ({
   deletePost,
   adminArchivePost,
   adminDeleteActivity,
-  adminCancelActivity
+  adminCancelActivity,
+  adminArchiveCommunityPost,
+  adminDeleteCommunityPost
+}));
+vi.mock("../../repositories/community-repository", () => ({
+  listCommunityPostsForAdmin
 }));
 // 同上，AdminNav 也会为"举报处理"角标调用 countPendingReports。
 vi.mock("../../repositories/reports-repository", () => ({
@@ -85,6 +96,10 @@ describe("AdminAllPostsPage", () => {
     adminArchivePost.mockReset();
     adminDeleteActivity.mockReset();
     adminCancelActivity.mockReset();
+    listCommunityPostsForAdmin.mockReset();
+    adminArchiveCommunityPost.mockReset();
+    adminDeleteCommunityPost.mockReset();
+    listCommunityPostsForAdmin.mockResolvedValue([]);
 
     listActiveCategories.mockResolvedValue(sampleCategories);
     listAllActivitiesForAdmin.mockResolvedValue([]);
@@ -570,6 +585,110 @@ describe("AdminAllPostsPage", () => {
 
       const item = await screen.findByText("Sunny room near metro");
       expect(item.closest("li")).not.toHaveTextContent("原因：");
+    });
+  });
+
+  describe("社区帖子 category", () => {
+    const sampleCommunityPost = {
+      id: "cp-1",
+      title: "dc有人一起打麻将吗",
+      body: "求打麻将搭子",
+      status: "approved",
+      authorName: "一棵树",
+      communityName: "DMV 华人社区",
+      createdAt: "2026-10-09T00:00:00.000Z"
+    };
+
+    async function openCommunityView() {
+      listAllPosts.mockResolvedValue([]);
+      renderWithProviders(<AdminAllPostsPage />);
+      fireEvent.click(await screen.findByRole("button", { name: "社区帖子" }));
+    }
+
+    it("switches the data source to community posts, with its own 全部/正常/已下架 status chips", async () => {
+      listCommunityPostsForAdmin.mockResolvedValue([sampleCommunityPost]);
+      await openCommunityView();
+
+      const link = await screen.findByRole("link", { name: "dc有人一起打麻将吗" });
+      expect(link).toHaveAttribute("href", "/community/post/cp-1");
+      const row = link.closest("li");
+      expect(row).toHaveTextContent("一棵树");
+      expect(row).toHaveTextContent("DMV 华人社区");
+      expect(row).toHaveTextContent("正常");
+      expect(listCommunityPostsForAdmin).toHaveBeenCalledWith(undefined, undefined);
+      expect(screen.getByRole("button", { name: "正常" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "待审核" })).toBeNull();
+    });
+
+    it("uses the body start as the row label when the post has no title", async () => {
+      listCommunityPostsForAdmin.mockResolvedValue([
+        { ...sampleCommunityPost, title: null, body: "没有标题的帖子正文" }
+      ]);
+      await openCommunityView();
+
+      expect(await screen.findByRole("link", { name: "没有标题的帖子正文" })).toBeInTheDocument();
+    });
+
+    it("filters by 已下架 and searches by title or body", async () => {
+      await openCommunityView();
+      await screen.findByText("暂无社区帖子");
+
+      fireEvent.click(screen.getByRole("button", { name: "已下架" }));
+      await waitFor(() =>
+        expect(listCommunityPostsForAdmin).toHaveBeenLastCalledWith("archived", undefined)
+      );
+
+      fireEvent.change(screen.getByLabelText("搜索"), { target: { value: "麻将" } });
+      await waitFor(() =>
+        expect(listCommunityPostsForAdmin).toHaveBeenLastCalledWith("archived", "麻将")
+      );
+    });
+
+    it("archives a community post with a required reason (author gets notified server-side)", async () => {
+      listCommunityPostsForAdmin.mockResolvedValue([sampleCommunityPost]);
+      adminArchiveCommunityPost.mockResolvedValue(undefined);
+      await openCommunityView();
+      await screen.findByRole("link", { name: "dc有人一起打麻将吗" });
+
+      fireEvent.click(screen.getByRole("button", { name: "下架" }));
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+      expect(await screen.findByRole("alert")).toHaveTextContent("请填写下架原因。");
+      expect(adminArchiveCommunityPost).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText(/下架原因/), { target: { value: "广告" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      await waitFor(() => expect(adminArchiveCommunityPost).toHaveBeenCalledWith("cp-1", "广告"));
+      // 下架后行保留，状态变成已下架，下架按钮禁用（不可恢复）。
+      const row = (await screen.findByRole("link", { name: "dc有人一起打麻将吗" })).closest("li");
+      await waitFor(() => expect(row).toHaveTextContent("已下架"));
+      expect(screen.getByRole("button", { name: "下架" })).toBeDisabled();
+      expect(adminArchivePost).not.toHaveBeenCalled();
+    });
+
+    it("deletes a community post with a reason and removes the row", async () => {
+      listCommunityPostsForAdmin.mockResolvedValue([sampleCommunityPost]);
+      adminDeleteCommunityPost.mockResolvedValue(undefined);
+      await openCommunityView();
+      await screen.findByRole("link", { name: "dc有人一起打麻将吗" });
+
+      fireEvent.click(screen.getByRole("button", { name: "删除" }));
+      fireEvent.change(screen.getByLabelText(/删除原因/), { target: { value: "违规" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
+
+      await waitFor(() => expect(adminDeleteCommunityPost).toHaveBeenCalledWith("cp-1", "违规"));
+      await waitFor(() =>
+        expect(screen.queryByRole("link", { name: "dc有人一起打麻将吗" })).not.toBeInTheDocument()
+      );
+      expect(deletePost).not.toHaveBeenCalled();
+    });
+
+    it("does not query community posts until the category is selected", async () => {
+      listAllPosts.mockResolvedValue([]);
+      renderWithProviders(<AdminAllPostsPage />);
+      await screen.findByText("暂无帖子");
+
+      expect(listCommunityPostsForAdmin).not.toHaveBeenCalled();
     });
   });
 });

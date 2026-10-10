@@ -111,7 +111,6 @@ export function CommunityBrowsePage() {
       <span className="sr-only">加载中…</span>
       <div className="rounded-card-lg border border-border bg-card-white p-4 shadow-card">
         <div className="flex items-center gap-3">
-          <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
           <div className="flex-1">
             <Skeleton className="h-5 w-1/2" />
             <Skeleton className="mt-1.5 h-3 w-2/3" />

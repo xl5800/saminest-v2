@@ -366,21 +366,31 @@ function sanitizeSearchKeyword(keyword: string): string {
 }
 
 /**
- * 全站搜索页用：按标题或正文模糊匹配所有社区里对外可见的帖子（approved 且未
- * 软删除），按发布时间倒序，最多 COMMUNITY_POST_SEARCH_LIMIT 条，不分页。
- * 返回结构跟 Feed 列表同一个 CommunityPostListItem。
+ * 按标题或正文模糊匹配对外可见的帖子（approved 且未软删除），按发布时间倒序，
+ * 最多 COMMUNITY_POST_SEARCH_LIMIT 条，不分页。返回结构跟 Feed 列表同一个
+ * CommunityPostListItem。
+ * - 全站搜索页：不传 communityId，搜所有社区；
+ * - 单个社区页的社区内搜索：传 communityId，只搜这个社区里的帖子。
  */
-export async function searchCommunityPosts(keyword: string): Promise<CommunityPostListItem[]> {
+export async function searchCommunityPosts(
+  keyword: string,
+  communityId?: string
+): Promise<CommunityPostListItem[]> {
   const sanitized = sanitizeSearchKeyword(keyword);
   if (!sanitized) return [];
   const pattern = `%${sanitized}%`;
 
-  const { data, error } = await getSupabaseClient()
+  let query = getSupabaseClient()
     .from("community_posts")
     .select(
       `${COMMUNITY_POST_LIST_COLUMNS}, community_post_images(public_url, sort_order, deleted_at)`
     )
-    .or(`title.ilike.${pattern},body.ilike.${pattern}`)
+    .or(`title.ilike.${pattern},body.ilike.${pattern}`);
+  if (communityId) {
+    query = query.eq("community_id", communityId);
+  }
+
+  const { data, error } = await query
     .eq("status", "approved")
     .is("deleted_at", null)
     .order("created_at", { ascending: false })
@@ -408,6 +418,75 @@ export async function searchCommunityPosts(keyword: string): Promise<CommunityPo
     images: mapPostImageUrls(row.community_post_images),
     communityName: row.community?.name ?? "",
     communitySlug: row.community?.slug ?? ""
+  }));
+}
+
+export interface AdminCommunityPostListItem {
+  id: string;
+  title: string | null;
+  body: string;
+  /** community_posts.status：'approved'（正常）或 'archived'（已下架）。 */
+  status: string;
+  authorName: string;
+  communityName: string;
+  createdAt: string;
+}
+
+interface AdminCommunityPostRow {
+  id: string;
+  title: string | null;
+  body: string;
+  status: string;
+  created_at: string;
+  author: { display_name: string } | null;
+  community: { name: string } | null;
+}
+
+const ADMIN_COMMUNITY_POSTS_LIMIT = 200;
+
+/**
+ * 管理后台「全部帖子 → 社区帖子」列表：所有社区、所有状态（可按 status 过滤）、
+ * 未删除的社区帖子，按发布时间倒序。community_posts 的 SELECT 策略对管理员
+ * （is_admin()）放行全部行，所以这里不需要专门的 RPC。搜索按标题或正文模糊匹配，
+ * 关键词清洗规则跟 searchCommunityPosts 一样。
+ */
+export async function listCommunityPostsForAdmin(
+  statusFilter?: string,
+  searchQuery?: string
+): Promise<AdminCommunityPostListItem[]> {
+  let query = getSupabaseClient()
+    .from("community_posts")
+    .select(
+      "id, title, body, status, created_at, author:profiles(display_name), community:communities(name)"
+    )
+    .is("deleted_at", null);
+
+  if (statusFilter) {
+    query = query.eq("status", statusFilter);
+  }
+  const sanitized = searchQuery ? sanitizeSearchKeyword(searchQuery) : "";
+  if (sanitized) {
+    const pattern = `%${sanitized}%`;
+    query = query.or(`title.ilike.${pattern},body.ilike.${pattern}`);
+  }
+
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .limit(ADMIN_COMMUNITY_POSTS_LIMIT)
+    .overrideTypes<AdminCommunityPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_COMMUNITY_POSTS_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    title: row.title,
+    body: row.body,
+    status: row.status,
+    authorName: row.author?.display_name ?? "未知用户",
+    communityName: row.community?.name ?? "",
+    createdAt: row.created_at
   }));
 }
 

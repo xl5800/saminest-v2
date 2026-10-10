@@ -10,7 +10,6 @@ import { useLeaveCommunityMutation } from "../../features/community/use-leave-co
 import type { Community } from "../../repositories/community-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
-import { getCommunityAbbreviation } from "./community-abbreviation";
 
 const JOIN_ERROR_MESSAGE = "加入失败，请稍后重试。";
 const LEAVE_ERROR_MESSAGE = "退出失败，请稍后重试。";
@@ -93,10 +92,8 @@ export function BrowseCommunityCard({ community }: { community: Community }) {
     <div>
       <CommunityCard
         name={community.name}
-        abbreviation={getCommunityAbbreviation(community.slug)}
         memberCount={community.memberCount}
         todayPostCount={todayPostCount}
-        tag="州社区"
         description={community.description ?? DESCRIPTION_FALLBACK}
         to={`/community/${community.slug}`}
         joinState={joinState}

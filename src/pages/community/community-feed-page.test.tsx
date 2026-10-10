@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const clipboardWriteMock = vi.hoisted(() => vi.fn());
 
 const {
+  useSearchCommunityPostsQuery,
   useCommunityBySlugQuery,
   useCommunityMembershipQuery,
   useCommunityPostsInfiniteQuery,
@@ -13,6 +14,7 @@ const {
   leaveMutate,
   navigateMock
 } = vi.hoisted(() => ({
+  useSearchCommunityPostsQuery: vi.fn(),
   useCommunityBySlugQuery: vi.fn(),
   useCommunityMembershipQuery: vi.fn(),
   useCommunityPostsInfiniteQuery: vi.fn(),
@@ -31,6 +33,13 @@ vi.mock("../../features/community/use-community-membership-query", () => ({
 }));
 vi.mock("../../features/community/use-community-posts-query", () => ({
   useCommunityPostsInfiniteQuery
+}));
+vi.mock("../../features/community/use-search-community-posts-query", () => ({
+  useSearchCommunityPostsQuery
+}));
+// 搜索防抖直接透传，测试里不用等计时器。
+vi.mock("../../utils/use-debounced-value", () => ({
+  useDebouncedValue: <T,>(value: T) => value
 }));
 vi.mock("../../features/community/use-join-community-mutation", () => ({
   useJoinCommunityMutation
@@ -110,6 +119,8 @@ describe("CommunityFeedPage", () => {
     useCommunityMembershipQuery.mockReset();
     useCommunityPostsInfiniteQuery.mockReset();
     useJoinCommunityMutation.mockReset();
+    useSearchCommunityPostsQuery.mockReset();
+    useSearchCommunityPostsQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
     useCommunityBySlugQuery.mockReturnValue({
       data: {
@@ -167,7 +178,10 @@ describe("CommunityFeedPage", () => {
     expect(link).toHaveAttribute("href", "/community/post/cp-1");
     expect(link).not.toHaveTextContent("提问");
     expect(link).toHaveTextContent("周末想去逛逛，求推荐");
-    expect(link).toHaveTextContent("Bob");
+    // 跟首页同一张卡片：作者行在最上面，而且不显示社区名标签。
+    const card = link.closest("article");
+    expect(card).toHaveTextContent("Bob");
+    expect(card?.firstElementChild).toHaveTextContent("Bob");
     expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "收藏" })).toHaveTextContent("5");
     // 收藏/分享按钮在详情链接外面（按钮不能嵌在 <a> 里）。
@@ -199,7 +213,7 @@ describe("CommunityFeedPage", () => {
       expect(screen.getByLabelText("官方认证")).toBeInTheDocument();
     });
 
-    it("keeps the square avatar abbreviation short for multi-part slugs (dmv-students -> DMV)", () => {
+    it("does not render the DMV avatar square in the header any more", () => {
       useCommunityBySlugQuery.mockReturnValue({
         data: {
           id: "c-3",
@@ -215,8 +229,7 @@ describe("CommunityFeedPage", () => {
       renderFeed("/community/dmv-students");
 
       const header = screen.getByRole("region", { name: "社区信息" });
-      expect(header).toHaveTextContent(/^DMVDMV 留学生社区/);
-      expect(header).not.toHaveTextContent("STUDENTS");
+      expect(header).toHaveTextContent(/^DMV 留学生社区/);
     });
 
     it("hides the verified badge for a non-official community and the description when it is empty", () => {
@@ -331,6 +344,69 @@ describe("CommunityFeedPage", () => {
     });
   });
 
+  describe("community-scoped search", () => {
+    it("opens a search box from the top-bar icon and searches only this community", () => {
+      renderFeed();
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索本社区" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索本社区" }), {
+        target: { value: "Tysons" }
+      });
+
+      expect(useSearchCommunityPostsQuery).toHaveBeenLastCalledWith("Tysons", {
+        communityId: "c-1",
+        enabled: true
+      });
+    });
+
+    it("shows the results with the same post card, hiding the community header while searching", () => {
+      useSearchCommunityPostsQuery.mockReturnValue({
+        data: [{ ...samplePost, id: "hit-1", title: "搜到的帖子" }],
+        isPending: false,
+        isError: false
+      });
+      renderFeed();
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索本社区" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索本社区" }), {
+        target: { value: "搜到" }
+      });
+
+      expect(screen.getByRole("link", { name: /搜到的帖子/ })).toHaveAttribute(
+        "href",
+        "/community/post/hit-1"
+      );
+      expect(screen.queryByRole("region", { name: "社区信息" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /有人去过 Tysons 吗/ })).not.toBeInTheDocument();
+    });
+
+    it("shows a no-result message scoped to this community", () => {
+      useSearchCommunityPostsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+      renderFeed();
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索本社区" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索本社区" }), {
+        target: { value: "没有" }
+      });
+
+      expect(screen.getByText("本社区没有找到相关帖子")).toBeInTheDocument();
+    });
+
+    it("取消 closes the search and brings back the normal feed", () => {
+      renderFeed();
+
+      fireEvent.click(screen.getByRole("button", { name: "搜索本社区" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: "搜索本社区" }), {
+        target: { value: "x" }
+      });
+      fireEvent.click(screen.getByRole("button", { name: "取消" }));
+
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+      expect(screen.getByRole("region", { name: "社区信息" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /有人去过 Tysons 吗/ })).toBeInTheDocument();
+    });
+  });
+
   describe("share button", () => {
     it("copies the production URL of the current page and confirms", async () => {
       renderFeed("/community/dmv-pets");
@@ -377,7 +453,7 @@ describe("CommunityFeedPage", () => {
     it("renders flat rows (border-b, no card border/shadow/rounding)", () => {
       renderFeed();
 
-      const row = screen.getByRole("link", { name: /有人去过 Tysons 吗/ }).parentElement;
+      const row = screen.getByRole("link", { name: /有人去过 Tysons 吗/ }).closest("article");
       expect(row).toHaveClass("border-b");
       expect(row).not.toHaveClass("rounded-card-lg", "shadow-card", "border");
     });
@@ -401,8 +477,9 @@ describe("CommunityFeedPage", () => {
 
       renderFeed();
 
-      expect(screen.getByRole("link", { name: /置顶公告/ })).toHaveTextContent("置顶");
-      expect(screen.getByRole("link", { name: /普通帖子/ })).not.toHaveTextContent("置顶");
+      // 置顶标签在作者行右侧（社区页不显示社区名标签，那个位置给"置顶"）。
+      expect(screen.getByRole("link", { name: /置顶公告/ }).closest("article")).toHaveTextContent("置顶");
+      expect(screen.getByRole("link", { name: /普通帖子/ }).closest("article")).not.toHaveTextContent("置顶");
     });
 
     it("uses the same plain icons as the detail page: MessageCircle / Star / Share2, no heart", () => {

@@ -7,10 +7,8 @@ import { CommunityCard, type CommunityCardProps } from "./community-card";
 function renderCard(overrides: Partial<CommunityCardProps> = {}) {
   const props: CommunityCardProps = {
     name: "DMV 华人社区",
-    abbreviation: "DMV",
     memberCount: 128,
     todayPostCount: 3,
-    tag: "州社区",
     description: "DC / MD / VA 华人交流",
     to: "/community/dmv",
     joinState: "join",
@@ -26,14 +24,14 @@ describe("CommunityCard", () => {
     cleanup();
   });
 
-  it("renders the avatar abbreviation, name, member count, today's post count, tag and description", () => {
+  it("renders name, member count, today's post count and description — no avatar square, no 州社区 tag", () => {
     renderCard();
 
-    expect(screen.getByText("DMV")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
     expect(screen.getByText("128 位成员 · 今日 3 个新帖子")).toBeInTheDocument();
-    expect(screen.getByText("州社区")).toBeInTheDocument();
     expect(screen.getByText("DC / MD / VA 华人交流")).toBeInTheDocument();
+    expect(screen.queryByText("DMV")).not.toBeInTheDocument();
+    expect(screen.queryByText("州社区")).not.toBeInTheDocument();
   });
 
   it("shows the verified icon by default, and hides it when isOfficial is false (non-official communities)", () => {

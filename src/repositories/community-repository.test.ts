@@ -36,6 +36,7 @@ import {
   listCommunities,
   listCommunityPosts,
   listMyCommunities,
+  listCommunityPostsForAdmin,
   listMyCommunityPosts,
   searchCommunityPosts,
   updateCommunityPost
@@ -279,6 +280,22 @@ describe("searchCommunityPosts", () => {
     expect(posts[0]).toMatchObject({ id: "cp-1", title: "标题", communityName: "DMV 华人社区" });
   });
 
+  it("restricts to one community when a communityId is given (community-scoped search)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await searchCommunityPosts("麻将", "c-9");
+
+    expect(queryBuilder.eq).toHaveBeenCalledWith("community_id", "c-9");
+  });
+
+  it("does not filter by community when no communityId is given (site-wide search)", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await searchCommunityPosts("麻将");
+
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("community_id", expect.anything());
+  });
+
   it("strips characters that would break the PostgREST or-filter", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
@@ -292,6 +309,57 @@ describe("searchCommunityPosts", () => {
 
     await expect(searchCommunityPosts("x")).rejects.toMatchObject({
       code: "COMMUNITY_POSTS_SEARCH_FAILED"
+    });
+  });
+});
+
+describe("listCommunityPostsForAdmin", () => {
+  const row = {
+    id: "cp-1",
+    title: null,
+    body: "正文",
+    status: "archived",
+    created_at: "2026-10-09T00:00:00.000Z",
+    author: { display_name: "一棵树" },
+    community: { name: "DMV 华人社区" }
+  };
+
+  it("lists non-deleted community posts newest first, mapping author and community names", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [row], error: null });
+
+    const posts = await listCommunityPostsForAdmin();
+
+    expect(fromMock).toHaveBeenCalledWith("community_posts");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(queryBuilder.or).not.toHaveBeenCalled();
+    expect(posts).toEqual([
+      {
+        id: "cp-1",
+        title: null,
+        body: "正文",
+        status: "archived",
+        authorName: "一棵树",
+        communityName: "DMV 华人社区",
+        createdAt: "2026-10-09T00:00:00.000Z"
+      }
+    ]);
+  });
+
+  it("applies the status filter and a title-or-body search", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listCommunityPostsForAdmin("approved", "麻将");
+
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(queryBuilder.or).toHaveBeenCalledWith("title.ilike.%麻将%,body.ilike.%麻将%");
+  });
+
+  it("throws ADMIN_COMMUNITY_POSTS_LIST_FAILED on error", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+
+    await expect(listCommunityPostsForAdmin()).rejects.toMatchObject({
+      code: "ADMIN_COMMUNITY_POSTS_LIST_FAILED"
     });
   });
 });

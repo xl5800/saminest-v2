@@ -483,7 +483,7 @@ export function CreateCommunityPostPage() {
           )}
 
           {/* 标题 + 正文合在同一块编辑区里（参照小红书）：视觉上是一个框，
-              实际仍是两个输入框——第一行大号粗体的标题（提示"添加标题"），
+              实际仍是两个输入框——第一行大号的标题（常规字重，跟发出去后的标题样式一致）（提示"添加标题"），
               下面是正文（提示"添加正文"），中间没有分隔线、没有小标签。
               不做成"一个文本框、第一行自动算标题"：用户随手换行会把标题和
               正文切错，标题的长度上限和编辑回填也不好处理。标题里按回车
@@ -502,7 +502,7 @@ export function CreateCommunityPostPage() {
               }}
               maxLength={COMMUNITY_TITLE_MAX_LENGTH}
               placeholder="添加标题"
-              className="w-full bg-transparent text-xl font-bold text-text placeholder:font-bold placeholder:text-text-placeholder focus:outline-none"
+              className="w-full bg-transparent text-xl text-text placeholder:text-text-placeholder focus:outline-none"
             />
             <textarea
               ref={bodyRef}

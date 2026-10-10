@@ -7,9 +7,11 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  adminArchiveCommunityPost,
   adminArchivePost,
   adminCancelActivity,
   adminDeleteActivity,
+  adminDeleteCommunityPost,
   approvePost,
   deleteComment,
   deletePost,
@@ -299,5 +301,55 @@ describe("setAccountStatus", () => {
     await expect(
       setAccountStatus("admin-1", "restricted", "note")
     ).rejects.toMatchObject({ code: "ADMIN_SET_ACCOUNT_STATUS_FAILED" });
+  });
+});
+
+describe("adminArchiveCommunityPost", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_archive_community_post with target_community_post_id and archive_note", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminArchiveCommunityPost("cp-1", "广告");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_archive_community_post", {
+      target_community_post_id: "cp-1",
+      archive_note: "广告"
+    });
+  });
+
+  it("throws ADMIN_ARCHIVE_COMMUNITY_POST_FAILED when the RPC errors", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "already archived" } });
+
+    await expect(adminArchiveCommunityPost("cp-1", "x")).rejects.toMatchObject({
+      code: "ADMIN_ARCHIVE_COMMUNITY_POST_FAILED"
+    });
+  });
+});
+
+describe("adminDeleteCommunityPost", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_delete_community_post with target_community_post_id and delete_reason", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminDeleteCommunityPost("cp-1", "违规");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_delete_community_post", {
+      target_community_post_id: "cp-1",
+      delete_reason: "违规"
+    });
+  });
+
+  it("throws ADMIN_DELETE_COMMUNITY_POST_FAILED when the RPC errors", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "already deleted" } });
+
+    await expect(adminDeleteCommunityPost("cp-1", "x")).rejects.toMatchObject({
+      code: "ADMIN_DELETE_COMMUNITY_POST_FAILED"
+    });
   });
 });

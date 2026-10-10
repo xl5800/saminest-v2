@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { AdminNav } from "../../components/admin-nav";
 import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
 import { useAllActivitiesForAdminQuery } from "../../features/admin/use-all-activities-for-admin-query";
+import { useAdminArchiveCommunityPostMutation } from "../../features/admin/use-admin-archive-community-post-mutation";
 import { useAdminArchivePostMutation } from "../../features/admin/use-admin-archive-post-mutation";
+import { useAdminCommunityPostsQuery } from "../../features/admin/use-admin-community-posts-query";
+import { useAdminDeleteCommunityPostMutation } from "../../features/admin/use-admin-delete-community-post-mutation";
 import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
 import { useAdminDeleteActivityMutation } from "../../features/admin/use-admin-delete-activity-mutation";
 import { useAllPostsQuery } from "../../features/admin/use-all-posts-query";
@@ -67,6 +71,31 @@ function activityStatusVariant(status: string): string {
 // uuid 的字符串常量，不会跟任何真实 category.id 冲突。
 const ACTIVITIES_FILTER_VALUE = "__activities__";
 
+// "社区帖子"同样是前端自己定义的特殊分类值：选中后数据源切到
+// useAdminCommunityPostsQuery（community_posts 表），跟"找搭子"切到活动是同一个
+// 做法。社区帖子不走审核，状态只有"正常"（approved）和"已下架"（archived），
+// 所以状态筛选换成自己的一套选项，不复用帖子的 待审核/已通过/已驳回。
+const COMMUNITY_POSTS_FILTER_VALUE = "__community_posts__";
+
+const COMMUNITY_STATUS_FILTER_OPTIONS = [
+  { value: "", label: "全部" },
+  { value: "approved", label: "正常" },
+  { value: "archived", label: "已下架" }
+] as const;
+
+const COMMUNITY_STATUS_LABELS: Record<string, string> = {
+  approved: "正常",
+  archived: "已下架",
+  rejected: "已驳回"
+};
+
+/** 社区帖子标题可空：没有标题时用正文开头当这一行的名字。 */
+function getCommunityPostLabel(title: string | null, body: string): string {
+  const trimmedTitle = title?.trim();
+  if (trimmedTitle) return trimmedTitle;
+  return body.length > 30 ? `${body.slice(0, 30)}…` : body;
+}
+
 // 搜索框防抖间隔——跟首页/分类页搜索框的防抖时长保持一致，不发明一个新的
 // 数值，见 use-debounced-value.ts。
 const SEARCH_DEBOUNCE_MS = 300;
@@ -123,14 +152,22 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
  *
  * 切换分类/搜索词都要把两套行内表单状态重置——避免在新条件下继续展示上
  * 一个条件下展开到一半的表单。
+ *
+ * "社区帖子"分类（第 6 个 Chip）：数据源切到 useAdminCommunityPostsQuery，
+ * 搜索按标题或正文匹配，状态筛选换成"全部 / 正常 / 已下架"（独立的
+ * communityStatusFilter，不跟帖子的 statusFilter 混用）。下架 / 删除复用同一套
+ * 行内表单状态，按 isCommunityView 分流到 admin_archive_community_post /
+ * admin_delete_community_post——两个函数都会给发帖人发系统通知；下架不可恢复。
  */
 export function AdminAllPostsPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [communityStatusFilter, setCommunityStatusFilter] = useState<string>("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [searchInput, setSearchInput] = useState<string>("");
   const debouncedSearchQuery = useDebouncedValue(searchInput, SEARCH_DEBOUNCE_MS);
 
   const isActivitiesView = categoryFilter === ACTIVITIES_FILTER_VALUE;
+  const isCommunityView = categoryFilter === COMMUNITY_POSTS_FILTER_VALUE;
   const trimmedSearchQuery = debouncedSearchQuery.trim();
 
   const { data: categories } = useCategoriesQuery();
@@ -141,7 +178,7 @@ export function AdminAllPostsPage() {
     isError: isPostsError
   } = useAllPostsQuery(
     statusFilter === "" ? undefined : statusFilter,
-    categoryFilter === "" || isActivitiesView ? undefined : categoryFilter,
+    categoryFilter === "" || isActivitiesView || isCommunityView ? undefined : categoryFilter,
     trimmedSearchQuery === "" ? undefined : trimmedSearchQuery
   );
   const {
@@ -152,7 +189,19 @@ export function AdminAllPostsPage() {
     trimmedSearchQuery === "" ? undefined : trimmedSearchQuery
   );
 
+  const {
+    data: communityPostsData,
+    isPending: isCommunityPostsPending,
+    isError: isCommunityPostsError
+  } = useAdminCommunityPostsQuery(
+    communityStatusFilter === "" ? undefined : communityStatusFilter,
+    trimmedSearchQuery === "" ? undefined : trimmedSearchQuery,
+    { enabled: isCommunityView }
+  );
+
   const deletePostMutation = useDeletePostMutation();
+  const archiveCommunityPostMutation = useAdminArchiveCommunityPostMutation();
+  const deleteCommunityPostMutation = useAdminDeleteCommunityPostMutation();
   const archivePostMutation = useAdminArchivePostMutation();
   const deleteActivityMutation = useAdminDeleteActivityMutation();
   const cancelActivityMutation = useAdminCancelActivityMutation();
@@ -199,6 +248,11 @@ export function AdminAllPostsPage() {
     resetRowLevelState();
   }
 
+  function handleCommunityStatusFilterChange(nextStatus: string): void {
+    setCommunityStatusFilter(nextStatus);
+    resetRowLevelState();
+  }
+
   function handleCategoryFilterChange(nextCategory: string): void {
     setCategoryFilter(nextCategory);
     resetRowLevelState();
@@ -241,6 +295,11 @@ export function AdminAllPostsPage() {
     try {
       if (isActivitiesView) {
         await deleteActivityMutation.mutateAsync({ activityId: id, deleteReason: reason });
+      } else if (isCommunityView) {
+        await deleteCommunityPostMutation.mutateAsync({
+          communityPostId: id,
+          deleteReason: reason
+        });
       } else {
         await deletePostMutation.mutateAsync({ postId: id, deleteReason: reason });
       }
@@ -276,6 +335,11 @@ export function AdminAllPostsPage() {
     try {
       if (isActivitiesView) {
         await cancelActivityMutation.mutateAsync({ activityId: id, cancelReason: reason });
+      } else if (isCommunityView) {
+        await archiveCommunityPostMutation.mutateAsync({
+          communityPostId: id,
+          archiveNote: reason
+        });
       } else {
         await archivePostMutation.mutateAsync({ postId: id, archiveNote: reason });
       }
@@ -327,10 +391,34 @@ export function AdminAllPostsPage() {
       >
         找搭子
       </button>
+      <button
+        type="button"
+        onClick={() => handleCategoryFilterChange(COMMUNITY_POSTS_FILTER_VALUE)}
+        aria-pressed={isCommunityView}
+        className={isCommunityView ? chipActiveClassName : chipInactiveClassName}
+      >
+        社区帖子
+      </button>
     </div>
   );
 
-  const statusFilterControl = isActivitiesView ? null : (
+  const statusFilterControl = isActivitiesView ? null : isCommunityView ? (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {COMMUNITY_STATUS_FILTER_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => handleCommunityStatusFilterChange(option.value)}
+          aria-pressed={communityStatusFilter === option.value}
+          className={
+            communityStatusFilter === option.value ? chipActiveClassName : chipInactiveClassName
+          }
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  ) : (
     <div className="mb-4 flex flex-wrap gap-2">
       {STATUS_FILTER_OPTIONS.map((option) => (
         <button
@@ -353,14 +441,22 @@ export function AdminAllPostsPage() {
         type="text"
         value={searchInput}
         onChange={(event) => handleSearchInputChange(event.target.value)}
-        placeholder="按标题搜索…"
+        placeholder={isCommunityView ? "按标题或内容搜索…" : "按标题搜索…"}
         className="rounded border border-border px-2 py-1 text-base text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
       />
     </label>
   );
 
-  const isPending = isActivitiesView ? isActivitiesPending : isPostsPending;
-  const isError = isActivitiesView ? isActivitiesError : isPostsError;
+  const isPending = isActivitiesView
+    ? isActivitiesPending
+    : isCommunityView
+      ? isCommunityPostsPending
+      : isPostsPending;
+  const isError = isActivitiesView
+    ? isActivitiesError
+    : isCommunityView
+      ? isCommunityPostsError
+      : isPostsError;
 
   if (isPending) {
     return (
@@ -387,7 +483,11 @@ export function AdminAllPostsPage() {
           {categoryFilterControl}
           {searchControl}
           <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            {isActivitiesView ? "活动加载失败，请稍后重试。" : "帖子加载失败，请稍后重试。"}
+            {isActivitiesView
+              ? "活动加载失败，请稍后重试。"
+              : isCommunityView
+                ? "社区帖子加载失败，请稍后重试。"
+                : "帖子加载失败，请稍后重试。"}
           </p>
         </div>
       </main>
@@ -396,7 +496,12 @@ export function AdminAllPostsPage() {
 
   const visiblePosts = postsData ?? [];
   const visibleActivities = activitiesData ?? [];
-  const isEmpty = isActivitiesView ? visibleActivities.length === 0 : visiblePosts.length === 0;
+  const visibleCommunityPosts = communityPostsData ?? [];
+  const isEmpty = isActivitiesView
+    ? visibleActivities.length === 0
+    : isCommunityView
+      ? visibleCommunityPosts.length === 0
+      : visiblePosts.length === 0;
 
   return (
     <main>
@@ -408,8 +513,96 @@ export function AdminAllPostsPage() {
       {searchControl}
       {isEmpty ? (
         <p role="status" className="text-sm text-text-muted">
-          {isActivitiesView ? "暂无找搭子活动" : "暂无帖子"}
+          {isActivitiesView ? "暂无找搭子活动" : isCommunityView ? "暂无社区帖子" : "暂无帖子"}
         </p>
+      ) : isCommunityView ? (
+        <ul>
+          {visibleCommunityPosts.map((post) => {
+            const isActioning = actioningId === post.id;
+            const isDeleteFormOpen = openDeleteRowId === post.id;
+            const isCancelFormOpen = openCancelRowId === post.id;
+            const isAlreadyArchived = post.status === "archived";
+            const label = getCommunityPostLabel(post.title, post.body);
+            const statusVariant =
+              post.status === "approved" ? "bg-success/10 text-success" : "bg-danger/10 text-danger";
+
+            return (
+              <li key={post.id} className="mb-2 rounded-lg border border-border bg-card p-4">
+                <Link
+                  to={`/community/post/${post.id}`}
+                  className="mr-3 break-words text-sm text-text hover:text-primary hover:underline"
+                >
+                  {label}
+                </Link>
+                <span className="mr-3 break-words text-sm text-text-muted">{post.authorName}</span>
+                <span className="mr-3 text-sm text-text-muted">{post.communityName}</span>
+                <span className={`mr-3 rounded-full px-2 py-0.5 text-xs font-medium ${statusVariant}`}>
+                  {COMMUNITY_STATUS_LABELS[post.status] ?? post.status}
+                </span>
+                <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(post.createdAt)}</span>
+                {rowErrors[post.id] ? (
+                  <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+                    {rowErrors[post.id]}
+                  </p>
+                ) : null}
+                {isDeleteFormOpen || isCancelFormOpen ? null : (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={isActioning || isAlreadyArchived}
+                      onClick={() => openCancelForm(post.id)}
+                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      下架
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isActioning}
+                      onClick={() => openDeleteForm(post.id)}
+                      className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      删除
+                    </button>
+                  </div>
+                )}
+                {isCancelFormOpen ? (
+                  <ReasonSheet
+                    title="下架社区帖子"
+                    targetLabel={label}
+                    reasonLabel="下架原因（会通知发帖人，下架后不能恢复）"
+                    reasonValue={cancelReasons[post.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setCancelReasons((prev) => ({ ...prev, [post.id]: value }))
+                    }
+                    errorMessage={cancelValidationErrors[post.id] ?? null}
+                    confirmLabel="确认下架"
+                    destructive
+                    pending={isActioning}
+                    onConfirm={() => handleConfirmCancel(post.id)}
+                    onClose={() => cancelCancelForm(post.id)}
+                  />
+                ) : null}
+                {isDeleteFormOpen ? (
+                  <ReasonSheet
+                    title="删除社区帖子"
+                    targetLabel={label}
+                    reasonLabel="删除原因（会通知发帖人）"
+                    reasonValue={deleteReasons[post.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setDeleteReasons((prev) => ({ ...prev, [post.id]: value }))
+                    }
+                    errorMessage={deleteValidationErrors[post.id] ?? null}
+                    confirmLabel="确认删除"
+                    destructive
+                    pending={isActioning}
+                    onConfirm={() => handleConfirmDelete(post.id)}
+                    onClose={() => cancelDeleteForm(post.id)}
+                  />
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
       ) : isActivitiesView ? (
         <ul>
           {visibleActivities.map((activity) => {

@@ -133,6 +133,13 @@ export function MyCommunityPostsPage() {
 
             return (
               <li key={post.id} className="rounded-2xl border border-border bg-card p-3 shadow-card">
+                {/* 被管理员下架的帖子（不可恢复）：公开页面已经看不到，作者自己在这里
+                    能看到，打个标签说明原因来自系统通知。 */}
+                {post.status === "archived" ? (
+                  <span className="mb-2 inline-block rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                    已下架
+                  </span>
+                ) : null}
                 {hasTitle ? (
                   <>
                     <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.title}</p>

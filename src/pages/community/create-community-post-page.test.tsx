@@ -184,12 +184,14 @@ describe("CreateCommunityPostPage", () => {
     expect(useMyCommunitiesQuery).toHaveBeenCalledWith(undefined);
   });
 
-  it("puts images first, then one merged title+body editor (large bold 添加标题, then 添加正文), no field labels", () => {
+  it("puts images first, then one merged title+body editor (large 添加标题, then 添加正文), no field labels", () => {
     renderCreate();
 
     const title = screen.getByPlaceholderText("添加标题");
     const body = screen.getByPlaceholderText("添加正文");
-    expect(title).toHaveClass("text-xl", "font-bold");
+    // 标题只靠字号区分，字重跟正文一样（不加粗）。
+    expect(title).toHaveClass("text-xl");
+    expect(title).not.toHaveClass("font-bold");
     expect(body).not.toHaveClass("font-bold");
     // 标题和正文在同一个容器里（一块编辑区）。
     expect(title.parentElement).toBe(body.parentElement);

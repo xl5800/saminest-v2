@@ -198,6 +198,45 @@ export async function adminArchivePost(
 }
 
 /**
+ * 管理员下架社区帖子（不可恢复）：admin_archive_community_post 在一个
+ * security definer 函数里把 status 改成 'archived'、写 moderation_actions 日志、
+ * 并给发帖人发系统通知，见
+ * supabase/migrations/20261010013000_admin_archive_community_post_and_notify.sql。
+ */
+export async function adminArchiveCommunityPost(
+  communityPostId: string,
+  archiveNote: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_archive_community_post", {
+    target_community_post_id: communityPostId,
+    archive_note: archiveNote
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_ARCHIVE_COMMUNITY_POST_FAILED", error);
+  }
+}
+
+/**
+ * 管理员删除社区帖子（软删除 deleted_at）：admin_delete_community_post 同样记
+ * 日志并通知发帖人。函数本身线上早已存在（20261008185243，前端一直没接），
+ * 通知是 20261010013000 加上的。
+ */
+export async function adminDeleteCommunityPost(
+  communityPostId: string,
+  deleteReason: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_delete_community_post", {
+    target_community_post_id: communityPostId,
+    delete_reason: deleteReason
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_DELETE_COMMUNITY_POST_FAILED", error);
+  }
+}
+
+/**
  * 设置某个用户的 account_status（active/restricted/suspended），走
  * set_account_status 这个 security definer 函数（见
  * supabase/migrations/20260717000700_account_status_enforcement.sql）。
