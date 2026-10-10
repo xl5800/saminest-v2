@@ -237,6 +237,35 @@ export async function adminDeleteCommunityPost(
 }
 
 /**
+ * 管理员通过社区申请：admin_approve_community 把社区改成 active、把申请人以
+ * owner 角色加入、记日志并通知申请人（20261010043000）。
+ */
+export async function adminApproveCommunity(communityId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_approve_community", {
+    target_community_id: communityId
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_APPROVE_COMMUNITY_FAILED", error);
+  }
+}
+
+/** 管理员驳回社区申请（原因必填，会写进给申请人的系统通知）。 */
+export async function adminRejectCommunity(
+  communityId: string,
+  rejectionNote: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_reject_community", {
+    target_community_id: communityId,
+    rejection_note: rejectionNote
+  });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_REJECT_COMMUNITY_FAILED", error);
+  }
+}
+
+/**
  * 设置某个用户的 account_status（active/restricted/suspended），走
  * set_account_status 这个 security definer 函数（见
  * supabase/migrations/20260717000700_account_status_enforcement.sql）。

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { useMyCommunitiesQuery, useCommunityPostsInfiniteQuery, navigateMock } = vi.hoisted(() => ({
@@ -136,6 +136,16 @@ describe("HomePage (community aggregate feed)", () => {
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
       expect(await screen.findByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
+    });
+
+    it("opens the side menu (我的社区 / 创建社区) from the hamburger button", () => {
+      renderWithProviders(<HomePage />);
+
+      fireEvent.click(screen.getByRole("button", { name: "菜单" }));
+
+      const menu = screen.getByRole("dialog", { name: "菜单" });
+      expect(within(menu).getByRole("button", { name: /我的社区/ })).toBeInTheDocument();
+      expect(within(menu).getByRole("button", { name: /创建社区/ })).toBeInTheDocument();
     });
 
     it("navigates to the site-wide search page /search from the search icon", () => {

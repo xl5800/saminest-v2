@@ -7,7 +7,7 @@ const { queryBuilder, singleMock, maybeSingleMock, updateMock, overrideTypesMock
   const overrideTypesMock = vi.fn();
   const insertMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const name of ["select", "eq", "in", "is", "order", "range", "gte", "delete", "or", "limit"]) {
+  for (const name of ["select", "eq", "in", "is", "order", "range", "gte", "delete", "or", "limit", "not"]) {
     builder[name] = vi.fn(() => builder);
   }
   builder.insert = insertMock;
@@ -19,9 +19,10 @@ const { queryBuilder, singleMock, maybeSingleMock, updateMock, overrideTypesMock
 });
 
 const fromMock = vi.fn(() => queryBuilder);
+const rpcMock = vi.fn();
 
 vi.mock("../integrations/supabase/client", () => ({
-  getSupabaseClient: () => ({ from: fromMock })
+  getSupabaseClient: () => ({ from: fromMock, rpc: rpcMock })
 }));
 
 import {
@@ -37,6 +38,9 @@ import {
   listCommunityPosts,
   listMyCommunities,
   listCommunityPostsForAdmin,
+  listCommunityRequestsForAdmin,
+  listMyCommunityRequests,
+  requestCommunity,
   listMyCommunityPosts,
   searchCommunityPosts,
   updateCommunityPost
@@ -376,7 +380,7 @@ describe("listCommunities", () => {
     ...overrides
   });
 
-  it("queries every community, official first then oldest first, and maps state_codes to stateCodes", async () => {
+  it("queries only active communities, official first then oldest first, and maps state_codes to stateCodes", async () => {
     // 第二个 order() 是链上最后一环，直接 resolve。
     queryBuilder.order.mockReturnValueOnce(queryBuilder).mockResolvedValueOnce({
       data: [
@@ -392,7 +396,8 @@ describe("listCommunities", () => {
     expect(queryBuilder.select).toHaveBeenCalledWith(
       "id, name, slug, description, member_count, is_official, state_codes"
     );
-    expect(queryBuilder.eq).not.toHaveBeenCalled();
+    // 显式只取已上线的：管理员 / 申请人按 RLS 能看到审核中、已驳回的社区申请。
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "active");
     expect(queryBuilder.order).toHaveBeenNthCalledWith(1, "is_official", { ascending: false });
     expect(queryBuilder.order).toHaveBeenNthCalledWith(2, "created_at", { ascending: true });
     expect(result.map((c) => [c.slug, c.isOfficial, c.stateCodes])).toEqual([
@@ -919,6 +924,106 @@ describe("deleteCommunityPost", () => {
 
     await expect(deleteCommunityPost("cp-1", "user-1")).rejects.toMatchObject({
       code: "COMMUNITY_POST_DELETE_FAILED"
+    });
+  });
+});
+
+describe("requestCommunity", () => {
+  beforeEach(() => rpcMock.mockReset());
+
+  it("calls request_community with name, description and state codes, returning the new id", async () => {
+    rpcMock.mockResolvedValue({ data: "c-new", error: null });
+
+    const id = await requestCommunity({ name: "羽毛球", description: "打球", stateCodes: ["VA"] });
+
+    expect(rpcMock).toHaveBeenCalledWith("request_community", {
+      community_name: "羽毛球",
+      community_description: "打球",
+      community_state_codes: ["VA"]
+    });
+    expect(id).toBe("c-new");
+  });
+
+  it.each([
+    ["you already have a pending community request", "COMMUNITY_REQUEST_PENDING_EXISTS", "你已经有一个正在审核的社区申请，请等待审核结果。"],
+    ["community name already taken", "COMMUNITY_NAME_TAKEN", "这个社区名已经有人用了，换一个吧。"],
+    ["account restricted", "ACCOUNT_RESTRICTED", RESTRICTED_MESSAGE]
+  ])("maps %s to a friendly %s error", async (dbMessage, code, message) => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: dbMessage } });
+
+    await expect(
+      requestCommunity({ name: "x", description: "", stateCodes: ["VA"] })
+    ).rejects.toMatchObject({ code, message });
+  });
+
+  it("throws COMMUNITY_REQUEST_FAILED for other errors", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+
+    await expect(
+      requestCommunity({ name: "x", description: "", stateCodes: ["VA"] })
+    ).rejects.toMatchObject({ code: "COMMUNITY_REQUEST_FAILED" });
+  });
+});
+
+describe("listMyCommunityRequests", () => {
+  it("lists the user's own requests newest first", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "c-9",
+          name: "羽毛球",
+          slug: "c-abc",
+          description: null,
+          state_codes: ["VA"],
+          status: "rejected",
+          rejection_reason: "重复",
+          created_at: "2026-10-10T00:00:00.000Z"
+        }
+      ],
+      error: null
+    });
+
+    const result = await listMyCommunityRequests("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("communities");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("created_by", "user-1");
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result[0]).toMatchObject({ id: "c-9", status: "rejected", rejectionReason: "重复", stateCodes: ["VA"] });
+  });
+});
+
+describe("listCommunityRequestsForAdmin", () => {
+  it("lists only user-created communities, filtered by status, oldest first, with the creator name", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "c-9",
+          name: "羽毛球",
+          slug: "c-abc",
+          description: "打球",
+          state_codes: ["VA"],
+          status: "pending",
+          rejection_reason: null,
+          created_at: "2026-10-10T00:00:00.000Z",
+          creator: { display_name: "一棵树" }
+        }
+      ],
+      error: null
+    });
+
+    const result = await listCommunityRequestsForAdmin("pending");
+
+    expect(queryBuilder.not).toHaveBeenCalledWith("created_by", "is", null);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: true });
+    expect(result[0]).toMatchObject({ id: "c-9", creatorName: "一棵树" });
+  });
+
+  it("throws ADMIN_COMMUNITY_REQUESTS_FETCH_FAILED on error", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+
+    await expect(listCommunityRequestsForAdmin()).rejects.toMatchObject({
+      code: "ADMIN_COMMUNITY_REQUESTS_FETCH_FAILED"
     });
   });
 });

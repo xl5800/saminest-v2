@@ -167,6 +167,18 @@ describe("CommunityBrowsePage", () => {
       expect(screen.getByRole("tab", { name: "发现" })).toHaveAttribute("aria-selected", "false");
     });
 
+    it("opens the 我的社区 tab directly when the URL has ?tab=mine (from the home menu)", () => {
+      renderWithProviders(<CommunityBrowsePage />, { initialEntries: ["/community?tab=mine"] });
+
+      expect(screen.getByRole("tab", { name: "我的社区" })).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("ignores an unknown ?tab= value and falls back to 附近", () => {
+      renderWithProviders(<CommunityBrowsePage />, { initialEntries: ["/community?tab=bogus"] });
+
+      expect(screen.getByRole("tab", { name: "附近" })).toHaveAttribute("aria-selected", "true");
+    });
+
     it("switches the selected tab on click, without touching the URL (no navigation)", () => {
       renderPage();
 

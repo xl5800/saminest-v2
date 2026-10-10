@@ -41,6 +41,32 @@ describe("TopBar", () => {
       expect(screen.getByText("Saminest")).toBeInTheDocument();
     });
 
+    it("renders a leftmost 菜单 (hamburger) button only when onMenuClick is passed, before the brand name", () => {
+      const onMenuClick = vi.fn();
+      const { unmount } = renderWithProviders(
+        <TopBar
+          variant="home"
+          regionLabel={null}
+          onRegionClick={vi.fn()}
+          onSearchClick={vi.fn()}
+          onMenuClick={onMenuClick}
+        />
+      );
+
+      const menuButton = screen.getByRole("button", { name: "菜单" });
+      expect(
+        menuButton.compareDocumentPosition(screen.getByText("Saminest")) & Node.DOCUMENT_POSITION_FOLLOWING
+      ).toBeTruthy();
+      fireEvent.click(menuButton);
+      expect(onMenuClick).toHaveBeenCalledTimes(1);
+      unmount();
+
+      renderWithProviders(
+        <TopBar variant="home" regionLabel={null} onRegionClick={vi.fn()} onSearchClick={vi.fn()} />
+      );
+      expect(screen.queryByRole("button", { name: "菜单" })).not.toBeInTheDocument();
+    });
+
     it("renders the caller-supplied regionLabel as the pill's second line", () => {
       renderWithProviders(
         <TopBar

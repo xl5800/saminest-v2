@@ -7,6 +7,7 @@ import { ActivityNotifyPage } from "../pages/activities/activity-notify-page";
 import { CreateActivityPage } from "../pages/activities/create-activity-page";
 import { AdminAllPostsPage } from "../pages/admin/all-posts-page";
 import { AdminCategoriesPage } from "../pages/admin/categories-page";
+import { AdminCommunityRequestsPage } from "../pages/admin/community-requests-page";
 import { AdminFeedbackPage } from "../pages/admin/feedback-page";
 import { AdminPendingPostsPage } from "../pages/admin/pending-posts-page";
 import { AdminReportsPage } from "../pages/admin/reports-page";
@@ -17,6 +18,7 @@ import { CategoriesPage } from "../pages/categories/categories-page";
 import { CommunityBrowsePage } from "../pages/community/community-browse-page";
 import { CommunityFeedPage } from "../pages/community/community-feed-page";
 import { CommunityPostDetailPage } from "../pages/community/community-post-detail-page";
+import { CreateCommunityPage } from "../pages/community/create-community-page";
 import { CreateCommunityPostPage } from "../pages/community/create-community-post-page";
 import { MyCommunityPostsPage } from "../pages/community/my-community-posts-page";
 import { FavoritesPage } from "../pages/favorites/favorites-page";
@@ -145,6 +147,16 @@ export const router = createBrowserRouter([
         element: (
           <RequireAuth>
             <CreateCommunityPostPage />
+          </RequireAuth>
+        )
+      },
+      {
+        // 申请创建社区（首页左上角菜单进入），需要登录；管理员审核通过后才上线。
+        // 固定段 community/create 优先于 community/:slug，不会被当成 slug。
+        path: "community/create",
+        element: (
+          <RequireAuth>
+            <CreateCommunityPage />
           </RequireAuth>
         )
       },
@@ -338,6 +350,17 @@ export const router = createBrowserRouter([
           <RequireAuth>
             <RequireAdmin>
               <AdminAllPostsPage />
+            </RequireAdmin>
+          </RequireAuth>
+        )
+      },
+      {
+        // 用户申请创建的社区在这里审核（通过 / 驳回），见 community-requests-page.tsx。
+        path: "admin/communities",
+        element: (
+          <RequireAuth>
+            <RequireAdmin>
+              <AdminCommunityRequestsPage />
             </RequireAdmin>
           </RequireAuth>
         )

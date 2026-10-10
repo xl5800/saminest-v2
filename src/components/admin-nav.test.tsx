@@ -33,11 +33,15 @@ describe("AdminNav", () => {
     countPendingReports.mockReset().mockResolvedValue(0);
   });
 
-  it("renders all 6 admin destination links", () => {
+  it("renders all 7 admin destination links", () => {
     renderWithProviders(<AdminNav />, { initialEntries: ["/admin/posts"] });
 
     const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(6);
+    expect(links).toHaveLength(7);
+    expect(screen.getByRole("link", { name: "社区申请" })).toHaveAttribute(
+      "href",
+      "/admin/communities"
+    );
     expect(screen.getByRole("link", { name: "待审核" })).toHaveAttribute(
       "href",
       "/admin/posts"

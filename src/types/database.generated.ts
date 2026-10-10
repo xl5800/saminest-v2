@@ -314,11 +314,13 @@ export type Database = {
       communities: {
         Row: {
           created_at: string
+          created_by: string | null
           description: string | null
           id: string
           is_official: boolean
           member_count: number
           name: string
+          rejection_reason: string | null
           slug: string
           state_codes: string[]
           status: string
@@ -326,11 +328,13 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           description?: string | null
           id?: string
           is_official?: boolean
           member_count?: number
           name: string
+          rejection_reason?: string | null
           slug: string
           state_codes?: string[]
           status?: string
@@ -338,17 +342,27 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           description?: string | null
           id?: string
           is_official?: boolean
           member_count?: number
           name?: string
+          rejection_reason?: string | null
           slug?: string
           state_codes?: string[]
           status?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "communities_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       community_members: {
         Row: {
@@ -1309,6 +1323,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_approve_community: {
+        Args: { target_community_id: string }
+        Returns: undefined
+      }
       admin_archive_community_post: {
         Args: { archive_note: string; target_community_post_id: string }
         Returns: undefined
@@ -1327,6 +1345,10 @@ export type Database = {
       }
       admin_delete_community_post: {
         Args: { delete_reason: string; target_community_post_id: string }
+        Returns: undefined
+      }
+      admin_reject_community: {
+        Args: { rejection_note: string; target_community_id: string }
         Returns: undefined
       }
       admin_list_activities: {
@@ -1642,6 +1664,14 @@ export type Database = {
         Returns: undefined
       }
       request_account_deletion: { Args: never; Returns: string }
+      request_community: {
+        Args: {
+          community_description: string
+          community_name: string
+          community_state_codes: string[]
+        }
+        Returns: string
+      }
       resolve_report: {
         Args: { resolution_note: string; target_report_id: string }
         Returns: undefined

@@ -68,14 +68,16 @@ export async function getCommunityBySlug(slug: string): Promise<Community> {
 }
 
 /**
- * 全部社区（"社区浏览"页的"附近"/"发现"Tab 要枚举所有社区）。官方社区排前面，
- * 同级按创建时间升序，保证展示顺序稳定。RLS 的 SELECT 策略只放行 active
- * 状态的社区（管理员例外），这里不需要再自己过滤 status。
+ * 全部已上线社区（"社区浏览"页的"附近"/"发现"Tab、全站搜索要枚举所有社区）。
+ * 官方社区排前面，同级按创建时间升序，保证展示顺序稳定。
  */
 export async function listCommunities(): Promise<Community[]> {
   const { data, error } = await getSupabaseClient()
     .from("communities")
     .select(COMMUNITY_COLUMNS)
+    // 显式只取已上线的社区：管理员按 RLS 能看到所有状态（含审核中 / 已驳回的
+    // 用户申请），申请人也能看到自己的申请，这些都不该出现在公开列表里。
+    .eq("status", "active")
     .order("is_official", { ascending: false })
     .order("created_at", { ascending: true });
 
@@ -204,6 +206,138 @@ export async function leaveCommunity(input: JoinCommunityInput): Promise<void> {
   if (error) {
     throw new AppError(error.message, "COMMUNITY_LEAVE_FAILED", error);
   }
+}
+
+// ---------------------------------------------------------------------------
+// 用户申请创建社区（管理员审核通过后才上线），见
+// supabase/migrations/20261010043000_community_creation_requests.sql。
+
+export type CommunityRequestStatus = "pending" | "active" | "rejected" | "archived";
+
+export interface CommunityRequest {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  stateCodes: string[];
+  /** pending = 审核中，active = 已通过（已上线），rejected = 未通过。 */
+  status: CommunityRequestStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+}
+
+export interface AdminCommunityRequest extends CommunityRequest {
+  creatorName: string;
+}
+
+interface CommunityRequestRow {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  state_codes: string[] | null;
+  status: CommunityRequestStatus;
+  rejection_reason: string | null;
+  created_at: string;
+  creator?: { display_name: string } | null;
+}
+
+const COMMUNITY_REQUEST_COLUMNS =
+  "id, name, slug, description, state_codes, status, rejection_reason, created_at";
+
+function mapCommunityRequestRow(row: CommunityRequestRow): CommunityRequest {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    description: row.description,
+    stateCodes: row.state_codes ?? [],
+    status: row.status,
+    rejectionReason: row.rejection_reason,
+    createdAt: row.created_at
+  };
+}
+
+export interface RequestCommunityInput {
+  name: string;
+  description: string;
+  stateCodes: string[];
+}
+
+export const COMMUNITY_REQUEST_PENDING_MESSAGE = "你已经有一个正在审核的社区申请，请等待审核结果。";
+export const COMMUNITY_NAME_TAKEN_MESSAGE = "这个社区名已经有人用了，换一个吧。";
+
+/**
+ * 提交创建社区的申请（request_community，security definer）。数据库函数负责
+ * 全部校验（登录、账号未受限、只能有一个审核中的申请、社区名 2-30 字且不重名、
+ * 简介最多 200 字、至少一个州）；这里只把几种明确、可操作的失败原因翻译成中文
+ * 提示，其它失败抛通用错误码。
+ */
+export async function requestCommunity(input: RequestCommunityInput): Promise<string> {
+  const { data, error } = await getSupabaseClient().rpc("request_community", {
+    community_name: input.name,
+    community_description: input.description,
+    community_state_codes: input.stateCodes
+  });
+
+  if (error) {
+    const message = error.message ?? "";
+    if (message.includes("pending community request")) {
+      throw new AppError(COMMUNITY_REQUEST_PENDING_MESSAGE, "COMMUNITY_REQUEST_PENDING_EXISTS", error);
+    }
+    if (message.includes("name already taken")) {
+      throw new AppError(COMMUNITY_NAME_TAKEN_MESSAGE, "COMMUNITY_NAME_TAKEN", error);
+    }
+    if (message.includes("account restricted")) {
+      throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    throw new AppError(message, "COMMUNITY_REQUEST_FAILED", error);
+  }
+  return data as string;
+}
+
+/** 当前用户自己提交过的社区申请（含审核中 / 已通过 / 未通过），新的在前。 */
+export async function listMyCommunityRequests(userId: string): Promise<CommunityRequest[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("communities")
+    .select(COMMUNITY_REQUEST_COLUMNS)
+    .eq("created_by", userId)
+    .order("created_at", { ascending: false })
+    .overrideTypes<CommunityRequestRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "MY_COMMUNITY_REQUESTS_FETCH_FAILED", error);
+  }
+  return (data ?? []).map(mapCommunityRequestRow);
+}
+
+/**
+ * 管理后台"社区申请"列表：只看用户申请的社区（created_by 非空，官方社区不在
+ * 这里），可按状态过滤。审核中的按提交时间升序（先来先审），跟待审核帖子队列
+ * 同一个顺序。
+ */
+export async function listCommunityRequestsForAdmin(
+  statusFilter?: CommunityRequestStatus
+): Promise<AdminCommunityRequest[]> {
+  let query = getSupabaseClient()
+    .from("communities")
+    .select(`${COMMUNITY_REQUEST_COLUMNS}, creator:profiles!communities_created_by_fkey(display_name)`)
+    .not("created_by", "is", null);
+  if (statusFilter) {
+    query = query.eq("status", statusFilter);
+  }
+
+  const { data, error } = await query
+    .order("created_at", { ascending: true })
+    .overrideTypes<CommunityRequestRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_COMMUNITY_REQUESTS_FETCH_FAILED", error);
+  }
+  return (data ?? []).map((row) => ({
+    ...mapCommunityRequestRow(row),
+    creatorName: row.creator?.display_name ?? "未知用户"
+  }));
 }
 
 export type CommunityPostType =

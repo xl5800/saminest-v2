@@ -12,6 +12,8 @@ const ADMIN_NAV_ITEMS: AdminNavItem[] = [
   { to: "/admin/posts", label: "待审核" },
   { to: "/admin/posts/all", label: "全部帖子" },
   { to: "/admin/reports", label: "举报处理" },
+  // 用户申请创建社区的审核入口（2026-10-10 新增）。
+  { to: "/admin/communities", label: "社区申请" },
   // 联系客服改成真聊天任务卡：原来指向 /admin/feedback（一次性表单提交
   // 队列）的这一项换成 /admin/support（客服会话列表），文案从"联系客服"
   // 改成"客服"——从管理员视角这不再是"联系"谁，是"处理"客服会话，跟

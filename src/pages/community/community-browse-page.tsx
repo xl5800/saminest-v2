@@ -1,6 +1,6 @@
 import { ChevronRight, MapPin, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Skeleton } from "../../components/skeleton";
 import { formatSelectedRegionLabel } from "../../data/us-states";
@@ -49,7 +49,8 @@ const ICON_BUTTON_CLASS_NAME =
  * useSelectedRegionStore、文案走 formatSelectedRegionLabel，点击跳
  * /region-select——全站地区选择只有这一个页面，不新建底部弹层。
  *
- * 三个 Tab 只是页面内本地 state，不进 URL：
+ * 三个 Tab 只是页面内本地 state，不进 URL（唯一例外：进入页面时读一次 ?tab=，
+ * 首页菜单的"我的社区"用 ?tab=mine 直接打开"我的社区"Tab）：
  * - 附近：listCommunities() 拿到全部社区，用选中的州代码去匹配每个社区自己的
  *   stateCodes（communities.state_codes），匹配上的都渲染成卡片（DC 用户会同时
  *   看到三个 DMV 社区）。没选州（null 既是新用户的默认值，也是地区选择页「全美」
@@ -74,7 +75,13 @@ export function CommunityBrowsePage() {
   const userId = useAuthStore((s) => s.session)?.user.id;
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
-  const [tab, setTab] = useState<BrowseTab>("nearby");
+  // 首页菜单的"我的社区"跳 /community?tab=mine，直接打开对应 Tab；之后在页面里
+  // 切 Tab 仍然只是本地 state，不写回 URL。
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const [tab, setTab] = useState<BrowseTab>(
+    TAB_OPTIONS.some((option) => option.value === initialTab) ? (initialTab as BrowseTab) : "nearby"
+  );
   const [searchText, setSearchText] = useState("");
   const [focusRequested, setFocusRequested] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);

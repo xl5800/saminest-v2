@@ -7,11 +7,13 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  adminApproveCommunity,
   adminArchiveCommunityPost,
   adminArchivePost,
   adminCancelActivity,
   adminDeleteActivity,
   adminDeleteCommunityPost,
+  adminRejectCommunity,
   approvePost,
   deleteComment,
   deletePost,
@@ -350,6 +352,42 @@ describe("adminDeleteCommunityPost", () => {
 
     await expect(adminDeleteCommunityPost("cp-1", "x")).rejects.toMatchObject({
       code: "ADMIN_DELETE_COMMUNITY_POST_FAILED"
+    });
+  });
+});
+
+describe("adminApproveCommunity / adminRejectCommunity", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_approve_community with target_community_id", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminApproveCommunity("c-9");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_approve_community", { target_community_id: "c-9" });
+  });
+
+  it("calls admin_reject_community with target_community_id and rejection_note", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminRejectCommunity("c-9", "名字重复");
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_reject_community", {
+      target_community_id: "c-9",
+      rejection_note: "名字重复"
+    });
+  });
+
+  it("throws the matching error codes when the RPCs fail", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "not pending" } });
+
+    await expect(adminApproveCommunity("c-9")).rejects.toMatchObject({
+      code: "ADMIN_APPROVE_COMMUNITY_FAILED"
+    });
+    await expect(adminRejectCommunity("c-9", "x")).rejects.toMatchObject({
+      code: "ADMIN_REJECT_COMMUNITY_FAILED"
     });
   });
 });

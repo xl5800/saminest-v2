@@ -180,6 +180,7 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/admin/support",
   "/admin/users",
   "/admin/categories",
+  "/admin/communities",
   "/terms",
   "/privacy",
   // 社区功能阶段二：Feed（TopBar tab 变体）和帖子详情（TopBar nav-only
@@ -200,7 +201,9 @@ const TOPBAR_MIGRATED_PATTERNS = [
   // 同一类，只关 AppHeader、留 BottomNav。
   "/my-community-posts",
   // 全站搜索页（首页顶栏搜索图标进入），自己渲染 TopBar nav-only 变体 + 搜索框。
-  "/search"
+  "/search",
+  // 申请创建社区页（首页菜单进入），自己渲染 TopBar nav-only 变体。
+  "/community/create"
 ];
 
 function matchesAnyPattern(pathname: string, patterns: string[]): boolean {

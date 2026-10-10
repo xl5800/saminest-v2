@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { AppMenuDrawer } from "../../components/app-menu-drawer";
 import { CommunityPostCard } from "../../components/community-post-card";
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { Skeleton } from "../../components/skeleton";
@@ -41,7 +42,8 @@ const COMMUNITY_PATH = "/community";
  *   列表不等于用户没加入，不该错误地告诉 TA"还没加入任何社区"）。
  *
  * 结构（自上而下）：
- * - TopBar home 变体：Saminest + 地区按钮（点击去 /region-select，地区目前
+ * - TopBar home 变体：最左侧"三条横线"菜单按钮（打开 AppMenuDrawer：我的社区 /
+ *   创建社区）+ Saminest + 地区按钮（点击去 /region-select，地区目前
  *   只是展示，社区帖子没有地区维度，不做筛选）、"＋"打开 PublishActionSheet、
  *   搜索图标（跳全站搜索页 /search，同时搜社区和社区帖子）。
  * - "推荐"Tab：固定的蓝色下划线标题，没有任何切换逻辑，只是给后面"关注/最新"
@@ -57,6 +59,7 @@ const COMMUNITY_PATH = "/community";
 export function HomePage() {
   const navigate = useNavigate();
   const [publishSheetOpen, setPublishSheetOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
@@ -157,6 +160,7 @@ export function HomePage() {
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={() => navigate(SEARCH_PATH)}
+        onMenuClick={() => setMenuOpen(true)}
         bottomSlot={
           <div className="px-4">
             <span
@@ -184,6 +188,7 @@ export function HomePage() {
       <div className="mt-4 pb-24 md:pb-6">{renderFeed()}</div>
 
       {publishSheetOpen ? <PublishActionSheet onClose={() => setPublishSheetOpen(false)} /> : null}
+      {menuOpen ? <AppMenuDrawer onClose={() => setMenuOpen(false)} /> : null}
     </main>
   );
 }

@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown, MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, Menu, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -196,6 +196,10 @@ interface TopBarHomeProps {
    *  顺手改成跟实际渲染位置一致的"右侧"，跟这次改动本身无关。） */
   onCreateClick?: () => void;
   onSearchClick: () => void;
+  /** 最左侧"三条横线"菜单按钮（参照 Facebook），点击打开侧边菜单
+   *  （AppMenuDrawer，由调用方渲染）。不传就不渲染这个按钮——目前只有首页传，
+   *  复用 home 变体的找搭子列表页不受影响。 */
+  onMenuClick?: () => void;
   /** 顶栏+分类 Chips 固定成一张卡片任务卡新增——只有首页需要在固定卡片
    *  里，紧跟着品牌名那一行，再追加渲染分类 Chips（以及搜索框展开时的
    *  搜索输入框），让它们和顶栏合并成同一张卡片，卡片底部的分隔线只出现
@@ -286,6 +290,16 @@ export function TopBar(props: TopBarProps) {
               只是不再跟品牌名共享同一个 flex 容器，各自在自己的分组里，见下面
               两个 <div>。 */}
           <div className="flex min-w-0 shrink-0 items-center gap-2">
+            {props.onMenuClick ? (
+              <button
+                type="button"
+                aria-label="菜单"
+                onClick={props.onMenuClick}
+                className="-ml-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-text"
+              >
+                <Menu size={22} aria-hidden="true" />
+              </button>
+            ) : null}
             <span className="shrink-0 text-base font-bold leading-tight text-primary">
               Saminest
             </span>

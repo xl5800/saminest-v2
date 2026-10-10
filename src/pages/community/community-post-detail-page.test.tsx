@@ -131,10 +131,11 @@ describe("CommunityPostDetailPage", () => {
     expect(useCommunityBySlugQuery).toHaveBeenCalledWith("dmv-pets");
   });
 
-  it("renders the body at 17px with 1.6 line height", () => {
+  it("renders title and body at the same sizes as the list preview (18px / 15px)", () => {
     renderPage();
 
-    expect(screen.getByText(/第一行/)).toHaveClass("text-[17px]", "leading-[1.6]");
+    expect(screen.getByRole("heading", { level: 1, name: "推荐一家中餐馆" })).toHaveClass("text-lg");
+    expect(screen.getByText(/第一行/)).toHaveClass("text-[15px]");
   });
 
   it("lays the action row out as three equal columns: comment count, favorite, share", () => {
