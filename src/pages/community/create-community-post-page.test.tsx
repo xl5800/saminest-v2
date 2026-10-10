@@ -114,7 +114,7 @@ function joined(id: string, slug: string, name: string) {
 }
 
 function fillBody(value: string) {
-  fireEvent.change(screen.getByPlaceholderText("说点什么吧…"), { target: { value } });
+  fireEvent.change(screen.getByPlaceholderText("添加正文"), { target: { value } });
 }
 
 function submit() {
@@ -184,6 +184,33 @@ describe("CreateCommunityPostPage", () => {
     expect(useMyCommunitiesQuery).toHaveBeenCalledWith(undefined);
   });
 
+  it("puts images first, then one merged title+body editor (large bold 添加标题, then 添加正文), no field labels", () => {
+    renderCreate();
+
+    const title = screen.getByPlaceholderText("添加标题");
+    const body = screen.getByPlaceholderText("添加正文");
+    expect(title).toHaveClass("text-xl", "font-bold");
+    expect(body).not.toHaveClass("font-bold");
+    // 标题和正文在同一个容器里（一块编辑区）。
+    expect(title.parentElement).toBe(body.parentElement);
+    // 图片选择器在标题前面。
+    const picker = screen.getByTestId("image-picker");
+    expect(picker.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // 不再有"标题（可选）""内容"这两个可见小标签。
+    expect(screen.queryByText("内容")).not.toBeInTheDocument();
+    expect(screen.queryByText("标题（可选）")).not.toBeInTheDocument();
+  });
+
+  it("moves focus from the title to the body on Enter instead of inserting a line break", () => {
+    renderCreate();
+
+    const title = screen.getByPlaceholderText("添加标题");
+    title.focus();
+    fireEvent.keyDown(title, { key: "Enter" });
+
+    expect(screen.getByPlaceholderText("添加正文")).toHaveFocus();
+  });
+
   it("rejects an empty body without calling the mutations", async () => {
     renderCreate();
 
@@ -220,7 +247,7 @@ describe("CreateCommunityPostPage", () => {
   it("sends the trimmed title when one is given", async () => {
     renderCreate();
 
-    fireEvent.change(screen.getByPlaceholderText("起个标题"), { target: { value: " 标题 " } });
+    fireEvent.change(screen.getByPlaceholderText("添加标题"), { target: { value: " 标题 " } });
     fillBody("正文");
     submit();
 
@@ -476,7 +503,7 @@ describe("CreateCommunityPostPage", () => {
 
       expect(screen.getByText("你还没有加入任何社区，发帖前请先加入一个社区。")).toBeInTheDocument();
       expect(screen.getByRole("link", { name: "去加入社区" })).toHaveAttribute("href", "/community");
-      expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("选择社区")).not.toBeInTheDocument();
     });
 
@@ -487,7 +514,7 @@ describe("CreateCommunityPostPage", () => {
 
       expect(screen.getByRole("status")).toHaveTextContent("加载中…");
       expect(screen.queryByText(/你还没有加入任何社区/)).not.toBeInTheDocument();
-      expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
     });
 
     it("shows an error alert (not the prompt, not the form) when the joined list fails to load", () => {

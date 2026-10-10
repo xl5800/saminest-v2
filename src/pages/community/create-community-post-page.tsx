@@ -151,10 +151,12 @@ async function uploadAndInsertCommunityPostImages(input: {
  * - /community/post/:id/edit：编辑模式，见下面"我的社区帖子管理"，跟 slug /
  *   选择器这套逻辑没有任何交集。
  *
- * 表单字段：帖子类型（下拉，默认"讨论"）、标题（可选，留空提交 null）、
- * 内容（必填，1-10000 字，textarea 随输入自动撑高，写法照抄
+ * 表单从上到下：图片（PostImagePicker）→ 标题 + 正文合在一块的编辑区（参照
+ * 小红书，见 JSX 里的注释）→ 选择社区（只有全局入口才有）。标题可选，留空提交
+ * null；正文必填，1-10000 字，textarea 随输入自动撑高，写法照抄
  * comment-section.tsx：先把 style.height 重置成 auto 再读 scrollHeight，
- * 封顶高度靠 max-h + overflow-y-auto 内部滚动）。
+ * 封顶高度靠 max-h + overflow-y-auto 内部滚动。帖子类型不让用户选，固定
+ * "discussion"。
  *
  * 加入社区：createCommunityPost 依赖 community_posts_insert_own RLS 要求
  * 用户已经是 community_members 成员。带 slug 进来（用户主动点了某个社区的
@@ -233,6 +235,7 @@ export function CreateCommunityPostPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const seededRef = useRef(false);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!isEditMode || seededRef.current || !existingPost) return;
@@ -467,6 +470,51 @@ export function CreateCommunityPostPage() {
             </p>
           ) : null}
 
+          {/* 图片在最上面（跟小红书发布页一样），编辑模式不展示图片选择器，
+              见组件顶部注释。 */}
+          {isEditMode ? null : (
+            <div className="mb-4">
+              <PostImagePicker
+                value={imageFiles}
+                onChange={setImageFiles}
+                id="community-post-image-picker"
+              />
+            </div>
+          )}
+
+          {/* 标题 + 正文合在同一块编辑区里（参照小红书）：视觉上是一个框，
+              实际仍是两个输入框——第一行大号粗体的标题（提示"添加标题"），
+              下面是正文（提示"添加正文"），中间没有分隔线、没有小标签。
+              不做成"一个文本框、第一行自动算标题"：用户随手换行会把标题和
+              正文切错，标题的长度上限和编辑回填也不好处理。标题里按回车
+              直接跳到正文，不在标题里换行。 */}
+          <div className="mb-4 rounded-xl bg-card px-3.5 py-3">
+            <input
+              type="text"
+              aria-label="标题（可选）"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+                  event.preventDefault();
+                  bodyRef.current?.focus();
+                }
+              }}
+              maxLength={COMMUNITY_TITLE_MAX_LENGTH}
+              placeholder="添加标题"
+              className="w-full bg-transparent text-xl font-bold text-text placeholder:font-bold placeholder:text-text-placeholder focus:outline-none"
+            />
+            <textarea
+              ref={bodyRef}
+              aria-label="正文"
+              value={body}
+              onChange={handleBodyChange}
+              maxLength={COMMUNITY_BODY_MAX_LENGTH}
+              placeholder="添加正文"
+              className="mt-2 max-h-[60dvh] min-h-[160px] w-full resize-none overflow-y-auto bg-transparent text-base text-text placeholder:text-text-placeholder focus:outline-none"
+            />
+          </div>
+
           {isPickerMode ? (
             <label className="mb-4 block">
               <span className="mb-2 block text-xs font-semibold text-text">选择社区</span>
@@ -484,39 +532,6 @@ export function CreateCommunityPostPage() {
               </select>
             </label>
           ) : null}
-
-          <label className="mb-4 block">
-            <span className="mb-2 block text-xs font-semibold text-text">标题（可选）</span>
-            <input
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              maxLength={COMMUNITY_TITLE_MAX_LENGTH}
-              placeholder="起个标题"
-              className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
-            />
-          </label>
-
-          {isEditMode ? null : (
-            <div className="mb-4">
-              <PostImagePicker
-                value={imageFiles}
-                onChange={setImageFiles}
-                id="community-post-image-picker"
-              />
-            </div>
-          )}
-
-          <label className="mb-4 block">
-            <span className="mb-2 block text-xs font-semibold text-text">内容</span>
-            <textarea
-              value={body}
-              onChange={handleBodyChange}
-              maxLength={COMMUNITY_BODY_MAX_LENGTH}
-              placeholder="说点什么吧…"
-              className="max-h-[60dvh] min-h-[160px] w-full resize-none overflow-y-auto rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
-            />
-          </label>
         </form>
       </div>
     </main>

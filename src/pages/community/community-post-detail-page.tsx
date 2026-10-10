@@ -13,6 +13,10 @@ import { useCommunityBySlugQuery } from "../../features/community/use-community-
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatRelativeTimeAgo } from "../../utils/format";
+import {
+  COMMUNITY_POST_DETAIL_BODY_CLASS_NAME,
+  COMMUNITY_POST_DETAIL_TITLE_CLASS_NAME
+} from "./community-post-type";
 
 interface CommunityPostDetailLocationState {
   publishSuccessMessage?: string;
@@ -32,7 +36,7 @@ interface CommunityPostDetailLocationState {
  * 生产域名拼的帖子链接写入剪贴板，同 post-share-action-sheet.tsx 的复制
  * 链接用法：@capacitor/clipboard，网页端自动降级 navigator.clipboard；
  * 这里没有抽 src/utils/share.ts，跟阶段十的卡各自内联，避免两边建同名文件
- * 冲突）。顶栏 title 是"社区名 · N 位成员"（按帖子自己的 communitySlug 查所属
+ * 冲突）。顶栏 title 是社区名（按帖子自己的 communitySlug 查所属
  * 社区，useCommunityBySlugQuery），帖子/社区还没加载出来或加载失败时退回"帖子详情"。
  * 举报入口放在顶栏 detail 变体的"…"更多菜单里（一个"举报"链接，跳
  * /community/post/:id/report，未登录由那条路由的 RequireAuth 挡回登录页）；
@@ -54,9 +58,8 @@ export function CommunityPostDetailPage() {
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { data: community } = useCommunityBySlugQuery(post?.communitySlug);
-  const topBarTitle = community
-    ? `${community.name} · ${community.memberCount} 位成员`
-    : "帖子详情";
+  // 顶栏只显示所属社区的名字（不再带"· N 位成员"）。
+  const topBarTitle = community ? community.name : "帖子详情";
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
   useEffect(() => {
@@ -97,7 +100,7 @@ export function CommunityPostDetailPage() {
       <>
         <article>
           {post.title ? (
-            <h1 className="break-words text-xl font-semibold text-text">{post.title}</h1>
+            <h1 className={COMMUNITY_POST_DETAIL_TITLE_CLASS_NAME}>{post.title}</h1>
           ) : null}
           <div className="mt-3 flex items-center gap-2">
             {post.authorAvatarUrl ? (
@@ -119,7 +122,7 @@ export function CommunityPostDetailPage() {
               <p className="text-xs text-text-muted">{formatRelativeTimeAgo(post.createdAt)}</p>
             </div>
           </div>
-          <p className="mt-4 whitespace-pre-wrap break-words text-[17px] leading-[1.6] text-text">
+          <p className={`mt-4 ${COMMUNITY_POST_DETAIL_BODY_CLASS_NAME}`}>
             {post.body}
           </p>
           {post.images.length > 0 ? (

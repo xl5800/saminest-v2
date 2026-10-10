@@ -124,18 +124,18 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     renderEdit();
 
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("起个标题")).toHaveValue("原标题");
+      expect(screen.getByPlaceholderText("添加标题")).toHaveValue("原标题");
     });
-    expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
+    expect(screen.getByPlaceholderText("添加正文")).toHaveValue("原正文");
   });
 
   it("only seeds once: a later background refetch does not overwrite what the user has typed", async () => {
     renderEdit();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
+      expect(screen.getByPlaceholderText("添加正文")).toHaveValue("原正文");
     });
 
-    fireEvent.change(screen.getByPlaceholderText("说点什么吧…"), {
+    fireEvent.change(screen.getByPlaceholderText("添加正文"), {
       target: { value: "我改到一半的内容" }
     });
     // 模拟后台重新拉取：详情查询返回了一份新对象（内容也变了）。下一次渲染
@@ -145,10 +145,10 @@ describe("CreateCommunityPostPage (edit mode)", () => {
       isPending: false,
       isError: false
     });
-    fireEvent.change(screen.getByPlaceholderText("起个标题"), { target: { value: "我的标题" } });
+    fireEvent.change(screen.getByPlaceholderText("添加标题"), { target: { value: "我的标题" } });
 
-    expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("我改到一半的内容");
-    expect(screen.getByPlaceholderText("起个标题")).toHaveValue("我的标题");
+    expect(screen.getByPlaceholderText("添加正文")).toHaveValue("我改到一半的内容");
+    expect(screen.getByPlaceholderText("添加标题")).toHaveValue("我的标题");
   });
 
   it("does not render the image picker or silently join the community in edit mode", () => {
@@ -163,11 +163,11 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     updateMutateAsync.mockResolvedValue(undefined);
     renderEdit();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
+      expect(screen.getByPlaceholderText("添加正文")).toHaveValue("原正文");
     });
 
-    fireEvent.change(screen.getByPlaceholderText("起个标题"), { target: { value: "  新标题  " } });
-    fireEvent.change(screen.getByPlaceholderText("说点什么吧…"), { target: { value: "新正文" } });
+    fireEvent.change(screen.getByPlaceholderText("添加标题"), { target: { value: "  新标题  " } });
+    fireEvent.change(screen.getByPlaceholderText("添加正文"), { target: { value: "新正文" } });
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 
     await waitFor(() => {
@@ -187,10 +187,10 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     updateMutateAsync.mockResolvedValue(undefined);
     renderEdit();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("起个标题")).toHaveValue("原标题");
+      expect(screen.getByPlaceholderText("添加标题")).toHaveValue("原标题");
     });
 
-    fireEvent.change(screen.getByPlaceholderText("起个标题"), { target: { value: "" } });
+    fireEvent.change(screen.getByPlaceholderText("添加标题"), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 
     await waitFor(() => {
@@ -201,10 +201,10 @@ describe("CreateCommunityPostPage (edit mode)", () => {
   it("blocks saving an empty body and does not call the mutation", async () => {
     renderEdit();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
+      expect(screen.getByPlaceholderText("添加正文")).toHaveValue("原正文");
     });
 
-    fireEvent.change(screen.getByPlaceholderText("说点什么吧…"), { target: { value: "   " } });
+    fireEvent.change(screen.getByPlaceholderText("添加正文"), { target: { value: "   " } });
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("请写点内容再发布。");
@@ -215,7 +215,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     updateMutateAsync.mockRejectedValue(new Error("boom"));
     renderEdit();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
+      expect(screen.getByPlaceholderText("添加正文")).toHaveValue("原正文");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
@@ -228,7 +228,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     updateMutateAsync.mockRejectedValue(new AppError("账号受限提示", "ACCOUNT_RESTRICTED"));
     renderEdit();
     await waitFor(() => {
-      expect(screen.getByPlaceholderText("说点什么吧…")).toHaveValue("原正文");
+      expect(screen.getByPlaceholderText("添加正文")).toHaveValue("原正文");
     });
 
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
@@ -246,7 +246,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     renderEdit();
 
     expect(screen.getByRole("status")).toHaveTextContent("加载中…");
-    expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
   });
 
   it("shows 帖子不存在，或没有权限编辑 and no form when the post query fails", () => {
@@ -259,7 +259,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     renderEdit();
 
     expect(screen.getByRole("alert")).toHaveTextContent("帖子不存在，或没有权限编辑。");
-    expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
   });
 
   it("shows 帖子不存在，或没有权限编辑 and no form when the post belongs to someone else", () => {
@@ -272,7 +272,7 @@ describe("CreateCommunityPostPage (edit mode)", () => {
     renderEdit();
 
     expect(screen.getByRole("alert")).toHaveTextContent("帖子不存在，或没有权限编辑。");
-    expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
     expect(updateMutateAsync).not.toHaveBeenCalled();
   });
 });

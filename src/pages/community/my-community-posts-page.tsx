@@ -9,6 +9,10 @@ import { useMyCommunityPostsQuery } from "../../features/community/use-my-commun
 import type { MyCommunityPostListItem } from "../../repositories/community-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { formatPublishedAt } from "../../utils/format";
+import {
+  COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME,
+  COMMUNITY_POST_LIST_TITLE_CLASS_NAME
+} from "./community-post-type";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const MY_COMMUNITY_POSTS_SKELETON_COUNT = 3;
@@ -131,15 +135,11 @@ export function MyCommunityPostsPage() {
               <li key={post.id} className="rounded-2xl border border-border bg-card p-3 shadow-card">
                 {hasTitle ? (
                   <>
-                    <p className="line-clamp-1 break-words text-base font-medium text-text">
-                      {post.title}
-                    </p>
-                    <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">{post.body}</p>
+                    <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.title}</p>
+                    <p className={`mt-1 ${COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME}`}>{post.body}</p>
                   </>
                 ) : (
-                  <p className="line-clamp-2 break-words text-base font-medium text-text">
-                    {post.body}
-                  </p>
+                  <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.body}</p>
                 )}
                 <div className="mt-2 flex items-center gap-3 text-xs text-text-muted">
                   <span>{formatPublishedAt(post.createdAt)}</span>

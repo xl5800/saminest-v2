@@ -39,6 +39,21 @@ vi.mock("../../features/community/use-leave-community-mutation", () => ({
   useLeaveCommunityMutation
 }));
 vi.mock("@capacitor/clipboard", () => ({ Clipboard: { write: clipboardWriteMock } }));
+// 收藏按钮自己的登录/切换逻辑在 community-post-favorite-button 的测试里覆盖，
+// 这里只关心 Feed 把哪个帖子、多少收藏数交给它。
+vi.mock("../../components/community-post-favorite-button", () => ({
+  CommunityPostFavoriteButton: ({
+    communityPostId,
+    favoriteCount
+  }: {
+    communityPostId: string;
+    favoriteCount?: number;
+  }) => (
+    <button type="button" aria-label="收藏" data-post-id={communityPostId}>
+      {favoriteCount}
+    </button>
+  )
+}));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
@@ -154,7 +169,10 @@ describe("CommunityFeedPage", () => {
     expect(link).toHaveTextContent("周末想去逛逛，求推荐");
     expect(link).toHaveTextContent("Bob");
     expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
-    expect(screen.getByLabelText("5 人收藏")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "收藏" })).toHaveTextContent("5");
+    // 收藏/分享按钮在详情链接外面（按钮不能嵌在 <a> 里）。
+    expect(link).not.toContainElement(screen.getByRole("button", { name: "收藏" }));
+    expect(link).not.toContainElement(screen.getByRole("button", { name: "分享帖子" }));
   });
 
   it("uses the body as the headline (and no separate preview) when the post has no title", () => {
@@ -359,7 +377,7 @@ describe("CommunityFeedPage", () => {
     it("renders flat rows (border-b, no card border/shadow/rounding)", () => {
       renderFeed();
 
-      const row = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
+      const row = screen.getByRole("link", { name: /有人去过 Tysons 吗/ }).parentElement;
       expect(row).toHaveClass("border-b");
       expect(row).not.toHaveClass("rounded-card-lg", "shadow-card", "border");
     });
@@ -387,7 +405,7 @@ describe("CommunityFeedPage", () => {
       expect(screen.getByRole("link", { name: /普通帖子/ })).not.toHaveTextContent("置顶");
     });
 
-    it("shows comment and favorite counts with MessageCircle / Heart icons, each bound to its own field", () => {
+    it("uses the same plain icons as the detail page: MessageCircle / Star / Share2, no heart", () => {
       useCommunityPostsInfiniteQuery.mockReturnValue(
         postsResult({
           data: {
@@ -399,12 +417,13 @@ describe("CommunityFeedPage", () => {
       const { container } = renderFeed();
 
       const comments = screen.getByLabelText("7 条评论");
-      const favorites = screen.getByLabelText("9 人收藏");
       expect(comments).toHaveTextContent("7");
       expect(comments.querySelector("svg.lucide-message-circle")).not.toBeNull();
-      expect(favorites).toHaveTextContent("9");
-      expect(favorites.querySelector("svg.lucide-heart")).not.toBeNull();
-      expect(container.querySelector("svg.lucide-star")).toBeNull();
+      expect(screen.getByRole("button", { name: "收藏" })).toHaveTextContent("9");
+      expect(
+        screen.getByRole("button", { name: "分享帖子" }).querySelector("svg.lucide-share-2")
+      ).not.toBeNull();
+      expect(container.querySelector("svg.lucide-heart")).toBeNull();
     });
   });
 

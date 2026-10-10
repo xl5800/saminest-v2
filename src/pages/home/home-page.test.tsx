@@ -248,7 +248,7 @@ describe("HomePage (community aggregate feed)", () => {
       renderWithProviders(<HomePage />);
 
       expect(screen.getByRole("button", { name: "收藏" })).toHaveAttribute("data-post-id", "cp-1");
-      expect(screen.getByRole("button", { name: "分享" })).toBeDisabled();
+      expect(screen.getByRole("button", { name: "分享帖子" })).toBeEnabled();
       expect(screen.queryByRole("button", { name: /赞/ })).not.toBeInTheDocument();
     });
 
@@ -257,7 +257,7 @@ describe("HomePage (community aggregate feed)", () => {
 
       const link = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
       expect(link).not.toContainElement(screen.getByRole("button", { name: "收藏" }));
-      expect(link).not.toContainElement(screen.getByRole("button", { name: "分享" }));
+      expect(link).not.toContainElement(screen.getByRole("button", { name: "分享帖子" }));
     });
 
     it("uses the body as the headline (and no separate preview) when the post has no title", () => {

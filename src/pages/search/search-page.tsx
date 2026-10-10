@@ -9,6 +9,10 @@ import { useSearchCommunityPostsQuery } from "../../features/community/use-searc
 import { formatRelativeTimeAgo } from "../../utils/format";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 import { BrowseCommunityCard } from "../community/browse-community-card";
+import {
+  COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME,
+  COMMUNITY_POST_LIST_TITLE_CLASS_NAME
+} from "../community/community-post-type";
 import { filterCommunitiesByKeyword } from "../community/community-search";
 
 const SEARCH_DEBOUNCE_MS = 400;
@@ -77,11 +81,9 @@ export function SearchPage() {
         {posts.map((post) => (
           <li key={post.id} className="border-b border-divider py-3">
             <Link to={`/community/post/${post.id}`} className="block">
-              <p className="line-clamp-2 break-words text-base font-semibold text-text">
-                {post.title || post.body}
-              </p>
+              <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.title || post.body}</p>
               {post.title ? (
-                <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">{post.body}</p>
+                <p className={`mt-1 ${COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME}`}>{post.body}</p>
               ) : null}
               <div className="mt-2 flex items-center gap-2 text-xs text-text-subtle">
                 {post.communityName ? (

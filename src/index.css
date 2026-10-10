@@ -238,6 +238,9 @@
   --color-text: #1c1e21;
   /* 全局配色改为冷灰色调任务卡：#756e65 → #65676b。 */
   --color-text-muted: #65676b;
+  /* 社区帖子正文色（参照 Reddit 正文：比标题 --color-text 浅一档，但明显比
+     --color-text-muted 深）。之前帖子列表正文用 text-muted，读起来太淡。 */
+  --color-text-body: #363a3f;
   /* 全局配色改为冷灰色调任务卡：#9c958b → #8a8d91（继续跟下面
      --color-nav-icon 保持同一个值）。 */
   --color-text-subtle: #8a8d91;

@@ -816,7 +816,7 @@ describe("app routes", () => {
 
     renderAt("/community/dmv/new");
 
-    expect(await screen.findByPlaceholderText("说点什么吧…")).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText("添加正文")).toBeInTheDocument();
     expect(screen.queryByLabelText("选择社区")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
@@ -834,7 +834,7 @@ describe("app routes", () => {
     renderAt("/community/new");
 
     expect(await screen.findByText("你还没有加入任何社区，发帖前请先加入一个社区。")).toBeInTheDocument();
-    expect(screen.queryByPlaceholderText("说点什么吧…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
@@ -856,7 +856,7 @@ describe("app routes", () => {
     renderAt("/community/new");
 
     expect(await screen.findByLabelText("选择社区")).toBeInTheDocument();
-    expect(screen.getByPlaceholderText("说点什么吧…")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("添加正文")).toBeInTheDocument();
   });
 
   it("renders the community post detail page at /community/post/:id without a session (not-found state when the post doesn't resolve)", async () => {

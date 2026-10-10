@@ -12,7 +12,9 @@ export interface CommunityPostFavoriteButtonProps {
   /** 跟 favorite-button.tsx 的 variant 完全一致：default 是 36×36 圆形图标
    *  按钮，icon 是 Star 图标 + 小字号文字标签竖排（详情页操作行用）。只改
    *  展示形式，登录跳转/收藏切换/错误提示这套逻辑两个变体共用。 */
-  variant?: "default" | "icon";
+  variant?: "default" | "icon" | "inline";
+  /** inline 变体在星星右边显示的收藏数（帖子列表操作行用）。 */
+  favoriteCount?: number;
 }
 
 /**
@@ -27,7 +29,8 @@ export interface CommunityPostFavoriteButtonProps {
  */
 export function CommunityPostFavoriteButton({
   communityPostId,
-  variant = "default"
+  variant = "default",
+  favoriteCount
 }: CommunityPostFavoriteButtonProps) {
   const navigate = useNavigate();
   const session = useAuthStore((s) => s.session);
@@ -64,6 +67,36 @@ export function CommunityPostFavoriteButton({
           }
         }
       }
+    );
+  }
+
+  // inline：帖子列表操作行用（community-post-action-bar.tsx）——跟详情页同一个
+  // 无圆框的 Star 线条图标，右边跟收藏数，不带"收藏"文字，像 Reddit 列表一样紧凑。
+  if (variant === "inline") {
+    return (
+      <span className="relative">
+        <button
+          type="button"
+          aria-pressed={isFavorited}
+          aria-label={isFavorited ? "取消收藏" : "收藏"}
+          disabled={toggleFavorite.isPending}
+          onClick={handleClick}
+          className="flex items-center gap-1 py-1 text-sm text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <Star
+            size={20}
+            aria-hidden="true"
+            fill={isFavorited ? "currentColor" : "none"}
+            className={isFavorited ? "text-primary" : undefined}
+          />
+          {favoriteCount !== undefined ? <span>{favoriteCount}</span> : null}
+        </button>
+        {restrictedError ? (
+          <p role="alert" className="absolute left-0 top-full mt-1 w-56 text-xs text-danger">
+            {restrictedError}
+          </p>
+        ) : null}
+      </span>
     );
   }
 

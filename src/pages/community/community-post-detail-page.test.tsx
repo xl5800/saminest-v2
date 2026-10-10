@@ -109,9 +109,9 @@ describe("CommunityPostDetailPage", () => {
     clipboardWrite.mockResolvedValue(undefined);
   });
 
-  it("shows '社区名 · N 位成员' as the top bar title, falling back to 帖子详情 until the community loads", () => {
+  it("shows just the community name (no member count) as the top bar title, falling back to 帖子详情 until the community loads", () => {
     const { unmount } = renderPage();
-    expect(screen.getByRole("heading", { level: 1, name: "DMV 社区 · 128 位成员" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: "DMV 社区" })).toBeInTheDocument();
     unmount();
 
     useCommunityBySlugQuery.mockReturnValue({ data: undefined });
@@ -232,7 +232,7 @@ describe("CommunityPostDetailPage", () => {
 
     // 页面里只剩顶栏那一个 h1（社区名），没有帖子标题。
     expect(screen.getAllByRole("heading", { level: 1 }).map((h) => h.textContent)).toEqual([
-      "DMV 社区 · 128 位成员"
+      "DMV 社区"
     ]);
   });
 

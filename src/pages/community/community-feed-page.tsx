@@ -1,8 +1,9 @@
 import { Clipboard } from "@capacitor/clipboard";
-import { BadgeCheck, Heart, MessageCircle, Plus, Share2 } from "lucide-react";
+import { BadgeCheck, Plus, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
+import { CommunityPostActionBar } from "../../components/community-post-action-bar";
 import { LeaveCommunityConfirmDialog } from "../../components/leave-community-confirm-dialog";
 import { PostImageCarousel } from "../../components/post-image-carousel";
 import { Skeleton } from "../../components/skeleton";
@@ -15,6 +16,10 @@ import { useLeaveCommunityMutation } from "../../features/community/use-leave-co
 import { useAuthStore } from "../../store/auth-store";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { getCommunityAbbreviation } from "./community-abbreviation";
+import {
+  COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME,
+  COMMUNITY_POST_LIST_TITLE_CLASS_NAME
+} from "./community-post-type";
 
 const SKELETON_COUNT = 4;
 
@@ -271,78 +276,62 @@ export function CommunityFeedPage() {
           {posts.map((post) => {
             const hasTitle = Boolean(post.title);
             return (
-              <Link
-                key={post.id}
-                to={`/community/post/${post.id}`}
-                className="block border-b border-border py-4"
-              >
-                {post.pinned ? (
-                  <span className="inline-block rounded-full bg-primary-light px-2 py-0.5 text-xs font-medium text-primary">
-                    置顶
-                  </span>
-                ) : null}
-                {/* 有标题：标题单行截断 + body 预览两行；没有标题：直接把
-                    body 前一两行当标题用（两行截断），不再重复展示预览。
-                    文字在上、图片在下：图片区域是满宽的 PostImageCarousel
-                    （一次一张、多张可滑动 + 圆点指示器），没有图片时不渲染
-                    任何占位，保持纯文字。整张卡片是一个 <Link>，图片这里不
-                    传 onImageClick——静止点击图片直接冒泡给 Link 跳详情页，
-                    "纯滑动不触发点击"由 PostImageCarousel 自己保证。 */}
-                <div className="min-w-0">
-                  {hasTitle ? (
-                    <>
-                      <p className="mt-2 line-clamp-1 break-words text-base font-medium text-text">
-                        {post.title}
-                      </p>
-                      <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">
-                        {post.body}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-2 line-clamp-2 break-words text-base font-medium text-text">
-                      {post.body}
-                    </p>
-                  )}
-                </div>
-                {post.images.length > 0 ? (
-                  <div className="mt-3">
-                    <PostImageCarousel images={post.images} aspectRatio="4 / 3" />
-                  </div>
-                ) : null}
-                <div className="mt-3 flex items-center gap-2">
-                  {post.authorAvatarUrl ? (
-                    <img
-                      src={post.authorAvatarUrl}
-                      alt=""
-                      className="h-6 w-6 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
-                    >
-                      {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
+              <div key={post.id} className="border-b border-border py-4">
+                {/* 内容区是一个整体 <Link> 去详情页；操作行（收藏/分享按钮）放在
+                    链接外面，按钮不能嵌在 <a> 里。 */}
+                <Link to={`/community/post/${post.id}`} className="block">
+                  {post.pinned ? (
+                    <span className="mb-2 inline-block rounded-full bg-primary-light px-2 py-0.5 text-xs font-medium text-primary">
+                      置顶
                     </span>
-                  )}
-                  <span className="min-w-0 flex-1 truncate text-sm text-text">
-                    {post.authorDisplayName}
-                  </span>
-                  <span
-                    aria-label={`${post.commentCount} 条评论`}
-                    className="flex shrink-0 items-center gap-1 text-xs text-text-muted"
-                  >
-                    <MessageCircle aria-hidden="true" size={14} />
-                    {post.commentCount}
-                  </span>
-                  <span
-                    aria-label={`${post.favoriteCount} 人收藏`}
-                    className="flex shrink-0 items-center gap-1 text-xs text-text-muted"
-                  >
-                    <Heart aria-hidden="true" size={14} />
-                    {post.favoriteCount}
-                  </span>
-                </div>
-              </Link>
+                  ) : null}
+                  {/* 有标题：标题 + 正文预览；没有标题：正文直接当标题用，不再
+                      重复展示预览。文字样式跟首页同一份（community-post-type.ts）。
+                      图片在文字下方满宽展示，不传 onImageClick——静止点击图片
+                      直接冒泡给 Link 跳详情页。 */}
+                  <div className="min-w-0">
+                    {hasTitle ? (
+                      <>
+                        <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.title}</p>
+                        <p className={`mt-1 ${COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME}`}>
+                          {post.body}
+                        </p>
+                      </>
+                    ) : (
+                      <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.body}</p>
+                    )}
+                  </div>
+                  {post.images.length > 0 ? (
+                    <div className="mt-3">
+                      <PostImageCarousel images={post.images} aspectRatio="4 / 3" />
+                    </div>
+                  ) : null}
+                  <div className="mt-3 flex items-center gap-2">
+                    {post.authorAvatarUrl ? (
+                      <img
+                        src={post.authorAvatarUrl}
+                        alt=""
+                        className="h-6 w-6 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <span
+                        aria-hidden="true"
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
+                      >
+                        {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
+                      </span>
+                    )}
+                    <span className="min-w-0 truncate text-sm text-text">
+                      {post.authorDisplayName}
+                    </span>
+                  </div>
+                </Link>
+                <CommunityPostActionBar
+                  communityPostId={post.id}
+                  commentCount={post.commentCount}
+                  favoriteCount={post.favoriteCount}
+                />
+              </div>
             );
           })}
         </div>

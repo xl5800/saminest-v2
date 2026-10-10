@@ -1,8 +1,7 @@
-import { MessageCircle, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { CommunityPostFavoriteButton } from "../../components/community-post-favorite-button";
+import { CommunityPostActionBar } from "../../components/community-post-action-bar";
 import { PostImageCarousel } from "../../components/post-image-carousel";
 import { PublishActionSheet } from "../../components/publish-action-sheet";
 import { Skeleton } from "../../components/skeleton";
@@ -13,6 +12,10 @@ import { useMyCommunitiesQuery } from "../../features/community/use-my-communiti
 import { useAuthStore } from "../../store/auth-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { formatRelativeTimeAgo } from "../../utils/format";
+import {
+  COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME,
+  COMMUNITY_POST_LIST_TITLE_CLASS_NAME
+} from "../community/community-post-type";
 
 const SKELETON_COUNT = 4;
 
@@ -55,9 +58,9 @@ const COMMUNITY_PATH = "/community";
  * - 帖子流：标题和正文分开展示，行与行之间用底部分隔线隔开，不是带边框的
  *   卡片。分页沿用社区 Feed 页同一套"哨兵元素 + IntersectionObserver"
  *   无限滚动。
- * - 操作行：评论数 / 收藏（CommunityPostFavoriteButton）/ 分享。**没有点赞
- *   图标**——社区帖子 v1 没有点赞。分享是这张卡新增的产品决策，还没有确认
- *   具体行为，所以先做成不可点的占位按钮（disabled），没有任何分享逻辑。
+ * - 操作行：CommunityPostActionBar（评论数 / 收藏 / 分享，跟详情页同一套线条
+ *   图标，只放图标和数字）。**没有点赞图标**——社区帖子 v1 没有点赞。分享是
+ *   复制帖子链接，跟详情页一致。
  *
  * 社区名标签是独立的 <Link>，不嵌在"去详情页"那个 <Link> 里——<a> 里嵌 <a> 是
  * 非法 HTML，而且点标签会同时触发外层导航；所以卡片顶部一行拆成"作者信息链接
@@ -200,17 +203,13 @@ export function HomePage() {
                         当标题，不重复展示预览——跟 /community 页同一规则。 */}
                     {hasTitle ? (
                       <>
-                        <p className="line-clamp-2 break-words text-base font-semibold text-text">
-                          {post.title}
-                        </p>
-                        <p className="mt-1 line-clamp-2 break-words text-sm text-text-muted">
+                        <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.title}</p>
+                        <p className={`mt-1 ${COMMUNITY_POST_LIST_PREVIEW_CLASS_NAME}`}>
                           {post.body}
                         </p>
                       </>
                     ) : (
-                      <p className="line-clamp-2 break-words text-base font-semibold text-text">
-                        {post.body}
-                      </p>
+                      <p className={COMMUNITY_POST_LIST_TITLE_CLASS_NAME}>{post.body}</p>
                     )}
                   </div>
                   {/* 图片在文字下方、满宽展示，跟 /community Feed 页、帖子
@@ -223,26 +222,11 @@ export function HomePage() {
                     </div>
                   ) : null}
                 </Link>
-                <div className="mt-3 flex items-center gap-6 text-text-muted">
-                  <span
-                    aria-label={`${post.commentCount} 条评论`}
-                    className="flex items-center gap-1 text-sm"
-                  >
-                    <MessageCircle aria-hidden="true" size={18} />
-                    {post.commentCount}
-                  </span>
-                  <CommunityPostFavoriteButton communityPostId={post.id} />
-                  {/* 分享：占位。具体行为（复制链接/系统分享面板）还没确认，
-                      先不做任何逻辑，disabled 避免用户点了没反应。 */}
-                  <button
-                    type="button"
-                    disabled
-                    aria-label="分享"
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text-muted opacity-60"
-                  >
-                    <Share2 aria-hidden="true" size={18} />
-                  </button>
-                </div>
+                <CommunityPostActionBar
+                  communityPostId={post.id}
+                  commentCount={post.commentCount}
+                  favoriteCount={post.favoriteCount}
+                />
               </li>
             );
           })}
