@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  composeEditableDescription,
-  deriveTitleFromDescription,
   OTHER_LOCATION_VALUE,
+  stripTitleLineFromDescription,
   validatePublishInput
 } from "./publish-validation";
 
@@ -11,9 +10,10 @@ const validInput = {
   categoryId: "cat-1",
   locationId: "loc-1",
   locationText: "",
-  // 发布页简化改版（任务卡 7）：没有独立的 title / contactMethod /
-  // contactValue 输入了，title 从描述第一行派生。
-  description: "Sunny room near metro\nA description that is definitely long enough.",
+  // 发布页简化改版（任务卡 7）：没有 contactMethod / contactValue 输入了；
+  // 标题、正文是两个独立输入（标题 + 正文编辑区），正文不含标题。
+  title: "Sunny room near metro",
+  description: "A description that is definitely long enough.",
   price: "1200",
   // 31 号卡新增字段：这份 baseline fixture 里留空，代表"非求租分类/没填"
   // 这个最常见的场景——已有的一大批用例都是继承自这个 baseline，不需要
@@ -34,8 +34,7 @@ describe("validatePublishInput", () => {
         locationId: "loc-1",
         locationText: null,
         title: "Sunny room near metro",
-        // description 保存完整原文，第一行（标题行）不剔除。
-        description: "Sunny room near metro\nA description that is definitely long enough.",
+        description: "A description that is definitely long enough.",
         priceAmount: 1200,
         contactMethod: "message",
         contactValue: null,
@@ -121,61 +120,48 @@ describe("validatePublishInput", () => {
     expect(result.error?.code).toBe("PUBLISH_LOCATION_TEXT_LENGTH");
   });
 
-  // 发布页简化改版（任务卡 7）：title 从描述第一行派生。
-  it("derives the title from the first line of the description and keeps the full text as description", () => {
-    const result = validatePublishInput({ ...validInput, description: "  标题行  \n第二行正文\n第三行" });
+  // 标题、正文分开：title 来自标题输入框，description 原样保存正文，不再
+  // 从正文第一行派生标题，标题也不会出现在正文里。
+  it("takes the title from the title field and keeps the description without the title line", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      title: "  标题行  ",
+      description: "第一行正文\n第二行"
+    });
 
     expect(result.success).toBe(true);
     expect(result.data?.title).toBe("标题行");
-    expect(result.data?.description).toBe("标题行  \n第二行正文\n第三行");
+    expect(result.data?.description).toBe("第一行正文\n第二行");
   });
 
-  it("uses the whole text as title when the description has a single line (no body)", () => {
-    const result = validatePublishInput({ ...validInput, description: "只有一行" });
+  it("allows an empty description as long as there is a title", () => {
+    const result = validatePublishInput({ ...validInput, description: "   " });
 
     expect(result.success).toBe(true);
-    expect(result.data?.title).toBe("只有一行");
-    expect(result.data?.description).toBe("只有一行");
+    expect(result.data?.description).toBe("");
   });
 
-  it("handles CRLF line breaks and ignores leading blank lines when picking the first line", () => {
-    const result = validatePublishInput({ ...validInput, description: "\r\n\r\n标题\r\n正文" });
-
-    expect(result.success).toBe(true);
-    expect(result.data?.title).toBe("标题");
-  });
-
-  it("truncates a first line longer than 120 characters to exactly 120 for the title, without truncating the description", () => {
-    const longLine = "a".repeat(150);
-    const result = validatePublishInput({ ...validInput, description: longLine + "\n正文" });
-
-    expect(result.success).toBe(true);
-    expect(result.data?.title).toBe("a".repeat(120));
-    expect(result.data?.description).toBe(longLine + "\n正文");
-  });
-
-  it("truncates by code point so an emoji at the boundary is never split in half", () => {
-    const line = "a".repeat(119) + "😀😀";
-    const result = validatePublishInput({ ...validInput, description: line });
-
-    expect(result.success).toBe(true);
-    expect(result.data?.title).toBe("a".repeat(119) + "😀");
-  });
-
-  // 整段描述为空 → 派生出来的 title 也是空，必须在前端拦住，不能让空 title
-  // 提交到数据库触发 posts_title_length_check。
-  it("rejects an empty / whitespace-only description, because the derived title would be empty", () => {
-    for (const description of ["", "   ", "\n\n  \n"]) {
-      const result = validatePublishInput({ ...validInput, description });
+  // 空标题必须在前端拦住，不能提交到数据库触发 posts_title_length_check。
+  it("rejects an empty / whitespace-only title even when the description has content", () => {
+    for (const title of ["", "   "]) {
+      const result = validatePublishInput({ ...validInput, title, description: "有正文" });
 
       expect(result.success).toBe(false);
-      expect(result.error?.code).toBe("PUBLISH_CONTENT_REQUIRED");
-      expect(result.error?.message).toBe("请至少写点什么。");
+      expect(result.error?.code).toBe("PUBLISH_TITLE_REQUIRED");
+      expect(result.error?.message).toBe("请填写标题。");
     }
   });
 
-  it("accepts a single-character description (it is also the title)", () => {
-    const result = validatePublishInput({ ...validInput, description: "A" });
+  it("rejects a title longer than 120 characters, counted by code point", () => {
+    expect(validatePublishInput({ ...validInput, title: "😀".repeat(120) }).success).toBe(true);
+
+    const result = validatePublishInput({ ...validInput, title: "a".repeat(121) });
+    expect(result.success).toBe(false);
+    expect(result.error?.code).toBe("PUBLISH_TITLE_LENGTH");
+  });
+
+  it("accepts a single-character title (posts_title_length_check lower bound is 1)", () => {
+    const result = validatePublishInput({ ...validInput, title: "A" });
 
     expect(result.success).toBe(true);
     expect(result.data?.title).toBe("A");
@@ -284,32 +270,28 @@ describe("validatePublishInput", () => {
   });
 });
 
-describe("deriveTitleFromDescription", () => {
-  it("returns the trimmed first line", () => {
-    expect(deriveTitleFromDescription("  Hello  \nworld")).toBe("Hello");
+// 编辑模式回填：任务卡 7 之后、标题/正文分开之前发布的帖子，正文第一行就是
+// 标题，回填正文时要去掉这一行，不然标题会在标题框和正文框里各出现一次。
+describe("stripTitleLineFromDescription", () => {
+  it("removes the first line when it equals the title (old derived-title posts)", () => {
+    expect(stripTitleLineFromDescription("标题", "标题\n正文\n第二段")).toBe("正文\n第二段");
   });
 
-  it("returns an empty string for empty or whitespace-only input", () => {
-    expect(deriveTitleFromDescription("")).toBe("");
-    expect(deriveTitleFromDescription(" \n ")).toBe("");
-  });
-});
-
-// 编辑模式回填：历史帖子的 title 是单独填的、不一定出现在 description 里，
-// 回填时必须保证"重新提交后派生出来的 title 仍然是原标题"。
-describe("composeEditableDescription", () => {
-  it("returns the description unchanged when its first line already equals the title (new-format posts)", () => {
-    expect(composeEditableDescription("标题", "标题\n正文")).toBe("标题\n正文");
+  it("handles leading whitespace, CRLF and a blank line after the title", () => {
+    expect(stripTitleLineFromDescription("标题", "\r\n  标题  \r\n\r\n正文")).toBe("正文");
   });
 
-  it("prepends the title as the first line for legacy posts whose description does not start with it", () => {
-    const composed = composeEditableDescription("旧标题", "这是一段独立的描述");
-
-    expect(composed).toBe("旧标题\n这是一段独立的描述");
-    expect(deriveTitleFromDescription(composed)).toBe("旧标题");
+  it("matches a title that was truncated to 120 characters from a longer first line", () => {
+    const longLine = "a".repeat(150);
+    expect(stripTitleLineFromDescription("a".repeat(120), `${longLine}\n正文`)).toBe("正文");
   });
 
-  it("returns just the title when a legacy post has an empty description", () => {
-    expect(composeEditableDescription("旧标题", "")).toBe("旧标题");
+  it("returns an empty body when the description was only the title line", () => {
+    expect(stripTitleLineFromDescription("只有一行", "只有一行")).toBe("");
+  });
+
+  it("returns the description unchanged when its first line is not the title (legacy or new posts)", () => {
+    expect(stripTitleLineFromDescription("旧标题", "这是一段独立的描述")).toBe("这是一段独立的描述");
+    expect(stripTitleLineFromDescription("旧标题", "")).toBe("");
   });
 });

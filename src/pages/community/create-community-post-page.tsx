@@ -1,9 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from "react";
+import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
 import { Skeleton } from "../../components/skeleton";
+import { TitleBodyEditor } from "../../components/title-body-editor";
 import { TopBar } from "../../components/top-bar";
 import { useCommunityBySlugQuery } from "../../features/community/use-community-by-slug-query";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
@@ -235,7 +236,6 @@ export function CreateCommunityPostPage() {
   const [submitting, setSubmitting] = useState(false);
 
   const seededRef = useRef(false);
-  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   useEffect(() => {
     if (!isEditMode || seededRef.current || !existingPost) return;
@@ -251,14 +251,6 @@ export function CreateCommunityPostPage() {
     if (isEditMode || isPickerMode || !communityId || !userId) return;
     joinCommunityMutate({ communityId, userId });
   }, [isEditMode, isPickerMode, communityId, userId, joinCommunityMutate]);
-
-  function handleBodyChange(event: ChangeEvent<HTMLTextAreaElement>): void {
-    setBody(event.target.value);
-    // 先重置成 "auto" 再读 scrollHeight：不重置的话浏览器还按撑高之前的
-    // 高度算 scrollHeight，只会越撑越高，删字缩不回去。
-    event.target.style.height = "auto";
-    event.target.style.height = `${event.target.scrollHeight}px`;
-  }
 
   async function submitForm(): Promise<void> {
     if (submitting) return;
@@ -482,38 +474,17 @@ export function CreateCommunityPostPage() {
             </div>
           )}
 
-          {/* 标题 + 正文合在同一块编辑区里（参照小红书）：视觉上是一个框，
-              实际仍是两个输入框——第一行大号的标题（常规字重，跟发出去后的标题样式一致）（提示"添加标题"），
-              下面是正文（提示"添加正文"），中间没有分隔线、没有小标签。
-              不做成"一个文本框、第一行自动算标题"：用户随手换行会把标题和
-              正文切错，标题的长度上限和编辑回填也不好处理。标题里按回车
-              直接跳到正文，不在标题里换行。 */}
-          <div className="mb-4 rounded-xl bg-card px-3.5 py-3">
-            <input
-              type="text"
-              aria-label="标题（可选）"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.nativeEvent.isComposing) {
-                  event.preventDefault();
-                  bodyRef.current?.focus();
-                }
-              }}
-              maxLength={COMMUNITY_TITLE_MAX_LENGTH}
-              placeholder="添加标题"
-              className="w-full bg-transparent text-xl text-text placeholder:text-text-placeholder focus:outline-none"
-            />
-            <textarea
-              ref={bodyRef}
-              aria-label="正文"
-              value={body}
-              onChange={handleBodyChange}
-              maxLength={COMMUNITY_BODY_MAX_LENGTH}
-              placeholder="添加正文"
-              className="mt-2 max-h-[60dvh] min-h-[160px] w-full resize-none overflow-y-auto bg-transparent text-base text-text placeholder:text-text-placeholder focus:outline-none"
-            />
-          </div>
+          {/* 标题 + 正文合在同一块编辑区里（参照小红书），见 TitleBodyEditor 注释。 */}
+          <TitleBodyEditor
+            title={title}
+            onTitleChange={setTitle}
+            body={body}
+            onBodyChange={setBody}
+            titleMaxLength={COMMUNITY_TITLE_MAX_LENGTH}
+            bodyMaxLength={COMMUNITY_BODY_MAX_LENGTH}
+            titleAriaLabel="标题（可选）"
+            bodyAriaLabel="正文"
+          />
 
           {isPickerMode ? (
             <label className="mb-4 block">

@@ -156,15 +156,16 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
     listActiveActivityRegions.mockResolvedValue([{ id: "loc-va", name: "VA", stateCode: "VA" }]);
   });
 
-  // 发布页简化改版（任务卡 7）：没有独立的标题/联系方式字段了，草稿里只存
-  // 分类/描述（第一行即标题）/价格这些还在的字段。
-  it("keeps 分类/描述/价格 after a real navigation round-trip through 地区选择 (新建帖子: 租房/求租/二手共用这个页面)", async () => {
+  // 发布页简化改版（任务卡 7）：没有联系方式字段了；标题、描述是两个独立
+  // 输入框，都要跟分类/价格一起存进草稿。
+  it("keeps 分类/标题/描述/价格 after a real navigation round-trip through 地区选择 (新建帖子: 租房/求租/二手共用这个页面)", async () => {
     renderWithRealRouting("/publish");
 
     await screen.findByRole("radio", { name: "租房" });
     fireEvent.click(screen.getByRole("radio", { name: "租房" }));
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Sunny room" } });
     fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Sunny room\nNice and quiet, close to metro." }
+      target: { value: "Nice and quiet, close to metro." }
     });
     fireEvent.change(screen.getByLabelText("价格（可选）"), { target: { value: "1200" } });
 
@@ -179,9 +180,8 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
     // 这才是这次要修的 bug：其它字段在改版前会被清空（新建模式下打回
     // 空白），改版后应该原样保留。
     expect(screen.getByRole("radio", { name: "租房" })).toBeChecked();
-    expect(screen.getByLabelText("描述")).toHaveValue(
-      "Sunny room\nNice and quiet, close to metro."
-    );
+    expect(screen.getByLabelText("标题")).toHaveValue("Sunny room");
+    expect(screen.getByLabelText("描述")).toHaveValue("Nice and quiet, close to metro.");
     expect(screen.getByLabelText("价格（可选）")).toHaveValue(1200);
   });
 
@@ -191,8 +191,9 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
 
     await screen.findByRole("radio", { name: "租房" });
     fireEvent.click(screen.getByRole("radio", { name: "租房" }));
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Sunny room" } });
     fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Sunny room\nNice and quiet, close to metro." }
+      target: { value: "Nice and quiet, close to metro." }
     });
 
     fireEvent.click(screen.getByText("不限地区"));
@@ -204,7 +205,7 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
       expect(createPost).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Sunny room",
-          description: "Sunny room\nNice and quiet, close to metro.",
+          description: "Nice and quiet, close to metro.",
           // design_handoff_saminest_ios 第 6 项：选中的州现在通过
           // regionsByStateCode 反查成真实的 locations.id 提交，不再把州名
           // 字符串塞进 locationText（见 publish-page.tsx 消费 pendingRegion
@@ -245,14 +246,14 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
 
     expect(await screen.findByDisplayValue(/Original title/)).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Edited title\nEdited body" }
-    });
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Edited title" } });
+    fireEvent.change(screen.getByLabelText("描述"), { target: { value: "Edited body" } });
 
     fireEvent.click(screen.getByText("Rockville"));
     await screen.findByText("VA 弗吉尼亚州");
 
-    expect(screen.getByLabelText("描述")).toHaveValue("Edited title\nEdited body");
+    expect(screen.getByLabelText("标题")).toHaveValue("Edited title");
+    expect(screen.getByLabelText("描述")).toHaveValue("Edited body");
     expect(screen.queryByDisplayValue(/Original title/)).not.toBeInTheDocument();
   });
 
@@ -266,8 +267,9 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
 
     await screen.findByRole("radio", { name: "租房" });
     fireEvent.click(screen.getByRole("radio", { name: "租房" }));
+    fireEvent.change(screen.getByLabelText("标题"), { target: { value: "Sunny room" } });
     fireEvent.change(screen.getByLabelText("描述"), {
-      target: { value: "Sunny room\nNice and quiet, close to metro." }
+      target: { value: "Nice and quiet, close to metro." }
     });
 
     // 基准用真实当前时间（不是一个很小的固定值）——mock 成一个远早于
@@ -287,6 +289,7 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
 
     // 但草稿已经过期，分类/描述不应该被回填，退回新建表单的初始态。
     expect(screen.getByRole("radio", { name: "租房" })).not.toBeChecked();
+    expect(screen.getByLabelText("标题")).toHaveValue("");
     expect(screen.getByLabelText("描述")).toHaveValue("");
   });
 });

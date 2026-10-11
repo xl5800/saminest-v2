@@ -97,16 +97,36 @@ describe("PostList", () => {
     expect(link).toHaveTextContent("USD 1,200");
   });
 
-  // 19 号卡（帖子卡片改版）：分类标签 pill 和地点文字整个从卡片上去掉了，
-  // 不再展示（详情页仍然完整展示这些信息，只是列表卡片不再承载）。
-  it("does not render the category tag pill or the location text on the card", async () => {
+  // Facebook Marketplace 风格：分类标签 pill 不展示；地区以灰色小字放在标题
+  // 下面，顺序是 价格（黑色粗体）→ 标题 → 地区。
+  it("renders price (bold), then title, then location in that order, without a category pill", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
 
     const link = await screen.findByRole("link");
     expect(link).not.toHaveTextContent("租房");
+    const price = screen.getByText("USD 1,200");
+    const title = screen.getByText("Sunny room near metro");
+    const location = screen.getByText("Rockville");
+    expect(price).toHaveClass("font-bold", "text-text");
+    expect(location).toHaveClass("text-xs", "text-text-muted");
+    const following = Node.DOCUMENT_POSITION_FOLLOWING;
+    expect(price.compareDocumentPosition(title) & following).toBeTruthy();
+    expect(title.compareDocumentPosition(location) & following).toBeTruthy();
+  });
+
+  it("omits the location row when the post has no location", async () => {
+    listApprovedPosts.mockResolvedValue({
+      posts: [{ ...samplePost, locationName: null }],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList />);
+
+    const link = await screen.findByRole("link");
     expect(link).not.toHaveTextContent("Rockville");
+    expect(link.querySelectorAll("p")).toHaveLength(2);
   });
 
   it("truncates a very long title to a single line with an ellipsis (no multi-line wrap)", async () => {
@@ -149,22 +169,19 @@ describe("PostList", () => {
     expect(container.querySelector(".columns-2")).not.toBeInTheDocument();
   });
 
-  // 19 号卡：图片区域从 16:9 改成更接近人像照片的 4:5（任务卡给的 3:4～4:5
-  // 区间内）。
-  //
-  // 背景换中性浅灰 + 卡片边框/阴影撑出层次（新一轮 UI 审计）：卡片改动前
-  // 是无边框/无投影，这次补上跟其它卡片列表项一致的 border-border/
-  // shadow-card，这条断言跟着从"没有"改成"有"。
-  it("renders the cover image at a 4:5 aspect ratio, and the card itself with a border + shadow", async () => {
+  // Facebook Marketplace 风格：1:1 方图，卡片本身没有白底/边框/投影。
+  it("renders the cover image as a square, and the card itself without a border, shadow or white background", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
 
     const img = await screen.findByRole("img");
-    expect(img).toHaveClass("aspect-[4/5]");
+    expect(img).toHaveClass("aspect-square", "rounded-lg");
 
     const link = screen.getByRole("link");
-    expect(link).toHaveClass("border", "border-border", "shadow-card");
+    expect(link).not.toHaveClass("border");
+    expect(link).not.toHaveClass("shadow-card");
+    expect(link).not.toHaveClass("bg-card-white");
   });
 
   // 19 号卡：价格为空时，那一整行文字完全不渲染——不是渲染出来但显示
@@ -288,9 +305,8 @@ describe("PostList", () => {
       expect(placeholder.querySelector("span")).toHaveClass("text-primary");
     });
 
-    // 19 号卡「参考 Craigslist 简化布局」要求两列网格保持等高对齐——占位
-    // 换样式不能破坏这条，比例仍然是 4:5。
-    it("keeps the 4:5 aspect ratio unchanged", async () => {
+    // 两列网格保持等高对齐——占位跟封面图一样是 1:1 方图。
+    it("uses the same square aspect ratio as a cover image", async () => {
       listApprovedPosts.mockResolvedValue({
         posts: [{ ...samplePost, coverImageUrl: null }],
         hasNextPage: false
@@ -299,7 +315,7 @@ describe("PostList", () => {
       renderWithProviders(<PostList />);
       const placeholder = await screen.findByTestId("post-thumbnail-placeholder");
 
-      expect(placeholder).toHaveClass("aspect-[4/5]");
+      expect(placeholder).toHaveClass("aspect-square");
     });
   });
 

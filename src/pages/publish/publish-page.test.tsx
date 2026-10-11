@@ -79,14 +79,18 @@ const initialPendingRegionState = usePendingFormRegionStore.getState();
 const initialPendingPostDraftState = usePendingPostFormDraftStore.getState();
 
 // 发布页简化改版（任务卡 7）：分类从 <select> 改成 role="radiogroup" 里的
-// 胶囊 tab 按钮（role="radio"），没有独立的"标题"输入框了，title 从描述
-// 第一行派生。下面两个常量/helper 是这套新交互的统一入口。
+// 胶囊 tab 按钮（role="radio"）。标题 + 描述是跟社区发帖页同款的编辑区
+// （TitleBodyEditor），标题、描述两个独立输入，描述不含标题。下面这些
+// 常量/helper 是这套交互的统一入口。
 const SAMPLE_TITLE = "Sunny room near metro";
-const SAMPLE_BODY = "A description that is definitely long enough.";
-const SAMPLE_DESCRIPTION = SAMPLE_TITLE + "\n" + SAMPLE_BODY;
+const SAMPLE_DESCRIPTION = "A description that is definitely long enough.";
 
 function selectCategory(name: string) {
   fireEvent.click(screen.getByRole("radio", { name }));
+}
+
+function fillTitle(value: string) {
+  fireEvent.change(screen.getByLabelText("标题"), { target: { value } });
 }
 
 function fillDescription(value: string) {
@@ -95,6 +99,7 @@ function fillDescription(value: string) {
 
 function fillRequiredFields() {
   selectCategory("租房");
+  fillTitle(SAMPLE_TITLE);
   fillDescription(SAMPLE_DESCRIPTION);
 }
 
@@ -272,15 +277,18 @@ describe("PublishPage", () => {
     expect(screen.getByRole("radio", { name: "求租" }).className).toMatch(/\btext-text-muted\b/);
   });
 
-  it("no longer renders a separate 标题 input, and the 描述 textarea hints that its first line becomes the title", async () => {
+  it("renders the shared 标题 + 描述 editor with 添加标题 / 添加正文 placeholders, title first", async () => {
     renderWithProviders(<PublishPage />);
     await screen.findByRole("radio", { name: "租房" });
 
-    expect(screen.queryByLabelText("标题")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("描述")).toHaveAttribute(
-      "placeholder",
-      "第一行将作为标题…详细说说你的帖子"
-    );
+    const title = screen.getByLabelText("标题");
+    const description = screen.getByLabelText("描述");
+    expect(title).toHaveAttribute("placeholder", "添加标题");
+    expect(title).toHaveAttribute("maxLength", "120");
+    expect(description).toHaveAttribute("placeholder", "添加正文");
+    expect(
+      title.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
   });
 
   it("no longer renders the 联系方式 type/content controls, nor the 拍照 button", async () => {
@@ -332,22 +340,19 @@ describe("PublishPage", () => {
     expect(age.compareDocumentPosition(price) & following).toBeTruthy();
   });
 
-  it("derives the title from the first line (trimmed) and truncates it to 120 characters, while description keeps the full text", async () => {
+  it("submits the title field as title and the description field as description, without repeating the title in the description", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
     await screen.findByRole("radio", { name: "租房" });
 
-    const longFirstLine = "a".repeat(150);
     selectCategory("租房");
-    fillDescription(longFirstLine + "\n第二行");
+    fillTitle("  两室一厅  ");
+    fillDescription("第一行正文\n第二行");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
     await waitFor(() => {
       expect(createPost).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "a".repeat(120),
-          description: longFirstLine + "\n第二行"
-        })
+        expect.objectContaining({ title: "两室一厅", description: "第一行正文\n第二行" })
       );
     });
   });
@@ -367,20 +372,31 @@ describe("PublishPage", () => {
     });
   });
 
-  it("allows a single-line post (title only, no extra body)", async () => {
+  it("allows a post with a title and no description", async () => {
     createPost.mockResolvedValue({ id: "post-999" });
     renderWithProviders(<PublishPage />);
     await screen.findByRole("radio", { name: "租房" });
 
     selectCategory("租房");
-    fillDescription("只有一行标题");
+    fillTitle("只有标题");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
     await waitFor(() => {
       expect(createPost).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "只有一行标题", description: "只有一行标题" })
+        expect.objectContaining({ title: "只有标题", description: "" })
       );
     });
+  });
+
+  it("moves focus from the title to the description when Enter is pressed in the title", async () => {
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    const title = screen.getByLabelText("标题");
+    title.focus();
+    fireEvent.keyDown(title, { key: "Enter" });
+
+    expect(screen.getByLabelText("描述")).toHaveFocus();
   });
 
   it("does not render any field for author_id or status", () => {
@@ -392,18 +408,18 @@ describe("PublishPage", () => {
     expect(screen.queryByLabelText(/status/i)).not.toBeInTheDocument();
   });
 
-  // 发布页简化改版（任务卡 7）：title 从描述第一行派生，整段描述为空（或只有
-  // 空白）时派生出来的 title 也是空——必须在前端拦住，不能让空 title 提交
-  // 到数据库。
-  it("blocks submission with a '请至少写点什么' message when the description (and so the derived title) is empty", async () => {
+  // 标题必填：空标题必须在前端拦住，不能提交到数据库触发
+  // posts_title_length_check；只写了描述也不行。
+  it("blocks submission with a '请填写标题' message when the title is empty, even if the description has content", async () => {
     renderWithProviders(<PublishPage />);
     await screen.findByRole("radio", { name: "租房" });
 
     selectCategory("租房");
-    fillDescription("   \n  ");
+    fillTitle("   ");
+    fillDescription("有正文");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("请至少写点什么。");
+    expect(await screen.findByRole("alert")).toHaveTextContent("请填写标题。");
     expect(createPost).not.toHaveBeenCalled();
   });
 
@@ -411,6 +427,7 @@ describe("PublishPage", () => {
     renderWithProviders(<PublishPage />);
     await screen.findByRole("radio", { name: "租房" });
 
+    fillTitle(SAMPLE_TITLE);
     fillDescription(SAMPLE_DESCRIPTION);
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
@@ -432,8 +449,7 @@ describe("PublishPage", () => {
         categoryId: "cat-1",
         locationId: null,
         locationText: null,
-        // title 从描述第一行派生，description 保存完整原文（标题行不剔除）；
-        // 联系方式固定站内私信。
+        // 标题、描述各自来自自己的输入框；联系方式固定站内私信。
         title: SAMPLE_TITLE,
         description: SAMPLE_DESCRIPTION,
         priceAmount: null,
@@ -989,7 +1005,8 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
-      fillDescription("Looking for a room\n" + SAMPLE_BODY);
+      fillTitle("Looking for a room");
+      fillDescription(SAMPLE_DESCRIPTION);
       fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
       fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "30" } });
 
@@ -1013,6 +1030,7 @@ describe("PublishPage", () => {
       // 切回非求租分类——性别/年龄输入框随之不再渲染，但底层 state 值仍然
       // 留着，提交时必须被当成没填。
       selectCategory("租房");
+      fillTitle(SAMPLE_TITLE);
       fillDescription(SAMPLE_DESCRIPTION);
 
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -1112,11 +1130,11 @@ describe("PublishPage in edit mode", () => {
     getPostDetail.mockResolvedValue(existingPostDetail);
     renderEditPage();
 
-    // 历史帖子（title 单独填、不在 description 里）回填描述框时，原标题会被
-    // 补成第一行，见 publish-validation.ts 的 composeEditableDescription。
+    // 标题、描述分别回填到各自的输入框。
     expect(await screen.findByLabelText("描述")).toHaveValue(
-      "Original title\nOriginal description that is long enough."
+      "Original description that is long enough."
     );
+    expect(screen.getByLabelText("标题")).toHaveValue("Original title");
     expect(screen.getByRole("radio", { name: "租房" })).toBeChecked();
     // 地区字段不再是原生 <select>——展示文案直接复用服务端已经解析好的
     // locationName（见 publish-page.tsx 顶部注释），这里断言那行按钮上
@@ -1125,9 +1143,9 @@ describe("PublishPage in edit mode", () => {
     expect(getPostDetail).toHaveBeenCalledWith("post-1");
   });
 
-  // 发布页简化改版（任务卡 7）：新格式的帖子（description 第一行本来就是
-  // title）原样回填；重新保存后 title/description 保持一致，不会越存越长。
-  it("restores a new-format post's description unchanged (its first line already equals the title), and re-saving keeps title and description stable", async () => {
+  // 任务卡 7 之后、标题/正文分开之前发布的帖子（description 第一行就是
+  // title）：回填时去掉正文里重复的标题行，重新保存后正文不再带标题。
+  it("strips the repeated title line from an old derived-title post's description, and re-saving keeps the title out of the description", async () => {
     getPostDetail.mockResolvedValue({
       ...existingPostDetail,
       title: "新格式标题",
@@ -1136,19 +1154,20 @@ describe("PublishPage in edit mode", () => {
     updatePost.mockResolvedValue(undefined);
     renderEditPage();
 
-    expect(await screen.findByLabelText("描述")).toHaveValue("新格式标题\n这是正文");
+    expect(await screen.findByLabelText("描述")).toHaveValue("这是正文");
+    expect(screen.getByLabelText("标题")).toHaveValue("新格式标题");
 
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
     await waitFor(() => {
       expect(updatePost).toHaveBeenCalledWith(
-        expect.objectContaining({ title: "新格式标题", description: "新格式标题\n这是正文" })
+        expect.objectContaining({ title: "新格式标题", description: "这是正文" })
       );
     });
   });
 
-  // 历史帖子（title 单独填、不在 description 里）：直接回填原 description 会让
-  // 重新提交后的 title 悄悄变成描述第一行——回填时要把原标题补成第一行。
-  it("keeps a legacy post's original title when re-saved without edits (title is prepended as the first line of the textarea)", async () => {
+  // 历史帖子（title 单独填、不在 description 里）：标题、描述原样回填，
+  // 不改动地保存后两者都不变。
+  it("keeps a legacy post's original title and description when re-saved without edits", async () => {
     getPostDetail.mockResolvedValue(existingPostDetail);
     updatePost.mockResolvedValue(undefined);
     renderEditPage();
@@ -1160,7 +1179,7 @@ describe("PublishPage in edit mode", () => {
       expect(updatePost).toHaveBeenCalledWith(
         expect.objectContaining({
           title: "Original title",
-          description: "Original title\nOriginal description that is long enough."
+          description: "Original description that is long enough."
         })
       );
     });
@@ -1200,7 +1219,7 @@ describe("PublishPage in edit mode", () => {
     renderEditPage();
 
     await screen.findByDisplayValue(/Original title/);
-    fillDescription("Updated title\nOriginal description that is long enough.");
+    fillTitle("Updated title");
     fireEvent.click(screen.getByRole("button", { name: "保存修改" }));
 
     await waitFor(() => {
@@ -1209,7 +1228,7 @@ describe("PublishPage in edit mode", () => {
           postId: "post-1",
           currentStatus: "pending",
           title: "Updated title",
-          description: "Updated title\nOriginal description that is long enough.",
+          description: "Original description that is long enough.",
           // 编辑保存同样固定站内私信（existingPostDetail 里原来的 email 联系
           // 方式会被覆盖掉）。
           contactMethod: "message",

@@ -110,6 +110,20 @@ export interface PostListProps {
  * TopBar/找搭子卡片/表单输入框等）颜色会跟着 `--color-card` 的新数值
  * 自动变成米白色，不需要逐个排查。
  *
+ * Facebook Marketplace 风格改版（取代上面 19 号卡的 4:5 图片 + 白底卡片、
+ * 以及"边框+投影""rounded-card-lg""bg-card-white"这几段对 grid variant
+ * 的描述，wanted variant 不受影响）：
+ * - 图片改成 1:1 方图（aspect-square，rounded-lg 小圆角），仍然是等高对齐
+ *   的两列网格，不做瀑布流；
+ * - 卡片去掉白底/边框/投影/大圆角，文字直接排在图片下方，列间距收紧
+ *   （gap-x-2），行间距 gap-y-4；没有卡片边框之后文字不能贴着屏幕边，
+ *   网格自己带 px-3 左右留白（跟 wanted variant 自带 px-4 是同一个做法；
+ *   发帖者主页外层已经有 px-4，那边用 -mx-3 抵消，保持跟"作品"标题对齐）；
+ * - 文字顺序：价格（黑色粗体，最醒目）→ 标题（单行省略）→ 地区（灰色
+ *   小字，复用 formatLocationDisplayName）。价格未填写时价格行整个不渲染
+ *   （isPriceUnset 判断不变），标题顶上来成为第一行；没有地区时地区行也
+ *   不渲染。19 号卡去掉的地点文字这次加回来了。
+ *
  * 分页：用"哨兵元素 + IntersectionObserver"实现无限滚动：列表底部放一个
  * 不可见的哨兵 div，它进入视口时触发 fetchNextPage()。哨兵只在
  * hasNextPage 为真时渲染——没有下一页时彻底不挂这个元素，而不是渲染出来
@@ -203,16 +217,13 @@ export function PostList({
     return (
       <div role="status">
         <span className="sr-only">加载中…</span>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-3 pt-3">
           {Array.from({ length: GRID_SKELETON_COUNT }).map((_, index) => (
-            <div
-              key={index}
-              className="overflow-hidden rounded-card-lg border border-border bg-card-white shadow-card"
-            >
-              <Skeleton className="aspect-[4/5] w-full" />
-              <div className="space-y-0.5 p-2.5">
-                <Skeleton className="h-4 w-4/5" />
+            <div key={index}>
+              <Skeleton className="aspect-square w-full rounded-lg" />
+              <div className="mt-1.5 space-y-1">
                 <Skeleton className="h-4 w-2/5" />
+                <Skeleton className="h-4 w-4/5" />
               </div>
             </div>
           ))}
@@ -315,35 +326,32 @@ export function PostList({
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-3 pt-3">
         {posts.map((post) => {
           const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
           return (
-            <Link
-              key={post.id}
-              to={`/post/${post.id}`}
-              className="block overflow-hidden rounded-card-lg border border-border bg-card-white shadow-card"
-            >
-              {/* 帖子卡片统一视觉（新一轮 UI 审计 P0 #1）：封面图/分类色底
-                  占位这段展示逻辑抽成了共享组件 PostThumbnail（见该文件顶部
-                  注释），my-posts-page.tsx/favorites-page.tsx 现在复用同一个
-                  组件展示缩略图，不再各自维护一套。这里传的
-                  sizeClassName/alt 保持跟改动前的内联 JSX 完全一致
-                  （aspect-[4/5] w-full + alt={post.title}），渲染结果没有
-                  变化，纯提取重构。 */}
+            <Link key={post.id} to={`/post/${post.id}`} className="block min-w-0">
+              {/* Facebook Marketplace 风格：方图（小圆角），没有卡片底色/边框/
+                  投影，文字直接排在图片下面。封面图/分类色底占位仍然复用
+                  共享组件 PostThumbnail。 */}
               <PostThumbnail
                 coverImageUrl={post.coverImageUrl}
                 categoryName={post.categoryName}
-                sizeClassName="aspect-[4/5] w-full"
+                sizeClassName="aspect-square w-full rounded-lg"
                 alt={post.title}
               />
-              <div className="space-y-0.5 p-2.5">
-                <p className="truncate text-sm text-text">{post.title}</p>
+              <div className="mt-1.5 space-y-0.5">
                 {priceUnset ? null : (
-                  <p className="text-base font-semibold text-text">
+                  <p className="truncate text-base font-bold text-text">
                     {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
                   </p>
                 )}
+                <p className="truncate text-sm text-text">{post.title}</p>
+                {post.locationName ? (
+                  <p className="truncate text-xs text-text-muted">
+                    {formatLocationDisplayName(post.locationName)}
+                  </p>
+                ) : null}
               </div>
             </Link>
           );

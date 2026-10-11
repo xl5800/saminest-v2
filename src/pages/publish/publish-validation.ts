@@ -10,10 +10,12 @@
  * - 9.5 contact_method 可选值：message / email / phone / wechat / other
  * 这里的前端校验必须和这些约束保持一致，不额外发明更严格或更宽松的规则。
  *
- * 发布页简化改版（任务卡 7）：发布表单不再有独立的"标题"输入框和"联系
- * 方式"字段——title 从描述的第一行派生（见 deriveTitleFromDescription），
- * 联系方式固定写站内私信（contact_method = 'message'、contact_value =
- * null）。CONTACT_METHOD_OPTIONS 仍然导出：找搭子发布页
+ * 发布页简化改版（任务卡 7）：发布表单不再有"联系方式"字段——联系方式
+ * 固定写站内私信（contact_method = 'message'、contact_value = null）。
+ * 标题曾经从描述第一行派生、整段原文存进 description（标题会在正文里重复
+ * 一次）；现在改回独立的 title 字段，跟社区发帖页共用"标题 + 正文合在一个
+ * 框里"的编辑区（components/title-body-editor.tsx），description 不再包含
+ * 标题行。CONTACT_METHOD_OPTIONS 仍然导出：找搭子发布页
  * （create-activity-page.tsx / activity-validation.ts）还在用它。
  */
 
@@ -51,31 +53,22 @@ export const TITLE_MAX_LENGTH = 120;
 export const DESCRIPTION_MAX_LENGTH = 10000;
 
 /**
- * 发布页简化改版（任务卡 7）：从描述内容派生 title——取 trim 之后的第一行
- * （按 \n / \r\n 分割），超过 TITLE_MAX_LENGTH 按字符（Unicode 码点，不是
- * UTF-16 单元，避免把 emoji 等代理对从中间截断成非法字符串）截断。先对
- * 整段描述 trim 再取第一行，所以描述开头的空行不会让标题变成空字符串。
- * 整段描述为空（或只有空白）时返回空字符串，由 validatePublishInput 拦住。
+ * 编辑模式回填用：任务卡 7 到"标题/正文分开"改版之间发布的帖子，description
+ * 保存的是完整原文，第一行就是 title（派生时 trim 过、可能被截断到
+ * TITLE_MAX_LENGTH）。现在标题有了独立输入框，回填正文时如果原样塞回去，
+ * 标题会在标题框和正文框里各出现一次，重新提交后正文里还是带着标题行。
+ * 所以：正文 trim 后的第一行（trim 后）等于 title 时去掉这一行（连同紧跟
+ * 着的空行）；不等于时（更早的历史帖子，title 单独填、不在 description
+ * 里）原样返回。
  */
-export function deriveTitleFromDescription(description: string): string {
-  const firstLine = description.trim().split(/\r?\n/)[0] ?? "";
-  return Array.from(firstLine.trim()).slice(0, TITLE_MAX_LENGTH).join("");
-}
-
-/**
- * 编辑模式回填描述框用：新格式的帖子（任务卡 7 之后发布的）description 保存
- * 的是用户输入的完整原文，第一行本来就等于 title（截断前）；但历史帖子的
- * title 是单独填的、不一定出现在 description 里。如果直接把历史帖子的
- * description 原样塞回描述框，提交时 title 会被重新派生成描述的第一行，
- * 悄悄把原标题替换掉。所以回填时：描述的第一行（派生规则同上）已经等于
- * 原标题就原样回填；否则把标题作为第一行拼在描述前面，这样重新提交后
- * 派生出来的 title 仍然是原标题。
- */
-export function composeEditableDescription(title: string, description: string): string {
-  if (deriveTitleFromDescription(description) === title) {
+export function stripTitleLineFromDescription(title: string, description: string): string {
+  const trimmed = description.trim();
+  const [firstLine = "", ...rest] = trimmed.split(/\r?\n/);
+  const firstLineTitle = Array.from(firstLine.trim()).slice(0, TITLE_MAX_LENGTH).join("");
+  if (!title || firstLineTitle !== title) {
     return description;
   }
-  return description.trim() ? `${title}\n${description}` : title;
+  return rest.join("\n").replace(/^\s*\n/, "").trim();
 }
 
 // 地区下拉框"其他"选项用的哨兵值，不会和 locations 表里的真实 UUID 冲突。
@@ -100,8 +93,9 @@ export interface PublishFormInput {
   categoryId: string;
   locationId: string;
   locationText: string;
-  /** 完整的描述原文——title 不再是独立字段，由这里派生（见
-   *  deriveTitleFromDescription），联系方式也不再是表单输入（固定站内私信）。 */
+  /** 标题输入框原文（标题 + 正文编辑区的第一行）。 */
+  title: string;
+  /** 正文输入框原文，不含标题。联系方式不是表单输入（固定站内私信）。 */
   description: string;
   price: string;
   /** 31 号卡新增：跟 price 一样是表单原始字符串，"可选、不强制"——非求租
@@ -145,7 +139,7 @@ export function validatePublishInput(
   const locationIdRaw = input.locationId.trim();
   const locationTextRaw = input.locationText.trim();
   const description = input.description.trim();
-  const title = deriveTitleFromDescription(description);
+  const title = input.title.trim();
   const priceRaw = input.price.trim();
   const posterAgeRaw = input.posterAge.trim();
   const posterGenderRaw = input.posterGender.trim();
@@ -187,13 +181,14 @@ export function validatePublishInput(
     locationText = locationTextRaw;
   }
 
-  // title 是从描述第一行派生的（派生时已经截断到 TITLE_MAX_LENGTH，所以不会
-  // 再有"标题太长"这种失败），派生结果为空说明整段描述是空的（或者只有
-  // 空白）——数据库 posts_title_length_check 要求 title 至少 1 个字符，这里
-  // 必须提前拦住，不能让空标题提交上去触发约束报错。description 自己的
-  // 下限已经放宽到 0（见文件顶部说明），不需要单独校验下限。
+  // 数据库 posts_title_length_check 要求 title 1–120 字符，这里提前拦住，
+  // 不让空标题提交上去触发约束报错。输入框本身有 maxLength，长度分支只是
+  // 兜底。description 的下限已经放宽到 0（见文件顶部说明），正文可以不写。
   if (title.length === 0) {
-    return fail("PUBLISH_CONTENT_REQUIRED", "请至少写点什么。");
+    return fail("PUBLISH_TITLE_REQUIRED", "请填写标题。");
+  }
+  if (Array.from(title).length > TITLE_MAX_LENGTH) {
+    return fail("PUBLISH_TITLE_LENGTH", `标题不能超过 ${TITLE_MAX_LENGTH} 字符。`);
   }
 
   if (description.length > DESCRIPTION_MAX_LENGTH) {

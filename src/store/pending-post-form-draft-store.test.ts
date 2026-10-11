@@ -16,9 +16,10 @@ const sampleFile = new File(["fake"], "photo.jpg", { type: "image/jpeg" });
 
 const sampleDraft = {
   categoryId: "cat-1",
-  // 发布页简化改版（任务卡 7）：草稿里不再有 title / contactMethod /
-  // contactValue（title 从 description 第一行派生，联系方式固定站内私信）。
-  description: "Sunny room\nNice and quiet.",
+  // 发布页简化改版（任务卡 7）：草稿里不再有 contactMethod / contactValue
+  // （联系方式固定站内私信）；title 是独立输入框，跟 description 一起存。
+  title: "Sunny room",
+  description: "Nice and quiet.",
   price: "1200",
   // 31 号卡新增字段——跟其它字段一样是原始表单字符串，一起参与下面这些
   // 用例的 round-trip 断言。

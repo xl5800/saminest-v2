@@ -4,9 +4,10 @@ import type { PostDetailImage } from "../repositories/posts-repository";
 
 export interface PendingPostFormDraft {
   categoryId: string;
-  /** 发布页简化改版（任务卡 7）：不再有独立的 title / contactMethod /
-   *  contactValue 字段——title 从 description 第一行派生，联系方式固定
-   *  站内私信，所以草稿里也不再存这三个值。 */
+  /** 发布页简化改版（任务卡 7）：不再有 contactMethod / contactValue
+   *  字段（联系方式固定站内私信）。title 后来又改回独立输入框（标题 +
+   *  正文编辑区），所以跟 description 一起存。 */
+  title: string;
   description: string;
   price: string;
   /** design_handoff_saminest_ios 第 6 项新增："城市/具体位置"这个补充说明

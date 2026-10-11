@@ -4,6 +4,7 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PostImagePicker } from "../../components/post-image-picker";
+import { TitleBodyEditor } from "../../components/title-body-editor";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName, formatStateLabelByCode } from "../../data/us-states";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
@@ -29,11 +30,12 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { getNextPostImageSortOrder } from "../../utils/post-image-sort-order";
 import {
-  composeEditableDescription,
   DESCRIPTION_MAX_LENGTH,
   GENDER_OPTIONS,
   LOCATION_TEXT_MAX_LENGTH,
   OTHER_LOCATION_VALUE,
+  stripTitleLineFromDescription,
+  TITLE_MAX_LENGTH,
   validatePublishInput
 } from "./publish-validation";
 
@@ -240,13 +242,12 @@ async function uploadAndInsertPostImages(input: {
  *   所在州 → 城市/具体位置；图片上传（含编辑模式下"已上传的图片"）从原来
  *   整个表单最后一个元素挪到分类下面第一个。
  * - 分类选择器从 <select> 改成并排的胶囊 tab（单选，role="radiogroup"）。
- * - 去掉独立的"标题"输入框：title 提交时从描述第一行派生（见
- *   publish-validation.ts 的 deriveTitleFromDescription），description
- *   列保存用户输入的完整原文，标题行在描述正文里会重复出现一次（刻意的
- *   简化）。整段描述为空时在前端拦住（"请至少写点什么"），不让空标题
- *   提交到数据库触发 posts_title_length_check。编辑模式回填描述框时，
- *   历史帖子（title 单独填、不在 description 里）会把原标题补成第一行，
- *   避免重新提交后 title 被悄悄换成描述的第一行。
+ * - 标题 + 描述：跟社区发帖页共用同一个"标题 + 正文合在一个框里"的编辑区
+ *   （components/title-body-editor.tsx），标题必填、正文可选，description
+ *   不再包含标题行（任务卡 7 曾经从描述第一行派生标题、整段原文存进
+ *   description，标题会在正文里重复一次，已改掉）。编辑模式回填时，那批
+ *   旧格式帖子正文第一行等于标题的会去掉这一行（见
+ *   stripTitleLineFromDescription）。
  * - 去掉"联系方式类型/内容"两个输入，提交时固定 contact_method =
  *   'message'、contact_value = null（见 validatePublishInput）。
  *
@@ -311,6 +312,7 @@ export function PublishPage() {
   // 值分开存——两者语义不一样（这个只管这一行按钮显示什么字，不参与校验/
   // 提交），见下面消费 pendingRegion 的 effect 和"地区"字段的渲染。
   const [regionLabel, setRegionLabel] = useState("");
+  const [title, setTitle] = useState(initialDraft?.title ?? "");
   const [description, setDescription] = useState(initialDraft?.description ?? "");
   const [price, setPrice] = useState(initialDraft?.price ?? "");
   // 31 号卡：求租分类专属字段，跟其它字段一样吃草稿回填——见组件顶部注释
@@ -392,11 +394,10 @@ export function PublishPage() {
           ? formatLocationDisplayName(existingPost.locationText)
           : ""
     );
-    // 发布页简化改版（任务卡 7）：没有独立的标题输入框了，title 提交时从
-    // 描述第一行派生——历史帖子的 title 不一定出现在 description 里，直接
-    // 回填 description 会让重新提交后的 title 悄悄变成描述第一行，所以
-    // 用 composeEditableDescription 把原标题补成第一行，见该函数注释。
-    setDescription(composeEditableDescription(existingPost.title, existingPost.description));
+    // 标题、正文分别回填；旧格式帖子（正文第一行就是标题）去掉正文里重复
+    // 的标题行，见 stripTitleLineFromDescription 注释。
+    setTitle(existingPost.title);
+    setDescription(stripTitleLineFromDescription(existingPost.title, existingPost.description));
     setPrice(existingPost.priceAmount !== null ? String(existingPost.priceAmount) : "");
     // 31 号卡：编辑模式回填这两个字段用帖子自己保存的 posterAge/
     // posterGender，不是当前 profiles.age——帖子已经有自己那份保存值，
@@ -515,6 +516,7 @@ export function PublishPage() {
     // 顶部注释。
     usePendingPostFormDraftStore.getState().saveDraft({
       categoryId,
+      title,
       description,
       price,
       // design_handoff_saminest_ios 第 6 项：locationText 现在是"城市/
@@ -583,6 +585,7 @@ export function PublishPage() {
       categoryId,
       locationId,
       locationText,
+      title,
       description,
       price,
       posterAge: isWantedCategory ? posterAge : "",
@@ -745,8 +748,9 @@ export function PublishPage() {
             {/* 发布页简化改版（任务卡 7）：整体顺序是 分类 tab → 图片 → 描述 →
                 （求租）性别/年龄 → 价格 → 所在州 → 城市/具体位置。图片从
                 原来整个表单的最后一个元素挪到分类下面第一个；独立的"标题"
-                输入框、"联系方式类型/内容"都去掉了（title 提交时从描述第
-                一行派生，联系方式固定站内私信，见 publish-validation.ts）。
+                输入框、"联系方式类型/内容"都去掉了（联系方式固定站内私信，
+                见 publish-validation.ts）；标题后来改成跟社区发帖页同款的
+                "标题 + 正文"编辑区，见下面 TitleBodyEditor。
 
                 全 App 视觉 Token 体系（第二批）：这个表单里所有输入类控件的
                 focus 态从改动前的细描边 `focus:ring-1 focus:ring-primary`
@@ -830,23 +834,20 @@ export function PublishPage() {
               <PostImagePicker value={images} onChange={setImages} />
             </div>
 
-            {/* 单个"描述"输入框：第一行会在提交时被当作标题（见
-                publish-validation.ts 的 deriveTitleFromDescription），整段
-                原文原样存进 description 列，标题行会在描述正文里重复出现
-                一次——刻意的简化，换取不用处理"剔除第一行后描述变空"这个
-                边界情况。placeholder 里提示这个规则，不再另起一个"标题"
-                label。上限沿用 DESCRIPTION_MAX_LENGTH，没有下限（整段为空
-                由校验函数提示"请至少写点什么"）。 */}
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">描述</span>
-              <textarea
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                maxLength={DESCRIPTION_MAX_LENGTH}
-                placeholder="第一行将作为标题…详细说说你的帖子"
-                className="min-h-[160px] w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
-              />
-            </label>
+            {/* 标题 + 描述合在同一块编辑区里，跟社区发帖页共用
+                TitleBodyEditor（视觉、回车跳正文、正文自动撑高都一样）。
+                标题必填（posts_title_length_check 要求 1–120 字），正文可选；
+                标题不再从正文第一行派生，所以不会在正文里重复出现。 */}
+            <TitleBodyEditor
+              title={title}
+              onTitleChange={setTitle}
+              body={description}
+              onBodyChange={setDescription}
+              titleMaxLength={TITLE_MAX_LENGTH}
+              bodyMaxLength={DESCRIPTION_MAX_LENGTH}
+              titleAriaLabel="标题"
+              bodyAriaLabel="描述"
+            />
 
             {isWantedCategory ? (
               <>
