@@ -1,11 +1,15 @@
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useMyCommunitiesQuery, useCommunityPostsInfiniteQuery, navigateMock } = vi.hoisted(() => ({
-  useMyCommunitiesQuery: vi.fn(),
-  useCommunityPostsInfiniteQuery: vi.fn(),
-  navigateMock: vi.fn()
-}));
+const { useMyCommunitiesQuery, useCommunityPostsInfiniteQuery, navigateMock, hideSplashScreen } =
+  vi.hoisted(() => ({
+    useMyCommunitiesQuery: vi.fn(),
+    useCommunityPostsInfiniteQuery: vi.fn(),
+    navigateMock: vi.fn(),
+    hideSplashScreen: vi.fn()
+  }));
+
+vi.mock("../../app/splash-screen", () => ({ hideSplashScreen }));
 
 vi.mock("../../features/community/use-my-communities-query", () => ({ useMyCommunitiesQuery }));
 vi.mock("../../features/community/use-community-posts-query", () => ({
@@ -85,6 +89,7 @@ describe("HomePage (community aggregate feed)", () => {
     navigateMock.mockReset();
     useMyCommunitiesQuery.mockReset();
     useCommunityPostsInfiniteQuery.mockReset();
+    hideSplashScreen.mockReset();
 
     // 默认：游客，没有已加入列表（useMyCommunitiesQuery 在没有 userId 时不发请求）。
     useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
@@ -226,6 +231,41 @@ describe("HomePage (community aggregate feed)", () => {
 
       expect(screen.queryByRole("region", { name: "我的社区" })).not.toBeInTheDocument();
       expect(screen.queryByText("加入更多")).not.toBeInTheDocument();
+    });
+  });
+
+  // 启动图：首页第一屏帖子请求结束（成功或失败）才收起，还在加载时不收起，
+  // 见 app/splash-screen.ts。
+  describe("splash screen", () => {
+    it("does not hide the splash screen while the first page of posts is still loading", () => {
+      useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
+      renderWithProviders(<HomePage />);
+
+      expect(hideSplashScreen).not.toHaveBeenCalled();
+    });
+
+    it("hides the splash screen once the first page of posts has loaded", () => {
+      renderWithProviders(<HomePage />);
+
+      expect(hideSplashScreen).toHaveBeenCalled();
+    });
+
+    it("hides the splash screen when the posts request fails, so the user is not stuck on it", () => {
+      useCommunityPostsInfiniteQuery.mockReturnValue(
+        postsResult({ data: undefined, isPending: true, isError: true })
+      );
+      renderWithProviders(<HomePage />);
+
+      expect(hideSplashScreen).toHaveBeenCalled();
+    });
+
+    it("keeps the splash screen while a logged-in user's joined-communities list is still loading (feed scope unknown)", () => {
+      loginAs("user-1");
+      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
+      useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
+      renderWithProviders(<HomePage />);
+
+      expect(hideSplashScreen).not.toHaveBeenCalled();
     });
   });
 

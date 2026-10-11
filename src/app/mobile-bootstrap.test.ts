@@ -5,13 +5,15 @@ const {
   setOverlaysWebViewMock,
   setStyleMock,
   hideMock,
-  addListenerMock
+  addListenerMock,
+  startSplashScreenFallbackMock
 } = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(),
   setOverlaysWebViewMock: vi.fn(),
   setStyleMock: vi.fn(),
   hideMock: vi.fn(),
-  addListenerMock: vi.fn()
+  addListenerMock: vi.fn(),
+  startSplashScreenFallbackMock: vi.fn()
 }));
 
 vi.mock("@capacitor/core", () => ({
@@ -26,6 +28,10 @@ vi.mock("@capacitor/splash-screen", () => ({
 vi.mock("@capacitor/status-bar", () => ({
   StatusBar: { setOverlaysWebView: setOverlaysWebViewMock, setStyle: setStyleMock },
   Style: { Light: "LIGHT" }
+}));
+
+vi.mock("./splash-screen", () => ({
+  startSplashScreenFallback: startSplashScreenFallbackMock
 }));
 
 import { initializeMobileShell } from "./mobile-bootstrap";
@@ -49,9 +55,12 @@ describe("initializeMobileShell", () => {
     expect(setStyleMock).not.toHaveBeenCalled();
     expect(addListenerMock).not.toHaveBeenCalled();
     expect(hideMock).not.toHaveBeenCalled();
+    expect(startSplashScreenFallbackMock).not.toHaveBeenCalled();
   });
 
-  it("still sets up the status bar and hides the splash screen in a native shell (unchanged by this task)", async () => {
+  // 启动图不再在这里立刻收起：只开始兜底计时，真正收起等首页第一屏数据
+  // （见 splash-screen.ts），兜底计时本身的行为在 splash-screen.test.ts 里测。
+  it("sets up the status bar and starts the splash fallback timer, without hiding the splash screen right away", async () => {
     isNativePlatformMock.mockReturnValue(true);
     addListenerMock.mockResolvedValue({ remove: vi.fn() });
 
@@ -59,7 +68,8 @@ describe("initializeMobileShell", () => {
 
     expect(setOverlaysWebViewMock).toHaveBeenCalledWith({ overlay: true });
     expect(setStyleMock).toHaveBeenCalledWith({ style: "LIGHT" });
-    expect(hideMock).toHaveBeenCalledTimes(1);
+    expect(hideMock).not.toHaveBeenCalled();
+    expect(startSplashScreenFallbackMock).toHaveBeenCalledTimes(1);
   });
 
   it("registers a keyboardDidHide listener (not keyboardWillHide) in a native shell", async () => {

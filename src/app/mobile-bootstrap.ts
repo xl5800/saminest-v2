@@ -1,14 +1,16 @@
 import { Capacitor } from "@capacitor/core";
 import { Keyboard } from "@capacitor/keyboard";
-import { SplashScreen } from "@capacitor/splash-screen";
 import { StatusBar, Style } from "@capacitor/status-bar";
+
+import { startSplashScreenFallback } from "./splash-screen";
 
 /**
  * 原生壳启动初始化：设置状态栏样式（沉浸式，网页内容延伸到状态栏底下，
  * 具体视觉上的"让内容不被状态栏挡住"改由 index.css 的
  * padding-top: env(safe-area-inset-top) 负责，见下面 overlay 那行的
  * 注释）+ 系统键盘收起时强制重排（见下面 Keyboard.addListener 那段的
- * 注释）+ 网页资源加载完成后隐藏启动图。
+ * 注释）+ 启动图兜底计时（启动图不再在这里立刻收起，改成首页第一屏数据
+ * 返回后再收起，见 splash-screen.ts）。
  *
  * iOS 沉浸式状态栏 + 安全区适配任务卡：这里原来是 overlay: false（网页
  * 内容不从状态栏底下开始画），真机上会导致状态栏区域露出原生层的黑色
@@ -66,5 +68,7 @@ export async function initializeMobileShell(): Promise<void> {
     window.scrollTo(0, 0);
   });
 
-  await SplashScreen.hide();
+  // 启动图不在这里收起：等首页第一屏数据返回（或登录状态恢复后打开的是别的
+  // 页面）再收起，这里只开始最长等待时间的兜底计时，见 splash-screen.ts。
+  startSplashScreenFallback();
 }

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { hideSplashScreen } from "../../app/splash-screen";
+
 import { AppMenuDrawer } from "../../components/app-menu-drawer";
 import { CommunityPostCard } from "../../components/community-post-card";
 import { PublishActionSheet } from "../../components/publish-action-sheet";
@@ -79,6 +81,15 @@ export function HomePage() {
 
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useCommunityPostsInfiniteQuery(scope);
+
+  // 启动图：首页第一屏帖子请求结束（成功或失败）再收起，避免启动图一闪而过
+  // 之后看到骨架屏，见 app/splash-screen.ts。之后再进首页时这里重复调用
+  // 也没关系，hideSplashScreen 只有第一次生效。
+  useEffect(() => {
+    if (!isPending || isError) {
+      hideSplashScreen();
+    }
+  }, [isPending, isError]);
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
