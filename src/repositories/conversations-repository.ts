@@ -14,8 +14,10 @@ const ACCOUNT_RESTRICTED_ERROR_TEXT =
 const ACCOUNT_RESTRICTED_MESSAGE =
   "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。";
 
-// create_profile_conversation() 达到每日新建会话上限时抛出的异常文本，
-// 跟 supabase/migrations/20260818070309_create_profile_conversation_function.sql
+// create_profile_conversation() / create_direct_conversation() 达到每日新建
+// 会话上限时抛出的异常文本，跟
+// supabase/migrations/20260818070309_create_profile_conversation_function.sql、
+// 20261011150000_restore_restricted_check_in_messaging.sql
 // 里 `raise exception 'daily new conversation limit reached'` 逐字一致——
 // 这段英文本身不是给用户看的，纯粹是给这里的 includes() 判断用的标识符。
 const DAILY_LIMIT_ERROR_TEXT = "daily new conversation limit reached";
@@ -337,6 +339,11 @@ export async function createDirectConversation(
   if (error) {
     if (error.message?.includes(ACCOUNT_RESTRICTED_ERROR_TEXT)) {
       throw new AppError(ACCOUNT_RESTRICTED_MESSAGE, "ACCOUNT_RESTRICTED", error);
+    }
+    // 20261011150000 迁移给"联系卖家"也加了每日新建会话上限（只算新建，
+    // 已有会话不占额度），跟个人主页入口用同一段识别文本和提示文案。
+    if (error.message?.includes(DAILY_LIMIT_ERROR_TEXT)) {
+      throw new AppError(DAILY_LIMIT_MESSAGE, "CONVERSATION_DAILY_LIMIT_REACHED", error);
     }
     throw new AppError(error.message, "CONVERSATION_CREATE_FAILED", error);
   }

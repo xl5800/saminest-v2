@@ -64,10 +64,12 @@ export function ContactSellerButton({ postId, label, className }: ContactSellerB
       onError: (mutationError) => {
         // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：账号
         // 受限是一个明确、可操作的失败原因（重试没有用），跟其它未知失败
-        // 原因共用一条"请稍后重试"文案会误导用户。
+        // 原因共用一条"请稍后重试"文案会误导用户。每日新建会话上限同理
+        // （明天才能再联系新的卖家，重试没用）。
         if (
           mutationError instanceof AppError &&
-          mutationError.code === "ACCOUNT_RESTRICTED"
+          (mutationError.code === "ACCOUNT_RESTRICTED" ||
+            mutationError.code === "CONVERSATION_DAILY_LIMIT_REACHED")
         ) {
           setError(mutationError.message);
         } else {

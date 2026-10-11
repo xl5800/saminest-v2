@@ -1630,6 +1630,10 @@ export type Database = {
         Args: { target_activity_id: string }
         Returns: boolean
       }
+      is_support_conversation: {
+        Args: { target_conversation_id: string }
+        Returns: boolean
+      }
       list_profiles_for_admin: {
         Args: { search_term?: string }
         Returns: {

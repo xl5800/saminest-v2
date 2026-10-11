@@ -103,6 +103,18 @@ describe("createDirectConversation", () => {
     });
   });
 
+  it("throws a distinct daily-limit AppError with a friendly message when too many new conversations were started today", async () => {
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "daily new conversation limit reached" }
+    });
+
+    await expect(createDirectConversation("post-1")).rejects.toMatchObject({
+      code: "CONVERSATION_DAILY_LIMIT_REACHED",
+      message: "你今天主动私信的新用户数量已经达到上限，请明天再试。"
+    });
+  });
+
   it("throws an AppError when the RPC succeeds but returns no conversation id", async () => {
     rpcMock.mockResolvedValue({ data: null, error: null });
 

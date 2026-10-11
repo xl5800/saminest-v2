@@ -179,6 +179,28 @@ describe("ContactSellerButton", () => {
     );
   });
 
+  it("shows the daily-limit message when the mutation rejects with CONVERSATION_DAILY_LIMIT_REACHED", () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+
+    renderWithProviders(<ContactSellerButton postId="post-1" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "联系发布者" }));
+
+    const { onError } = mutateMock.mock.calls[0][1];
+    act(() => {
+      onError(
+        new AppError(
+          "你今天主动私信的新用户数量已经达到上限，请明天再试。",
+          "CONVERSATION_DAILY_LIMIT_REACHED"
+        )
+      );
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "你今天主动私信的新用户数量已经达到上限，请明天再试。"
+    );
+  });
+
   it("disables the button while the mutation is pending, preventing a double submit", () => {
     useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
     useCreateDirectConversationMutation.mockReturnValue({
