@@ -69,6 +69,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 });
 
 import { useAuthStore } from "../../store/auth-store";
+import { AppError } from "../../utils/app-error";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { CommunityFeedPage } from "./community-feed-page";
 
@@ -584,6 +585,23 @@ describe("CommunityFeedPage", () => {
     renderFeed();
 
     expect(screen.getByRole("alert")).toHaveTextContent("社区加载失败，请稍后重试。");
+  });
+
+  // 社区被管理员关闭（或 slug 不存在）时，提示"不存在或已关闭"，不是
+  // "加载失败，请稍后重试"——重试没用。
+  it("tells the user the community does not exist or was closed when it is not found", () => {
+    useCommunityBySlugQuery.mockReturnValue({
+      data: undefined,
+      isError: true,
+      error: new AppError("社区不存在或已关闭。", "COMMUNITY_NOT_FOUND")
+    });
+    useCommunityPostsInfiniteQuery.mockReturnValue(
+      postsResult({ data: undefined, isPending: true })
+    );
+
+    renderFeed();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("这个社区不存在或已关闭。");
   });
 
   it("shows the empty state with a link to the create page", () => {

@@ -81,6 +81,17 @@ beforeEach(() => {
 });
 
 describe("getCommunityBySlug", () => {
+  it("throws COMMUNITY_NOT_FOUND when no row comes back (slug does not exist, or the community was closed)", async () => {
+    singleMock.mockResolvedValue({
+      data: null,
+      error: { code: "PGRST116", message: "JSON object requested, multiple (or no) rows returned" }
+    });
+
+    await expect(getCommunityBySlug("closed")).rejects.toMatchObject({
+      code: "COMMUNITY_NOT_FOUND"
+    });
+  });
+
   it("queries communities by slug and maps the row", async () => {
     singleMock.mockResolvedValue({
       data: {
@@ -993,6 +1004,40 @@ describe("listMyCommunityRequests", () => {
 });
 
 describe("listCommunityRequestsForAdmin", () => {
+  it("includes official/seeded communities (no created_by filter) in the 已通过 / 已关闭 management views, with counts", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "c-1",
+          name: "DMV 华人社区",
+          slug: "dmv",
+          description: null,
+          state_codes: ["DC"],
+          status: "active",
+          rejection_reason: null,
+          created_at: "2026-10-01T00:00:00.000Z",
+          creator: null,
+          is_official: true,
+          member_count: 30,
+          community_posts: [{ count: 11 }]
+        }
+      ],
+      error: null
+    });
+
+    const result = await listCommunityRequestsForAdmin("active");
+
+    expect(queryBuilder.not).not.toHaveBeenCalled();
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "active");
+    expect(result[0]).toMatchObject({
+      id: "c-1",
+      creatorName: null,
+      isOfficial: true,
+      memberCount: 30,
+      postCount: 11
+    });
+  });
+
   it("lists only user-created communities, filtered by status, oldest first, with the creator name", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [

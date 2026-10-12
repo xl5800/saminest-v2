@@ -32,7 +32,16 @@ const samplePost = {
   title: "Sunny room near metro",
   createdAt: "2026-07-01T00:00:00.000Z",
   authorName: "Alice",
-  categoryName: "租房"
+  categoryName: "租房",
+  status: "pending",
+  rejectionReason: null,
+  archiveReason: null,
+  description: "步行 5 分钟到地铁站",
+  priceAmount: 1200,
+  priceLabel: null,
+  currencyCode: "USD",
+  locationName: "Rockville",
+  imageUrls: ["https://img.example.com/1.jpg", "https://img.example.com/2.jpg"]
 };
 
 describe("AdminPendingPostsPage", () => {
@@ -81,6 +90,46 @@ describe("AdminPendingPostsPage", () => {
     const row = item.closest("li");
     expect(row).toHaveTextContent("Alice");
     expect(row).toHaveTextContent("租房");
+  });
+
+  // 审核卡片：照片、价格、描述、地区、查看详情——管理员审核内容本身需要
+  // 看到的东西，之前只有标题/作者/分类/时间。
+  it("shows every image, the price, description, location and a link to the post detail page", async () => {
+    listPendingPosts.mockResolvedValue([samplePost]);
+
+    renderWithProviders(<AdminPendingPostsPage />);
+
+    const row = (await screen.findByText("Sunny room near metro")).closest("li") as HTMLElement;
+    const images = row.querySelectorAll("img");
+    expect(images).toHaveLength(2);
+    expect(images[0]).toHaveAttribute("src", "https://img.example.com/1.jpg");
+    expect(row).toHaveTextContent("USD 1,200");
+    expect(row).toHaveTextContent("步行 5 分钟到地铁站");
+    expect(row).toHaveTextContent("Rockville");
+    expect(screen.getByRole("link", { name: "查看详情" })).toHaveAttribute("href", "/post/post-1");
+  });
+
+  it("opens the full-screen image viewer at the tapped image", async () => {
+    listPendingPosts.mockResolvedValue([samplePost]);
+
+    renderWithProviders(<AdminPendingPostsPage />);
+    await screen.findByText("Sunny room near metro");
+
+    fireEvent.click(screen.getByRole("button", { name: "查看第 2 张图片" }));
+
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+  });
+
+  it("shows a '没有图片' hint and no price row when the post has neither", async () => {
+    listPendingPosts.mockResolvedValue([
+      { ...samplePost, imageUrls: [], priceAmount: null, priceLabel: null }
+    ]);
+
+    renderWithProviders(<AdminPendingPostsPage />);
+
+    const row = (await screen.findByText("Sunny room near metro")).closest("li") as HTMLElement;
+    expect(row).toHaveTextContent("没有图片");
+    expect(row).not.toHaveTextContent("USD");
   });
 
   it("removes the row on a successful approve", async () => {

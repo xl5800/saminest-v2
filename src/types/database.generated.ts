@@ -1327,6 +1327,10 @@ export type Database = {
         Args: { target_community_id: string }
         Returns: undefined
       }
+      admin_archive_community: {
+        Args: { archive_note: string; target_community_id: string }
+        Returns: undefined
+      }
       admin_archive_community_post: {
         Args: { archive_note: string; target_community_post_id: string }
         Returns: undefined
@@ -1349,6 +1353,20 @@ export type Database = {
       }
       admin_reject_community: {
         Args: { rejection_note: string; target_community_id: string }
+        Returns: undefined
+      }
+      admin_restore_community: {
+        Args: { target_community_id: string }
+        Returns: undefined
+      }
+      admin_update_community: {
+        Args: {
+          community_description: string
+          community_is_official: boolean
+          community_name: string
+          community_state_codes: string[]
+          target_community_id: string
+        }
         Returns: undefined
       }
       admin_list_activities: {

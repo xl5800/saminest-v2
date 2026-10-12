@@ -113,12 +113,14 @@ export interface PostListProps {
  * Facebook Marketplace 风格改版（取代上面 19 号卡的 4:5 图片 + 白底卡片、
  * 以及"边框+投影""rounded-card-lg""bg-card-white"这几段对 grid variant
  * 的描述，wanted variant 不受影响）：
- * - 图片改成 1:1 方图（aspect-square，rounded-lg 小圆角），仍然是等高对齐
+ * - 图片改成 1:1 方图（aspect-square，4px 小圆角——rounded-lg 的 8px
+ *   看起来太圆润，按 Marketplace 收成接近直角），仍然是等高对齐
  *   的两列网格，不做瀑布流；
  * - 卡片去掉白底/边框/投影/大圆角，文字直接排在图片下方，列间距收紧
- *   （gap-x-2），行间距 gap-y-4；没有卡片边框之后文字不能贴着屏幕边，
- *   网格自己带 px-3 左右留白（跟 wanted variant 自带 px-4 是同一个做法；
- *   发帖者主页外层已经有 px-4，那边用 -mx-3 抵消，保持跟"作品"标题对齐）；
+ *   （gap-x-1，4px），行间距 gap-y-3；图片基本贴边铺满，四周留白收紧，
+ *   文字区左右 px-0.5 内缩 2px，不贴图片边；
+ *   网格自己带 px-1 左右留白（跟 wanted variant 自带 px-4 是同一个做法；
+ *   发帖者主页外层已经有 px-4，那边用 -mx-1 抵消，保持跟"作品"标题对齐）；
  * - 文字顺序：价格（黑色粗体，最醒目）→ 标题（单行省略）→ 地区（灰色
  *   小字，复用 formatLocationDisplayName）。价格未填写时价格行整个不渲染
  *   （isPriceUnset 判断不变），标题顶上来成为第一行；没有地区时地区行也
@@ -217,11 +219,11 @@ export function PostList({
     return (
       <div role="status">
         <span className="sr-only">加载中…</span>
-        <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-3 pt-3">
+        <div className="grid grid-cols-2 gap-x-1 gap-y-3 px-1 pt-1">
           {Array.from({ length: GRID_SKELETON_COUNT }).map((_, index) => (
             <div key={index}>
-              <Skeleton className="aspect-square w-full rounded-lg" />
-              <div className="mt-1.5 space-y-1">
+              <Skeleton className="aspect-square w-full rounded-[4px]" />
+              <div className="mt-1 space-y-1 px-0.5">
                 <Skeleton className="h-4 w-2/5" />
                 <Skeleton className="h-4 w-4/5" />
               </div>
@@ -326,7 +328,7 @@ export function PostList({
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-x-2 gap-y-4 px-3 pt-3">
+      <div className="grid grid-cols-2 gap-x-1 gap-y-3 px-1 pt-1">
         {posts.map((post) => {
           const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
           return (
@@ -337,10 +339,10 @@ export function PostList({
               <PostThumbnail
                 coverImageUrl={post.coverImageUrl}
                 categoryName={post.categoryName}
-                sizeClassName="aspect-square w-full rounded-lg"
+                sizeClassName="aspect-square w-full rounded-[4px]"
                 alt={post.title}
               />
-              <div className="mt-1.5 space-y-0.5">
+              <div className="mt-1 space-y-0.5 px-0.5">
                 {priceUnset ? null : (
                   <p className="truncate text-base font-bold text-text">
                     {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}

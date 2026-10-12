@@ -569,9 +569,9 @@ export function UserProfilePage() {
               不管是不是自己的主页都展示这个区块，纯展示内容，不是一个
               需要区分身份的操作入口。 */}
           <h2 className="mt-6 text-lg font-bold text-text">作品</h2>
-          {/* PostList 的网格自带 px-3 左右留白（见 post-list.tsx 顶部注释），
-              这里外层已经有 px-4，用 -mx-3 抵消，让图片跟"作品"标题左右对齐。 */}
-          <div className="-mx-3 mt-3">
+          {/* PostList 的网格自带 px-1 左右留白（见 post-list.tsx 顶部注释），
+              这里外层已经有 px-4，用 -mx-1 抵消，让图片跟"作品"标题左右对齐。 */}
+          <div className="-mx-1 mt-3">
             <PostList authorId={userId} excludeCategoryId={wantedCategoryId} />
           </div>
         </div>

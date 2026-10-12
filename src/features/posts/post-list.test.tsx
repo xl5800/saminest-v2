@@ -176,7 +176,7 @@ describe("PostList", () => {
     renderWithProviders(<PostList />);
 
     const img = await screen.findByRole("img");
-    expect(img).toHaveClass("aspect-square", "rounded-lg");
+    expect(img).toHaveClass("aspect-square", "rounded-[4px]");
 
     const link = screen.getByRole("link");
     expect(link).not.toHaveClass("border");

@@ -1,10 +1,13 @@
-import { X } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link } from "react-router-dom";
 
+import {
+  COMMUNITY_NAME_MAX_LENGTH,
+  COMMUNITY_NAME_MIN_LENGTH,
+  CommunityFormFields
+} from "../../components/community-form-fields";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
-import { US_STATES, formatStateLabelByCode } from "../../data/us-states";
 import { useMyCommunityRequestsQuery } from "../../features/community/use-my-community-requests-query";
 import { useRequestCommunityMutation } from "../../features/community/use-request-community-mutation";
 import type { CommunityRequest } from "../../repositories/community-repository";
@@ -12,12 +15,15 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { formatPublishedAt } from "../../utils/format";
 
-export const COMMUNITY_NAME_MIN_LENGTH = 2;
-export const COMMUNITY_NAME_MAX_LENGTH = 30;
-export const COMMUNITY_DESCRIPTION_MAX_LENGTH = 200;
+// 长度常量跟表单字段一起挪到了 components/community-form-fields.tsx（后台
+// 编辑社区也用同一套字段），这里继续导出，保持原有引用方式不变。
+export {
+  COMMUNITY_DESCRIPTION_MAX_LENGTH,
+  COMMUNITY_NAME_MAX_LENGTH,
+  COMMUNITY_NAME_MIN_LENGTH
+} from "../../components/community-form-fields";
 
 // DMV 三个州放在最前面做成快捷选项；其余州从下拉框里添加。
-const QUICK_STATE_CODES = ["DC", "MD", "VA"];
 
 const NAME_LENGTH_MESSAGE = `社区名称需要 ${COMMUNITY_NAME_MIN_LENGTH}-${COMMUNITY_NAME_MAX_LENGTH} 个字。`;
 const STATE_REQUIRED_MESSAGE = "请至少选择一个覆盖的州。";
@@ -65,19 +71,6 @@ export function CreateCommunityPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const pendingRequest = requests?.find((request) => request.status === "pending");
-  const otherStates = US_STATES.filter((state) => !QUICK_STATE_CODES.includes(state.code));
-  const extraSelected = stateCodes.filter((code) => !QUICK_STATE_CODES.includes(code));
-
-  function toggleState(code: string): void {
-    setStateCodes((current) =>
-      current.includes(code) ? current.filter((value) => value !== code) : [...current, code]
-    );
-  }
-
-  function addState(code: string): void {
-    if (!code) return;
-    setStateCodes((current) => (current.includes(code) ? current : [...current, code]));
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -118,7 +111,6 @@ export function CreateCommunityPage() {
     }
   }
 
-  const chipBase = "flex h-9 items-center rounded-full px-4 text-sm whitespace-nowrap";
 
   function renderForm() {
     if (requestsPending) {
@@ -146,89 +138,14 @@ export function CreateCommunityPage() {
           </p>
         ) : null}
 
-        <label className="mb-4 block">
-          <span className="mb-2 flex items-center justify-between text-xs font-semibold text-text">
-            社区名称
-            <span className="font-normal text-text-subtle">
-              {name.trim().length}/{COMMUNITY_NAME_MAX_LENGTH}
-            </span>
-          </span>
-          <input
-            type="text"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={COMMUNITY_NAME_MAX_LENGTH}
-            placeholder="比如：DMV 华人羽毛球"
-            className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-placeholder focus:outline-none focus:ring-4 focus:ring-primary-light"
-          />
-        </label>
-
-        <label className="mb-4 block">
-          <span className="mb-2 flex items-center justify-between text-xs font-semibold text-text">
-            简介（可选）
-            <span className="font-normal text-text-subtle">
-              {description.trim().length}/{COMMUNITY_DESCRIPTION_MAX_LENGTH}
-            </span>
-          </span>
-          <textarea
-            value={description}
-            onChange={(event) => setDescription(event.target.value)}
-            maxLength={COMMUNITY_DESCRIPTION_MAX_LENGTH}
-            rows={3}
-            placeholder="这个社区聊什么？"
-            className="w-full resize-none rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-placeholder focus:outline-none focus:ring-4 focus:ring-primary-light"
-          />
-        </label>
-
-        <fieldset className="mb-6">
-          <legend className="mb-2 text-xs font-semibold text-text">覆盖的州（至少选一个）</legend>
-          <div className="flex flex-wrap gap-2">
-            {QUICK_STATE_CODES.map((code) => {
-              const selected = stateCodes.includes(code);
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => toggleState(code)}
-                  className={`${chipBase} ${
-                    selected
-                      ? "bg-primary font-semibold text-white"
-                      : "border border-border bg-card text-text-muted"
-                  }`}
-                >
-                  {formatStateLabelByCode(code)}
-                </button>
-              );
-            })}
-            {extraSelected.map((code) => (
-              <span key={code} className={`${chipBase} gap-1 bg-primary font-semibold text-white`}>
-                {formatStateLabelByCode(code)}
-                <button
-                  type="button"
-                  aria-label={`移除 ${formatStateLabelByCode(code)}`}
-                  onClick={() => toggleState(code)}
-                  className="-mr-1 flex h-5 w-5 items-center justify-center rounded-full"
-                >
-                  <X size={14} aria-hidden="true" />
-                </button>
-              </span>
-            ))}
-          </div>
-          <select
-            aria-label="添加其他州"
-            value=""
-            onChange={(event) => addState(event.target.value)}
-            className="mt-3 w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
-          >
-            <option value="">＋ 添加其他州</option>
-            {otherStates.map((state) => (
-              <option key={state.code} value={state.code} disabled={stateCodes.includes(state.code)}>
-                {formatStateLabelByCode(state.code)}
-              </option>
-            ))}
-          </select>
-        </fieldset>
+        <CommunityFormFields
+          name={name}
+          onNameChange={setName}
+          description={description}
+          onDescriptionChange={setDescription}
+          stateCodes={stateCodes}
+          onStateCodesChange={setStateCodes}
+        />
 
         <button
           type="submit"

@@ -626,29 +626,40 @@ describe("listPendingPosts", () => {
     maybeSingleMock.mockReset();
   });
 
-  it("filters to pending, non-deleted posts ordered by created_at descending, with a nested author/category select", async () => {
+  it("filters to pending, non-deleted posts ordered by created_at descending, with nested author/category/location/images selects", async () => {
     overrideTypesMock.mockResolvedValue({ data: [], error: null });
 
     await listPendingPosts();
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, created_at, author:profiles(display_name), category:categories(name_zh)"
+      "id, title, description, price_amount, price_label, currency_code, location_text, created_at, author:profiles(display_name), category:categories(name_zh), location:locations(name), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "pending");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
     expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
-  it("maps rows to AdminPostListItem including author and category names", async () => {
+  it("maps rows to AdminPendingPostItem including author/category names, price, location and all active images in sort order", async () => {
     overrideTypesMock.mockResolvedValue({
       data: [
         {
           id: "post-1",
           title: "Sunny room",
+          description: "近地铁",
+          price_amount: 1200,
+          price_label: null,
+          currency_code: "USD",
+          location_text: null,
           created_at: "2026-07-01T00:00:00.000Z",
           author: { display_name: "Alice" },
-          category: { name_zh: "租房" }
+          category: { name_zh: "租房" },
+          location: { name: "Rockville" },
+          post_images: [
+            { public_url: "https://img/2.jpg", sort_order: 2, deleted_at: null },
+            { public_url: "https://img/deleted.jpg", sort_order: 0, deleted_at: "2026-07-02T00:00:00Z" },
+            { public_url: "https://img/1.jpg", sort_order: 1, deleted_at: null }
+          ]
         }
       ],
       error: null
@@ -666,7 +677,13 @@ describe("listPendingPosts", () => {
         status: "pending",
         // 待审核的帖子不可能已经被驳回或下架过，这两个字段恒为 null。
         rejectionReason: null,
-        archiveReason: null
+        archiveReason: null,
+        description: "近地铁",
+        priceAmount: 1200,
+        priceLabel: null,
+        currencyCode: "USD",
+        locationName: "Rockville",
+        imageUrls: ["https://img/1.jpg", "https://img/2.jpg"]
       }
     ]);
   });

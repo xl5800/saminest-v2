@@ -14,6 +14,7 @@ import { useSearchCommunityPostsQuery } from "../../features/community/use-searc
 import { useJoinCommunityMutation } from "../../features/community/use-join-community-mutation";
 import { useLeaveCommunityMutation } from "../../features/community/use-leave-community-mutation";
 import { useAuthStore } from "../../store/auth-store";
+import { AppError } from "../../utils/app-error";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 
@@ -74,7 +75,13 @@ export function CommunityFeedPage() {
   const userId = session?.user.id;
 
   const { slug } = useParams<{ slug: string }>();
-  const { data: community, isError: communityError } = useCommunityBySlugQuery(slug);
+  const {
+    data: community,
+    isError: communityError,
+    error: communityFetchError
+  } = useCommunityBySlugQuery(slug);
+  const communityNotFound =
+    communityFetchError instanceof AppError && communityFetchError.code === "COMMUNITY_NOT_FOUND";
   const communityId = community?.id;
 
   const joinCommunity = useJoinCommunityMutation();
@@ -270,6 +277,9 @@ export function CommunityFeedPage() {
   }
 
   function renderContent() {
+    if (communityNotFound) {
+      return <p role="alert">这个社区不存在或已关闭。</p>;
+    }
     if (communityError || isError) {
       return <p role="alert">社区加载失败，请稍后重试。</p>;
     }

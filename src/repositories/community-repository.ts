@@ -62,6 +62,12 @@ export async function getCommunityBySlug(slug: string): Promise<Community> {
     .single();
 
   if (error) {
+    // PGRST116 = .single() 没查到行：slug 不存在，或者社区已被管理员关闭
+    // （status = archived，RLS 不对普通用户放行）。单独一个错误码，社区页
+    // 据此提示"不存在或已关闭"，而不是"加载失败，请稍后重试"（重试没用）。
+    if (error.code === "PGRST116") {
+      throw new AppError("社区不存在或已关闭。", "COMMUNITY_NOT_FOUND", error);
+    }
     throw new AppError(error.message, "COMMUNITY_FETCH_FAILED", error);
   }
   return mapCommunityRow(data);
@@ -227,7 +233,12 @@ export interface CommunityRequest {
 }
 
 export interface AdminCommunityRequest extends CommunityRequest {
-  creatorName: string;
+  /** 申请人昵称；官方/种子社区没有申请人（created_by 为空），为 null。 */
+  creatorName: string | null;
+  isOfficial: boolean;
+  memberCount: number;
+  /** 这个社区下的帖子总数（含已下架），关闭社区的确认框里展示。 */
+  postCount: number;
 }
 
 interface CommunityRequestRow {
@@ -240,6 +251,9 @@ interface CommunityRequestRow {
   rejection_reason: string | null;
   created_at: string;
   creator?: { display_name: string } | null;
+  is_official?: boolean;
+  member_count?: number;
+  community_posts?: Array<{ count: number }>;
 }
 
 const COMMUNITY_REQUEST_COLUMNS =
@@ -312,17 +326,26 @@ export async function listMyCommunityRequests(userId: string): Promise<Community
 }
 
 /**
- * 管理后台"社区申请"列表：只看用户申请的社区（created_by 非空，官方社区不在
- * 这里），可按状态过滤。审核中的按提交时间升序（先来先审），跟待审核帖子队列
- * 同一个顺序。
+ * 管理后台"社区申请 / 管理"列表，可按状态过滤。审核中的按提交时间升序（先来
+ * 先审），跟待审核帖子队列同一个顺序。
+ *
+ * "待审核"/"已驳回"只看用户申请的社区（created_by 非空）；"已通过"/"已关闭"
+ * 是社区管理视图（编辑 / 关闭 / 恢复），要包括官方和种子社区（created_by 为空），
+ * 所以这两个状态不加 created_by 过滤。成员数直接读 communities.member_count，
+ * 帖子数用 PostgREST 的内嵌聚合 community_posts(count) 一次查出来（管理员按
+ * RLS 能看到全部帖子，含已下架）。
  */
 export async function listCommunityRequestsForAdmin(
   statusFilter?: CommunityRequestStatus
 ): Promise<AdminCommunityRequest[]> {
   let query = getSupabaseClient()
     .from("communities")
-    .select(`${COMMUNITY_REQUEST_COLUMNS}, creator:profiles!communities_created_by_fkey(display_name)`)
-    .not("created_by", "is", null);
+    .select(
+      `${COMMUNITY_REQUEST_COLUMNS}, is_official, member_count, creator:profiles!communities_created_by_fkey(display_name), community_posts(count)`
+    );
+  if (statusFilter !== "active" && statusFilter !== "archived") {
+    query = query.not("created_by", "is", null);
+  }
   if (statusFilter) {
     query = query.eq("status", statusFilter);
   }
@@ -336,7 +359,10 @@ export async function listCommunityRequestsForAdmin(
   }
   return (data ?? []).map((row) => ({
     ...mapCommunityRequestRow(row),
-    creatorName: row.creator?.display_name ?? "未知用户"
+    creatorName: row.creator ? row.creator.display_name : null,
+    isOfficial: row.is_official ?? false,
+    memberCount: row.member_count ?? 0,
+    postCount: row.community_posts?.[0]?.count ?? 0
   }));
 }
 

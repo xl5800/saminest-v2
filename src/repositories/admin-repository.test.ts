@@ -13,7 +13,10 @@ import {
   adminCancelActivity,
   adminDeleteActivity,
   adminDeleteCommunityPost,
+  adminArchiveCommunity,
   adminRejectCommunity,
+  adminRestoreCommunity,
+  adminUpdateCommunity,
   approvePost,
   deleteComment,
   deletePost,
@@ -388,6 +391,77 @@ describe("adminApproveCommunity / adminRejectCommunity", () => {
     });
     await expect(adminRejectCommunity("c-9", "x")).rejects.toMatchObject({
       code: "ADMIN_REJECT_COMMUNITY_FAILED"
+    });
+  });
+});
+
+describe("adminUpdateCommunity / adminArchiveCommunity / adminRestoreCommunity", () => {
+  beforeEach(() => {
+    rpcMock.mockReset();
+  });
+
+  it("calls admin_update_community with every editable field", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+
+    await adminUpdateCommunity({
+      communityId: "c-9",
+      name: "羽毛球",
+      description: "周末打球",
+      stateCodes: ["VA"],
+      isOfficial: false
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith("admin_update_community", {
+      target_community_id: "c-9",
+      community_name: "羽毛球",
+      community_description: "周末打球",
+      community_state_codes: ["VA"],
+      community_is_official: false
+    });
+  });
+
+  it("translates a duplicate name into COMMUNITY_NAME_TAKEN with a Chinese message", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: { message: "community name already taken" } });
+
+    await expect(
+      adminUpdateCommunity({
+        communityId: "c-9",
+        name: "x",
+        description: "",
+        stateCodes: ["VA"],
+        isOfficial: false
+      })
+    ).rejects.toMatchObject({
+      code: "COMMUNITY_NAME_TAKEN",
+      message: "已经有同名的社区，换一个名称吧。"
+    });
+  });
+
+  it("calls admin_archive_community with the note, and translates the official-community refusal", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    await adminArchiveCommunity("c-9", "长期无人发帖");
+    expect(rpcMock).toHaveBeenCalledWith("admin_archive_community", {
+      target_community_id: "c-9",
+      archive_note: "长期无人发帖"
+    });
+
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: { message: "official communities cannot be archived" }
+    });
+    await expect(adminArchiveCommunity("c-1", "x")).rejects.toMatchObject({
+      code: "OFFICIAL_COMMUNITY_CANNOT_ARCHIVE"
+    });
+  });
+
+  it("calls admin_restore_community and wraps unknown errors", async () => {
+    rpcMock.mockResolvedValue({ data: null, error: null });
+    await adminRestoreCommunity("c-9");
+    expect(rpcMock).toHaveBeenCalledWith("admin_restore_community", { target_community_id: "c-9" });
+
+    rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(adminRestoreCommunity("c-9")).rejects.toMatchObject({
+      code: "ADMIN_RESTORE_COMMUNITY_FAILED"
     });
   });
 });

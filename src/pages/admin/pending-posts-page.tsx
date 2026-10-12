@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 import { AdminNav } from "../../components/admin-nav";
+import { ImageLightbox } from "../../components/image-lightbox";
 import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
 import { useApprovePostMutation } from "../../features/admin/use-approve-post-mutation";
 import { usePendingPostsQuery } from "../../features/admin/use-pending-posts-query";
 import { useRejectPostMutation } from "../../features/admin/use-reject-post-mutation";
-import type { AdminPostListItem } from "../../repositories/posts-repository";
-import { formatPublishedAt } from "../../utils/format";
+import type { AdminPendingPostItem } from "../../repositories/posts-repository";
+import { formatLocationDisplayName } from "../../data/us-states";
+import { formatPrice, formatPublishedAt, isPriceUnset } from "../../utils/format";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const REJECTION_REASON_REQUIRED_MESSAGE = "请填写驳回原因。";
@@ -35,7 +38,7 @@ export function AdminPendingPostsPage() {
   const approveMutation = useApprovePostMutation();
   const rejectMutation = useRejectPostMutation();
 
-  const [posts, setPosts] = useState<AdminPostListItem[] | null>(null);
+  const [posts, setPosts] = useState<AdminPendingPostItem[] | null>(null);
   const [actioningPostId, setActioningPostId] = useState<string | null>(null);
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
   const [openRejectRowId, setOpenRejectRowId] = useState<string | null>(null);
@@ -43,6 +46,8 @@ export function AdminPendingPostsPage() {
   const [rejectValidationErrors, setRejectValidationErrors] = useState<
     Record<string, string>
   >({});
+  const [lightbox, setLightbox] = useState<{ images: string[]; index: number } | null>(null);
+  const [expandedPostIds, setExpandedPostIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (data && posts === null) {
@@ -154,11 +159,69 @@ export function AdminPendingPostsPage() {
           const isRejectFormOpen = openRejectRowId === post.id;
 
           return (
-            <li key={post.id} className="mb-2 rounded-lg border border-border bg-card p-4">
-              <span className="mr-3 break-words text-sm text-text">{post.title}</span>
-              <span className="mr-3 break-words text-sm text-text-muted">{post.authorName}</span>
-              <span className="mr-3 text-sm text-text-muted">{post.categoryName}</span>
-              <span className="mr-3 text-sm text-text-muted">{formatPublishedAt(post.createdAt)}</span>
+            <li key={post.id} className="mb-3 rounded-lg border border-border bg-card p-3">
+              {/* 审核卡片：照片横向一排（全部图片，点开全屏看），下面价格 →
+                  标题 → 描述（默认 3 行，可展开）→ 分类·地区·作者·时间，
+                  底部 通过 / 驳回 / 查看详情。字段顺序跟前台 Facebook 风格
+                  列表一致（价格黑色粗体在最上），管理员看到的就是用户将来
+                  看到的样子。 */}
+              {post.imageUrls.length > 0 ? (
+                <div className="-mx-3 mb-2 flex gap-1 overflow-x-auto px-3">
+                  {post.imageUrls.map((url, index) => (
+                    <button
+                      key={url}
+                      type="button"
+                      aria-label={`查看第 ${index + 1} 张图片`}
+                      onClick={() => setLightbox({ images: post.imageUrls, index })}
+                      className="shrink-0"
+                    >
+                      <img
+                        src={url}
+                        alt=""
+                        className="h-24 w-24 rounded object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="mb-2 text-xs text-text-muted">没有图片</p>
+              )}
+              {isPriceUnset(post.priceAmount, post.priceLabel) ? null : (
+                <p className="text-base font-bold text-text">
+                  {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
+                </p>
+              )}
+              <p className="break-words text-sm font-medium text-text">{post.title}</p>
+              {post.description.trim() ? (
+                <>
+                  <p
+                    className={`mt-1 whitespace-pre-wrap break-words text-sm text-text-muted${
+                      expandedPostIds[post.id] ? "" : " line-clamp-3"
+                    }`}
+                  >
+                    {post.description}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedPostIds((prev) => ({ ...prev, [post.id]: !prev[post.id] }))
+                    }
+                    className="mt-0.5 text-xs text-primary"
+                  >
+                    {expandedPostIds[post.id] ? "收起" : "展开全文"}
+                  </button>
+                </>
+              ) : null}
+              <p className="mt-1 text-xs text-text-muted">
+                {[
+                  post.categoryName,
+                  post.locationName ? formatLocationDisplayName(post.locationName) : null,
+                  post.authorName,
+                  formatPublishedAt(post.createdAt)
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
               {rowErrors[post.id] ? (
                 <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                   {rowErrors[post.id]}
@@ -190,6 +253,12 @@ export function AdminPendingPostsPage() {
                     驳回
                   </button>
                 )}
+                <Link
+                  to={`/post/${post.id}`}
+                  className="rounded border border-border px-3 py-1.5 text-sm text-text hover:bg-bg"
+                >
+                  查看详情
+                </Link>
               </div>
               {/* 功能改动清单第 7 项："所有需要原因的操作统一改为底部弹出
                   表单（替代原版行内展开）"——驳回原因这里原来是行内展开的
@@ -218,6 +287,13 @@ export function AdminPendingPostsPage() {
         })}
       </ul>
       </div>
+      {lightbox ? (
+        <ImageLightbox
+          images={lightbox.images}
+          initialIndex={lightbox.index}
+          onClose={() => setLightbox(null)}
+        />
+      ) : null}
     </main>
   );
 }

@@ -265,6 +265,79 @@ export async function adminRejectCommunity(
   }
 }
 
+export interface AdminUpdateCommunityInput {
+  communityId: string;
+  name: string;
+  description: string;
+  stateCodes: string[];
+  isOfficial: boolean;
+}
+
+export const OFFICIAL_COMMUNITY_ARCHIVE_MESSAGE =
+  "官方社区不能关闭，如确实需要，请先在编辑里取消官方。";
+export const ADMIN_COMMUNITY_NAME_TAKEN_MESSAGE = "已经有同名的社区，换一个名称吧。";
+
+/**
+ * 管理员编辑社区（admin_update_community，20261012000100）：名称、简介、
+ * 覆盖的州、是否官方；slug 不变。校验全部在数据库函数里，这里只把"重名"
+ * 这一种明确、可操作的失败翻译成中文提示。
+ */
+export async function adminUpdateCommunity(input: AdminUpdateCommunityInput): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_update_community", {
+    target_community_id: input.communityId,
+    community_name: input.name,
+    community_description: input.description,
+    community_state_codes: input.stateCodes,
+    community_is_official: input.isOfficial
+  });
+
+  if (error) {
+    if (error.message?.includes("name already taken")) {
+      throw new AppError(ADMIN_COMMUNITY_NAME_TAKEN_MESSAGE, "COMMUNITY_NAME_TAKEN", error);
+    }
+    throw new AppError(error.message, "ADMIN_UPDATE_COMMUNITY_FAILED", error);
+  }
+}
+
+/**
+ * 管理员关闭社区（admin_archive_community）：status → archived，原因必填，
+ * 通知社区创建人。官方社区数据库会拒绝，这里翻译成中文提示。
+ */
+export async function adminArchiveCommunity(
+  communityId: string,
+  archiveNote: string
+): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_archive_community", {
+    target_community_id: communityId,
+    archive_note: archiveNote
+  });
+
+  if (error) {
+    if (error.message?.includes("official communities cannot be archived")) {
+      throw new AppError(
+        OFFICIAL_COMMUNITY_ARCHIVE_MESSAGE,
+        "OFFICIAL_COMMUNITY_CANNOT_ARCHIVE",
+        error
+      );
+    }
+    throw new AppError(error.message, "ADMIN_ARCHIVE_COMMUNITY_FAILED", error);
+  }
+}
+
+/** 管理员恢复已关闭的社区（admin_restore_community），通知社区创建人。 */
+export async function adminRestoreCommunity(communityId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("admin_restore_community", {
+    target_community_id: communityId
+  });
+
+  if (error) {
+    if (error.message?.includes("name already taken")) {
+      throw new AppError(ADMIN_COMMUNITY_NAME_TAKEN_MESSAGE, "COMMUNITY_NAME_TAKEN", error);
+    }
+    throw new AppError(error.message, "ADMIN_RESTORE_COMMUNITY_FAILED", error);
+  }
+}
+
 /**
  * 设置某个用户的 account_status（active/restricted/suspended），走
  * set_account_status 这个 security definer 函数（见

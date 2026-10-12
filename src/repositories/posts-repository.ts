@@ -510,12 +510,37 @@ export interface AdminPostListItem {
   archiveReason: string | null;
 }
 
+/**
+ * 待审核页（/admin/pending）卡片用：在 AdminPostListItem 的基础上多带审核
+ * 内容本身需要看的字段——照片、价格、描述、地区。只有 listPendingPosts
+ * 返回这个形状；全部帖子页（listAllPosts）和下架/删除 mutation 里的乐观
+ * 更新仍然只用 AdminPostListItem，不受影响。
+ */
+export interface AdminPendingPostItem extends AdminPostListItem {
+  description: string;
+  priceAmount: number | null;
+  priceLabel: string | null;
+  currencyCode: string;
+  /** 跟 listApprovedPosts 同一个 resolveLocationName 规则（location_text
+   *  优先，其次联表的 locations.name），没有地区时为 null。 */
+  locationName: string | null;
+  /** 全部未删除的图片地址，按 sort_order 升序（第一张就是封面）。 */
+  imageUrls: string[];
+}
+
 interface AdminPendingPostRow {
   id: string;
   title: string;
+  description: string;
+  price_amount: number | null;
+  price_label: string | null;
+  currency_code: string;
+  location_text: string | null;
   created_at: string;
   author: { display_name: string } | null;
   category: { name_zh: string } | null;
+  location: { name: string } | null;
+  post_images: PostFeedImageRow[] | null;
 }
 
 /**
@@ -531,11 +556,11 @@ interface AdminPendingPostRow {
  * 约束，关联的 profiles/categories 行不应该缺失，但嵌套 join 万一返回 null
  * 时这里退回一个占位文案，不让页面崩掉。
  */
-export async function listPendingPosts(): Promise<AdminPostListItem[]> {
+export async function listPendingPosts(): Promise<AdminPendingPostItem[]> {
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, title, created_at, author:profiles(display_name), category:categories(name_zh)"
+      "id, title, description, price_amount, price_label, currency_code, location_text, created_at, author:profiles(display_name), category:categories(name_zh), location:locations(name), post_images(public_url, sort_order, deleted_at)"
     )
     .eq("status", "pending")
     .is("deleted_at", null)
@@ -560,7 +585,19 @@ export async function listPendingPosts(): Promise<AdminPostListItem[]> {
     // 待审核的帖子不可能已经被驳回或下架过，这两个字段恒为 null，没必要
     // 为了它们再多查两列。
     rejectionReason: null,
-    archiveReason: null
+    archiveReason: null,
+    description: row.description,
+    priceAmount: row.price_amount,
+    priceLabel: row.price_label,
+    currencyCode: row.currency_code,
+    locationName: resolveLocationName(row.location, row.location_text),
+    // 跟 resolveCoverImageUrl 同一个口径：只要未软删除的图片，按 sort_order
+    // 排序；这里要全部图片（审核要逐张看），不是只取封面那一张。
+    imageUrls: (row.post_images ?? [])
+      .filter((image) => image.deleted_at === null)
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((image) => image.public_url)
+      .filter((url): url is string => url !== null)
   }));
 }
 
