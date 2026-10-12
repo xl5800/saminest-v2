@@ -66,6 +66,14 @@ describe("PostImagePicker", () => {
     expect(screen.getByText("拖拽图片到此处，或点击从相册选择")).toBeInTheDocument();
   });
 
+  it("shows no hint text above the upload area, but keeps 上传图片 as the input's accessible name", () => {
+    render(<PickerHarness />);
+
+    expect(screen.queryByText(/最多.*张/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/JPEG\/PNG\/WEBP/)).not.toBeInTheDocument();
+    expect(screen.getByLabelText("上传图片")).toHaveAttribute("type", "file");
+  });
+
   it("accepts a valid file, shows a preview, and reports it to the parent", async () => {
     const onFilesChange = vi.fn();
     render(<PickerHarness onFilesChange={onFilesChange} />);

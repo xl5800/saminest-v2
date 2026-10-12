@@ -163,8 +163,11 @@ export function PostImagePicker({
 
   return (
     <div>
+      {/* BARRY 要求去掉上传区上方那行说明文字（"上传图片（最多 9 张，支持
+          JPEG/PNG/WEBP，单张不超过 20MB）"）——数量/格式/大小的限制本身不变，
+          超出时仍由下面的 errors 提示具体原因。输入框改用 aria-label 保留
+          "上传图片"这个可访问名称，读屏和测试按名称找它都不受影响。 */}
       <label htmlFor={inputId} className="mb-2 block cursor-pointer text-sm font-medium text-text">
-        上传图片（最多 {MAX_POST_IMAGES} 张，支持 JPEG/PNG/WEBP，单张不超过 {MAX_POST_IMAGE_SIZE_MB}MB）
         {/* 全 App 视觉 Token 体系（第二批）：占位底色从 bg-bg（通用页面
             背景）换成 bg-surface-muted——这里是一个图片占位/上传区域，
             语义上应该用第一批专门为"弱化表面/图片占位"建的 token，不是
@@ -174,13 +177,14 @@ export function PostImagePicker({
           data-testid="post-image-drop-zone"
           onDragOver={handleDragOver}
           onDrop={handleDrop}
-          className="mt-2 flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-surface-muted px-4 py-8 text-center font-normal"
+          className="flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-surface-muted px-4 py-8 text-center font-normal"
         >
           <input
             id={inputId}
             type="file"
             accept={ACCEPTED_POST_IMAGE_MIME_TYPES.join(",")}
             multiple
+            aria-label="上传图片"
             onChange={handleInputChange}
             className="sr-only"
           />
