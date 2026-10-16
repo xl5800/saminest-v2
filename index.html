@@ -9,6 +9,18 @@
          top、底部工具栏的 paddingBottom 等）不受影响，但沉浸式头图也就
          无从"延伸到安全区底下"。 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- 微信内置浏览器：安卓微信在 viewport-fit=cover 下会把系统状态栏的
+         高度当成 env(safe-area-inset-top) 报给网页，可状态栏位置其实已经被
+         微信自己的标题栏占着了——顶部栏因此多出一大块空白。微信里打开时去掉
+         viewport-fit=cover，env(safe-area-inset-*) 回到 0；App（原生壳）和
+         普通浏览器不受影响。必须在页面渲染前同步执行，所以写成内联脚本。 -->
+    <script>
+      if (navigator.userAgent.indexOf("MicroMessenger") !== -1) {
+        document
+          .querySelector('meta[name="viewport"]')
+          .setAttribute("content", "width=device-width, initial-scale=1.0");
+      }
+    </script>
     <title>Saminest</title>
   </head>
   <body>

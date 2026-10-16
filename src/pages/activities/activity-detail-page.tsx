@@ -1,4 +1,3 @@
-import { Share } from "@capacitor/share";
 import { Clock, Flag, MapPin, Share2, Users } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 
@@ -20,6 +19,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatActivityParticipantSummary, formatActivityStartAt } from "../../utils/format";
 import { useGoBack } from "../../router/use-go-back";
+import { useShareLink } from "../../features/share/use-share-link";
 
 // 找搭子卡片+详情页视觉对齐设计稿任务卡：时间行的"星期几"次要文字——这个
 // 仓库里没有现成的星期格式化函数（format.ts 不在这张任务卡允许改动的文件
@@ -233,6 +233,7 @@ export function ActivityDetailPage() {
   // 从微信分享卡片直接打开时没有站内上一页，返回改成去找搭子列表，用户
   // 能接着看其它活动（见 router/use-go-back.ts）。
   const goBack = useGoBack("/activities");
+  const { share, shareUi } = useShareLink();
 
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
@@ -263,30 +264,24 @@ export function ActivityDetailPage() {
 
   const canTapEmptySlot = !participationAction.disabled && !participationAction.isApproved;
 
+  // 微信内分享任务卡：分享按钮按环境分流（App 弹系统分享面板 / 微信里
+  // 提示点右上角转发 / 电脑浏览器复制链接），见 features/share/share-link.ts。
   async function handleShare(activity: ActivityDetail): Promise<void> {
     if (!id) return;
-    try {
-      await Share.share({
-        title: activity.title,
-        text: `${formatActivityStartAt(activity.startAt)}・${
-          activity.isOnline
-            ? "线上活动"
-            : activity.landmarkText ??
-              (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")
-        }`,
-        // 分享卡片方图任务卡：链接末尾带上分享时刻的时间戳（?s=）。微信会按
-        // 链接缓存抓到的卡片，同一个链接再分享可能直接复用旧卡片；每次分享
-        // 都是一个新链接，微信就会重新抓一次标题/描述/图片。这个参数页面
-        // 本身不读，只是让链接不一样。
-        url: `${PRODUCTION_ORIGIN}/activities/${id}?s=${Date.now()}`,
-        dialogTitle: "分享"
-      });
-    } catch (error) {
-      // 用户主动关掉系统分享面板也会让这个 promise reject，跟
-      // post-detail-page.tsx 的 handleShare 是同一个"两种情况都静默吞掉"
-      // 的处理方式，见那边的详细注释。
-      console.error("分享失败：", error);
-    }
+    await share({
+      title: activity.title,
+      text: `${formatActivityStartAt(activity.startAt)}・${
+        activity.isOnline
+          ? "线上活动"
+          : activity.landmarkText ??
+            (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")
+      }`,
+      // 分享卡片方图任务卡：链接末尾带上分享时刻的时间戳（?s=）。微信会按
+      // 链接缓存抓到的卡片，同一个链接再分享可能直接复用旧卡片；每次分享
+      // 都是一个新链接，微信就会重新抓一次标题/描述/图片。这个参数页面
+      // 本身不读，只是让链接不一样。
+      url: `${PRODUCTION_ORIGIN}/activities/${id}?s=${Date.now()}`
+    });
   }
 
   return (
@@ -557,6 +552,7 @@ export function ActivityDetailPage() {
           </button>
         </div>
       ) : null}
+      {shareUi}
     </main>
   );
 }

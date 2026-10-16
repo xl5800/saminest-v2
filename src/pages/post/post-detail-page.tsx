@@ -1,5 +1,4 @@
 import { Capacitor } from "@capacitor/core";
-import { Share } from "@capacitor/share";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { Share2, X } from "lucide-react";
 import { type UIEvent, useEffect, useState } from "react";
@@ -19,6 +18,7 @@ import type { PostDetail } from "../../repositories/posts-repository";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatPrice, formatRelativeTimeAgo, isPriceUnset } from "../../utils/format";
 import { useGoBack } from "../../router/use-go-back";
+import { useShareLink } from "../../features/share/use-share-link";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -170,6 +170,7 @@ export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
   const goBack = useGoBack();
+  const { share, shareUi } = useShareLink();
   const state = location.state as PostDetailLocationState | null;
   const publishSuccessMessage = state?.publishSuccessMessage;
 
@@ -213,18 +214,15 @@ export function PostDetailPage() {
   // 没法可靠区分"用户取消"和"插件真的调用失败"——按任务卡的指示，宁可把
   // 两种情况都静默吞掉（只 console.error，不弹用户可见的错误提示），也不
   // 要因为一次正常的取消分享给用户看一个莫名其妙的"分享失败"提示。
+  // 微信内分享任务卡：按环境分流（App 系统分享 / 微信里提示右上角转发 /
+  // 电脑浏览器复制链接），见 features/share/share-link.ts。
   async function handleShare(post: PostDetail): Promise<void> {
     if (!id) return;
-    try {
-      await Share.share({
-        title: post.title,
-        text: formatPrice(post.priceAmount, post.priceLabel, post.currencyCode),
-        url: `${PRODUCTION_ORIGIN}/post/${id}`,
-        dialogTitle: "分享"
-      });
-    } catch (error) {
-      console.error("分享失败：", error);
-    }
+    await share({
+      title: post.title,
+      text: formatPrice(post.priceAmount, post.priceLabel, post.currencyCode),
+      url: `${PRODUCTION_ORIGIN}/post/${id}`
+    });
   }
 
   const priceUnset = data ? isPriceUnset(data.priceAmount, data.priceLabel) : true;
@@ -494,6 +492,7 @@ export function PostDetailPage() {
           onClose={() => setIsShareSheetOpen(false)}
         />
       ) : null}
+      {shareUi}
     </main>
   );
 }

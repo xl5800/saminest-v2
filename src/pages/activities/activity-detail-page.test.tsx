@@ -71,8 +71,11 @@ vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
 vi.mock("../../features/activities/use-pending-activity-participants-query", () => ({
   usePendingActivityParticipantsQuery
 }));
-vi.mock("@capacitor/share", () => ({
-  Share: { share: shareMock }
+// 微信内分享任务卡：分享按钮改成调 features/share/share-link.ts 的
+// shareLink()（按 App/微信/普通浏览器分流），这里直接 mock 它。
+vi.mock("../../features/share/share-link", () => ({
+  shareLink: shareMock,
+  isWechatBrowser: () => false
 }));
 // 跟 contact-seller-button.test.tsx 同一个模式：只覆盖 useNavigate，其它
 // react-router-dom 的导出（Link、useParams、MemoryRouter…）保持真实实现，
@@ -699,8 +702,7 @@ describe("ActivityDetailPage", () => {
         expect(shareMock).toHaveBeenCalledWith(
           expect.objectContaining({
             title: "周末吃火锅",
-            url: expect.stringMatching(/^https:\/\/www\.saminest\.com\/activities\/act-1\?s=\d+$/),
-            dialogTitle: "分享"
+            url: expect.stringMatching(/^https:\/\/www\.saminest\.com\/activities\/act-1\?s=\d+$/)
           })
         );
       });
@@ -1295,5 +1297,27 @@ describe("ActivityDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
     expect(navigateMock).toHaveBeenCalledWith("/activities", { replace: true });
+  });
+
+  // 微信内分享任务卡：在微信内置浏览器里点分享，弹"点右上角 ··· 转发"的
+  // 引导遮罩，点任意处关闭。
+  it("shows the WeChat 右上角转发 guide when sharing inside WeChat, and closes it on tap", async () => {
+    shareMock.mockResolvedValue("wechat-guide");
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    fireEvent.click(within(screen.getByTestId("activity-detail-action-bar")).getByRole("button", { name: "分享" }));
+
+    const guide = await screen.findByRole("dialog", { name: "分享引导" });
+    expect(guide).toHaveTextContent("点击右上角");
+    fireEvent.click(guide);
+    expect(screen.queryByRole("dialog", { name: "分享引导" })).not.toBeInTheDocument();
   });
 });

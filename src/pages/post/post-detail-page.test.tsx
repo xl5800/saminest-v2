@@ -82,8 +82,11 @@ vi.mock("../../features/comments/use-create-comment-mutation", () => ({
 vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
   useDeleteCommentMutation
 }));
-vi.mock("@capacitor/share", () => ({
-  Share: { share: shareMock }
+// 微信内分享任务卡：分享按钮改成调 features/share/share-link.ts 的
+// shareLink()（按 App/微信/普通浏览器分流），这里直接 mock 它。
+vi.mock("../../features/share/share-link", () => ({
+  shareLink: shareMock,
+  isWechatBrowser: () => false
 }));
 vi.mock("@capacitor/clipboard", () => ({
   Clipboard: { write: clipboardWriteMock }
@@ -663,8 +666,7 @@ describe("PostDetailPage", () => {
         expect(shareMock).toHaveBeenCalledWith({
           title: "Sunny room near metro",
           text: "USD 1,200",
-          url: "https://www.saminest.com/post/post-1",
-          dialogTitle: "分享"
+          url: "https://www.saminest.com/post/post-1"
         });
       });
       // 分享到微信点击后弹层立即关闭——系统分享面板会覆盖在上面。
