@@ -1,3 +1,4 @@
+import { generateDefaultDisplayName } from "../../utils/default-display-name";
 import { isLikelyEmail, isLikelyPhone, normalizePhoneDigits, phoneToShadowEmail } from "../../utils/phone-identity";
 
 export interface RegisterFormInput {
@@ -5,9 +6,6 @@ export interface RegisterFormInput {
    *  由 validateRegisterInput 内部判断，见下面的实现。 */
   email: string;
   password: string;
-  confirmPassword: string;
-  displayName: string;
-  agreedToTerms: boolean;
 }
 
 export interface RegisterFormData {
@@ -17,6 +15,8 @@ export interface RegisterFormData {
    *  authService.signUp 即可。 */
   email: string;
   password: string;
+  /** 注册登录简化任务卡：注册页不再让用户填昵称，这里自动分配一个
+   *  "同城用户 + 4 位数"的默认昵称（见 utils/default-display-name.ts）。 */
   displayName: string;
   /** 手机号注册任务卡新增：归一化后的真实手机号数字，只在手机号注册
    *  路径才有值，邮箱注册路径是 undefined。 */
@@ -42,17 +42,19 @@ function fail(code: string, message: string): RegisterValidationResult {
   return { success: false, data: null, error: { code, message } };
 }
 
+/**
+ * 注册登录简化任务卡：表单从 5 项减到 2 项——去掉了"显示名称"（改成自动
+ * 分配默认昵称，第一次报名/发私信时再提示修改）、"确认密码"（密码框本身
+ * 有显示密码的开关，确认密码是多余的一步）和"同意协议"勾选框（改成按钮
+ * 下方一行"注册即表示同意…"，见 register-page.tsx）。
+ */
 export function validateRegisterInput(
-  input: RegisterFormInput
+  input: RegisterFormInput,
+  random: () => number = Math.random
 ): RegisterValidationResult {
   const identifier = input.email.trim();
   const password = input.password;
-  const confirmPassword = input.confirmPassword;
-  const displayName = input.displayName.trim();
 
-  if (!displayName) {
-    return fail("REGISTER_DISPLAY_NAME_REQUIRED", "请填写显示名称。");
-  }
   if (!identifier) {
     return fail("REGISTER_IDENTIFIER_REQUIRED", "请填写邮箱或手机号。");
   }
@@ -77,12 +79,10 @@ export function validateRegisterInput(
       `密码至少需要 ${MIN_PASSWORD_LENGTH} 位。`
     );
   }
-  if (password !== confirmPassword) {
-    return fail("REGISTER_PASSWORD_MISMATCH", "两次输入的密码不一致。");
-  }
-  if (!input.agreedToTerms) {
-    return fail("REGISTER_TERMS_NOT_AGREED", "请先阅读并同意用户协议和隐私政策。");
-  }
 
-  return { success: true, data: { email, password, displayName, phone }, error: null };
+  return {
+    success: true,
+    data: { email, password, displayName: generateDefaultDisplayName(random), phone },
+    error: null
+  };
 }

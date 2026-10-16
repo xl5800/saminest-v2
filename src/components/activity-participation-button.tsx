@@ -4,6 +4,7 @@ import {
   useActivityParticipationAction,
   type UseActivityParticipationActionInput
 } from "../features/activities/use-activity-participation-action";
+import { useLoginPath } from "../router/use-login-path";
 
 export const SECONDARY_BUTTON_CLASS_NAME =
   "w-full rounded-xl border border-border px-4 py-2 font-semibold text-text hover:bg-bg disabled:cursor-not-allowed disabled:opacity-60";
@@ -35,14 +36,20 @@ export type ActivityParticipationAction = ReturnType<typeof useActivityParticipa
  * 渲染逻辑，不是重复实现。
  */
 export function ActivityParticipationButtonView({ action }: { action: ActivityParticipationAction }) {
+  const loginPath = useLoginPath();
   if (action.loggedOut) {
-    return (
-      <p className="text-sm text-text-muted">
-        <Link to="/login" className="text-primary hover:underline">
-          登录
-        </Link>
-        后可以报名
-      </p>
+    // 注册登录简化任务卡：未登录时也显示正常的报名按钮（原来是一行灰色
+    // 小字"登录后可以报名"，从微信群点进来的新用户很容易忽略），点了去
+    // 登录，登录/注册成功后回到这个活动页，再点一次完成报名——不自动
+    // 报名，避免误操作。
+    return action.canGoLogin ? (
+      <Link to={loginPath} className={`block text-center ${PRIMARY_BUTTON_CLASS_NAME}`}>
+        {action.label}
+      </Link>
+    ) : (
+      <button type="button" disabled className={PRIMARY_BUTTON_CLASS_NAME}>
+        {action.label}
+      </button>
     );
   }
 

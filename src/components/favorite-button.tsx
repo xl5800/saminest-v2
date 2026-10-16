@@ -6,6 +6,7 @@ import { useFavoritePostIdsQuery } from "../features/favorites/use-favorite-post
 import { useToggleFavoriteMutation } from "../features/favorites/use-toggle-favorite-mutation";
 import { useAuthStore } from "../store/auth-store";
 import { AppError } from "../utils/app-error";
+import { useLoginPath } from "../router/use-login-path";
 
 export interface FavoriteButtonProps {
   postId: string;
@@ -44,6 +45,7 @@ export interface FavoriteButtonProps {
  */
 export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonProps) {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
@@ -58,7 +60,7 @@ export function FavoriteButton({ postId, variant = "default" }: FavoriteButtonPr
     event.stopPropagation();
 
     if (!userId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
 

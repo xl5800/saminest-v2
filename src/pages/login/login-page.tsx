@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   AuthLayout,
@@ -10,6 +10,7 @@ import {
 import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
+import { carryRedirect, resolveRedirectAfterLogin } from "../../utils/auth-redirect";
 import { isLikelyEmail, isLikelyPhone, normalizePhoneDigits, phoneToShadowEmail } from "../../utils/phone-identity";
 
 const DEFAULT_ERROR_MESSAGE = "登录失败，请稍后重试。";
@@ -37,6 +38,7 @@ function friendlyErrorMessage(error: unknown): string {
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +68,8 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await authService.signIn({ email: loginEmail, password });
-      navigate("/", { replace: true });
+      // 注册登录简化任务卡：回到去登录之前的页面（?redirect=），没有就回首页。
+      navigate(resolveRedirectAfterLogin(searchParams), { replace: true });
     } catch (cause) {
       setError(friendlyErrorMessage(cause));
     } finally {
@@ -122,7 +125,7 @@ export function LoginPage() {
         </p>
         <p>
           还没有账号？
-          <Link to="/register" className="text-primary hover:underline">
+          <Link to={carryRedirect("/register", searchParams)} className="text-primary hover:underline">
             去注册
           </Link>
         </p>

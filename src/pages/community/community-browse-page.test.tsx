@@ -316,7 +316,7 @@ describe("CommunityBrowsePage", () => {
       openMineTab();
 
       expect(screen.getByText(/登录后可以看到你加入的社区/)).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "去登录" })).toHaveAttribute("href", "/login");
+      expect(screen.getByRole("link", { name: "去登录" })).toHaveAttribute("href", expect.stringMatching(/^\/login\?redirect=/));
       expect(screen.queryByRole("heading", { name: "DMV 华人社区" })).not.toBeInTheDocument();
     });
 
@@ -469,7 +469,7 @@ describe("CommunityBrowsePage", () => {
 
       fireEvent.click(joinButtons()[0]);
 
-      expect(navigateMock).toHaveBeenCalledWith("/login");
+      expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/login\?redirect=/));
       expect(mutateMock).not.toHaveBeenCalled();
     });
 

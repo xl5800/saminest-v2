@@ -16,6 +16,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 import { ProfileSummary } from "../../components/profile-summary";
 import { Skeleton } from "../../components/skeleton";
+import { usePendingActivityParticipantsCountQuery } from "../../features/activities/use-has-pending-activity-participants-query";
 import { useIsAdminQuery } from "../../features/admin/use-is-admin-query";
 import { useContactSupport } from "../../features/conversations/use-contact-support";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
@@ -52,9 +53,12 @@ interface GroupRowProps {
   onClick?: () => void;
   icon: LucideIcon;
   label: string;
+  /** 审核入口红点任务卡：大于 0 时在 chevron 前面显示一个红色数量角标
+   *  （目前只有"我的活动"这一行传，值是待处理的活动报名申请数）。 */
+  badgeCount?: number;
 }
 
-function GroupRow({ to, onClick, icon: Icon, label }: GroupRowProps) {
+function GroupRow({ to, onClick, icon: Icon, label, badgeCount }: GroupRowProps) {
   // 修复"帮助与客服"chevron 贴字/分隔线变短任务卡：上面那条"两者都是 flex
   // 天然撑满父级宽度"的假设对 <button> 不成立——表单控件（<button>/
   // <input>/<select>）有一条特殊的尺寸规则，即使设了 display: flex，宽度
@@ -74,8 +78,19 @@ function GroupRow({ to, onClick, icon: Icon, label }: GroupRowProps) {
         <Icon aria-hidden="true" size={20} className="shrink-0 text-text-muted" />
         <span>{label}</span>
       </span>
-      <span aria-hidden="true" className="text-[18px] leading-none text-chevron">
-        ›
+      <span className="flex items-center gap-2">
+        {badgeCount && badgeCount > 0 ? (
+          <span
+            data-testid="group-row-badge"
+            className="min-w-[20px] rounded-full bg-danger px-1.5 text-center text-xs font-semibold leading-5 text-white"
+          >
+            {badgeCount > 99 ? "99+" : badgeCount}
+            <span className="sr-only"> 条待处理</span>
+          </span>
+        ) : null}
+        <span aria-hidden="true" className="text-[18px] leading-none text-chevron">
+          ›
+        </span>
       </span>
     </>
   );
@@ -222,6 +237,9 @@ export function ProfilePage() {
 
   const { data: profile, isPending, isError } = useMyProfileQuery();
   const { data: isAdmin } = useIsAdminQuery();
+  // 审核入口红点任务卡：底部导航"我的"图标亮红点之后，发起人进到这个页面
+  // 要能一眼看出该点哪一行——跟那个红点共用同一个查询/缓存，不多发请求。
+  const { data: pendingApprovalCount } = usePendingActivityParticipantsCountQuery();
   const { contactSupport, error: contactSupportError } = useContactSupport();
 
   const [isLoggingOut, setIsLoggingOut] = useState(false);
@@ -297,7 +315,12 @@ export function ProfilePage() {
 
         <nav aria-label="我的内容">
           <GroupCard>
-            <GroupRow to="/my-activities" icon={Calendar} label="我的活动" />
+            <GroupRow
+              to="/my-activities"
+              icon={Calendar}
+              label="我的活动"
+              badgeCount={pendingApprovalCount}
+            />
             <GroupRow to="/blocked-users" icon={Ban} label="已屏蔽" />
           </GroupCard>
         </nav>

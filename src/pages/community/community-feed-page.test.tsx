@@ -320,7 +320,7 @@ describe("CommunityFeedPage", () => {
       expect(screen.queryByRole("button", { name: "退出" })).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "加入" }));
 
-      expect(navigateMock).toHaveBeenCalledWith("/login");
+      expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/login\?redirect=/));
       expect(joinMutate).not.toHaveBeenCalled();
     });
 

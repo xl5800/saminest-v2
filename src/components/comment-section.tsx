@@ -19,6 +19,7 @@ import {
 } from "../utils/build-comment-tree";
 import { validateCommentContent } from "../utils/comment-content-validation";
 import { CommentItem } from "./comment-item";
+import { useLoginPath } from "../router/use-login-path";
 
 /**
  * 找搭子留言区任务卡：帖子评论区/活动留言区二选一，跟
@@ -226,6 +227,7 @@ function CommentSectionBody({
   onSubmit
 }: CommentSectionBodyProps) {
   const session = useAuthStore((s) => s.session);
+  const loginPath = useLoginPath();
   const userId = session?.user.id ?? null;
   const [sortMode, setSortMode] = useState<CommentSortMode>("latest");
 
@@ -355,7 +357,7 @@ function CommentSectionBody({
         </form>
       ) : (
         <p className="mb-4 text-sm text-text-muted">
-          <Link to="/login" className="text-primary hover:underline">
+          <Link to={loginPath} className="text-primary hover:underline">
             登录
           </Link>
           后可以发表评论

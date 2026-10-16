@@ -9,7 +9,7 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock }
   // 最后一步 is() 之后没有再调用任何终结方法，是直接 await 整条链式调用
   // 本身——真实的 supabase-js query builder 本身就是个 thenable。这里补
   // 一个 .then 让 builder 自己也能被直接 await，写法照抄
-  // activities-repository.test.ts 的 hasPendingActivityParticipantsForOrganizer
+  // activities-repository.test.ts 的 countPendingActivityParticipantsForOrganizer
   // 那份注释和实现。
   const thenMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};

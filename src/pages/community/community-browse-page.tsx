@@ -11,6 +11,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { BrowseCommunityCard } from "./browse-community-card";
 import { filterCommunitiesByKeyword } from "./community-search";
+import { useLoginPath } from "../../router/use-login-path";
 
 const REGION_SELECT_PATH = "/region-select";
 function getCommunityPath(slug: string): string {
@@ -72,6 +73,7 @@ const ICON_BUTTON_CLASS_NAME =
  */
 export function CommunityBrowsePage() {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const userId = useAuthStore((s) => s.session)?.user.id;
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
 
@@ -156,7 +158,7 @@ export function CommunityBrowsePage() {
       return (
         <p role="status" className="px-2 py-10 text-center text-sm text-text-muted">
           {MINE_GUEST_MESSAGE}，
-          <Link to="/login" className="text-primary hover:underline">
+          <Link to={loginPath} className="text-primary hover:underline">
             去登录
           </Link>
         </p>

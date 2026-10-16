@@ -6,6 +6,7 @@ import { useActivityFavoriteIdsQuery } from "../features/activities/use-activity
 import { useToggleActivityFavoriteMutation } from "../features/activities/use-toggle-activity-favorite-mutation";
 import { useAuthStore } from "../store/auth-store";
 import { AppError } from "../utils/app-error";
+import { useLoginPath } from "../router/use-login-path";
 
 export interface ActivityFavoriteButtonProps {
   activityId: string;
@@ -40,6 +41,7 @@ export interface ActivityFavoriteButtonProps {
  */
 export function ActivityFavoriteButton({ activityId, variant = "menu" }: ActivityFavoriteButtonProps) {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
@@ -54,7 +56,7 @@ export function ActivityFavoriteButton({ activityId, variant = "menu" }: Activit
     event.stopPropagation();
 
     if (!userId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
 

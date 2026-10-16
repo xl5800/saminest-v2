@@ -6,13 +6,15 @@ const {
   getMyProfile,
   signOut,
   navigateMock,
-  getOrCreateOwnSupportConversation
+  getOrCreateOwnSupportConversation,
+  usePendingActivityParticipantsCountQuery
 } = vi.hoisted(() => ({
   getCurrentUserRole: vi.fn(),
   getMyProfile: vi.fn(),
   signOut: vi.fn(),
   navigateMock: vi.fn(),
-  getOrCreateOwnSupportConversation: vi.fn()
+  getOrCreateOwnSupportConversation: vi.fn(),
+  usePendingActivityParticipantsCountQuery: vi.fn()
 }));
 
 vi.mock("../../repositories/profiles-repository", () => ({
@@ -24,6 +26,9 @@ vi.mock("../../repositories/profiles-repository", () => ({
 // Supabase。
 vi.mock("../../repositories/conversations-repository", () => ({
   getOrCreateOwnSupportConversation
+}));
+vi.mock("../../features/activities/use-has-pending-activity-participants-query", () => ({
+  usePendingActivityParticipantsCountQuery
 }));
 vi.mock("../../services/auth/auth-service", () => ({
   authService: { signOut }
@@ -56,6 +61,24 @@ describe("ProfilePage", () => {
     getOrCreateOwnSupportConversation.mockReset();
     getCurrentUserRole.mockResolvedValue("user");
     getMyProfile.mockResolvedValue({ displayName: "Alice" });
+    usePendingActivityParticipantsCountQuery.mockReset();
+    usePendingActivityParticipantsCountQuery.mockReturnValue({ data: 0 });
+  });
+
+  // 审核入口红点任务卡："我的活动"这一行显示待处理申请数。
+  it("shows the pending applicant count on the 我的活动 row", async () => {
+    usePendingActivityParticipantsCountQuery.mockReturnValue({ data: 3 });
+    renderWithProviders(<ProfilePage />);
+
+    const row = await screen.findByRole("link", { name: /我的活动/ });
+    expect(within(row).getByTestId("group-row-badge")).toHaveTextContent("3");
+  });
+
+  it("does not show a badge on 我的活动 when there are no pending applicants", async () => {
+    renderWithProviders(<ProfilePage />);
+
+    const row = await screen.findByRole("link", { name: /我的活动/ });
+    expect(within(row).queryByTestId("group-row-badge")).not.toBeInTheDocument();
   });
 
   it("shows the display name", async () => {

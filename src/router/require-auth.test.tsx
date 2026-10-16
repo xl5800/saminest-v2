@@ -26,7 +26,8 @@ function renderAt(path: string) {
     ],
     { initialEntries: [path] }
   );
-  return render(<RouterProvider router={router} />);
+  render(<RouterProvider router={router} />);
+  return router;
 }
 
 describe("RequireAuth", () => {
@@ -34,6 +35,14 @@ describe("RequireAuth", () => {
     renderAt("/protected");
 
     expect(screen.getByText("登录页")).toBeInTheDocument();
+  });
+
+  // 注册登录简化任务卡：跳登录页时带上来源页，登录成功后回来。
+  it("carries the protected path (with its query) in the redirect param", () => {
+    const router = renderAt("/protected?tab=1");
+
+    expect(router.state.location.pathname).toBe("/login");
+    expect(new URLSearchParams(router.state.location.search).get("redirect")).toBe("/protected?tab=1");
   });
 
   it("renders the children when a session exists", () => {

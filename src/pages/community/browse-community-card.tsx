@@ -10,6 +10,7 @@ import { useLeaveCommunityMutation } from "../../features/community/use-leave-co
 import type { Community } from "../../repositories/community-repository";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
+import { useLoginPath } from "../../router/use-login-path";
 
 const JOIN_ERROR_MESSAGE = "加入失败，请稍后重试。";
 const LEAVE_ERROR_MESSAGE = "退出失败，请稍后重试。";
@@ -30,6 +31,7 @@ const DESCRIPTION_FALLBACK = "暂无简介";
  */
 export function BrowseCommunityCard({ community }: { community: Community }) {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const userId = useAuthStore((s) => s.session)?.user.id;
   const [actionError, setActionError] = useState<string | null>(null);
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
@@ -50,7 +52,7 @@ export function BrowseCommunityCard({ community }: { community: Community }) {
 
   function handleJoin(): void {
     if (!userId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
     if (joinCommunity.isPending || leaveCommunity.isPending) return;

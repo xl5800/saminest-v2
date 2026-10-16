@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { useAuthStore } from "../../store/auth-store";
 import { useGetOrCreateOwnSupportConversationMutation } from "./use-get-or-create-own-support-conversation-mutation";
+import { useLoginPath } from "../../router/use-login-path";
 
 const DEFAULT_ERROR_MESSAGE = "打开客服会话失败，请稍后重试。";
 
@@ -33,6 +34,7 @@ const DEFAULT_ERROR_MESSAGE = "打开客服会话失败，请稍后重试。";
  */
 export function useContactSupport() {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
   const mutation = useGetOrCreateOwnSupportConversationMutation();
@@ -40,7 +42,7 @@ export function useContactSupport() {
 
   function contactSupport(): void {
     if (!userId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
     if (mutation.isPending) return;

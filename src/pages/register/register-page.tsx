@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import {
   AuthLayout,
@@ -10,6 +10,7 @@ import {
 import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
+import { carryRedirect, resolveRedirectAfterLogin } from "../../utils/auth-redirect";
 import { MIN_PASSWORD_LENGTH, validateRegisterInput } from "./register-validation";
 
 const DEFAULT_ERROR_MESSAGE = "注册失败，请稍后重试。";
@@ -40,11 +41,9 @@ function friendlyErrorMessage(error: unknown): string {
 
 export function RegisterPage() {
   const navigate = useNavigate();
-  const [displayName, setDisplayName] = useState("");
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,13 +52,7 @@ export function RegisterPage() {
     if (submitting) return;
 
     setError(null);
-    const validation = validateRegisterInput({
-      email,
-      password,
-      confirmPassword,
-      displayName,
-      agreedToTerms
-    });
+    const validation = validateRegisterInput({ email, password });
     if (!validation.success) {
       setError(validation.error.message);
       return;
@@ -68,7 +61,9 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await authService.signUp(validation.data);
-      navigate("/", { replace: true });
+      // 注册登录简化任务卡：回到去登录/注册之前的页面（?redirect=），没有
+      // 就回首页。
+      navigate(resolveRedirectAfterLogin(searchParams), { replace: true });
     } catch (cause) {
       setError(friendlyErrorMessage(cause));
     } finally {
@@ -86,17 +81,6 @@ export function RegisterPage() {
       ) : null}
       <form onSubmit={handleSubmit} noValidate>
         <div className="space-y-4">
-          <label className={authLabelClassName}>
-            显示名称
-            <input
-              type="text"
-              autoComplete="nickname"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              required
-              className={authInputClassName}
-            />
-          </label>
           <label className={authLabelClassName}>
             邮箱或手机号
             <input
@@ -116,41 +100,6 @@ export function RegisterPage() {
             autoComplete="new-password"
             minLength={MIN_PASSWORD_LENGTH}
           />
-          <PasswordInput
-            id="register-confirm-password"
-            label="确认密码"
-            value={confirmPassword}
-            onChange={setConfirmPassword}
-            autoComplete="new-password"
-            minLength={MIN_PASSWORD_LENGTH}
-          />
-          <label className="flex items-start gap-2 text-base font-normal text-text">
-            <input
-              type="checkbox"
-              checked={agreedToTerms}
-              onChange={(event) => setAgreedToTerms(event.target.checked)}
-              className="mt-1 h-4 w-4 shrink-0 rounded border-border text-primary focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span>
-              我已阅读并同意
-              {/*
-                之前这两个链接带 target="_blank"，在浏览器里能正常新开一个标签页，
-                但 /terms 和 /privacy 本来就是这个 SPA 自己的内部路由，不是外部链接——
-                Capacitor 打包出来的 App 用的是原生 WebView，没有"新标签页"这个概念，
-                target="_blank" 在里面点了没有任何反应（既不报错也不跳转），这就是注册页
-                用户反馈点了用户协议/隐私政策打不开的原因。去掉 target="_blank" 后，
-                react-router 的 Link 会走正常的客户端路由跳转，在网页端和 App 里都能用；
-                唯一的代价是网页端不再新开标签页，而是在当前页跳转，可以接受。
-              */}
-              <Link to="/terms" className="text-primary underline">
-                《用户协议》
-              </Link>
-              和
-              <Link to="/privacy" className="text-primary underline">
-                《隐私政策》
-              </Link>
-            </span>
-          </label>
         </div>
         <button
           type="submit"
@@ -159,7 +108,27 @@ export function RegisterPage() {
         >
           {submitting ? "注册中…" : "注册"}
         </button>
+        {/* 注册登录简化任务卡：原来是一个必须勾选的"我已阅读并同意"复选框，
+            改成按钮下方一行说明文字，注册即表示同意，少一步操作。两个链接
+            仍然是站内路由，不加 target="_blank"——Capacitor 的原生 WebView
+            没有"新标签页"这个概念，加了在 App 里点击没有反应。 */}
+        <p className="mt-3 text-center text-xs text-text-muted">
+          注册即表示同意
+          <Link to="/terms" className="text-primary underline">
+            《用户协议》
+          </Link>
+          和
+          <Link to="/privacy" className="text-primary underline">
+            《隐私政策》
+          </Link>
+        </p>
       </form>
+      <p className="mt-5 text-center text-sm text-text-muted">
+        已有账号？
+        <Link to={carryRedirect("/login", searchParams)} className="text-primary hover:underline">
+          去登录
+        </Link>
+      </p>
     </AuthLayout>
   );
 }

@@ -3,6 +3,7 @@ import { matchPath, Outlet, useLocation, useMatches } from "react-router-dom";
 import { useOnlineStatus } from "../utils/use-online-status";
 import { AppHeader } from "./app-header";
 import { BottomNav } from "./bottom-nav";
+import { NicknamePromptSheet } from "./nickname-prompt-sheet";
 
 /**
  * 登录/注册/忘记密码/重置密码这四个认证页面用自己的 AuthLayout 渲染精简版
@@ -261,6 +262,8 @@ export function AppShell() {
       {showAppHeader ? <AppHeader /> : null}
       <Outlet />
       {showBottomNav ? <BottomNav /> : null}
+      {/* 注册登录简化任务卡：首次报名/发私信时提示设置昵称，全站一个实例。 */}
+      <NicknamePromptSheet />
     </>
   );
 }

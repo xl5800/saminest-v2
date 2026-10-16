@@ -26,7 +26,7 @@ const {
   // overrideTypes()/single()），是直接 await 整条链式调用本身——真实的
   // supabase-js query builder 本身就是个 thenable。这里补一个 .then 让
   // builder 自己也能被直接 await，写法照抄
-  // activities-repository.test.ts 的 hasPendingActivityParticipantsForOrganizer
+  // activities-repository.test.ts 的 countPendingActivityParticipantsForOrganizer
   // 那份注释和实现，理由一致，这里不重复展开。
   const thenMock = vi.fn();
   const builder: Record<string, ReturnType<typeof vi.fn>> = {};

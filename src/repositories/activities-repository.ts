@@ -1029,8 +1029,11 @@ export async function listPendingActivityParticipants(
 }
 
 /**
- * 30 号卡（待审核红点）：只要当前用户名下任意一场活动存在至少一条待处理
- * 申请，就返回 true——底部导航"我的"图标用这个判断要不要显示红点。故意
+ * 30 号卡（待审核红点）：返回当前用户名下所有活动的待处理申请总数——
+ * 底部导航"我的"图标用"是否大于 0"判断要不要显示红点，"我的"页面里
+ * "我的活动"这一行直接显示这个数字（审核入口红点任务卡：原来这个函数
+ * 只返回布尔值，发起人在"我的"页面看不到该点哪一行，改成返回数量，两处
+ * 共用同一个查询和缓存，见 use-has-pending-activity-participants-query.ts）。故意
  * 不复用"先查 listMyOrganizedActivities 拿到全部活动 id，再传给
  * listPendingActivityParticipants"这条 my-activities-page.tsx 已有的两步
  * 查询链路：底部导航是每个页面都会渲染的全局组件，为了一个布尔值现查一遍
@@ -1047,9 +1050,9 @@ export async function listPendingActivityParticipants(
  * 那份已经在内存里的数据判断"是不是空数组"就够了，没必要为同一件事再多发
  * 一次网络请求。
  */
-export async function hasPendingActivityParticipantsForOrganizer(
+export async function countPendingActivityParticipantsForOrganizer(
   organizerId: string
-): Promise<boolean> {
+): Promise<number> {
   const { count, error } = await getSupabaseClient()
     .from("activity_participants")
     .select("id, activities!inner(organizer_id)", { count: "exact", head: true })
@@ -1060,7 +1063,7 @@ export async function hasPendingActivityParticipantsForOrganizer(
     throw new AppError(error.message, "ACTIVITY_PENDING_PARTICIPANTS_COUNT_FAILED", error);
   }
 
-  return (count ?? 0) > 0;
+  return count ?? 0;
 }
 
 /**

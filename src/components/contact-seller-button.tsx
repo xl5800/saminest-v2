@@ -5,6 +5,8 @@ import { useCreateDirectConversationMutation } from "../features/conversations/u
 import { usePostAuthorQuery } from "../features/posts/use-post-author-query";
 import { useAuthStore } from "../store/auth-store";
 import { AppError } from "../utils/app-error";
+import { useLoginPath } from "../router/use-login-path";
+import { useNicknamePrompt } from "../features/profile/use-nickname-prompt";
 
 const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 
@@ -35,12 +37,15 @@ export interface ContactSellerButtonProps {
  */
 export function ContactSellerButton({ postId, label, className }: ContactSellerButtonProps) {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
   const { data: authorId, isSuccess } = usePostAuthorQuery(postId);
   const createConversation = useCreateDirectConversationMutation();
   const [error, setError] = useState<string | null>(null);
+  // 注册登录简化任务卡：第一次私信前，默认昵称先提示改一个（卖家会看到）。
+  const { runWithNicknameCheck } = useNicknamePrompt();
 
   if (!isSuccess) return null;
   if (userId && authorId === userId) return null;
@@ -50,13 +55,17 @@ export function ContactSellerButton({ postId, label, className }: ContactSellerB
     event.stopPropagation();
 
     if (!userId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
 
     if (createConversation.isPending) return;
 
     setError(null);
+    runWithNicknameCheck(startConversation);
+  }
+
+  function startConversation(): void {
     createConversation.mutate(postId, {
       onSuccess: ({ conversationId }) => {
         navigate(`/messages/${conversationId}`);

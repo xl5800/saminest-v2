@@ -17,6 +17,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
+import { useLoginPath } from "../../router/use-login-path";
 
 const SKELETON_COUNT = 4;
 // 跟全站搜索页、分类页搜索同一个防抖时长。
@@ -70,6 +71,7 @@ const SEARCH_DEBOUNCE_MS = 400;
  */
 export function CommunityFeedPage() {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const location = useLocation();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
@@ -171,7 +173,7 @@ export function CommunityFeedPage() {
         type="button"
         onClick={() => {
           if (!userId) {
-            navigate("/login");
+            navigate(loginPath);
           } else if (communityId) {
             joinCommunityMutate({ communityId, userId });
           }

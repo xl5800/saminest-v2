@@ -48,11 +48,31 @@ describe("ActivityParticipationButton", () => {
     });
   });
 
-  it("shows a login link instead of a button when logged out", () => {
-    renderWithProviders(<ActivityParticipationButton {...defaultProps} />);
+  // 注册登录简化任务卡：未登录时显示跟登录后一样的报名按钮（一个指向
+  // 登录页的链接），登录后回到当前页。
+  it("shows a 我要报名 button-styled link to the login page when logged out", () => {
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} />, {
+      initialEntries: ["/activities/act-1"]
+    });
 
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "登录" })).toHaveAttribute("href", "/login");
+    expect(screen.getByRole("link", { name: "我要报名" })).toHaveAttribute(
+      "href",
+      "/login?redirect=%2Factivities%2Fact-1"
+    );
+  });
+
+  it("shows 申请加入 for approval-required activities when logged out", () => {
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} requiresApproval />);
+
+    expect(screen.getByRole("link", { name: "申请加入" })).toBeInTheDocument();
+  });
+
+  it("shows a disabled 报名已满 button (no login link) when logged out and the activity is not open", () => {
+    renderWithProviders(<ActivityParticipationButton {...defaultProps} activityStatus="full" />);
+
+    expect(screen.getByRole("button", { name: "报名已满" })).toBeDisabled();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
   });
 
   it("calls the mutation to join (isCurrentlyJoined: false) when logged in, not participating, and the activity is open", () => {

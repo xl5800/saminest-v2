@@ -18,6 +18,7 @@ import { messageImageStorageService } from "../../services/storage/message-image
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
+import { useNicknamePrompt } from "../../features/profile/use-nickname-prompt";
 
 const MESSAGE_MAX_LENGTH = 5000;
 const EMPTY_MESSAGE_ERROR = "请输入文字或选一张图片再发送。";
@@ -421,6 +422,7 @@ export function MessageConversationPage() {
     isError: messagesError
   } = useMessagesQuery(conversationId ?? "");
   const sendMessageMutation = useSendMessageMutation(conversationId ?? "");
+  const { needsPrompt: needsNicknamePrompt, ensureNickname } = useNicknamePrompt();
   const { data: conversations } = useMyConversationsQuery();
   const { data: myProfile } = useMyProfileQuery();
 
@@ -605,6 +607,14 @@ export function MessageConversationPage() {
     if (!senderId) {
       setSubmitError(SESSION_EXPIRED_MESSAGE);
       return;
+    }
+
+    // 注册登录简化任务卡：还是注册时的默认昵称、又没跳过过的话，发消息前
+    // 先提示设置一个（对方会看到）。客服会话不提示——联系客服不需要先
+    // 起名字。不需要提示时 needsNicknamePrompt 为 false，不 await，发送
+    // 时序跟原来完全一样。
+    if (needsNicknamePrompt && !isSupportConversation) {
+      await ensureNickname();
     }
 
     const trimmedBody = body.trim();

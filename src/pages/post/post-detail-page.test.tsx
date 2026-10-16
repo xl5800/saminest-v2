@@ -57,6 +57,15 @@ vi.mock("../../features/posts/use-post-author-query", () => ({
 vi.mock("../../features/conversations/use-create-direct-conversation-mutation", () => ({
   useCreateDirectConversationMutation
 }));
+// 注册登录简化任务卡：ContactSellerButton 发私信前会检查是不是默认昵称
+// （useNicknamePrompt 里读 useMyProfileQuery），这里直接放行。
+vi.mock("../../features/profile/use-nickname-prompt", () => ({
+  useNicknamePrompt: () => ({
+    needsPrompt: false,
+    runWithNicknameCheck: (action: () => void) => action(),
+    ensureNickname: async () => {}
+  })
+}));
 vi.mock("../../features/posts/use-post-detail-query", () => ({
   usePostDetailQuery
 }));

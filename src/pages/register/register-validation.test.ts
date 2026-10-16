@@ -2,54 +2,51 @@ import { describe, expect, it } from "vitest";
 
 import { MIN_PASSWORD_LENGTH, validateRegisterInput } from "./register-validation";
 
-function input(overrides: Partial<Parameters<typeof validateRegisterInput>[0]> = {}) {
-  return {
-    email: "user@example.com",
-    password: "password123",
-    confirmPassword: "password123",
-    displayName: "小明",
-    agreedToTerms: true,
-    ...overrides
-  };
+type Input = Parameters<typeof validateRegisterInput>[0];
+
+// 注册登录简化任务卡：表单只剩"邮箱或手机号 + 密码"两项，昵称自动分配。
+// random 固定成 0.1234，默认昵称就是确定的"同城用户1234"。
+const fixedRandom = () => 0.1234;
+
+function run(overrides: Partial<Input> = {}) {
+  return validateRegisterInput(
+    { email: "user@example.com", password: "password123", ...overrides },
+    fixedRandom
+  );
 }
 
 describe("validateRegisterInput", () => {
-  it("accepts a well-formed submission", () => {
-    expect(validateRegisterInput(input())).toEqual({
+  it("accepts a well-formed submission and assigns a default nickname", () => {
+    expect(run()).toEqual({
       success: true,
       data: {
         email: "user@example.com",
         password: "password123",
-        displayName: "小明"
+        displayName: "同城用户1234"
       },
       error: null
     });
   });
 
-  it("trims email and displayName", () => {
-    expect(
-      validateRegisterInput(input({ email: "  user@example.com  ", displayName: "  小明  " }))
-    ).toEqual({
+  it("trims the email", () => {
+    expect(run({ email: "  user@example.com  " })).toEqual({
       success: true,
       data: {
         email: "user@example.com",
         password: "password123",
-        displayName: "小明"
+        displayName: "同城用户1234"
       },
       error: null
     });
   });
 
-  it("requires a display name", () => {
-    expect(validateRegisterInput(input({ displayName: "  " }))).toEqual({
-      success: false,
-      data: null,
-      error: { code: "REGISTER_DISPLAY_NAME_REQUIRED", message: "请填写显示名称。" }
-    });
+  it("generates a 同城用户 + 4 digits nickname with the real random source", () => {
+    const result = validateRegisterInput({ email: "user@example.com", password: "password123" });
+    expect(result.success && /^同城用户\d{4}$/.test(result.data.displayName)).toBe(true);
   });
 
   it("requires an email or phone number", () => {
-    expect(validateRegisterInput(input({ email: "" }))).toEqual({
+    expect(run({ email: "" })).toEqual({
       success: false,
       data: null,
       error: { code: "REGISTER_IDENTIFIER_REQUIRED", message: "请填写邮箱或手机号。" }
@@ -57,7 +54,7 @@ describe("validateRegisterInput", () => {
   });
 
   it("rejects a string that looks like neither an email nor a phone number", () => {
-    expect(validateRegisterInput(input({ email: "not-an-email" }))).toEqual({
+    expect(run({ email: "not-an-email" })).toEqual({
       success: false,
       data: null,
       error: { code: "REGISTER_IDENTIFIER_INVALID", message: "请输入正确的邮箱或手机号。" }
@@ -68,12 +65,12 @@ describe("validateRegisterInput", () => {
   // phoneToShadowEmail() 算出来的值，data.phone 是归一化后的真实手机号，
   // register-page.tsx 不需要再判断一次，直接把 data 传给 authService.signUp。
   it("accepts a well-formed 10-digit phone number and derives a shadow email", () => {
-    expect(validateRegisterInput(input({ email: "703-555-0199" }))).toEqual({
+    expect(run({ email: "703-555-0199" })).toEqual({
       success: true,
       data: {
         email: "7035550199@phone.saminest.internal",
         password: "password123",
-        displayName: "小明",
+        displayName: "同城用户1234",
         phone: "7035550199"
       },
       error: null
@@ -81,12 +78,12 @@ describe("validateRegisterInput", () => {
   });
 
   it("accepts a phone number with a leading +1 country code", () => {
-    expect(validateRegisterInput(input({ email: "+1 (703) 555-0199" }))).toEqual({
+    expect(run({ email: "+1 (703) 555-0199" })).toEqual({
       success: true,
       data: {
         email: "17035550199@phone.saminest.internal",
         password: "password123",
-        displayName: "小明",
+        displayName: "同城用户1234",
         phone: "17035550199"
       },
       error: null
@@ -94,9 +91,7 @@ describe("validateRegisterInput", () => {
   });
 
   it("requires a password", () => {
-    expect(
-      validateRegisterInput(input({ password: "", confirmPassword: "" }))
-    ).toEqual({
+    expect(run({ password: "" })).toEqual({
       success: false,
       data: null,
       error: { code: "REGISTER_PASSWORD_REQUIRED", message: "请填写密码。" }
@@ -104,35 +99,12 @@ describe("validateRegisterInput", () => {
   });
 
   it(`rejects a password shorter than ${MIN_PASSWORD_LENGTH} characters`, () => {
-    expect(
-      validateRegisterInput(input({ password: "short1", confirmPassword: "short1" }))
-    ).toEqual({
+    expect(run({ password: "short1" })).toEqual({
       success: false,
       data: null,
       error: {
         code: "REGISTER_PASSWORD_TOO_SHORT",
         message: `密码至少需要 ${MIN_PASSWORD_LENGTH} 位。`
-      }
-    });
-  });
-
-  it("rejects mismatched passwords", () => {
-    expect(
-      validateRegisterInput(input({ confirmPassword: "different123" }))
-    ).toEqual({
-      success: false,
-      data: null,
-      error: { code: "REGISTER_PASSWORD_MISMATCH", message: "两次输入的密码不一致。" }
-    });
-  });
-
-  it("requires the terms/privacy checkbox to be checked", () => {
-    expect(validateRegisterInput(input({ agreedToTerms: false }))).toEqual({
-      success: false,
-      data: null,
-      error: {
-        code: "REGISTER_TERMS_NOT_AGREED",
-        message: "请先阅读并同意用户协议和隐私政策。"
       }
     });
   });

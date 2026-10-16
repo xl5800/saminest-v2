@@ -6,6 +6,7 @@ import { useCommunityPostFavoriteIdsQuery } from "../features/favorites/use-comm
 import { useToggleCommunityPostFavoriteMutation } from "../features/favorites/use-toggle-community-post-favorite-mutation";
 import { useAuthStore } from "../store/auth-store";
 import { AppError } from "../utils/app-error";
+import { useLoginPath } from "../router/use-login-path";
 
 export interface CommunityPostFavoriteButtonProps {
   communityPostId: string;
@@ -33,6 +34,7 @@ export function CommunityPostFavoriteButton({
   favoriteCount
 }: CommunityPostFavoriteButtonProps) {
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
@@ -47,7 +49,7 @@ export function CommunityPostFavoriteButton({
     event.stopPropagation();
 
     if (!userId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
 

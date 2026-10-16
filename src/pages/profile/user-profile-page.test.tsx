@@ -453,7 +453,7 @@ describe("UserProfilePage", () => {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "发消息" }));
 
-    expect(navigateMock).toHaveBeenCalledWith("/login");
+    expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/login\?redirect=/));
     expect(mutateMock).not.toHaveBeenCalled();
   });
 
@@ -735,7 +735,7 @@ describe("UserProfilePage", () => {
       fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
       fireEvent.click(screen.getByRole("button", { name: "屏蔽此人" }));
 
-      expect(navigateMock).toHaveBeenCalledWith("/login");
+      expect(navigateMock).toHaveBeenCalledWith(expect.stringMatching(/^\/login\?redirect=/));
       expect(blockMutateAsyncMock).not.toHaveBeenCalled();
     });
 

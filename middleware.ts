@@ -92,9 +92,9 @@ interface ActivityRow {
   start_at: string;
   is_online: boolean;
   capacity: number | null;
-  participant_count: number;
   location: { name: string } | null;
   landmark_text: string | null;
+  updated_at: string;
 }
 
 /**
@@ -118,62 +118,72 @@ const ACTIVITY_CHANNEL_META: Record<string, { label: string; emoji: string }> = 
   study: { label: "学习搭子", emoji: "📚" },
   travel: { label: "旅游搭子", emoji: "✈️" },
   entertainment: { label: "娱乐搭子", emoji: "🎬" },
-  other: { label: "其他", emoji: "🔖" }
+  other: { label: "其他", emoji: "🤝" }
 };
 
 function getActivityChannelMeta(channel: string): { label: string; emoji: string } {
-  return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, emoji: "🔖" };
+  return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, emoji: "🤝" };
 }
 
 /**
- * 下面两个函数原来是直接 import src/utils/format.ts 的
- * formatActivityStartAt/formatActivityParticipantSummary——那个文件确实
- * 零 import，但实测部署后仍然报错：api/og/activity.tsx 也 import 了同一个
- * 文件，Vercel 给 Middleware + 这个 Edge Function 构建时会把共同依赖打进
- * 同一个共享 chunk，这个共享 chunk 的产物又把 api/og/activity.tsx 独有的
- * @vercel/og / react 一起带进了 middleware 的产物列表，触发"Edge Function
- * 'middleware' is referencing unsupported modules"（Middleware 的运行时
- * 限制比普通 Edge Function 更严）。结论：跟 api/og/activity.tsx 之间哪怕
- * 共享的是零依赖纯函数文件也不能共用同一个 src/ 源文件，这里改成逐字
- * 复制的独立副本（详细说明见 api/og/activity.tsx 顶部注释）。
+ * 分享卡片文字里的活动时间，形如"10/25 周日 12:00"。
+ *
+ * 分享卡片方图任务卡顺手修的一个 bug：原来这里用 date.getHours() 这类
+ * 本地时间方法，但 Vercel 的运行环境时区是 UTC，卡片上显示的是 UTC 时间
+ * （美东早上 8 点的活动在卡片上显示成 12:00）。现在固定按美东时间
+ * （America/New_York，DMV 所在时区，夏令时自动处理）格式化。
+ *
+ * 不能 import src/utils/format.ts 的原因见 api/og/activity.tsx 顶部注释
+ * （Middleware 和 Edge Function 共享 chunk 的构建期问题）。
  */
+const SHARE_TIME_ZONE = "America/New_York";
+const WEEKDAY_LABELS: Record<string, string> = {
+  Sun: "日",
+  Mon: "一",
+  Tue: "二",
+  Wed: "三",
+  Thu: "四",
+  Fri: "五",
+  Sat: "六"
+};
+
 function formatActivityStartAt(startAt: string): string {
   const date = new Date(startAt);
-  if (Number.isNaN(date.getTime())) return "时间未知";
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month}-${day} ${hours}:${minutes}`;
-}
-
-function formatActivityParticipantSummary(participantCount: number, capacity: number | null): string {
-  const joinedCount = participantCount + 1; // +1：发起人本人
-  if (capacity === null) {
-    return `已有 ${joinedCount} 人报名`;
-  }
-  const remaining = Math.max(capacity - joinedCount, 0);
-  return remaining > 0
-    ? `还差 ${remaining} 人（${joinedCount}/${capacity}）`
-    : `已满员（${joinedCount}/${capacity}）`;
+  if (Number.isNaN(date.getTime())) return "时间待定";
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: SHARE_TIME_ZONE,
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23"
+    })
+      .formatToParts(date)
+      .map((part) => [part.type, part.value])
+  );
+  const weekday = WEEKDAY_LABELS[parts.weekday] ?? "";
+  return `${parts.month}/${parts.day} 周${weekday} ${parts.hour}:${parts.minute}`;
 }
 
 /**
- * og:description 这一行文字——任务卡明确"跟卡片图片上的信息一致即可，
- * 不需要一字不差"。地点这里故意不做 formatLocationDisplayName 那个
- * "裸州代码转中文州名"的转换（比如线下活动地点是裸的 "VA"，这里就直接显示
- * "VA"，不会转成"VA 弗吉尼亚州"）——原因同上：那个转换需要 51 州对照表，
- * 这份对照表已经在 api/og/activity.tsx 里复制了一份给卡片图片（真正对外
- * 展示、访客会看到的部分）用，og:description 是次要的辅助文字，不值得为了
- * 这一处也复制一份 51 州数据，接受这个小的文案差异。
+ * og:description 这一行文字，形如
+ * "🍜 吃饭搭子 · 10/24 周五 19:00 · Fairfax · 限 6 人 · 名额有限，点开报名"。
+ *
+ * 分享卡片方图任务卡：去掉了原来的"还差 N 人（M/容量）"——微信卡片发出去
+ * 就定格了，人数却一直在变，写一个会过时的数字会误导人；改成发起人设定的
+ * 人数上限（不会变），再加一句引导点开。点进去的详情页仍然实时显示报名
+ * 进度。
+ *
+ * 地点故意不做 formatLocationDisplayName 那个"裸州代码转中文州名"的转换，
+ * 原因见改动前的注释：不值得为这一处复制一份 51 州对照表。
  */
 function buildActivityDescription(row: ActivityRow): string {
   const { emoji, label } = getActivityChannelMeta(row.channel);
-  const timeText = formatActivityStartAt(row.start_at);
-  const locationOrParticipants = row.is_online
-    ? "线上活动"
-    : `${row.landmark_text ?? row.location?.name ?? "地点待定"} · ${formatActivityParticipantSummary(row.participant_count, row.capacity)}`;
-  return `${emoji} ${label} · ${timeText} · ${locationOrParticipants}`;
+  const location = row.is_online ? "线上" : row.landmark_text ?? row.location?.name ?? "地点待定";
+  const capacity = row.capacity === null ? "人数不限" : `限 ${row.capacity} 人`;
+  return `${emoji} ${label} · ${formatActivityStartAt(row.start_at)} · ${location} · ${capacity} · 名额有限，点开报名`;
 }
 
 async function handleActivityRequest(
@@ -185,7 +195,7 @@ async function handleActivityRequest(
   const restUrl =
     `${supabaseUrl}/rest/v1/activities` +
     `?id=eq.${encodeURIComponent(activityId)}` +
-    "&select=channel,title,start_at,is_online,capacity,participant_count,location:locations(name),landmark_text";
+    "&select=channel,title,start_at,is_online,capacity,location:locations(name),landmark_text,updated_at";
 
   let activities: ActivityRow[];
   try {
@@ -222,6 +232,11 @@ async function handleActivityRequest(
   const description = escapeHtml(truncate(buildActivityDescription(activity), DESCRIPTION_MAX_LENGTH));
   const ogImageUrl = new URL("/api/og/activity", request.url);
   ogImageUrl.searchParams.set("id", activityId);
+  // 分享卡片方图任务卡：@vercel/og 生成的图片默认带一年的
+  // `cache-control: public, immutable` 缓存，图片地址固定的话，活动改了
+  // 标题/人数上限/类型之后，新分享出去的卡片还是旧图。地址里带上活动的
+  // updated_at，活动一改地址就变，缓存自然失效；没改就继续命中缓存。
+  ogImageUrl.searchParams.set("v", String(new Date(activity.updated_at).getTime() || 0));
 
   const metaTags = [
     `<title>${title}</title>`,

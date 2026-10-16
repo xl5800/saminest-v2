@@ -4,6 +4,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { useActivityParticipationQuery } from "./use-activity-participation-query";
 import { useToggleActivityParticipationMutation } from "./use-toggle-activity-participation-mutation";
+import { useNicknamePrompt } from "../profile/use-nickname-prompt";
 
 // joinActivity/leaveActivity 抛出的这几个错误码自带已经写好的、安全的
 // 用户提示文案，可以直接展示；其它错误码一律回退到本地这条通用文案，见
@@ -79,17 +80,28 @@ export function useActivityParticipationAction({
     useActivityParticipationQuery(activityId, userId);
   const toggleParticipation = useToggleActivityParticipationMutation();
   const [error, setError] = useState<string | null>(null);
+  // 注册登录简化任务卡：报名（不是退出）前，如果还是注册时的默认昵称，
+  // 先提示设置一个——发起人会在申请/报名名单里看到这个名字。
+  const { runWithNicknameCheck } = useNicknamePrompt();
 
   const isApproved = participationStatus === "approved";
   const isPendingApplication = participationStatus === "pending";
   const isRejected = participationStatus === "rejected";
 
   if (!userId) {
+    // 注册登录简化任务卡：未登录时不再只显示一行"登录后可以报名"的小字，
+    // 按钮层改成渲染一个样子跟登录后一样的"我要报名/申请加入"按钮，点了去
+    // 登录（登录后回到这个活动页）。disabled 仍然恒为 true——这个 hook 的
+    // handleClick 在未登录时什么都不做，头像堆叠空位（canTapEmptySlot）也
+    // 不能点；"去登录"由按钮层用 <Link> 实现。活动已满/已结束时 label 是
+    // "报名已满"，按钮层渲染成不可点的灰按钮，不引导去登录。
     return {
       loggedOut: true as const,
       isOrganizer: false as const,
       disabled: true,
-      label: "",
+      label:
+        activityStatus !== "open" ? "报名已满" : requiresApproval ? "申请加入" : "我要报名",
+      canGoLogin: activityStatus === "open",
       isApproved: false,
       isPendingApplication: false,
       isRejected: false,
@@ -123,6 +135,14 @@ export function useActivityParticipationAction({
     }
 
     setError(null);
+    if (isApproved) {
+      submitToggle();
+    } else {
+      runWithNicknameCheck(submitToggle);
+    }
+  }
+
+  function submitToggle(): void {
     toggleParticipation.mutate(
       {
         activityId,

@@ -21,439 +21,177 @@ import React from "react";
  * activities-repository.ts 的 ACTIVITY_CHANNEL_OPTIONS 不能 import 的
  * 原因不一样（那个文件顶部 import 了 getSupabaseClient，会拉进 Vite 专属
  * 链路），这里是纯粹的构建期 chunk 归属问题，不是代码本身有依赖问题。
- * 下面 STATE_LABELS_BY_CODE / formatLocationDisplayName /
- * formatActivityParticipantSummary 都是从 src/data/us-states.ts /
- * src/utils/format.ts 逐字复制过来的独立副本，跟 middleware.ts 里的同名
- * 复制品各自维护，以后要改这几个函数的逻辑，需要同时改 src/ 原版 +
- * middleware.ts + 这个文件三处。
+ * 下面的频道表（ACTIVITY_CHANNEL_META）跟 middleware.ts 里的同名表是各自
+ * 维护的两份，以后改频道文案/图标需要两处一起改。（分享卡片方图任务卡之后
+ * 图上不再画地点和时间，原来从 src/ 复制过来的州名对照表和人数文案函数
+ * 已经用不到，一并删掉了。）
  */
 export const config = {
   runtime: "edge"
 };
 
-const CARD_WIDTH = 1200;
-const CARD_HEIGHT = 630;
+/**
+ * 分享卡片方图任务卡：卡片从 1200×630 横图改成 600×600 方图。微信聊天里的
+ * 链接卡片只显示一个很小的正方形缩略图，横图被缩小再裁切，标题/时间这些
+ * 字完全看不清（标题和描述本来就显示在卡片左边的文字里）。方图只放缩略图
+ * 里还能看清的两样东西：活动类型的大图标 + "限 N 人"标签；背景色按活动
+ * 类型区分，群里多张卡片排在一起一眼能分出是吃饭还是拼车。
+ *
+ * 也去掉了原来图上的"还差 N 人（M/容量）"：卡片在微信里发出去之后就定格
+ * 了，人数却一直在变，图上写一个会过时的数字会误导人；"限 N 人"是发起人
+ * 设定的上限，不会变。详情页本身仍然实时显示报名进度。
+ */
+const CARD_SIZE = 600;
 
-// BrandMark 里展示的品牌角标文字，两种卡片（真实活动卡/通用兜底卡）
-// 共用。真实 bug 记录：collectCardText() 第一版忘了把这个常量也加进去
-// 一起请求字体子集——BrandMark 是唯一一处不经过任何"卡片文案"函数、直接
-// 硬编码在 JSX 里的文字，本地用 satori 直接渲染真实活动数据肉眼验证时
-// 才发现"Saminest"这几个字母时不时渲染成方块（取决于那次请求里恰好有
-// 没有别的文字碰巧包含同一个字母）——根因是字体子集只覆盖
-// collectCardText() 返回的字符，Satori 对没配到的字形不报错、只留空/
-// 方块，这正是任务卡特别提醒的坑，这里改成两处都引用同一个常量，不会
-// 再意外漏掉。
-const BRAND_WORDMARK = "Saminest";
-
-const ACTIVITY_CHANNEL_META: Record<string, { label: string; emoji: string }> = {
-  food: { label: "吃饭搭子", emoji: "🍜" },
-  carpool: { label: "拼车/一起采购", emoji: "🚗" },
-  fitness: { label: "健身搭子", emoji: "🏋️" },
-  game: { label: "游戏搭子", emoji: "🎮" },
-  study: { label: "学习搭子", emoji: "📚" },
-  travel: { label: "旅游搭子", emoji: "✈️" },
-  entertainment: { label: "娱乐搭子", emoji: "🎬" },
-  other: { label: "其他", emoji: "🔖" }
-};
-
-function getActivityChannelMeta(channel: string): { label: string; emoji: string } {
-  return ACTIVITY_CHANNEL_META[channel] ?? { label: channel, emoji: "🔖" };
+interface ChannelStyle {
+  label: string;
+  emoji: string;
+  /** 径向渐变的三个色标：高光 / 主色 / 暗部，标签文字用暗部色。 */
+  light: string;
+  base: string;
+  dark: string;
 }
+
+const ACTIVITY_CHANNEL_META: Record<string, ChannelStyle> = {
+  food: { label: "吃饭搭子", emoji: "🍜", light: "#FF9F5A", base: "#FF7A3D", dark: "#E85A1F" },
+  carpool: { label: "拼车/一起采购", emoji: "🚗", light: "#3CC47F", base: "#1FA463", dark: "#12804B" },
+  fitness: { label: "健身搭子", emoji: "🏋️", light: "#4A72F0", base: "#2F5BE8", dark: "#1E3FAE" },
+  game: { label: "游戏搭子", emoji: "🎮", light: "#A78BFA", base: "#8B5CF6", dark: "#6D3FE0" },
+  study: { label: "学习搭子", emoji: "📚", light: "#F5B820", base: "#E5A100", dark: "#C08400" },
+  travel: { label: "旅游搭子", emoji: "✈️", light: "#0E86C7", base: "#0369A1", dark: "#075985" },
+  entertainment: { label: "娱乐搭子", emoji: "🎬", light: "#F06A97", base: "#E8457C", dark: "#C92A60" },
+  other: { label: "其他", emoji: "🤝", light: "#7C8BA1", base: "#5B6B82", dark: "#3F4C5F" }
+};
 
 /**
- * 从 src/data/us-states.ts 的 US_STATES + formatStateLabelByCode 逐字
- * 复制的精简版——只保留 formatLocationDisplayName 真正用到的 code/nameZh
- * 两个字段（原版 UsState 还有一个 name 英文全名字段，这里用不到，不复制）。
- * 不能 import 原文件的原因见本文件顶部注释（Middleware/Edge Function 共享
- * chunk 的构建期问题，不是代码依赖问题）。
+ * "其他"类型按标题关键词换一个更贴切的图标，没命中就用默认的 🤝。按数组
+ * 顺序取第一个命中的。只影响这张分享图，不改数据库也不改发布流程——以后
+ * 发现"其他"里经常出现某类活动，在这里加一行即可。
  */
-const STATE_LABELS_BY_CODE: Record<string, string> = {
-  AL: "AL 阿拉巴马州",
-  AK: "AK 阿拉斯加州",
-  AZ: "AZ 亚利桑那州",
-  AR: "AR 阿肯色州",
-  CA: "CA 加利福尼亚州",
-  CO: "CO 科罗拉多州",
-  CT: "CT 康涅狄格州",
-  DE: "DE 特拉华州",
-  DC: "DC 哥伦比亚特区",
-  FL: "FL 佛罗里达州",
-  GA: "GA 佐治亚州",
-  HI: "HI 夏威夷州",
-  ID: "ID 爱达荷州",
-  IL: "IL 伊利诺伊州",
-  IN: "IN 印第安纳州",
-  IA: "IA 艾奥瓦州",
-  KS: "KS 堪萨斯州",
-  KY: "KY 肯塔基州",
-  LA: "LA 路易斯安那州",
-  ME: "ME 缅因州",
-  MD: "MD 马里兰州",
-  MA: "MA 马萨诸塞州",
-  MI: "MI 密歇根州",
-  MN: "MN 明尼苏达州",
-  MS: "MS 密西西比州",
-  MO: "MO 密苏里州",
-  MT: "MT 蒙大拿州",
-  NE: "NE 内布拉斯加州",
-  NV: "NV 内华达州",
-  NH: "NH 新罕布什尔州",
-  NJ: "NJ 新泽西州",
-  NM: "NM 新墨西哥州",
-  NY: "NY 纽约州",
-  NC: "NC 北卡罗来纳州",
-  ND: "ND 北达科他州",
-  OH: "OH 俄亥俄州",
-  OK: "OK 俄克拉荷马州",
-  OR: "OR 俄勒冈州",
-  PA: "PA 宾夕法尼亚州",
-  RI: "RI 罗德岛州",
-  SC: "SC 南卡罗来纳州",
-  SD: "SD 南达科他州",
-  TN: "TN 田纳西州",
-  TX: "TX 得克萨斯州",
-  UT: "UT 犹他州",
-  VT: "VT 佛蒙特州",
-  VA: "VA 弗吉尼亚州",
-  WA: "WA 华盛顿州",
-  WV: "WV 西弗吉尼亚州",
-  WI: "WI 威斯康星州",
-  WY: "WY 怀俄明州"
-};
+const OTHER_CHANNEL_KEYWORD_EMOJI: Array<[string[], string]> = [
+  [["遛狗", "狗", "宠物", "猫"], "🐕"],
+  [["羽毛球"], "🏸"],
+  [["篮球"], "🏀"],
+  [["足球"], "⚽"],
+  [["网球"], "🎾"],
+  [["乒乓"], "🏓"],
+  [["爬山", "徒步", "登山"], "🥾"],
+  [["露营"], "⛺"],
+  [["钓鱼"], "🎣"],
+  [["K歌", "k歌", "KTV", "ktv", "唱歌"], "🎤"],
+  [["咖啡"], "☕"],
+  [["奶茶"], "🧋"],
+  [["购物", "逛街", "outlet", "Outlet"], "🛍️"],
+  [["跑步", "夜跑", "晨跑"], "🏃"],
+  [["游泳"], "🏊"],
+  [["滑雪"], "⛷️"],
+  [["麻将"], "🀄"],
+  [["桌游", "狼人杀", "剧本杀"], "🎲"]
+];
 
-/** 逐字对应原版 formatLocationDisplayName 的行为：裸两字母州代码换成
- *  "缩写 中文州名"，其余原样返回。 */
-function formatLocationDisplayName(name: string): string {
-  return STATE_LABELS_BY_CODE[name] ?? name;
+function getChannelStyle(channel: string): ChannelStyle {
+  return ACTIVITY_CHANNEL_META[channel] ?? ACTIVITY_CHANNEL_META.other;
 }
 
-/** 从 src/utils/format.ts 的 formatActivityParticipantSummary 逐字复制。 */
-function formatActivityParticipantSummary(participantCount: number, capacity: number | null): string {
-  const joinedCount = participantCount + 1; // +1：发起人本人
-  if (capacity === null) {
-    return `已有 ${joinedCount} 人报名`;
-  }
-  const remaining = Math.max(capacity - joinedCount, 0);
-  return remaining > 0
-    ? `还差 ${remaining} 人（${joinedCount}/${capacity}）`
-    : `已满员（${joinedCount}/${capacity}）`;
+function resolveCardEmoji(row: ActivityRow): string {
+  const style = getChannelStyle(row.channel);
+  if (row.channel !== "other" && ACTIVITY_CHANNEL_META[row.channel]) return style.emoji;
+  const title = row.title ?? "";
+  const hit = OTHER_CHANNEL_KEYWORD_EMOJI.find(([keywords]) =>
+    keywords.some((keyword) => title.includes(keyword))
+  );
+  return hit ? hit[1] : style.emoji;
+}
+
+function formatCapacityBadge(capacity: number | null): string {
+  return capacity === null ? "人数不限" : `限 ${capacity} 人`;
 }
 
 interface ActivityRow {
   channel: string;
   title: string;
-  start_at: string;
-  is_online: boolean;
   capacity: number | null;
-  participant_count: number;
   status: string;
-  location: { name: string } | null;
-  landmark_text: string | null;
 }
 
-const WEEKDAY_LABELS = ["日", "一", "二", "三", "四", "五", "六"];
+const BRAND_BLUE: Pick<ChannelStyle, "light" | "base" | "dark"> = {
+  light: "#4A72F0",
+  base: "#2F5BE8",
+  dark: "#1E3FAE"
+};
 
-/**
- * 分享卡片专用的时间格式化——刻意跟 src/utils/format.ts 的
- * formatActivityStartAt()（app 内其它地方展示活动时间统一用的格式，输出
- * 形如"09-28 12:00"）不一样，是这次任务里唯一一处主动偏离"复用现有格式
- * 函数"这条总原则的地方，原因见完工报告：这张卡片是给微信等外部平台看的
- * 营销素材，视觉稿 docs/share-card-design/og-card.html 已经明确给出并且
- * 是产品认可过的示例文案"10月1日 周四 12:00"——这个"月/日/周X"格式仓库里
- * 目前没有任何现成函数产出，app 内其它地方（详情页/列表页）用的
- * "MM-DD HH:mm"是更紧凑的内部展示形式，不适合直接照搬到对外分享的营销
- * 素材上。两处如果以后要统一，需要产品先确认改哪一边。
- */
-function formatShareCardStartAt(startAt: string): string {
-  const date = new Date(startAt);
-  if (Number.isNaN(date.getTime())) return "时间待定";
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const weekday = WEEKDAY_LABELS[date.getDay()];
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${month}月${day}日 周${weekday} ${hours}:${minutes}`;
-}
-
-/**
- * 线下活动地点文案：跟 activity-detail-page.tsx 那句
- * `data.landmarkText ?? (data.locationName ? formatLocationDisplayName(...) : "地点待定")`
- * 逐字同一套 fallback 顺序，只是这里从 REST 原始 snake_case 字段读。
- */
-function formatOfflineLocation(row: ActivityRow): string {
-  if (row.landmark_text) return row.landmark_text;
-  if (row.location?.name) return formatLocationDisplayName(row.location.name);
-  return "地点待定";
-}
-
-/**
- * 第二行 meta 文案：线上活动只显示"线上活动"（任务卡原话，没有要求线上
- * 也拼人数）；线下拼"地点 · 人数状态"，人数状态复用
- * formatActivityParticipantSummary()——跟活动详情页/活动卡片"还差 N 人
- * （M/容量）"/"已满员"是同一个算法，不重新写一套措辞。
- */
-function buildSecondMetaLine(row: ActivityRow): string {
-  if (row.is_online) return "线上活动";
-  const location = formatOfflineLocation(row);
-  const participantSummary = formatActivityParticipantSummary(row.participant_count, row.capacity);
-  return `${location} · ${participantSummary}`;
-}
-
-const CLOCK_ICON = (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="12" r="9" stroke="white" strokeWidth={2} />
-    <path d="M12 7V12L15.5 14" stroke="white" strokeWidth={2} strokeLinecap="round" />
-  </svg>
-);
-
-const PIN_ICON = (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path
-      d="M12 22s7-7.58 7-12.5A7 7 0 0 0 5 9.5C5 14.42 12 22 12 22Z"
-      stroke="white"
-      strokeWidth={2}
-      strokeLinejoin="round"
-    />
-    <circle cx="12" cy="9.5" r="2.4" stroke="white" strokeWidth={2} />
-  </svg>
-);
-
-const BRAND_MARK_ICON = (
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="12" cy="10" r="7" fill="none" stroke="white" strokeWidth={2.4} />
-    <circle cx="12" cy="15.2" r="2.6" fill="white" />
-  </svg>
-);
-
-/**
- * 品牌 mark + 文字，跟 og-card.html 的 .brand 一致，两种卡片（真实活动卡/
- * 通用兜底卡）共用同一个品牌角标，位置固定右上角。
- */
-function BrandMark() {
+/** 方图的统一版式：渐变背景 + 半透明圆底大图标 + 白色胶囊标签。 */
+function SquareCard({
+  emoji,
+  badge,
+  colors
+}: {
+  emoji: string;
+  badge: string;
+  colors: Pick<ChannelStyle, "light" | "base" | "dark">;
+}) {
   return (
     <div
       style={{
-        position: "absolute",
-        top: 44,
-        right: 52,
+        width: CARD_SIZE,
+        height: CARD_SIZE,
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
-        gap: 14
+        justifyContent: "center",
+        backgroundImage: `radial-gradient(circle at 70% 25%, ${colors.light} 0%, ${colors.base} 45%, ${colors.dark} 100%)`
       }}
     >
       <div
         style={{
-          width: 44,
-          height: 44,
-          borderRadius: 12,
+          width: 330,
+          height: 330,
+          borderRadius: 9999,
           background: "rgba(255,255,255,0.16)",
           display: "flex",
           alignItems: "center",
-          justifyContent: "center"
+          justifyContent: "center",
+          fontSize: 220,
+          lineHeight: 1
         }}
       >
-        <div style={{ width: 24, height: 24, display: "flex" }}>{BRAND_MARK_ICON}</div>
+        {emoji}
       </div>
-      <div style={{ fontSize: 28, fontWeight: 700, color: "rgba(255,255,255,0.92)" }}>
-        {BRAND_WORDMARK}
+      <div
+        style={{
+          marginTop: 34,
+          background: "#FFFFFF",
+          color: colors.dark,
+          fontSize: 52,
+          fontWeight: 700,
+          padding: "10px 40px",
+          borderRadius: 9999
+        }}
+      >
+        {badge}
       </div>
     </div>
   );
 }
 
-/** 两个装饰性光斑圆点，跟 og-card.html 的 .blob/.blob2 一致。 */
-function BackgroundBlobs() {
-  return (
-    <>
-      <div
-        style={{
-          position: "absolute",
-          width: 820,
-          height: 820,
-          right: -220,
-          top: -260,
-          borderRadius: 9999,
-          background: "rgba(255,255,255,0.06)"
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          width: 520,
-          height: 520,
-          left: -160,
-          bottom: -220,
-          borderRadius: 9999,
-          background: "rgba(255,255,255,0.05)"
-        }}
-      />
-    </>
-  );
-}
-
-/** 最外层容器：径向渐变蓝色背景，跟 og-card.html 的 body 一致。 */
-function CardBackground({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      style={{
-        width: CARD_WIDTH,
-        height: CARD_HEIGHT,
-        display: "flex",
-        position: "relative",
-        backgroundImage:
-          "radial-gradient(circle at 85% 15%, #4A72F0 0%, #315BEA 42%, #1E3FAE 100%)"
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-/**
- * 真实活动卡片——channel tag / 标题（最多两行）/ 时间 / 地点+人数，逐字
- * 还原 og-card.html 的布局坐标（top/left/right/bottom 数值直接照抄那份
- * 视觉稿，不是估算）。
- */
 function ActivityCard({ row }: { row: ActivityRow }) {
-  const { emoji, label } = getActivityChannelMeta(row.channel);
-  const timeLine = formatShareCardStartAt(row.start_at);
-  const secondMetaLine = buildSecondMetaLine(row);
-
   return (
-    <CardBackground>
-      <BackgroundBlobs />
-
-      <div
-        style={{
-          position: "absolute",
-          top: 64,
-          left: 64,
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          background: "rgba(255,255,255,0.18)",
-          border: "1px solid rgba(255,255,255,0.3)",
-          borderRadius: 9999,
-          padding: "12px 26px",
-          fontSize: 26,
-          fontWeight: 700,
-          color: "#FFFFFF"
-        }}
-      >
-        <span>{emoji}</span>
-        <span>{label}</span>
-      </div>
-
-      <BrandMark />
-
-      <div
-        style={{
-          position: "absolute",
-          left: 64,
-          top: 190,
-          right: 120,
-          fontSize: 64,
-          fontWeight: 700,
-          color: "#FFFFFF",
-          lineHeight: 1.32,
-          display: "-webkit-box",
-          WebkitBoxOrient: "vertical",
-          WebkitLineClamp: 2,
-          overflow: "hidden"
-        }}
-      >
-        {row.title}
-      </div>
-
-      <div
-        style={{
-          position: "absolute",
-          left: 64,
-          bottom: 76,
-          display: "flex",
-          flexDirection: "column",
-          gap: 22
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: "rgba(255,255,255,0.16)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <div style={{ width: 26, height: 26, display: "flex" }}>{CLOCK_ICON}</div>
-          </div>
-          <div style={{ fontSize: 34, fontWeight: 600, color: "#FFFFFF" }}>{timeLine}</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 14,
-              background: "rgba(255,255,255,0.16)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center"
-            }}
-          >
-            <div style={{ width: 26, height: 26, display: "flex" }}>{PIN_ICON}</div>
-          </div>
-          <div style={{ fontSize: 34, fontWeight: 600, color: "#FFFFFF" }}>{secondMetaLine}</div>
-        </div>
-      </div>
-    </CardBackground>
+    <SquareCard
+      emoji={resolveCardEmoji(row)}
+      badge={formatCapacityBadge(row.capacity)}
+      colors={getChannelStyle(row.channel)}
+    />
   );
 }
+
+const FALLBACK_BADGE = "找搭子";
 
 /**
  * 通用品牌兜底卡：活动不存在/被软删除/被 RLS 挡掉/已结束/已取消时用——
- * 不画任何具体活动信息，也不把内部错误信息画到图上（任务卡明确要求）。
+ * 不画任何具体活动信息，也不把内部错误信息画到图上。
  */
 function FallbackCard() {
-  return (
-    <CardBackground>
-      <BackgroundBlobs />
-      <div
-        style={{
-          position: "absolute",
-          left: 64,
-          right: 64,
-          top: 0,
-          bottom: 0,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          justifyContent: "center",
-          gap: 24
-        }}
-      >
-        <div
-          style={{
-            width: 88,
-            height: 88,
-            borderRadius: 20,
-            background: "rgba(255,255,255,0.16)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center"
-          }}
-        >
-          <div style={{ width: 48, height: 48, display: "flex" }}>{BRAND_MARK_ICON}</div>
-        </div>
-        <div style={{ fontSize: 72, fontWeight: 700, color: "#FFFFFF" }}>找搭子</div>
-        <div style={{ fontSize: 32, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>
-          在 Saminest 找到同城搭子
-        </div>
-      </div>
-    </CardBackground>
-  );
+  return <SquareCard emoji="🤝" badge={FALLBACK_BADGE} colors={BRAND_BLUE} />;
 }
 
 /**
@@ -461,18 +199,7 @@ function FallbackCard() {
  * 体积巨大的完整中文字体），见下面 loadFontSubset() 的详细说明。
  */
 function collectCardText(row: ActivityRow | null): string {
-  if (!row) {
-    return `找搭子在${BRAND_WORDMARK}找到同城搭子`;
-  }
-  const { emoji, label } = getActivityChannelMeta(row.channel);
-  return [
-    emoji,
-    label,
-    row.title,
-    formatShareCardStartAt(row.start_at),
-    buildSecondMetaLine(row),
-    BRAND_WORDMARK
-  ].join("");
+  return row ? formatCapacityBadge(row.capacity) : FALLBACK_BADGE;
 }
 
 /**
@@ -533,8 +260,8 @@ async function renderCard(row: ActivityRow | null): Promise<ImageResponse> {
   const fontData = await loadFontSubset(collectCardText(row));
 
   return new ImageResponse(row ? <ActivityCard row={row} /> : <FallbackCard />, {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
+    width: CARD_SIZE,
+    height: CARD_SIZE,
     fonts: fontData ? [{ name: "Noto Sans SC", data: fontData, weight: 700, style: "normal" }] : []
   });
 }
@@ -565,7 +292,7 @@ export default async function handler(request: Request): Promise<Response> {
   const restUrl =
     `${supabaseUrl}/rest/v1/activities` +
     `?id=eq.${encodeURIComponent(activityId)}` +
-    "&select=channel,tag_text,title,start_at,is_online,capacity,participant_count,status,location:locations(name),landmark_text";
+    "&select=channel,title,capacity,status";
 
   let rows: ActivityRow[];
   try {

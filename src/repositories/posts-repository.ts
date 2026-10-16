@@ -608,7 +608,7 @@ export async function listPendingPosts(): Promise<AdminPendingPostItem[]> {
  * 管理页面顶部都会挂这个导航条）都要多拉一份完整的待审核帖子数据，
  * 这里改成 `{ count: "exact", head: true }` 只让数据库返回一个数字，
  * 写法跟 activities-repository.ts 的
- * hasPendingActivityParticipantsForOrganizer 是同一个模式。过滤条件
+ * countPendingActivityParticipantsForOrganizer 是同一个模式。过滤条件
  * （status = 'pending' + deleted_at is null）跟 listPendingPosts 保持
  * 完全一致，这样角标数字和"待审核"页面实际能看到的行数永远对得上。
  */

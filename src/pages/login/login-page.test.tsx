@@ -37,9 +37,9 @@ import { LoginPage } from "./login-page";
 
 const initialAuthState = useAuthStore.getState();
 
-function renderLoginPage() {
+function renderLoginPage(initialEntry = "/login") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <LoginPage />
     </MemoryRouter>
   );
@@ -165,6 +165,52 @@ describe("LoginPage", () => {
       });
     });
     expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+  });
+
+  // 注册登录简化任务卡：从别的页面被带来登录（?redirect=），登录成功后
+  // 回到那个页面；去注册的链接也带上同一个 redirect。
+  it("returns to the page in ?redirect= after login and carries it to the register link", async () => {
+    authMock.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+      error: null
+    });
+
+    renderLoginPage("/login?redirect=%2Factivities%2Fact-1%3Fs%3D1");
+    expect(screen.getByRole("link", { name: "去注册" })).toHaveAttribute(
+      "href",
+      "/register?redirect=%2Factivities%2Fact-1%3Fs%3D1"
+    );
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
+      target: { value: "user@example.com" }
+    });
+    fireEvent.change(screen.getByLabelText("密码"), {
+      target: { value: "password123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/activities/act-1?s=1", { replace: true });
+    });
+  });
+
+  it("ignores an off-site redirect and goes home", async () => {
+    authMock.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+      error: null
+    });
+
+    renderLoginPage("/login?redirect=https%3A%2F%2Fevil.com");
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
+      target: { value: "user@example.com" }
+    });
+    fireEvent.change(screen.getByLabelText("密码"), {
+      target: { value: "password123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+    });
   });
 
   // 登录/注册支持手机号任务卡：输入手机号时，signInWithPassword 收到的

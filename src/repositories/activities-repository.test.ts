@@ -7,7 +7,7 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock }
   // 30 号卡新增：真实的 supabase-js query builder本身就是一个 thenable——
   // 不是每次查询都要落到 .single()/.maybeSingle()/.overrideTypes() 这类
   // 显式终结方法才能拿到结果，count-only 的 head:true 查询
-  // （hasPendingActivityParticipantsForOrganizer）就是直接 await 整条
+  // （countPendingActivityParticipantsForOrganizer）就是直接 await 整条
   // 链式调用本身，没有再多调用任何终结方法。这里补一个 .then 让这个
   // mock builder 也能被直接 await——包成 vi.fn() 是为了跟其它链式方法
   // 一样能被下面 resetAllMocks() 的 Object.keys 循环统一 mockClear()，
@@ -54,7 +54,7 @@ import {
   createActivity,
   getActivityDetail,
   getActivityParticipationStatus,
-  hasPendingActivityParticipantsForOrganizer,
+  countPendingActivityParticipantsForOrganizer,
   joinActivity,
   leaveActivity,
   listActivities,
@@ -1280,13 +1280,13 @@ describe("listPendingActivityParticipants", () => {
 
 // 30 号卡（待审核红点）：底部导航"我的"图标用这个函数判断要不要显示红点，
 // 见 use-has-pending-activity-participants-query.ts。
-describe("hasPendingActivityParticipantsForOrganizer", () => {
+describe("countPendingActivityParticipantsForOrganizer", () => {
   beforeEach(resetAllMocks);
 
   it("queries activity_participants filtered to pending status and the given organizer, with count:'exact', head:true", async () => {
     thenMock.mockResolvedValue({ count: 0, data: null, error: null });
 
-    await hasPendingActivityParticipantsForOrganizer("organizer-1");
+    await countPendingActivityParticipantsForOrganizer("organizer-1");
 
     expect(fromMock).toHaveBeenCalledWith("activity_participants");
     expect(queryBuilder.select).toHaveBeenCalledWith("id, activities!inner(organizer_id)", {
@@ -1297,22 +1297,22 @@ describe("hasPendingActivityParticipantsForOrganizer", () => {
     expect(queryBuilder.eq).toHaveBeenCalledWith("activities.organizer_id", "organizer-1");
   });
 
-  it("returns true when count is greater than 0", async () => {
+  it("returns the pending count", async () => {
     thenMock.mockResolvedValue({ count: 3, data: null, error: null });
 
-    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(true);
+    await expect(countPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(3);
   });
 
-  it("returns false when count is 0", async () => {
+  it("returns 0 when count is 0", async () => {
     thenMock.mockResolvedValue({ count: 0, data: null, error: null });
 
-    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(false);
+    await expect(countPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(0);
   });
 
-  it("returns false (not throw) when count comes back null", async () => {
+  it("returns 0 (not throw) when count comes back null", async () => {
     thenMock.mockResolvedValue({ count: null, data: null, error: null });
 
-    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(false);
+    await expect(countPendingActivityParticipantsForOrganizer("organizer-1")).resolves.toBe(0);
   });
 
   it("throws an AppError when the Supabase query fails", async () => {
@@ -1322,7 +1322,7 @@ describe("hasPendingActivityParticipantsForOrganizer", () => {
       error: { message: "network down", code: "500" }
     });
 
-    await expect(hasPendingActivityParticipantsForOrganizer("organizer-1")).rejects.toMatchObject({
+    await expect(countPendingActivityParticipantsForOrganizer("organizer-1")).rejects.toMatchObject({
       code: "ACTIVITY_PENDING_PARTICIPANTS_COUNT_FAILED"
     });
   });

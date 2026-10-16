@@ -12,6 +12,8 @@ import { useUnblockUserMutation } from "../../features/blocks/use-unblock-user-m
 import { usePublicProfileQuery } from "../../features/profile/use-public-profile-query";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
+import { useLoginPath } from "../../router/use-login-path";
+import { useNicknamePrompt } from "../../features/profile/use-nickname-prompt";
 
 const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
@@ -322,6 +324,7 @@ function MoreMenu({ userId, isBlocking, isBlockActionPending, onToggleBlock }: M
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const currentUserId = session?.user.id;
 
@@ -339,18 +342,24 @@ export function UserProfilePage() {
   const blockMutation = useBlockUserMutation();
   const unblockMutation = useUnblockUserMutation();
   const [blockError, setBlockError] = useState<string | null>(null);
+  // 注册登录简化任务卡：第一次私信前，默认昵称先提示改一个（对方会看到）。
+  const { runWithNicknameCheck } = useNicknamePrompt();
 
   function handleMessage(): void {
     if (!userId) return;
 
     if (!currentUserId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
     if (createConversation.isPending) return;
 
     setError(null);
-    createConversation.mutate(userId, {
+    runWithNicknameCheck(() => startConversation(userId));
+  }
+
+  function startConversation(targetUserId: string): void {
+    createConversation.mutate(targetUserId, {
       onSuccess: ({ conversationId }) => {
         navigate(`/messages/${conversationId}`);
       },
@@ -372,7 +381,7 @@ export function UserProfilePage() {
     if (!userId) return;
 
     if (!currentUserId) {
-      navigate("/login");
+      navigate(loginPath);
       return;
     }
     if (blockMutation.isPending || unblockMutation.isPending) return;

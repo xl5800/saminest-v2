@@ -11,6 +11,7 @@ const {
   useActivityCommentsQuery,
   useCreateCommentMutation,
   useDeleteCommentMutation,
+  usePendingActivityParticipantsQuery,
   shareMock,
   mutateParticipationMock,
   navigateMock
@@ -24,6 +25,7 @@ const {
   useActivityCommentsQuery: vi.fn(),
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
+  usePendingActivityParticipantsQuery: vi.fn(),
   shareMock: vi.fn(),
   mutateParticipationMock: vi.fn(),
   navigateMock: vi.fn()
@@ -65,6 +67,9 @@ vi.mock("../../features/comments/use-create-comment-mutation", () => ({
 }));
 vi.mock("../../features/comments/use-delete-comment-mutation", () => ({
   useDeleteCommentMutation
+}));
+vi.mock("../../features/activities/use-pending-activity-participants-query", () => ({
+  usePendingActivityParticipantsQuery
 }));
 vi.mock("@capacitor/share", () => ({
   Share: { share: shareMock }
@@ -122,6 +127,8 @@ describe("ActivityDetailPage", () => {
     useActivityCommentsQuery.mockReset();
     useCreateCommentMutation.mockReset();
     useDeleteCommentMutation.mockReset();
+    usePendingActivityParticipantsQuery.mockReset();
+    usePendingActivityParticipantsQuery.mockReturnValue({ data: undefined });
     shareMock.mockReset();
     mutateParticipationMock.mockReset();
     navigateMock.mockReset();
@@ -692,7 +699,7 @@ describe("ActivityDetailPage", () => {
         expect(shareMock).toHaveBeenCalledWith(
           expect.objectContaining({
             title: "周末吃火锅",
-            url: "https://www.saminest.com/activities/act-1",
+            url: expect.stringMatching(/^https:\/\/www\.saminest\.com\/activities\/act-1\?s=\d+$/),
             dialogTitle: "分享"
           })
         );
@@ -1202,10 +1209,72 @@ describe("ActivityDetailPage", () => {
       });
 
       expect(screen.queryByPlaceholderText("写下你的评论…")).not.toBeInTheDocument();
-      // "登录" 链接在这个页面上不止一个入口（参加活动按钮那一块未登录时
-      // 也有），用 getAllByRole 只确认至少有一个指向 /login，不假设唯一。
+      // 注册登录简化任务卡：登录链接带上当前活动页，登录后回来。
       const loginLinks = screen.getAllByRole("link", { name: "登录" });
-      expect(loginLinks.some((link) => link.getAttribute("href") === "/login")).toBe(true);
+      expect(
+        loginLinks.some(
+          (link) => link.getAttribute("href") === "/login?redirect=%2Factivities%2Fact-1"
+        )
+      ).toBe(true);
+    });
+  });
+
+  // 审核入口红点任务卡：发起人打开自己的需要审核的活动，有待处理申请时
+  // 顶部提示"有 N 人申请加入 · 去处理 →"，跳到"我的活动"并自动展开那张卡。
+  describe("pending applicants banner for the organizer", () => {
+    function renderAsOrganizer(requiresApproval: boolean) {
+      useAuthStore.getState().setSession({ user: { id: "user-1" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: { ...sampleActivityDetail, requiresApproval },
+        isPending: false,
+        isError: false
+      });
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+    }
+
+    it("shows the count and links to /my-activities?pendingActivityId=", () => {
+      usePendingActivityParticipantsQuery.mockReturnValue({
+        data: [{ participantId: "p1" }, { participantId: "p2" }]
+      });
+      renderAsOrganizer(true);
+
+      expect(usePendingActivityParticipantsQuery).toHaveBeenCalledWith(["act-1"]);
+      const banner = screen.getByTestId("pending-applicants-banner");
+      expect(banner).toHaveTextContent("有 2 人申请加入");
+      expect(banner).toHaveAttribute("href", "/my-activities?pendingActivityId=act-1");
+    });
+
+    it("does not render when there are no pending applicants", () => {
+      usePendingActivityParticipantsQuery.mockReturnValue({ data: [] });
+      renderAsOrganizer(true);
+
+      expect(screen.queryByTestId("pending-applicants-banner")).not.toBeInTheDocument();
+    });
+
+    it("does not query or render for activities that do not require approval", () => {
+      renderAsOrganizer(false);
+
+      expect(usePendingActivityParticipantsQuery).toHaveBeenCalledWith([]);
+      expect(screen.queryByTestId("pending-applicants-banner")).not.toBeInTheDocument();
+    });
+
+    it("does not query or render for non-organizers", () => {
+      useAuthStore.getState().setSession({ user: { id: "someone-else" } } as never);
+      useActivityDetailQuery.mockReturnValue({
+        data: { ...sampleActivityDetail, requiresApproval: true },
+        isPending: false,
+        isError: false
+      });
+      renderWithProviders(<ActivityDetailPage />, {
+        initialEntries: ["/activities/act-1"],
+        route: "/activities/:id"
+      });
+
+      expect(usePendingActivityParticipantsQuery).toHaveBeenCalledWith([]);
+      expect(screen.queryByTestId("pending-applicants-banner")).not.toBeInTheDocument();
     });
   });
 });

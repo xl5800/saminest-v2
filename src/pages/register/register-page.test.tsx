@@ -19,40 +19,30 @@ vi.mock("react-router-dom", async (importOriginal) => {
 import { AppError } from "../../utils/app-error";
 import { RegisterPage } from "./register-page";
 
-function renderRegisterPage() {
+function renderRegisterPage(initialEntry = "/register") {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <RegisterPage />
     </MemoryRouter>
   );
 }
 
 const validValues = {
-  displayName: "小明",
   email: "user@example.com",
-  password: "password123",
-  confirmPassword: "password123",
-  agreeToTerms: true
+  password: "password123"
 };
 
 function fillForm(overrides: Partial<typeof validValues> = {}) {
   const values = { ...validValues, ...overrides };
-  fireEvent.change(screen.getByLabelText("显示名称"), {
-    target: { value: values.displayName }
-  });
   fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
     target: { value: values.email }
   });
   fireEvent.change(screen.getByLabelText("密码"), {
     target: { value: values.password }
   });
-  fireEvent.change(screen.getByLabelText("确认密码"), {
-    target: { value: values.confirmPassword }
-  });
-  if (values.agreeToTerms) {
-    fireEvent.click(screen.getByRole("checkbox"));
-  }
 }
+
+const DEFAULT_NICKNAME = expect.stringMatching(/^同城用户\d{4}$/);
 
 describe("RegisterPage", () => {
   afterEach(() => {
@@ -64,22 +54,23 @@ describe("RegisterPage", () => {
     navigateMock.mockReset();
   });
 
-  it("renders the four required fields", () => {
+  // 注册登录简化任务卡：表单只剩两项，没有显示名称/确认密码/协议勾选框。
+  it("renders only the identifier and password fields", () => {
     renderRegisterPage();
 
-    expect(screen.getByLabelText("显示名称")).toBeInTheDocument();
     expect(screen.getByLabelText("邮箱或手机号")).toBeInTheDocument();
     expect(screen.getByLabelText("密码")).toBeInTheDocument();
-    expect(screen.getByLabelText("确认密码")).toBeInTheDocument();
+    expect(screen.queryByLabelText("显示名称")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("确认密码")).not.toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
-  it("renders the terms/privacy checkbox with links that navigate in-app (no target=_blank)", () => {
+  it("shows a 注册即表示同意 line with links that navigate in-app (no target=_blank)", () => {
     renderRegisterPage();
 
     // 不能再用 target="_blank"：/terms 和 /privacy 是应用内部路由，Capacitor 的原生
-    // WebView 没有"新标签页"，target="_blank" 在 App 里点了没反应。去掉之后走正常的
-    // 客户端路由跳转，网页端和 App 里都能用。
-    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    // WebView 没有"新标签页"，target="_blank" 在 App 里点了没反应。
+    expect(screen.getByText(/注册即表示同意/)).toBeInTheDocument();
     const termsLink = screen.getByRole("link", { name: "《用户协议》" });
     expect(termsLink).toHaveAttribute("href", "/terms");
     expect(termsLink).not.toHaveAttribute("target");
@@ -88,55 +79,22 @@ describe("RegisterPage", () => {
     expect(privacyLink).not.toHaveAttribute("target");
   });
 
-  it("blocks submission on the client and shows a friendly message when passwords mismatch", async () => {
-    renderRegisterPage();
-    fillForm({ confirmPassword: "different123" });
+  it("links to the login page, carrying the redirect param", () => {
+    renderRegisterPage("/register?redirect=%2Factivities%2Fact-1");
 
-    fireEvent.click(screen.getByRole("button", { name: "注册" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("两次输入的密码不一致。");
-    expect(signUp).not.toHaveBeenCalled();
+    expect(screen.getByRole("link", { name: "去登录" })).toHaveAttribute(
+      "href",
+      "/login?redirect=%2Factivities%2Fact-1"
+    );
   });
 
   it("blocks submission when the password is shorter than the minimum length", async () => {
     renderRegisterPage();
-    fillForm({ password: "short1", confirmPassword: "short1" });
+    fillForm({ password: "short1" });
 
     fireEvent.click(screen.getByRole("button", { name: "注册" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("密码至少需要 8 位。");
-    expect(signUp).not.toHaveBeenCalled();
-  });
-
-  it("toggles the password and confirm-password fields between hidden and visible text independently", () => {
-    renderRegisterPage();
-
-    const passwordInput = screen.getByLabelText("密码");
-    const confirmInput = screen.getByLabelText("确认密码");
-    expect(passwordInput).toHaveAttribute("type", "password");
-    expect(confirmInput).toHaveAttribute("type", "password");
-
-    const [passwordToggle, confirmToggle] = screen.getAllByRole("button", {
-      name: "显示密码"
-    });
-    fireEvent.click(passwordToggle);
-
-    expect(passwordInput).toHaveAttribute("type", "text");
-    expect(confirmInput).toHaveAttribute("type", "password");
-
-    fireEvent.click(confirmToggle);
-    expect(confirmInput).toHaveAttribute("type", "text");
-  });
-
-  it("blocks submission and shows a friendly message when the terms checkbox is not checked", async () => {
-    renderRegisterPage();
-    fillForm({ agreeToTerms: false });
-
-    fireEvent.click(screen.getByRole("button", { name: "注册" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "请先阅读并同意用户协议和隐私政策。"
-    );
     expect(signUp).not.toHaveBeenCalled();
   });
 
@@ -162,7 +120,7 @@ describe("RegisterPage", () => {
     });
   });
 
-  it("calls authService.signUp with the validated fields and redirects home on success once the terms checkbox is checked", async () => {
+  it("calls authService.signUp with a default nickname and redirects home on success", async () => {
     signUp.mockResolvedValue({ user: null, session: null });
     renderRegisterPage();
     fillForm();
@@ -173,10 +131,22 @@ describe("RegisterPage", () => {
       expect(signUp).toHaveBeenCalledWith({
         email: "user@example.com",
         password: "password123",
-        displayName: "小明"
+        displayName: DEFAULT_NICKNAME
       });
     });
     expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+  });
+
+  it("returns to the page in ?redirect= after a successful signup", async () => {
+    signUp.mockResolvedValue({ user: null, session: null });
+    renderRegisterPage("/register?redirect=%2Factivities%2Fact-1");
+    fillForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/activities/act-1", { replace: true });
+    });
   });
 
   it("maps a known Supabase error code to a friendly message instead of the raw error", async () => {
@@ -205,7 +175,7 @@ describe("RegisterPage", () => {
       expect(signUp).toHaveBeenCalledWith({
         email: "7035550199@phone.saminest.internal",
         password: "password123",
-        displayName: "小明",
+        displayName: DEFAULT_NICKNAME,
         phone: "7035550199"
       });
     });

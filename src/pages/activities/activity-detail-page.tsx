@@ -13,6 +13,7 @@ import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
+import { usePendingActivityParticipantsQuery } from "../../features/activities/use-pending-activity-participants-query";
 import type { ActivityDetail, ActivityParticipant } from "../../repositories/activities-repository";
 import { getActivityChannelMeta } from "../../repositories/activities-repository";
 import { useAuthStore } from "../../store/auth-store";
@@ -233,6 +234,14 @@ export function ActivityDetailPage() {
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
 
   const isOrganizer = !!session && !!data && session.user.id === data.organizerId;
+  // 审核入口红点任务卡：发起人打开自己的（需要审核的）活动时，顶部提示
+  // "有 N 人申请加入"。复用"我的活动"页面审核面板同一个查询
+  // （usePendingActivityParticipantsQuery），同意/拒绝之后那边 invalidate
+  // 的也是同一组 key；不是发起人或活动不需要审核时传空数组，查询不会发出。
+  const pendingQueryActivityIds =
+    isOrganizer && data?.requiresApproval && id ? [id] : [];
+  const { data: pendingApplicants } = usePendingActivityParticipantsQuery(pendingQueryActivityIds);
+  const pendingApplicantCount = pendingQueryActivityIds.length > 0 ? pendingApplicants?.length ?? 0 : 0;
   // 找搭子卡片+详情页视觉对齐设计稿任务卡：标题上方新增的频道行需要用到
   // 这两个值，data 还没加载出来时不需要真的展示，但 JSX 里不能直接写
   // `const`，提前在这里算好，data 为 null/undefined 时退回 getActivityChannelMeta
@@ -261,7 +270,11 @@ export function ActivityDetailPage() {
             : activity.landmarkText ??
               (activity.locationName ? formatLocationDisplayName(activity.locationName) : "地点待定")
         }`,
-        url: `${PRODUCTION_ORIGIN}/activities/${id}`,
+        // 分享卡片方图任务卡：链接末尾带上分享时刻的时间戳（?s=）。微信会按
+        // 链接缓存抓到的卡片，同一个链接再分享可能直接复用旧卡片；每次分享
+        // 都是一个新链接，微信就会重新抓一次标题/描述/图片。这个参数页面
+        // 本身不读，只是让链接不一样。
+        url: `${PRODUCTION_ORIGIN}/activities/${id}?s=${Date.now()}`,
         dialogTitle: "分享"
       });
     } catch (error) {
@@ -336,6 +349,16 @@ export function ActivityDetailPage() {
 
         {!isPending && !isError && data ? (
           <div className="space-y-4">
+            {pendingApplicantCount > 0 ? (
+              <Link
+                to={`/my-activities?pendingActivityId=${data.id}`}
+                data-testid="pending-applicants-banner"
+                className="flex items-center justify-between rounded-xl bg-primary/10 px-4 py-3 text-sm font-medium text-primary"
+              >
+                <span>有 {pendingApplicantCount} 人申请加入</span>
+                <span>去处理 →</span>
+              </Link>
+            ) : null}
             {/* 1. 标题——任务卡 9：频道/标签徽章 chip 删掉了（频道已经通过
                 emoji 表达），"发起人：{昵称}"文字链接也删掉了（发起人身份
                 下面的 PersonCard 已经展示，见页面顶部注释）。找搭子卡片+
