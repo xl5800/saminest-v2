@@ -1,6 +1,7 @@
 import { ArrowLeft, ChevronDown, Menu, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+
+import { useGoBack } from "../router/use-go-back";
 
 /**
  * 全站统一顶部栏——Meet5 风格改版任务卡 01（见
@@ -26,7 +27,8 @@ import { useNavigate } from "react-router-dom";
  * 因此改成可选，不传时不渲染那个图标按钮，"＋"和"搜索"两个图标不再必然
  * 成对出现。
  *
- * 返回/关闭按钮默认用 navigate(-1)，调用方传了 onBack/onClose 就用调用方
+ * 返回/关闭按钮默认用 useGoBack()（有站内上一页就 navigate(-1)，从分享链接
+ * 直接打开、没有上一页时回首页），调用方传了 onBack/onClose 就用调用方
  * 的——大多数二级页直接用默认值就够（跟 app-header.tsx 现有的返回按钮是
  * 同一个默认行为），只有像 conversation-page.tsx 那种"直接从外部链接进来、
  * 历史栈里没有上一页"要做特殊兜底跳转的页面才需要自己传 onBack。
@@ -96,12 +98,13 @@ function EmptySlot() {
 }
 
 function BackButton({ onBack }: { onBack?: () => void }) {
-  const navigate = useNavigate();
+  // 从分享链接直接打开、没有站内上一页时回首页，见 router/use-go-back.ts。
+  const goBack = useGoBack();
   return (
     <button
       type="button"
       aria-label="返回"
-      onClick={onBack ?? (() => navigate(-1))}
+      onClick={onBack ?? goBack}
       className={ICON_BUTTON_CLASS_NAME}
     >
       <ArrowLeft size={18} aria-hidden="true" />
@@ -275,7 +278,7 @@ export type TopBarProps =
   | TopBarNavOnlyProps;
 
 export function TopBar(props: TopBarProps) {
-  const navigate = useNavigate();
+  const goBack = useGoBack();
 
   if (props.variant === "home") {
     return (
@@ -405,7 +408,7 @@ export function TopBar(props: TopBarProps) {
           <button
             type="button"
             aria-label="关闭"
-            onClick={props.onClose ?? (() => navigate(-1))}
+            onClick={props.onClose ?? goBack}
             className={ICON_BUTTON_CLASS_NAME}
           >
             <X size={18} aria-hidden="true" />

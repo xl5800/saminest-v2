@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
+import { useGoBack } from "../router/use-go-back";
 
 export const authLabelClassName = "block text-sm font-medium text-text";
 
@@ -36,7 +37,8 @@ export interface AuthLayoutProps {
  * Safari 一屏内能看到从标题到提交按钮的完整登录/注册操作。
  */
 export function AuthLayout({ children }: AuthLayoutProps) {
-  const navigate = useNavigate();
+  // 直接打开登录链接、没有站内上一页时回首页，见 router/use-go-back.ts。
+  const goBack = useGoBack();
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -44,7 +46,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <button
           type="button"
           aria-label="返回"
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           className="shrink-0 text-lg text-text"
         >
           ←

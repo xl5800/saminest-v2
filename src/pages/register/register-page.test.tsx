@@ -19,7 +19,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 import { AppError } from "../../utils/app-error";
 import { RegisterPage } from "./register-page";
 
-function renderRegisterPage(initialEntry = "/register") {
+function renderRegisterPage(initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/register") {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <RegisterPage />
@@ -146,6 +146,23 @@ describe("RegisterPage", () => {
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/activities/act-1", { replace: true });
+    });
+  });
+
+  // 活动页 → 登录页 → 注册页（authDepth=2）：注册成功退两步回到活动页。
+  it("steps back over both auth pages when it was reached via the login page", async () => {
+    signUp.mockResolvedValue({ user: null, session: null });
+    renderRegisterPage({
+      pathname: "/register",
+      search: "?redirect=%2Factivities%2Fact-1",
+      state: { authDepth: 2 }
+    });
+    fillForm();
+
+    fireEvent.click(screen.getByRole("button", { name: "注册" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith(-2);
     });
   });
 

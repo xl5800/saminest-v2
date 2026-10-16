@@ -14,6 +14,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { useLoginPath } from "../../router/use-login-path";
 import { useNicknamePrompt } from "../../features/profile/use-nickname-prompt";
+import { useGoBack } from "../../router/use-go-back";
 
 const DEFAULT_ERROR_MESSAGE = "会话创建失败，请稍后重试。";
 const LOAD_ERROR_MESSAGE = "用户信息加载失败，请稍后重试。";
@@ -324,6 +325,7 @@ function MoreMenu({ userId, isBlocking, isBlockActionPending, onToggleBlock }: M
 export function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const goBack = useGoBack();
   const loginPath = useLoginPath();
   const session = useAuthStore((s) => s.session);
   const currentUserId = session?.user.id;
@@ -414,7 +416,7 @@ export function UserProfilePage() {
         <button
           type="button"
           aria-label="返回"
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           className={TOP_ROW_ICON_BUTTON_CLASS_NAME}
         >
           <ArrowLeft size={18} aria-hidden="true" />

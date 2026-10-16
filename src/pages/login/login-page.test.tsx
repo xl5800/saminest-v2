@@ -37,7 +37,7 @@ import { LoginPage } from "./login-page";
 
 const initialAuthState = useAuthStore.getState();
 
-function renderLoginPage(initialEntry = "/login") {
+function renderLoginPage(initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/login") {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <LoginPage />
@@ -190,6 +190,33 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/activities/act-1?s=1", { replace: true });
+    });
+  });
+
+  // 从原页面点"去登录"进来的（authDepth=1）：登录成功直接 navigate(-1)
+  // 退回原页面那条历史，不再 replace 出一条重复的记录（否则用户在活动页点
+  // 返回还是同一个活动页，看起来像被困住）。
+  it("steps back over the auth pages when the source page is behind it in history", async () => {
+    authMock.signInWithPassword.mockResolvedValue({
+      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+      error: null
+    });
+
+    renderLoginPage({
+      pathname: "/login",
+      search: "?redirect=%2Factivities%2Fact-1",
+      state: { authDepth: 1 }
+    });
+    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
+      target: { value: "user@example.com" }
+    });
+    fireEvent.change(screen.getByLabelText("密码"), {
+      target: { value: "password123" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith(-1);
     });
   });
 

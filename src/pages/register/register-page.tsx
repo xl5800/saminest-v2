@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
 import {
   AuthLayout,
@@ -10,8 +10,9 @@ import {
 import { PasswordInput } from "../../components/password-input";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
-import { carryRedirect, resolveRedirectAfterLogin } from "../../utils/auth-redirect";
+import { carryRedirect } from "../../utils/auth-redirect";
 import { MIN_PASSWORD_LENGTH, validateRegisterInput } from "./register-validation";
+import { useFinishAuth } from "../../router/use-finish-auth";
 
 const DEFAULT_ERROR_MESSAGE = "注册失败，请稍后重试。";
 
@@ -40,8 +41,8 @@ function friendlyErrorMessage(error: unknown): string {
 }
 
 export function RegisterPage() {
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { finishAuth, authLinkState } = useFinishAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,9 +62,8 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await authService.signUp(validation.data);
-      // 注册登录简化任务卡：回到去登录/注册之前的页面（?redirect=），没有
-      // 就回首页。
-      navigate(resolveRedirectAfterLogin(searchParams), { replace: true });
+      // 注册登录简化任务卡：回到去登录之前的页面，见 router/use-finish-auth.ts。
+      finishAuth();
     } catch (cause) {
       setError(friendlyErrorMessage(cause));
     } finally {
@@ -125,7 +125,11 @@ export function RegisterPage() {
       </form>
       <p className="mt-5 text-center text-sm text-text-muted">
         已有账号？
-        <Link to={carryRedirect("/login", searchParams)} className="text-primary hover:underline">
+        <Link
+            to={carryRedirect("/login", searchParams)}
+            state={authLinkState}
+            className="text-primary hover:underline"
+          >
           去登录
         </Link>
       </p>

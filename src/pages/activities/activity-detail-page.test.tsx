@@ -1277,4 +1277,23 @@ describe("ActivityDetailPage", () => {
       expect(screen.queryByTestId("pending-applicants-banner")).not.toBeInTheDocument();
     });
   });
+
+  // 从微信分享卡片直接打开活动页（没有站内上一页）时，返回去找搭子列表，
+  // 不再因为 navigate(-1) 无处可退而困在详情页。
+  it("goes to /activities when back is pressed without in-app history", () => {
+    window.history.replaceState(null, "");
+    useActivityDetailQuery.mockReturnValue({
+      data: sampleActivityDetail,
+      isPending: false,
+      isError: false
+    });
+    renderWithProviders(<ActivityDetailPage />, {
+      initialEntries: ["/activities/act-1"],
+      route: "/activities/:id"
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+    expect(navigateMock).toHaveBeenCalledWith("/activities", { replace: true });
+  });
 });

@@ -128,6 +128,17 @@ const samplePostDetail = {
   commentCount: 0
 };
 
+
+// 返回按钮改成 useGoBack（router/use-go-back.ts）：有站内上一页才
+// navigate(-1)，没有就回兜底页。这个文件里的用例模拟的是"站内点进来"的
+// 正常情况，所以先把 history.state.idx 设成 1。
+beforeEach(() => {
+  window.history.replaceState({ idx: 1 }, "");
+});
+afterEach(() => {
+  window.history.replaceState(null, "");
+});
+
 describe("PostDetailPage", () => {
   afterEach(() => {
     cleanup();

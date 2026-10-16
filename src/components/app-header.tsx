@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { PublishActionSheet } from "./publish-action-sheet";
+import { useGoBack } from "../router/use-go-back";
 
 /**
  * 全局持久顶部导航栏，由 AppShell 包在每一个路由外层渲染。
@@ -24,7 +25,7 @@ import { PublishActionSheet } from "./publish-action-sheet";
  */
 export function AppHeader() {
   const location = useLocation();
-  const navigate = useNavigate();
+  const goBack = useGoBack();
   const [publishSheetOpen, setPublishSheetOpen] = useState(false);
 
   const showBackButton = location.pathname !== "/";
@@ -36,7 +37,7 @@ export function AppHeader() {
           <button
             type="button"
             aria-label="返回"
-            onClick={() => navigate(-1)}
+            onClick={goBack}
             className="shrink-0 text-lg text-text"
           >
             ←

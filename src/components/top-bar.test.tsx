@@ -11,6 +11,17 @@ vi.mock("react-router-dom", async (importOriginal) => {
 import { renderWithProviders } from "../test/render-with-providers";
 import { TopBar } from "./top-bar";
 
+
+// 返回按钮改成 useGoBack（router/use-go-back.ts）：有站内上一页才
+// navigate(-1)，没有就回兜底页。这个文件里的用例模拟的是"站内点进来"的
+// 正常情况，所以先把 history.state.idx 设成 1。
+beforeEach(() => {
+  window.history.replaceState({ idx: 1 }, "");
+});
+afterEach(() => {
+  window.history.replaceState(null, "");
+});
+
 describe("TopBar", () => {
   afterEach(() => {
     cleanup();
@@ -320,6 +331,17 @@ describe("TopBar", () => {
       fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
       expect(navigateMock).toHaveBeenCalledWith(-1);
+    });
+
+    // 从微信分享链接直接打开详情页时没有站内上一页，navigate(-1) 什么都
+    // 不会发生，用户会被困在这一页——改成回首页。
+    it("goes to / (replace) instead of navigate(-1) when there is no in-app history", () => {
+      window.history.replaceState(null, "");
+      renderWithProviders(<TopBar variant="detail" />);
+
+      fireEvent.click(screen.getByRole("button", { name: "返回" }));
+
+      expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
     });
 
     it("calls a caller-supplied onBack instead of the default navigate(-1)", () => {

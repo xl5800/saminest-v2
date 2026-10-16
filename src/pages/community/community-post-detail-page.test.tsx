@@ -89,6 +89,16 @@ function renderPage(state?: unknown) {
   });
 }
 
+
+// 返回按钮改成 useGoBack（router/use-go-back.ts）：有站内上一页才
+// navigate(-1)。这个文件里的用例模拟"站内点进来"的情况。
+beforeEach(() => {
+  window.history.replaceState({ idx: 1 }, "");
+});
+afterEach(() => {
+  window.history.replaceState(null, "");
+});
+
 describe("CommunityPostDetailPage", () => {
   afterEach(() => {
     cleanup();

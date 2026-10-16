@@ -19,6 +19,7 @@ import { getActivityChannelMeta } from "../../repositories/activities-repository
 import { useAuthStore } from "../../store/auth-store";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatActivityParticipantSummary, formatActivityStartAt } from "../../utils/format";
+import { useGoBack } from "../../router/use-go-back";
 
 // 找搭子卡片+详情页视觉对齐设计稿任务卡：时间行的"星期几"次要文字——这个
 // 仓库里没有现成的星期格式化函数（format.ts 不在这张任务卡允许改动的文件
@@ -229,6 +230,9 @@ function formatJoinedParticipantLine(participant: ActivityParticipant): string {
 export function ActivityDetailPage() {
   const { id } = useParams<{ id: string }>();
   const session = useAuthStore((s) => s.session);
+  // 从微信分享卡片直接打开时没有站内上一页，返回改成去找搭子列表，用户
+  // 能接着看其它活动（见 router/use-go-back.ts）。
+  const goBack = useGoBack("/activities");
 
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
@@ -289,6 +293,7 @@ export function ActivityDetailPage() {
     <main data-testid="activity-detail-page">
       <TopBar
         variant="detail"
+        onBack={goBack}
         moreMenu={
           data
             ? {

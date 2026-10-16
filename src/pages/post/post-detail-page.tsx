@@ -3,7 +3,7 @@ import { Share } from "@capacitor/share";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { Share2, X } from "lucide-react";
 import { type UIEvent, useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
@@ -18,6 +18,7 @@ import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import type { PostDetail } from "../../repositories/posts-repository";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatPrice, formatRelativeTimeAgo, isPriceUnset } from "../../utils/format";
+import { useGoBack } from "../../router/use-go-back";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -168,7 +169,7 @@ interface PostDetailLocationState {
 export function PostDetailPage() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
-  const navigate = useNavigate();
+  const goBack = useGoBack();
   const state = location.state as PostDetailLocationState | null;
   const publishSuccessMessage = state?.publishSuccessMessage;
 
@@ -268,7 +269,7 @@ export function PostDetailPage() {
       <button
         type="button"
         aria-label="关闭"
-        onClick={() => navigate(-1)}
+        onClick={goBack}
         style={{ top: "calc(1rem + env(safe-area-inset-top))" }}
         className="fixed left-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
       >
