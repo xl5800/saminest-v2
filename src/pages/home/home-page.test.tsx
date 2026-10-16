@@ -294,12 +294,13 @@ describe("HomePage (community aggregate feed)", () => {
       expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
     });
 
-    it("renders the action row with favorite and share, and no like control", () => {
+    // 社区帖子点赞任务卡：操作行多了一个大拇指点赞按钮。
+    it("renders the action row with like, favorite and share", () => {
       renderWithProviders(<HomePage />);
 
       expect(screen.getByRole("button", { name: "收藏" })).toHaveAttribute("data-post-id", "cp-1");
       expect(screen.getByRole("button", { name: "分享帖子" })).toBeEnabled();
-      expect(screen.queryByRole("button", { name: /赞/ })).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "点赞" })).toHaveTextContent("赞");
     });
 
     it("keeps the action buttons outside the detail-page link", () => {

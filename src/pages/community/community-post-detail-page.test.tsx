@@ -1,11 +1,11 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useCommunityPostDetailQuery, useCommunityBySlugQuery, clipboardWrite, navigateMock } =
+const { useCommunityPostDetailQuery, useCommunityBySlugQuery, shareMock, navigateMock } =
   vi.hoisted(() => ({
     useCommunityPostDetailQuery: vi.fn(),
     useCommunityBySlugQuery: vi.fn(),
-    clipboardWrite: vi.fn(),
+    shareMock: vi.fn(),
     navigateMock: vi.fn()
   }));
 
@@ -20,8 +20,11 @@ vi.mock("../../features/community/use-community-post-detail-query", () => ({
 vi.mock("../../features/community/use-community-by-slug-query", () => ({
   useCommunityBySlugQuery
 }));
-vi.mock("@capacitor/clipboard", () => ({
-  Clipboard: { write: clipboardWrite }
+// 社区分享卡片任务卡：分享按钮改走 useShareLink() → shareLink()，这里直接
+// mock shareLink（跟 activity-detail-page.test.tsx 同一个做法）。
+vi.mock("../../features/share/share-link", () => ({
+  shareLink: shareMock,
+  isWechatBrowser: () => false
 }));
 vi.mock("../../components/image-lightbox", () => ({
   ImageLightbox: ({
@@ -115,8 +118,8 @@ describe("CommunityPostDetailPage", () => {
     useCommunityBySlugQuery.mockReturnValue({
       data: { id: "c-1", name: "DMV 社区", slug: "dmv", memberCount: 128 }
     });
-    clipboardWrite.mockReset();
-    clipboardWrite.mockResolvedValue(undefined);
+    shareMock.mockReset();
+    shareMock.mockResolvedValue("copied");
   });
 
   it("shows just the community name (no member count) as the top bar title, falling back to 帖子详情 until the community loads", () => {
@@ -148,45 +151,42 @@ describe("CommunityPostDetailPage", () => {
     expect(screen.getByText(/第一行/)).toHaveClass("text-[15px]");
   });
 
-  it("lays the action row out as three equal columns: comment count, favorite, share", () => {
+  // 社区帖子点赞任务卡：操作行变成四列，"赞"排第一个（跟 Facebook 一样）。
+  it("lays the action row out as four equal columns: like, comment count, favorite, share", () => {
     renderPage();
 
     const commentCount = screen.getByLabelText("4 条评论");
     const row = commentCount.parentElement;
-    expect(row).toHaveClass("grid", "grid-cols-3");
+    expect(row).toHaveClass("grid", "grid-cols-4");
     expect(Array.from(row?.children ?? []).map((cell) => cell.textContent)).toEqual([
+      "赞",
       "4",
       "cp-1/icon",
       "分享"
     ]);
   });
 
-  it("copies the production post link when 分享 is clicked and shows a transient confirmation", async () => {
+  it("shares the production post link (with a ?s= timestamp) and confirms when it fell back to copying", async () => {
     renderPage();
 
     expect(screen.queryByText("链接已复制")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "分享" }));
 
-    await waitFor(() => {
-      expect(clipboardWrite).toHaveBeenCalledWith({
-        string: "https://www.saminest.com/community/post/cp-1"
-      });
-    });
+    await waitFor(() => expect(shareMock).toHaveBeenCalledTimes(1));
+    const input = shareMock.mock.calls[0][0];
+    expect(input.title).toBe("推荐一家中餐馆");
+    expect(input.url).toMatch(/^https:\/\/www\.saminest\.com\/community\/post\/cp-1\?s=\d+$/);
     expect(await screen.findByRole("status")).toHaveTextContent("链接已复制");
   });
 
-  it("shows no confirmation when copying fails", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    clipboardWrite.mockRejectedValue(new Error("denied"));
+  it("shows no confirmation when sharing failed", async () => {
+    shareMock.mockResolvedValue("failed");
     renderPage();
 
     fireEvent.click(screen.getByRole("button", { name: "分享" }));
 
-    await waitFor(() => {
-      expect(consoleError).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(shareMock).toHaveBeenCalled());
     expect(screen.queryByText("链接已复制")).not.toBeInTheDocument();
-    consoleError.mockRestore();
   });
 
   it("loads the post by the :id route param", () => {

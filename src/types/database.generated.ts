@@ -463,6 +463,39 @@ export type Database = {
           },
         ]
       }
+      community_post_likes: {
+        Row: {
+          community_post_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          community_post_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          community_post_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_post_likes_community_post_id_fkey"
+            columns: ["community_post_id"]
+            isOneToOne: false
+            referencedRelation: "community_posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_post_likes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_posts: {
         Row: {
           author_id: string
@@ -472,6 +505,7 @@ export type Database = {
           created_at: string
           deleted_at: string | null
           favorite_count: number
+          like_count: number
           id: string
           pinned: boolean
           post_type: string
@@ -487,6 +521,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           favorite_count?: number
+          like_count?: number
           id?: string
           pinned?: boolean
           post_type?: string
@@ -502,6 +537,7 @@ export type Database = {
           created_at?: string
           deleted_at?: string | null
           favorite_count?: number
+          like_count?: number
           id?: string
           pinned?: boolean
           post_type?: string

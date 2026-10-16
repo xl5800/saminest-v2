@@ -1,7 +1,6 @@
-import { Clipboard } from "@capacitor/clipboard";
 import { BadgeCheck, Plus, Search, Share2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { CommunityPostCard } from "../../components/community-post-card";
 import { LeaveCommunityConfirmDialog } from "../../components/leave-community-confirm-dialog";
@@ -15,9 +14,10 @@ import { useJoinCommunityMutation } from "../../features/community/use-join-comm
 import { useLeaveCommunityMutation } from "../../features/community/use-leave-community-mutation";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
-import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
 import { useLoginPath } from "../../router/use-login-path";
+import { buildCommunityShareInput } from "../../features/share/community-share-input";
+import { useShareLink } from "../../features/share/use-share-link";
 
 const SKELETON_COUNT = 4;
 // 跟全站搜索页、分类页搜索同一个防抖时长。
@@ -46,11 +46,9 @@ const SEARCH_DEBOUNCE_MS = 400;
  * 成员，见 community-repository.ts），失败时按钮保持可点方便重试；未登录点击跳
  * 登录页。
  *
- * 分享：复制当前页面的生产环境链接到剪贴板（@capacitor/clipboard，跟
- * post-share-action-sheet.tsx 同一个写法，纯浏览器环境自动降级成
- * navigator.clipboard），成功后在头部下面显示一行"链接已复制"；失败只写
- * 控制台，不打扰用户。链接用当前 location.pathname 拼，路由以后改路径
- * （比如 /community/dmv）不需要同步改这里。
+ * 分享：社区分享卡片任务卡之后走 useShareLink()（App 系统分享面板 / 微信
+ * 转发引导 / navigator.share / 复制链接），跟找搭子活动详情页一致；微信卡片
+ * 的标题、简介和方图由 middleware.ts 按 /community/:slug 注入。
  *
  * 发布：悬浮按钮跳 /community/:slug/new——带上当前社区，发帖页自动归属到这个
  * 社区、不显示"选择社区"下拉框；未登录会被那条路由上的 RequireAuth 挡回登录页，
@@ -72,7 +70,6 @@ const SEARCH_DEBOUNCE_MS = 400;
 export function CommunityFeedPage() {
   const navigate = useNavigate();
   const loginPath = useLoginPath();
-  const location = useLocation();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
@@ -91,7 +88,7 @@ export function CommunityFeedPage() {
   const leaveCommunity = useLeaveCommunityMutation();
   const membership = useCommunityMembershipQuery(communityId, userId);
 
-  const [shareFeedback, setShareFeedback] = useState<string | null>(null);
+  const { share, shareUi } = useShareLink();
   const [confirmLeaveOpen, setConfirmLeaveOpen] = useState(false);
 
   // 社区内搜索：顶栏右侧搜索图标打开搜索框；只搜当前社区的帖子（传 communityId），
@@ -108,18 +105,6 @@ export function CommunityFeedPage() {
   function closeSearch(): void {
     setSearchOpen(false);
     setSearchText("");
-  }
-
-  async function handleShare(): Promise<void> {
-    setShareFeedback(null);
-    try {
-      await Clipboard.write({ string: `${PRODUCTION_ORIGIN}${location.pathname}` });
-      setShareFeedback("链接已复制");
-    } catch (error) {
-      // 复制失败不是用户能操作纠正的场景（权限被拒绝之类），静默吞掉、只留
-      // 控制台日志——跟 post-share-action-sheet.tsx 同一个态度。
-      console.error("复制链接失败：", error);
-    }
   }
 
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
@@ -221,17 +206,13 @@ export function CommunityFeedPage() {
           <button
             type="button"
             aria-label="分享"
-            onClick={() => void handleShare()}
+            onClick={() => void share(buildCommunityShareInput(community))}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg text-text"
           >
             <Share2 size={18} aria-hidden="true" />
           </button>
         </div>
-        {shareFeedback ? (
-          <p role="status" className="mt-2 text-xs text-text-muted">
-            {shareFeedback}
-          </p>
-        ) : null}
+        {shareUi}
         {confirmLeaveOpen ? (
           <LeaveCommunityConfirmDialog
             communityName={community.name}

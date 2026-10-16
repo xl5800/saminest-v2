@@ -1,9 +1,14 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { clipboardWrite } = vi.hoisted(() => ({ clipboardWrite: vi.fn() }));
+const { shareMock } = vi.hoisted(() => ({ shareMock: vi.fn() }));
 
-vi.mock("@capacitor/clipboard", () => ({ Clipboard: { write: clipboardWrite } }));
+// 社区分享卡片任务卡：分享按钮改走 useShareLink() → shareLink()，这里直接
+// mock shareLink（跟 activity-detail-page.test.tsx 同一个做法）。
+vi.mock("../features/share/share-link", () => ({
+  shareLink: shareMock,
+  isWechatBrowser: () => false
+}));
 vi.mock("./community-post-favorite-button", () => ({
   CommunityPostFavoriteButton: ({
     communityPostId,
@@ -25,11 +30,19 @@ import { CommunityPostActionBar } from "./community-post-action-bar";
 
 describe("CommunityPostActionBar", () => {
   afterEach(() => cleanup());
-  beforeEach(() => clipboardWrite.mockReset());
+  beforeEach(() => shareMock.mockReset());
 
   function renderBar() {
     return renderWithProviders(
-      <CommunityPostActionBar communityPostId="cp-1" commentCount={3} favoriteCount={5} />
+      <CommunityPostActionBar
+        communityPostId="cp-1"
+        commentCount={3}
+        favoriteCount={5}
+        likeCount={2}
+        title={null}
+        body="周末有人一起去 Costco 吗"
+        communityName="DMV 社区"
+      />
     );
   }
 
@@ -45,15 +58,25 @@ describe("CommunityPostActionBar", () => {
     expect(container.querySelector(".rounded-full.border")).toBeNull();
   });
 
-  it("copies the post link on share and briefly confirms", async () => {
-    clipboardWrite.mockResolvedValue(undefined);
+  it("shares the post link (with a ?s= timestamp) and confirms when it fell back to copying", async () => {
+    shareMock.mockResolvedValue("copied");
     renderBar();
 
     fireEvent.click(screen.getByRole("button", { name: "分享帖子" }));
 
     expect(await screen.findByText("链接已复制")).toBeInTheDocument();
-    expect(clipboardWrite).toHaveBeenCalledWith({
-      string: "https://www.saminest.com/community/post/cp-1"
-    });
+    const input = shareMock.mock.calls[0][0];
+    expect(input.title).toBe("周末有人一起去 Costco 吗");
+    expect(input.text).toBe("DMV 社区 · 华邻");
+    expect(input.url).toMatch(/^https:\/\/www\.saminest\.com\/community\/post\/cp-1\?s=\d+$/);
+  });
+
+  it("shows the WeChat forward guide inside WeChat", async () => {
+    shareMock.mockResolvedValue("wechat-guide");
+    renderBar();
+
+    fireEvent.click(screen.getByRole("button", { name: "分享帖子" }));
+
+    expect(await screen.findByRole("dialog", { name: "分享引导" })).toBeInTheDocument();
   });
 });

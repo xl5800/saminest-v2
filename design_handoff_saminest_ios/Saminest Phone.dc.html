@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+body{margin:0;background:#f7f5f1;color:#26221e;font-family:"Inter","PingFang SC","Noto Sans SC",system-ui,sans-serif;}
+a{color:#315bea;text-underline-offset:3px;}
+a:hover{color:#2b52d4;}
+*{box-sizing:border-box;}
+input,textarea,button{font-family:inherit;}
+input::placeholder,textarea::placeholder{color:#9c958b;}
+.sm-scroll::-webkit-scrollbar{display:none;}
+</style>
+</helmet>
+<div style="width:410px;height:864px;border-radius:60px;background:#2a2724;padding:10px;box-shadow:0 0 0 1px #e3ded6,0 30px 70px rgba(60,45,30,0.22);">
+<div style="position:relative;width:390px;height:844px;border-radius:50px;overflow:hidden;background:#f7f5f1;display:flex;flex-direction:column;font-family:'Inter','PingFang SC','Noto Sans SC',system-ui,sans-serif;color:#26221e;">
+
+<div style="height:47px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0 34px;font-size:15px;font-weight:600;position:relative;z-index:3;">
+<span>9:41</span>
+<div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#07080c;"></div>
+<div style="display:flex;gap:5px;align-items:center;font-size:16px;"><i class="ph-fill ph-cell-signal-full"></i><i class="ph-bold ph-wifi-high"></i><i class="ph-fill ph-battery-full" style="font-size:22px;"></i></div>
+</div>
+
+<sc-if value="{{ s_home }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;padding:6px 16px 0;">
+<div style="display:flex;align-items:center;gap:10px;height:44px;">
+<div style="font-size:22px;font-weight:500;letter-spacing:-0.02em;color:#315bea;">Saminest</div>
+<button onClick="{{ openRegionPicker }}" style="white-space:nowrap;flex-shrink:1;min-width:0;max-width:170px;overflow:hidden;display:flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:14px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:12px;cursor:pointer;"><i class="ph ph-map-pin"></i>{{ regionLabel }}<i class="ph ph-caret-down" style="font-size:10px;"></i></button>
+<div style="flex:1;"></div>
+<button onClick="{{ toggleSearch }}" style="white-space:nowrap;flex-shrink:0;width:36px;height:36px;border-radius:18px;border:0;background:transparent;color:#26221e;font-size:21px;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="ph ph-magnifying-glass"></i></button>
+<button onClick="{{ openPublishSheet }}" style="white-space:nowrap;flex-shrink:0;width:36px;height:36px;border-radius:18px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:19px;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="ph ph-plus"></i></button>
+</div>
+<sc-if value="{{ search }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:8px;height:42px;margin-top:6px;padding:0 14px;border-radius:21px;background:#ffffff;box-shadow:0 0 0 1px #e3ded6;color:#756e65;"><i class="ph ph-magnifying-glass"></i><input placeholder="搜租房、求租、二手物品…" style="flex:1;border:0;background:transparent;color:#26221e;font-size:16px;outline:none;"></div>
+</sc-if>
+<div style="display:flex;gap:22px;height:44px;align-items:flex-end;">
+<sc-for list="{{ homeCats }}" as="c" hint-placeholder-count="4">
+<button onClick="{{ c.pick }}" style="white-space:nowrap;flex-shrink:0;border:0;background:transparent;padding:0 0 9px;cursor:pointer;font-size:16px;color:{{ c.color }};font-weight:{{ c.weight }};border-bottom:2px solid {{ c.bar }};">{{ c.label }}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_acts }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;padding:6px 16px 0;">
+<div style="display:flex;align-items:center;gap:10px;height:44px;">
+<div style="font-size:22px;font-weight:500;letter-spacing:-0.02em;color:#315bea;">找搭子</div>
+<button onClick="{{ openRegionPicker }}" style="white-space:nowrap;flex-shrink:1;min-width:0;max-width:170px;overflow:hidden;display:flex;align-items:center;gap:4px;height:28px;padding:0 10px;border-radius:14px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:12px;cursor:pointer;"><i class="ph ph-map-pin"></i>{{ regionLabel }}<i class="ph ph-caret-down" style="font-size:10px;"></i></button>
+<div style="flex:1;"></div>
+<button onClick="{{ to_newAct }}" style="white-space:nowrap;flex-shrink:0;height:34px;padding:0 12px;border-radius:17px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:4px;"><i class="ph ph-plus"></i>发起</button>
+</div>
+<div class="sm-scroll" style="scrollbar-width:none;-ms-overflow-style:none;display:flex;gap:8px;overflow-x:auto;padding:8px 0 10px;margin:0 -16px;padding-left:16px;padding-right:16px;">
+<sc-for list="{{ channelChips }}" as="c" hint-placeholder-count="6">
+<button onClick="{{ c.pick }}" style="white-space:nowrap;flex-shrink:0;flex:none;height:32px;padding:0 13px;border-radius:16px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:5px;background:{{ c.bg }};color:{{ c.color }};border:1px solid {{ c.bd }};"><i class="{{ c.icon }}"></i>{{ c.label }}</button>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_msgs }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;padding:6px 16px 8px;display:flex;align-items:center;height:52px;"><div style="font-size:22px;font-weight:500;letter-spacing:-0.02em;flex:1;color:#315bea;">消息</div><button onClick="{{ markAllRead }}" style="white-space:nowrap;flex-shrink:0;border:0;background:transparent;color:#756e65;font-size:13px;cursor:pointer;">全部已读</button></div>
+</sc-if>
+
+<sc-if value="{{ showNav }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;height:48px;display:flex;align-items:center;padding:0 8px;gap:4px;border-bottom:1px solid #ece8e1;">
+<button onClick="{{ back }}" style="white-space:nowrap;flex-shrink:0;width:40px;height:40px;border:0;background:transparent;color:#26221e;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="ph ph-caret-left"></i></button>
+<div style="flex:1;min-width:0;"><div style="font-size:17px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#315bea;">{{ navTitle }}</div><sc-if value="{{ navSubShow }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px;color:#756e65;">{{ navSub }}</div></sc-if></div>
+<sc-if value="{{ navMore }}" hint-placeholder-val="{{ false }}"><button onClick="{{ openMore }}" style="white-space:nowrap;flex-shrink:0;width:40px;height:40px;border:0;background:transparent;color:#26221e;font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;"><i class="ph ph-dots-three"></i></button></sc-if>
+<sc-if value="{{ s_editMe }}" hint-placeholder-val="{{ false }}"><button onClick="{{ saveProfile }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;margin-right:6px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:14px;cursor:pointer;">保存</button></sc-if>
+</div>
+</sc-if>
+
+<div ref="{{ scrollRef }}" class="sm-scroll" style="scrollbar-width:none;-ms-overflow-style:none;flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;">
+
+<sc-if value="{{ s_home }}" hint-placeholder-val="{{ true }}">
+<div style="padding:10px 12px 20px;">
+<sc-if value="{{ feedEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:70px 20px;text-align:center;"><i class="ph ph-map-trifold" style="font-size:34px;color:#cdc7bd;"></i><div style="font-size:15px;margin-top:10px;">{{ regionLabel }} 还没有内容</div><div style="font-size:13px;color:#756e65;margin-top:4px;">换个地区看看，或者发布第一条</div><div style="display:flex;gap:8px;justify-content:center;margin-top:16px;"><button onClick="{{ openRegionPicker }}" style="white-space:nowrap;height:36px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:14px;cursor:pointer;">切换地区</button><button onClick="{{ openPublishSheet }}" style="white-space:nowrap;height:36px;padding:0 14px;border-radius:8px;border:1px solid #315bea;background:#315bea;color:#fffefc;font-size:14px;cursor:pointer;">去发布</button></div></div></sc-if>
+<sc-if value="{{ feedA }}" hint-placeholder-val="{{ true }}">
+<div style="columns:2;column-gap:8px;">
+<sc-for list="{{ feed }}" as="p" hint-placeholder-count="6">
+<div onClick="{{ p.open }}" style="break-inside:avoid;margin-bottom:8px;border-radius:14px;overflow:hidden;background:#ffffff;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);cursor:pointer;">
+<div style="height:{{ p.h }}px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#9c958b;position:relative;">{{ p.img }}<span style="position:absolute;left:8px;top:8px;height:20px;padding:0 7px;border-radius:4px;background:#fffefc;color:#2b52d4;font-family:'Inter','PingFang SC',sans-serif;font-size:11px;display:flex;align-items:center;">{{ p.catLabel }}</span></div>
+<div style="padding:9px 10px 11px;">
+<div style="font-size:14px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.title }}</div>
+<div style="font-size:15px;font-weight:500;margin-top:6px;">{{ p.price }}</div>
+<div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#756e65;margin-top:4px;"><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.loc }} · {{ p.time }}</span><i class="{{ p.favIcon }}" onClick="{{ p.toggleFav }}" style="font-size:15px;color:{{ p.favColor }};"></i></div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ feedB }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:22px;padding:4px 4px 0;">
+<sc-for list="{{ feed }}" as="p" hint-placeholder-count="3">
+<div onClick="{{ p.open }}" style="cursor:pointer;">
+<div style="height:220px;border-radius:14px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9c958b;position:relative;">{{ p.img }}<span style="position:absolute;right:10px;bottom:10px;height:22px;padding:0 8px;border-radius:4px;background:rgba(38,34,30,0.55);color:#fffefc;font-family:ui-monospace,Menlo,monospace;font-size:10px;display:flex;align-items:center;">1 / {{ p.photos }}</span></div>
+<div style="display:flex;align-items:flex-start;gap:10px;margin-top:10px;">
+<div style="flex:1;min-width:0;">
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#756e65;"><span style="color:#2b52d4;">{{ p.catLabel }}</span><span>·</span><span>{{ p.loc }}</span><span>·</span><span>{{ p.time }}</span></div>
+<div style="font-size:16px;line-height:1.4;margin-top:4px;">{{ p.title }}</div>
+<div style="font-size:17px;font-weight:500;margin-top:4px;">{{ p.price }}</div>
+</div>
+<button onClick="{{ p.toggleFav }}" style="white-space:nowrap;flex-shrink:0;width:40px;height:40px;border:0;background:transparent;font-size:22px;cursor:pointer;color:{{ p.favColor }};"><i class="{{ p.favIcon }}"></i></button>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ feedC }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;">
+<sc-for list="{{ feed }}" as="p" hint-placeholder-count="5">
+<div onClick="{{ p.open }}" style="display:flex;gap:12px;padding:12px 4px;cursor:pointer;border-bottom:1px solid #ffffff;">
+<div style="width:96px;height:96px;flex:none;border-radius:8px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#9c958b;text-align:center;padding:4px;">{{ p.img }}</div>
+<div style="flex:1;min-width:0;display:flex;flex-direction:column;">
+<div style="font-size:15px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.title }}</div>
+<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap;"><sc-for list="{{ p.tags }}" as="t" hint-placeholder-count="2"><span style="height:20px;padding:0 6px;border-radius:4px;background:#ece8e1;color:#6b655d;font-size:11px;display:flex;align-items:center;">{{ t }}</span></sc-for></div>
+<div style="flex:1;"></div>
+<div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:16px;font-weight:500;">{{ p.price }}</span><span style="flex:1;font-size:11px;color:#756e65;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.loc }} · {{ p.time }}</span></div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ feedWanted }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:8px;">
+<sc-for list="{{ feed }}" as="p" hint-placeholder-count="2">
+<div onClick="{{ p.open }}" style="padding:14px;border-radius:14px;background:#ffffff;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);cursor:pointer;">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#756e65;"><span style="height:20px;padding:0 7px;border-radius:4px;background:#eaf0ff;color:#2b52d4;display:flex;align-items:center;">求租</span><span>{{ p.loc }}</span><span style="flex:1;"></span><span>{{ p.time }}</span></div>
+<div style="font-size:16px;line-height:1.4;margin-top:8px;">{{ p.title }}</div>
+<div style="font-size:13px;color:#756e65;margin-top:6px;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.desc }}</div>
+<div style="font-size:15px;font-weight:500;margin-top:8px;">{{ p.price }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_post }}" hint-placeholder-val="{{ false }}">
+<div>
+<div style="height:300px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:#9c958b;position:relative;">{{ cur.img }}<span style="position:absolute;right:12px;bottom:12px;height:22px;padding:0 8px;border-radius:4px;background:#f7f5f1;color:#4a453f;font-size:10px;display:flex;align-items:center;">1 / {{ cur.photos }}</span></div>
+<div style="padding:16px;">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#756e65;"><span style="height:22px;padding:0 8px;border-radius:4px;background:#eaf0ff;color:#2b52d4;display:flex;align-items:center;">{{ cur.catLabel }}</span><span>{{ cur.time }}发布</span></div>
+<div style="font-size:21px;font-weight:500;line-height:1.35;margin-top:10px;letter-spacing:-0.01em;">{{ cur.title }}</div>
+<div style="font-size:22px;font-weight:500;margin-top:8px;">{{ cur.price }}</div>
+<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;"><sc-for list="{{ cur.tags }}" as="t" hint-placeholder-count="3"><span style="height:24px;padding:0 9px;border-radius:12px;box-shadow:0 0 0 1px #e3ded6;color:#4a453f;font-size:12px;display:flex;align-items:center;">{{ t }}</span></sc-for></div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:16px;padding:12px;border-radius:8px;background:#ffffff;font-size:14px;color:#4a453f;"><i class="ph ph-map-pin" style="color:#315bea;font-size:17px;"></i>{{ cur.loc }}</div>
+<div style="font-size:15px;line-height:1.7;color:#2f2b27;margin-top:16px;white-space:pre-line;">{{ cur.desc }}</div>
+<div onClick="{{ to_user }}" style="display:flex;align-items:center;gap:12px;margin-top:20px;padding:12px;border-radius:14px;box-shadow:0 0 0 1px #e3ded6;cursor:pointer;">
+<div style="width:44px;height:44px;border-radius:22px;background:#dfe6fd;color:#2449c9;display:flex;align-items:center;justify-content:center;font-size:16px;">{{ cur.authorInit }}</div>
+<div style="flex:1;"><div style="font-size:15px;">{{ cur.author }}</div><div style="font-size:12px;color:#756e65;margin-top:2px;">已发布 6 条 · 2024 年加入</div></div>
+<i class="ph ph-caret-right" style="color:#9c958b;"></i>
+</div>
+<div style="margin-top:22px;font-size:15px;font-weight:500;">评论 · 3</div>
+<div style="display:flex;flex-direction:column;gap:14px;margin-top:12px;">
+<sc-for list="{{ comments }}" as="c" hint-placeholder-count="2">
+<div style="display:flex;gap:10px;"><div style="width:30px;height:30px;flex:none;border-radius:15px;background:#e3ded6;display:flex;align-items:center;justify-content:center;font-size:12px;">{{ c.init }}</div><div><div style="font-size:12px;color:#756e65;">{{ c.name }} · {{ c.time }}</div><div style="font-size:14px;margin-top:3px;line-height:1.5;">{{ c.text }}</div></div></div>
+</sc-for>
+</div>
+<div style="height:20px;"></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_acts }}" hint-placeholder-val="{{ false }}">
+<div style="padding:4px 12px 20px;">
+<sc-if value="{{ actsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:70px 20px;text-align:center;"><i class="ph ph-map-trifold" style="font-size:34px;color:#cdc7bd;"></i><div style="font-size:15px;margin-top:10px;">{{ regionLabel }} 还没有内容</div><div style="font-size:13px;color:#756e65;margin-top:4px;">换个地区看看，或者发布第一条</div><div style="display:flex;gap:8px;justify-content:center;margin-top:16px;"><button onClick="{{ openRegionPicker }}" style="white-space:nowrap;height:36px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:14px;cursor:pointer;">切换地区</button><button onClick="{{ to_newAct }}" style="white-space:nowrap;height:36px;padding:0 14px;border-radius:8px;border:1px solid #315bea;background:#315bea;color:#fffefc;font-size:14px;cursor:pointer;">去发布</button></div></div></sc-if>
+<sc-if value="{{ vA }}" hint-placeholder-val="{{ true }}">
+<div style="display:flex;flex-direction:column;gap:10px;">
+<sc-for list="{{ acts }}" as="a" hint-placeholder-count="3">
+<div onClick="{{ a.open }}" style="border-radius:14px;overflow:hidden;background:#ffffff;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);cursor:pointer;">
+<div style="padding:12px 14px 10px;">
+<div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#2b52d4;"><i class="{{ a.icon }}"></i>{{ a.chLabel }}<span style="color:#9c958b;">·</span><span style="color:#756e65;">{{ a.tag }}</span><span style="flex:1;"></span><span style="color:{{ a.statusColor }};">{{ a.statusText }}</span></div>
+<div style="font-size:16px;line-height:1.4;margin-top:6px;">{{ a.title }}</div>
+<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:#756e65;margin-top:6px;"><i class="ph ph-map-pin"></i>{{ a.landmark }}</div>
+<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:#756e65;margin-top:3px;"><i class="ph ph-clock"></i>{{ a.when }}</div>
+</div>
+<div style="display:flex;gap:2px;">
+<sc-for list="{{ a.slots }}" as="sl" hint-placeholder-count="4">
+<div style="flex:1;aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:15px;background:{{ sl.bg }};color:{{ sl.color }};">{{ sl.label }}</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ vB }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:10px;">
+<sc-for list="{{ acts }}" as="a" hint-placeholder-count="3">
+<div onClick="{{ a.open }}" style="display:flex;gap:14px;padding:14px;border-radius:14px;background:#ffffff;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);cursor:pointer;">
+<div style="width:58px;flex:none;display:flex;flex-direction:column;align-items:flex-start;">
+<div style="font-size:12px;color:#315bea;">{{ a.day }}</div>
+<div style="font-size:22px;font-weight:500;letter-spacing:-0.02em;margin-top:2px;">{{ a.hour }}</div>
+<div style="width:14px;height:2px;background:#315bea;margin-top:8px;"></div>
+</div>
+<div style="flex:1;min-width:0;">
+<div style="font-size:16px;line-height:1.4;">{{ a.title }}</div>
+<div style="display:flex;align-items:center;gap:5px;font-size:12px;color:#756e65;margin-top:5px;"><i class="{{ a.icon }}"></i>{{ a.chLabel }} · {{ a.landmark }}</div>
+<div style="display:flex;align-items:center;gap:10px;margin-top:12px;">
+<div style="display:flex;"><sc-for list="{{ a.faces }}" as="f" hint-placeholder-count="3"><div style="width:24px;height:24px;border-radius:12px;margin-right:-6px;background:{{ f.bg }};box-shadow:0 0 0 2px #ffffff;display:flex;align-items:center;justify-content:center;font-size:10px;">{{ f.label }}</div></sc-for></div>
+<div style="flex:1;height:3px;border-radius:2px;background:#e3ded6;margin-left:8px;overflow:hidden;"><div style="height:3px;background:#315bea;width:{{ a.pct }};"></div></div>
+<div style="font-size:12px;color:#4a453f;font-family:ui-monospace,Menlo,monospace;white-space:nowrap;">{{ a.countText }}</div>
+</div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<sc-if value="{{ vC }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;flex-direction:column;gap:18px;padding-top:4px;">
+<sc-for list="{{ actGroups }}" as="g" hint-placeholder-count="2">
+<div>
+<div style="font-size:13px;color:#756e65;padding:0 4px 8px;">{{ g.label }}</div>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;">
+<sc-for list="{{ g.items }}" as="a" hint-placeholder-count="2">
+<div onClick="{{ a.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#ffffff;cursor:pointer;">
+<div style="width:40px;height:40px;flex:none;border-radius:8px;background:#eaf0ff;color:#2b52d4;display:flex;align-items:center;justify-content:center;font-size:20px;"><i class="{{ a.icon }}"></i></div>
+<div style="flex:1;min-width:0;"><div style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.title }}</div><div style="font-size:12px;color:#756e65;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.hour }} · {{ a.landmark }}</div></div>
+<div style="text-align:right;flex:none;"><div style="font-size:13px;font-family:ui-monospace,Menlo,monospace;color:#4a453f;white-space:nowrap;">{{ a.countText }}</div><div style="font-size:11px;margin-top:3px;white-space:nowrap;color:{{ a.statusColor }};">{{ a.statusText }}</div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_act }}" hint-placeholder-val="{{ false }}">
+<div style="padding:18px 16px 24px;">
+<div style="display:flex;align-items:center;gap:6px;font-size:13px;color:#2b52d4;"><i class="{{ ca.icon }}"></i>{{ ca.chLabel }}搭子<span style="color:#9c958b;">·</span><span style="color:#756e65;">{{ ca.tag }}</span></div>
+<div style="font-size:23px;font-weight:500;line-height:1.3;margin-top:8px;letter-spacing:-0.01em;">{{ ca.title }}</div>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;margin-top:18px;">
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#ffffff;"><i class="ph ph-clock" style="font-size:19px;color:#315bea;"></i><div><div style="font-size:15px;">{{ ca.when }}</div><div style="font-size:12px;color:#756e65;margin-top:2px;">{{ ca.day }}</div></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#ffffff;"><i class="ph ph-map-pin" style="font-size:19px;color:#315bea;"></i><div><div style="font-size:15px;">{{ ca.landmark }}</div><div style="font-size:12px;color:#756e65;margin-top:2px;">{{ ca.area }}</div></div></div>
+<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#ffffff;"><i class="ph ph-users-three" style="font-size:19px;color:#315bea;"></i><div style="flex:1;"><div style="font-size:15px;">已报名 {{ ca.countText }}</div><div style="height:3px;border-radius:2px;background:#e3ded6;margin-top:8px;overflow:hidden;"><div style="height:3px;background:#315bea;width:{{ ca.pct }};"></div></div></div></div>
+</div>
+<div style="font-size:15px;line-height:1.7;color:#2f2b27;margin-top:18px;">{{ ca.desc }}</div>
+<div style="font-size:15px;font-weight:500;margin-top:22px;">参与者</div>
+<div style="font-size:12px;color:#756e65;margin-top:3px;">报名后可以看到其他参与者</div>
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:12px;">
+<sc-for list="{{ ca.slots }}" as="sl" hint-placeholder-count="5">
+<div onClick="{{ sl.open }}" style="aspect-ratio:1;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:15px;cursor:pointer;background:{{ sl.bg }};color:{{ sl.color }};">{{ sl.label }}</div>
+</sc-for>
+</div>
+<div style="font-size:15px;font-weight:500;margin-top:22px;">已加入 · {{ ca.memberCount }}</div>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;margin-top:10px;">
+<sc-for list="{{ ca.members }}" as="m" hint-placeholder-count="3">
+<div onClick="{{ m.open }}" style="display:flex;gap:12px;padding:12px 14px;background:#ffffff;cursor:pointer;">
+<div style="width:40px;height:40px;flex:none;border-radius:20px;display:flex;align-items:center;justify-content:center;font-size:14px;background:{{ m.bg }};color:#26221e;">{{ m.init }}</div>
+<div style="flex:1;min-width:0;">
+<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:15px;">{{ m.line }}</span><sc-if value="{{ m.isOrg }}" hint-placeholder-val="{{ false }}"><span style="height:18px;padding:0 6px;border-radius:4px;background:#eaf0ff;color:#2b52d4;font-size:11px;display:flex;align-items:center;">发起人</span></sc-if></div>
+<div style="font-size:13px;color:#756e65;margin-top:3px;line-height:1.5;">{{ m.bio }}</div>
+</div>
+</div>
+</sc-for>
+</div>
+<div onClick="{{ to_user }}" style="display:flex;align-items:center;gap:12px;margin-top:20px;padding:12px;border-radius:14px;box-shadow:0 0 0 1px #e3ded6;cursor:pointer;">
+<div style="width:40px;height:40px;border-radius:20px;background:#dfe6fd;color:#2449c9;display:flex;align-items:center;justify-content:center;">{{ ca.orgInit }}</div>
+<div style="flex:1;"><div style="font-size:12px;color:#756e65;">发起人</div><div style="font-size:15px;margin-top:1px;">{{ ca.org }}</div></div>
+<i class="ph ph-caret-right" style="color:#9c958b;"></i>
+</div>
+<div style="font-size:15px;font-weight:500;margin-top:24px;">评论 · {{ actCommentCount }}</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+<input value="{{ actDraft }}" onChange="{{ onActDraft }}" onKeyDown="{{ onActDraftKey }}" placeholder="问问发起人，或者说说你的情况…" style="flex:1;height:40px;padding:0 14px;border-radius:20px;border:1px solid #e3ded6;background:#ffffff;color:#26221e;font-size:16px;outline:none;">
+<button onClick="{{ sendActComment }}" style="white-space:nowrap;flex-shrink:0;height:40px;padding:0 14px;border-radius:20px;border:1px solid #315bea;background:transparent;color:#315bea;font-size:14px;cursor:pointer;">发送</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:14px;margin-top:14px;">
+<sc-for list="{{ actComments }}" as="c" hint-placeholder-count="2">
+<div style="display:flex;gap:10px;"><div style="width:30px;height:30px;flex:none;border-radius:15px;background:#efe4d4;display:flex;align-items:center;justify-content:center;font-size:12px;">{{ c.init }}</div><div style="flex:1;min-width:0;"><div style="font-size:12px;color:#756e65;">{{ c.name }} · {{ c.time }}</div><div style="font-size:14px;margin-top:3px;line-height:1.5;">{{ c.text }}</div><div style="font-size:12px;color:#9c958b;margin-top:4px;">回复</div></div></div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_newAct }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px;display:flex;flex-direction:column;gap:18px;">
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">类型</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;"><sc-for list="{{ actChPick }}" as="c" hint-placeholder-count="7"><button onClick="{{ c.pick }}" style="white-space:nowrap;flex-shrink:0;height:34px;padding:0 12px;border-radius:17px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:5px;background:{{ c.bg }};color:{{ c.color }};border:1px solid {{ c.bd }};"><i class="{{ c.icon }}"></i>{{ c.label }}</button></sc-for></div></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">标题</div><input placeholder="例如：周五晚海底捞，还差 2 人" style="width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;"></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">说明</div><textarea placeholder="AA、女生优先、新手友好……写清楚更容易找到搭子" style="width:100%;height:96px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;resize:none;line-height:1.5;"></textarea></div>
+<div style="display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:15px;">线上活动</div><div style="font-size:12px;color:#756e65;margin-top:2px;">游戏、线上自习等不需要地点</div></div>
+<button onClick="{{ toggleOnline }}" style="white-space:nowrap;flex-shrink:0;width:50px;height:30px;border-radius:15px;border:1px solid {{ onlineBd }};background:{{ onlineBg }};cursor:pointer;position:relative;padding:0;"><span style="position:absolute;top:3px;width:22px;height:22px;border-radius:11px;background:{{ onlineKnob }};left:{{ onlineLeft }};"></span></button></div>
+<sc-if value="{{ offline }}" hint-placeholder-val="{{ true }}">
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">所在州</div>
+<button onClick="{{ pickActState }}" style="white-space:nowrap;width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px;color:#26221e;cursor:pointer;"><span style="overflow:hidden;text-overflow:ellipsis;">{{ actStateLabel }}</span><i class="ph ph-caret-down" style="color:#756e65;flex:none;"></i></button>
+<input placeholder="具体地点，例如 Planet Fitness Woodbridge" style="width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;margin-top:8px;"></div>
+</sc-if>
+<div style="display:flex;gap:10px;">
+<div style="flex:1;"><div style="font-size:13px;color:#756e65;margin-bottom:8px;">时间</div><div style="height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;display:flex;align-items:center;justify-content:space-between;font-size:15px;">10月3日 周五 19:00<i class="ph ph-calendar-blank" style="color:#756e65;"></i></div></div>
+</div>
+<div style="display:flex;align-items:center;justify-content:space-between;"><div><div style="font-size:15px;">人数上限</div><div style="font-size:12px;color:#756e65;margin-top:2px;">含你自己</div></div>
+<div style="display:flex;align-items:center;gap:14px;"><button onClick="{{ capDown }}" style="white-space:nowrap;flex-shrink:0;width:34px;height:34px;border-radius:17px;border:1px solid #e3ded6;background:transparent;color:#26221e;cursor:pointer;font-size:16px;"><i class="ph ph-minus"></i></button><span style="font-size:18px;min-width:20px;text-align:center;font-family:ui-monospace,Menlo,monospace;">{{ cap }}</span><button onClick="{{ capUp }}" style="white-space:nowrap;flex-shrink:0;width:34px;height:34px;border-radius:17px;border:1px solid #e3ded6;background:transparent;color:#26221e;cursor:pointer;font-size:16px;"><i class="ph ph-plus"></i></button></div></div>
+<button onClick="{{ submitAct }}" style="white-space:nowrap;flex-shrink:0;height:48px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:16px;cursor:pointer;margin-top:6px;">发布活动</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_publish }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px;display:flex;flex-direction:column;gap:18px;">
+<div style="display:flex;padding:3px;border-radius:8px;background:#f2efe9;box-shadow:0 0 0 1px #e3ded6;"><sc-for list="{{ pubTypes }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="white-space:nowrap;flex-shrink:0;flex:1;height:36px;border:0;border-radius:6px;cursor:pointer;font-size:14px;background:{{ o.bg }};color:{{ o.color }};">{{ o.label }}</button></sc-for></div>
+<sc-if value="{{ pubHasPhotos }}" hint-placeholder-val="{{ true }}">
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">照片 · 最多 9 张</div>
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+<div style="aspect-ratio:1;border-radius:8px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#9c958b;">封面</div>
+<div style="aspect-ratio:1;border-radius:8px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);"></div>
+<div style="aspect-ratio:1;border-radius:8px;border:1px dashed #cdc7bd;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#756e65;font-size:11px;cursor:pointer;"><i class="ph ph-camera-plus" style="font-size:20px;"></i>添加</div>
+</div></div>
+</sc-if>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">标题</div><input placeholder="{{ pubTitlePh }}" style="width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;"></div>
+<div style="display:flex;gap:10px;">
+<div style="flex:1;"><div style="font-size:13px;color:#756e65;margin-bottom:8px;">{{ pubPriceLabel }}</div><div style="height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;display:flex;align-items:center;gap:6px;font-size:16px;color:#756e65;">$<input placeholder="0" style="flex:1;width:0;border:0;background:transparent;color:#26221e;font-size:16px;outline:none;"></div></div>
+<div style="flex:1;min-width:0;"><div style="font-size:13px;color:#756e65;margin-bottom:8px;">所在州</div><button onClick="{{ pickPubState }}" style="white-space:nowrap;width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px;color:#26221e;cursor:pointer;"><span style="overflow:hidden;text-overflow:ellipsis;">{{ pubStateLabel }}</span><i class="ph ph-caret-down" style="color:#756e65;flex:none;"></i></button></div>
+</div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">城市 / 具体位置</div><input placeholder="{{ pubCityPh }}" style="width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;"></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">描述</div><textarea placeholder="{{ pubDescPh }}" style="width:100%;height:120px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;resize:none;line-height:1.5;"></textarea></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">联系方式</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;"><sc-for list="{{ contactPick }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.pick }}" style="white-space:nowrap;flex-shrink:0;height:34px;padding:0 12px;border-radius:17px;cursor:pointer;font-size:13px;background:{{ c.bg }};color:{{ c.color }};border:1px solid {{ c.bd }};">{{ c.label }}</button></sc-for></div></div>
+<div style="font-size:12px;color:#756e65;line-height:1.5;">发布即表示同意《社区规范》。帖子经审核后展示，通常在 1 小时内完成。</div>
+<button onClick="{{ submitPost }}" style="white-space:nowrap;flex-shrink:0;height:48px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:16px;cursor:pointer;">提交审核</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_myPosts }}" hint-placeholder-val="{{ false }}">
+<div style="padding:12px 16px;">
+<div style="display:flex;padding:3px;border-radius:8px;background:#f2efe9;box-shadow:0 0 0 1px #e3ded6;"><sc-for list="{{ myPostTabs }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="white-space:nowrap;flex-shrink:0;flex:1;height:34px;border:0;border-radius:6px;cursor:pointer;font-size:13px;background:{{ o.bg }};color:{{ o.color }};">{{ o.label }}</button></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:10px;margin-top:14px;">
+<sc-for list="{{ myPosts }}" as="p" hint-placeholder-count="2">
+<div style="padding:12px;border-radius:14px;background:#ffffff;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);">
+<div onClick="{{ p.open }}" style="display:flex;gap:12px;cursor:pointer;">
+<div style="width:64px;height:64px;flex:none;border-radius:8px;background:repeating-linear-gradient(135deg,#f2efe9 0 7px,#eeeae3 7px 14px);"></div>
+<div style="flex:1;min-width:0;"><div style="font-size:15px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.title }}</div><div style="font-size:14px;font-weight:500;margin-top:4px;">{{ p.price }}</div></div>
+</div>
+<div style="display:flex;align-items:center;gap:8px;margin-top:10px;">
+<span style="font-size:12px;color:{{ p.stColor }};">{{ p.stText }}</span><span style="font-size:12px;color:#9c958b;">{{ p.stats }}</span><span style="flex:1;"></span>
+<button onClick="{{ to_publish }}" style="white-space:nowrap;flex-shrink:0;height:30px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:12px;cursor:pointer;">编辑</button>
+<button onClick="{{ p.off }}" style="white-space:nowrap;flex-shrink:0;height:30px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:12px;cursor:pointer;">{{ p.offLabel }}</button>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ myPostsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:60px 0;text-align:center;color:#756e65;font-size:14px;">这里还没有帖子</div></sc-if>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_myActs }}" hint-placeholder-val="{{ false }}">
+<div style="padding:12px 16px;">
+<div style="display:flex;padding:3px;border-radius:8px;background:#f2efe9;box-shadow:0 0 0 1px #e3ded6;"><sc-for list="{{ myActTabs }}" as="o" hint-placeholder-count="2"><button onClick="{{ o.pick }}" style="white-space:nowrap;flex-shrink:0;flex:1;height:34px;border:0;border-radius:6px;cursor:pointer;font-size:13px;background:{{ o.bg }};color:{{ o.color }};">{{ o.label }}</button></sc-for></div>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;margin-top:14px;">
+<sc-for list="{{ myActs }}" as="a" hint-placeholder-count="2">
+<div onClick="{{ a.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:#ffffff;cursor:pointer;">
+<div style="width:40px;height:40px;flex:none;border-radius:8px;background:#eaf0ff;color:#2b52d4;display:flex;align-items:center;justify-content:center;font-size:20px;"><i class="{{ a.icon }}"></i></div>
+<div style="flex:1;min-width:0;"><div style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ a.title }}</div><div style="font-size:12px;color:#756e65;margin-top:3px;">{{ a.when }} · {{ a.countText }}</div></div>
+<sc-if value="{{ a.hasPending }}" hint-placeholder-val="{{ false }}"><span style="height:22px;padding:0 8px;border-radius:11px;background:#eaf0ff;color:#2b52d4;font-size:11px;display:flex;align-items:center;">{{ a.pendingText }}</span></sc-if>
+<i class="ph ph-caret-right" style="color:#9c958b;"></i>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_favs }}" hint-placeholder-val="{{ false }}">
+<div style="padding:4px 16px 20px;">
+<sc-for list="{{ favPosts }}" as="p" hint-placeholder-count="2">
+<div onClick="{{ p.open }}" style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #ffffff;cursor:pointer;">
+<div style="width:80px;height:80px;flex:none;border-radius:8px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:9px;color:#9c958b;">{{ p.img }}</div>
+<div style="flex:1;min-width:0;"><div style="font-size:12px;color:#2b52d4;">{{ p.catLabel }}</div><div style="font-size:15px;line-height:1.4;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.title }}</div><div style="font-size:14px;font-weight:500;margin-top:4px;">{{ p.price }}</div></div>
+<button onClick="{{ p.toggleFav }}" style="white-space:nowrap;flex-shrink:0;width:36px;height:36px;border:0;background:transparent;color:#315bea;font-size:20px;cursor:pointer;"><i class="ph-fill ph-heart"></i></button>
+</div>
+</sc-for>
+<sc-if value="{{ favsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:80px 0;text-align:center;color:#756e65;font-size:14px;">还没有收藏，看到喜欢的点一下 ♡</div></sc-if>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_msgs }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 0 20px;">
+<sc-for list="{{ convs }}" as="c" hint-placeholder-count="5">
+<div onClick="{{ c.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 16px;cursor:pointer;" style-hover="background:#f2efe9;">
+<div style="position:relative;width:48px;height:48px;flex:none;border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:17px;background:{{ c.bg }};color:{{ c.fg }};"><i class="{{ c.icon }}"></i>{{ c.init }}</div>
+<div style="flex:1;min-width:0;border-bottom:1px solid #ffffff;padding-bottom:12px;margin-bottom:-12px;">
+<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:15px;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</span><span style="font-size:11px;color:#9c958b;">{{ c.time }}</span></div>
+<div style="display:flex;align-items:center;gap:6px;margin-top:3px;"><span style="font-size:13px;color:#756e65;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.last }}</span><sc-if value="{{ c.hasUnread }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d94b4b;color:#fffefc;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ c.unread }}</span></sc-if></div>
+</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_chat }}" hint-placeholder-val="{{ false }}">
+<div style="padding:12px 14px 16px;display:flex;flex-direction:column;gap:10px;">
+<sc-if value="{{ chatHasCtx }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ openChatCtx }}" style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:8px;background:#ffffff;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);cursor:pointer;">
+<div style="width:40px;height:40px;flex:none;border-radius:6px;background:repeating-linear-gradient(135deg,#f2efe9 0 6px,#eeeae3 6px 12px);"></div>
+<div style="flex:1;min-width:0;"><div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chatCtx.title }}</div><div style="font-size:12px;color:#756e65;margin-top:2px;">{{ chatCtx.price }}</div></div>
+<i class="ph ph-caret-right" style="color:#9c958b;"></i>
+</div>
+</sc-if>
+<div style="text-align:center;font-size:11px;color:#9c958b;margin:4px 0;">请勿提前转账或支付定金，谨防诈骗</div>
+<sc-for list="{{ chatMsgs }}" as="m" hint-placeholder-count="4">
+<div style="display:flex;justify-content:{{ m.justify }};">
+<div style="max-width:76%;padding:9px 12px;border-radius:14px;font-size:15px;line-height:1.45;background:{{ m.bg }};color:{{ m.fg }};box-shadow:0 0 0 1px {{ m.bd }};">{{ m.text }}</div>
+</div>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_me }}" hint-placeholder-val="{{ false }}">
+<div style="padding:10px 16px 24px;">
+<div style="display:flex;align-items:center;gap:14px;padding:6px 0 18px;">
+<div style="width:64px;height:64px;border-radius:32px;background:#dfe6fd;color:#2449c9;display:flex;align-items:center;justify-content:center;font-size:22px;">{{ meInit }}</div>
+<div style="flex:1;min-width:0;"><div style="font-size:21px;font-weight:500;letter-spacing:-0.01em;">{{ meName }}</div><div style="font-size:12px;color:#756e65;margin-top:3px;">Fairfax, VA · 2025 年加入</div></div>
+<button onClick="{{ to_settings }}" style="white-space:nowrap;flex-shrink:0;width:40px;height:40px;border:0;background:transparent;color:#26221e;font-size:22px;cursor:pointer;"><i class="ph ph-gear-six"></i></button>
+</div>
+<div style="font-size:14px;color:#4a453f;line-height:1.5;">{{ meBio }}</div>
+<div style="display:flex;gap:8px;margin-top:14px;">
+<button onClick="{{ to_editMe }}" style="white-space:nowrap;flex-shrink:0;flex:1;height:40px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:14px;cursor:pointer;">编辑资料</button>
+<button onClick="{{ to_user }}" style="white-space:nowrap;flex-shrink:0;flex:1;height:40px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:14px;cursor:pointer;">查看公开主页</button>
+</div>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;margin-top:22px;">
+<sc-for list="{{ meRows }}" as="r" hint-placeholder-count="5">
+<div onClick="{{ r.open }}" style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px;background:#ffffff;cursor:pointer;" style-hover="background:#ece8e1;">
+<i class="{{ r.icon }}" style="font-size:19px;color:#315bea;"></i><span style="flex:1;font-size:15px;">{{ r.label }}</span>
+<sc-if value="{{ r.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="height:20px;padding:0 7px;border-radius:10px;background:#eaf0ff;color:#2b52d4;font-size:11px;display:flex;align-items:center;">{{ r.badge }}</span></sc-if>
+<i class="ph ph-caret-right" style="color:#9c958b;"></i>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_editMe }}" hint-placeholder-val="{{ false }}">
+<div style="padding:20px 16px;display:flex;flex-direction:column;gap:18px;">
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+<div style="width:84px;height:84px;border-radius:42px;background:#dfe6fd;color:#2449c9;display:flex;align-items:center;justify-content:center;font-size:28px;">{{ meInit }}</div>
+<button style="white-space:nowrap;flex-shrink:0;border:0;background:transparent;color:#315bea;font-size:14px;cursor:pointer;">更换头像</button>
+</div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">昵称</div><input value="{{ meName }}" onChange="{{ onName }}" style="width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;"></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">简介</div><textarea value="{{ meBio }}" onChange="{{ onBio }}" style="width:100%;height:90px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;resize:none;line-height:1.5;"></textarea></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">常驻地区</div>
+<button onClick="{{ pickMeState }}" style="white-space:nowrap;width:100%;height:46px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:15px;color:#26221e;cursor:pointer;"><span style="overflow:hidden;text-overflow:ellipsis;">{{ meStateLabel }}</span><i class="ph ph-caret-down" style="color:#756e65;flex:none;"></i></button></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_user }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px 16px 24px;">
+<div style="display:flex;align-items:center;gap:14px;">
+<div style="width:64px;height:64px;border-radius:32px;background:#e3ded6;display:flex;align-items:center;justify-content:center;font-size:22px;">{{ other.init }}</div>
+<div><div style="font-size:21px;font-weight:500;">{{ other.name }}</div><div style="font-size:12px;color:#756e65;margin-top:3px;">{{ other.meta }}</div></div>
+</div>
+<div style="font-size:14px;color:#4a453f;line-height:1.5;margin-top:14px;">{{ other.bio }}</div>
+<button onClick="{{ messageOther }}" style="white-space:nowrap;flex-shrink:0;width:100%;height:44px;margin-top:16px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="ph ph-chat-circle"></i>发消息</button>
+<div style="font-size:15px;font-weight:500;margin-top:24px;">TA 的帖子</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+<sc-for list="{{ otherPosts }}" as="p" hint-placeholder-count="2">
+<div onClick="{{ p.open }}" style="border-radius:14px;overflow:hidden;background:#ffffff;cursor:pointer;">
+<div style="height:120px;background:repeating-linear-gradient(135deg,#ffffff 0 7px,#eeeae3 7px 14px);display:flex;align-items:center;justify-content:center;font-family:ui-monospace,Menlo,monospace;font-size:10px;color:#9c958b;">{{ p.img }}</div>
+<div style="padding:8px 10px 10px;"><div style="font-size:13px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ p.title }}</div><div style="font-size:14px;font-weight:500;margin-top:4px;">{{ p.price }}</div></div>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_settings }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px;display:flex;flex-direction:column;gap:20px;">
+<sc-for list="{{ settingGroups }}" as="g" hint-placeholder-count="3">
+<div>
+<sc-if value="{{ g.hasTitle }}" hint-placeholder-val="{{ true }}"><div style="font-size:12px;color:#756e65;padding:0 4px 8px;">{{ g.title }}</div></sc-if>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;">
+<sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+<div onClick="{{ r.open }}" style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px;background:#ffffff;cursor:pointer;" style-hover="background:#ece8e1;">
+<span style="flex:1;font-size:15px;color:{{ r.color }};">{{ r.label }}</span><span style="font-size:13px;color:#756e65;">{{ r.value }}</span>
+<sc-if value="{{ r.chev }}" hint-placeholder-val="{{ true }}"><i class="ph ph-caret-right" style="color:#9c958b;"></i></sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="text-align:center;font-size:11px;color:#9c958b;font-family:ui-monospace,Menlo,monospace;">Saminest 2.0.3</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_report }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
+<div style="font-size:14px;color:#4a453f;line-height:1.5;">你正在举报这个{{ reportTarget }}。举报内容仅管理员可见，我们会在 24 小时内处理。</div>
+<div style="display:flex;flex-direction:column;gap:1px;border-radius:14px;overflow:hidden;background:#ece8e1;">
+<sc-for list="{{ reasons }}" as="r" hint-placeholder-count="6">
+<div onClick="{{ r.pick }}" style="display:flex;align-items:center;gap:12px;height:50px;padding:0 14px;background:#ffffff;cursor:pointer;">
+<span style="width:20px;height:20px;border-radius:10px;border:1.5px solid {{ r.ring }};display:flex;align-items:center;justify-content:center;"><span style="width:10px;height:10px;border-radius:5px;background:{{ r.dot }};"></span></span>
+<span style="font-size:15px;">{{ r.label }}</span>
+</div>
+</sc-for>
+</div>
+<textarea placeholder="补充说明（选填）" style="width:100%;height:100px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;resize:none;"></textarea>
+<button onClick="{{ submitReport }}" style="white-space:nowrap;flex-shrink:0;height:48px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:16px;cursor:pointer;opacity:{{ reportOpacity }};">提交举报</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_feedback }}" hint-placeholder-val="{{ false }}">
+<div style="padding:16px;display:flex;flex-direction:column;gap:18px;">
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">反馈类型</div>
+<div style="display:flex;gap:8px;flex-wrap:wrap;"><sc-for list="{{ fbTypes }}" as="c" hint-placeholder-count="4"><button onClick="{{ c.pick }}" style="white-space:nowrap;flex-shrink:0;height:34px;padding:0 12px;border-radius:17px;cursor:pointer;font-size:13px;background:{{ c.bg }};color:{{ c.color }};border:1px solid {{ c.bd }};">{{ c.label }}</button></sc-for></div></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">描述</div><textarea placeholder="告诉我们遇到了什么，或者希望 Saminest 增加什么" style="width:100%;height:140px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;resize:none;line-height:1.5;"></textarea></div>
+<div><div style="font-size:13px;color:#756e65;margin-bottom:8px;">截图（选填）</div>
+<div style="width:80px;height:80px;border-radius:8px;border:1px dashed #cdc7bd;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:#756e65;font-size:11px;cursor:pointer;"><i class="ph ph-image" style="font-size:20px;"></i>添加</div></div>
+<button onClick="{{ submitFeedback }}" style="white-space:nowrap;flex-shrink:0;height:48px;border-radius:8px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:16px;cursor:pointer;">提交</button>
+<div onClick="{{ openSupport }}" style="text-align:center;font-size:13px;color:#756e65;cursor:pointer;">需要即时帮助？<span style="color:#315bea;">联系客服</span></div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_admin }}" hint-placeholder-val="{{ false }}">
+<div style="padding:0 0 24px;">
+<div class="sm-scroll" style="scrollbar-width:none;-ms-overflow-style:none;display:flex;gap:8px;overflow-x:auto;padding:12px 16px;">
+<sc-for list="{{ adminTabs }}" as="o" hint-placeholder-count="6">
+<button onClick="{{ o.pick }}" style="white-space:nowrap;flex-shrink:0;height:34px;padding:0 14px;border-radius:17px;cursor:pointer;font-size:13px;display:flex;align-items:center;gap:6px;background:{{ o.bg }};color:{{ o.color }};border:1px solid {{ o.bd }};font-weight:{{ o.weight }};">{{ o.label }}<sc-if value="{{ o.hasCount }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;background:{{ o.cBg }};color:{{ o.cFg }};">{{ o.count }}</span></sc-if></button>
+</sc-for>
+</div>
+<div style="padding:0 16px;display:flex;flex-direction:column;gap:10px;">
+
+<sc-if value="{{ at_pending }}" hint-placeholder-val="{{ true }}">
+<div style="font-size:12px;color:#756e65;">{{ pendingSummary }}</div>
+<sc-for list="{{ admPending }}" as="p" hint-placeholder-count="3">
+<div style="background:#ffffff;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);padding:12px 14px;">
+<div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#756e65;"><span style="height:20px;padding:0 7px;border-radius:4px;background:#eaf0ff;color:#2b52d4;display:flex;align-items:center;">{{ p.cat }}</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.author }} · {{ p.time }}</span></div>
+<div onClick="{{ p.preview }}" style="font-size:15px;line-height:1.45;margin-top:8px;cursor:pointer;">{{ p.title }}</div>
+<div style="display:flex;gap:8px;margin-top:12px;"><button onClick="{{ p.approve }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #315bea;background:#315bea;color:#fffefc;">通过</button><button onClick="{{ p.reject }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #e3ded6;background:transparent;color:#4a453f;">驳回</button><span style="flex:1;"></span><button onClick="{{ p.preview }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:0;background:transparent;color:#315bea;">预览</button></div>
+</div>
+</sc-for>
+<sc-if value="{{ pendingEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:48px 0;text-align:center;color:#756e65;font-size:14px;">暂无待审核帖子</div></sc-if>
+</sc-if>
+
+<sc-if value="{{ at_all }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:20px;background:#ffffff;box-shadow:0 0 0 1px #e3ded6;color:#9c958b;"><i class="ph ph-magnifying-glass"></i><input value="{{ admSearch }}" onChange="{{ onAdmSearch }}" placeholder="按标题搜索…" style="flex:1;min-width:0;border:0;background:transparent;color:#26221e;font-size:16px;outline:none;"></div>
+<div class="sm-scroll" style="scrollbar-width:none;-ms-overflow-style:none;display:flex;gap:6px;overflow-x:auto;"><sc-for list="{{ admCatChips }}" as="c" hint-placeholder-count="5"><button onClick="{{ c.pick }}" style="white-space:nowrap;flex-shrink:0;height:30px;padding:0 12px;border-radius:15px;cursor:pointer;font-size:12px;background:{{ c.bg }};color:{{ c.color }};border:1px solid {{ c.bd }};">{{ c.label }}</button></sc-for></div>
+<sc-if value="{{ admShowStatus }}" hint-placeholder-val="{{ true }}"><div style="display:flex;padding:3px;border-radius:8px;background:#f2efe9;box-shadow:0 0 0 1px #e3ded6;"><sc-for list="{{ admStatusSeg }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.pick }}" style="white-space:nowrap;flex:1;height:32px;border:0;border-radius:6px;cursor:pointer;font-size:13px;background:{{ o.bg }};color:{{ o.color }};">{{ o.label }}</button></sc-for></div></sc-if>
+<sc-for list="{{ admAll }}" as="p" hint-placeholder-count="4">
+<div style="background:#ffffff;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);padding:12px 14px;">
+<div style="display:flex;align-items:flex-start;gap:8px;"><div onClick="{{ p.preview }}" style="flex:1;min-width:0;font-size:15px;line-height:1.45;cursor:pointer;">{{ p.title }}</div><span style="white-space:nowrap;height:20px;padding:0 7px;border-radius:4px;font-size:11px;display:flex;align-items:center;background:{{ p.stBg }};color:{{ p.stFg }};">{{ p.stText }}</span></div>
+<div style="font-size:12px;color:#756e65;margin-top:4px;">{{ p.meta }}</div>
+<sc-if value="{{ p.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:#4a453f;margin-top:8px;padding:8px 10px;border-radius:8px;background:#f2efe9;">{{ p.note }}</div></sc-if>
+<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;">
+<button onClick="{{ p.cancel }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #e3ded6;background:transparent;color:#4a453f;opacity:{{ p.cancelOpacity }};">下架</button>
+<button onClick="{{ p.del }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #f1c9c9;background:transparent;color:#d94b4b;">删除</button>
+</div>
+</div>
+</sc-for>
+<sc-if value="{{ admAllEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:48px 0;text-align:center;color:#756e65;font-size:14px;">{{ admAllEmptyText }}</div></sc-if>
+</sc-if>
+
+<sc-if value="{{ at_reports }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;padding:3px;border-radius:8px;background:#f2efe9;box-shadow:0 0 0 1px #e3ded6;"><sc-for list="{{ repStatusSeg }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.pick }}" style="white-space:nowrap;flex:1;height:32px;border:0;border-radius:6px;cursor:pointer;font-size:13px;background:{{ o.bg }};color:{{ o.color }};">{{ o.label }}</button></sc-for></div>
+<sc-for list="{{ admReports }}" as="r" hint-placeholder-count="3">
+<div style="background:#ffffff;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);padding:12px 14px;">
+<div style="display:flex;align-items:center;gap:8px;"><span style="height:20px;padding:0 7px;border-radius:4px;background:#fdeeee;color:#b83c3c;font-size:11px;display:flex;align-items:center;">举报{{ r.typeLabel }}</span><span style="font-size:15px;font-weight:500;flex:1;">{{ r.reason }}</span><span style="font-size:11px;color:#9c958b;">{{ r.time }}</span></div>
+<div style="display:flex;gap:6px;font-size:13px;margin-top:10px;"><span style="color:#756e65;flex:none;">对象</span><span onClick="{{ r.openTarget }}" style="color:#315bea;cursor:pointer;">{{ r.target }}</span></div>
+<sc-if value="{{ r.hasContentOps }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:8px;margin-top:8px;"><sc-if value="{{ r.contentDone }}" hint-placeholder-val="{{ false }}"><span style="white-space:nowrap;height:20px;padding:0 7px;border-radius:4px;font-size:11px;display:flex;align-items:center;background:#fdeeee;color:#b83c3c;">{{ r.contentText }}</span></sc-if><span style="flex:1;"></span><button onClick="{{ r.offline }}" style="white-space:nowrap;flex-shrink:0;height:30px;padding:0 10px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid #e3ded6;background:transparent;color:#4a453f;opacity:{{ r.offOpacity }};">{{ r.offLabel }}</button><button onClick="{{ r.remove }}" style="white-space:nowrap;flex-shrink:0;height:30px;padding:0 10px;border-radius:8px;font-size:12px;cursor:pointer;border:1px solid #f1c9c9;background:transparent;color:#d94b4b;opacity:{{ r.delOpacity }};">{{ r.delLabel }}</button></div></sc-if>
+<sc-if value="{{ r.hasComment }}" hint-placeholder-val="{{ false }}"><div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:#f2efe9;font-size:13px;line-height:1.5;">「{{ r.comment }}」<sc-if value="{{ r.commentDeleted }}" hint-placeholder-val="{{ false }}"><span style="display:inline-block;margin-left:6px;padding:0 6px;border-radius:4px;background:#ece8e1;color:#756e65;font-size:11px;">该评论已被用户删除</span></sc-if></div></sc-if>
+<div style="font-size:13px;color:{{ r.descColor }};margin-top:8px;line-height:1.5;">{{ r.descText }}</div>
+<div style="font-size:12px;color:#9c958b;margin-top:6px;">举报人：{{ r.reporter }}</div>
+<sc-if value="{{ r.isUser }}" hint-placeholder-val="{{ false }}"><div onClick="{{ r.toUsers }}" style="font-size:13px;color:#315bea;margin-top:8px;cursor:pointer;display:flex;align-items:center;gap:4px;">去账号管理搜索处理<i class="ph ph-arrow-right"></i></div></sc-if>
+<sc-if value="{{ r.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:#4a453f;margin-top:8px;padding:8px 10px;border-radius:8px;background:#f2efe9;">处理说明：{{ r.note }}</div></sc-if>
+<sc-if value="{{ r.open }}" hint-placeholder-val="{{ true }}"><div style="display:flex;gap:8px;margin-top:12px;"><button onClick="{{ r.resolve }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #315bea;background:#315bea;color:#fffefc;">标记已处理</button><button onClick="{{ r.dismiss }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #e3ded6;background:transparent;color:#4a453f;">驳回举报</button></div></sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ admReportsEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:48px 0;text-align:center;color:#756e65;font-size:14px;">暂无举报</div></sc-if>
+</sc-if>
+
+<sc-if value="{{ at_support }}" hint-placeholder-val="{{ false }}">
+<div style="background:#ffffff;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);overflow:hidden;">
+<sc-for list="{{ supportList }}" as="c" hint-placeholder-count="2">
+<div onClick="{{ c.open }}" style="display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;border-bottom:1px solid #f2efe9;">
+<div style="width:44px;height:44px;flex:none;border-radius:22px;background:#efe4d4;display:flex;align-items:center;justify-content:center;font-size:16px;">{{ c.init }}</div>
+<div style="flex:1;min-width:0;"><div style="display:flex;gap:6px;"><span style="font-size:15px;flex:1;">{{ c.name }}</span><span style="font-size:11px;color:#9c958b;">{{ c.time }}</span></div><div style="display:flex;align-items:center;gap:6px;margin-top:3px;"><span style="font-size:13px;color:#756e65;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.last }}</span><sc-if value="{{ c.hasUnread }}" hint-placeholder-val="{{ false }}"><span style="min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:#d94b4b;color:#fffefc;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;">{{ c.unread }}</span></sc-if></div></div>
+</div>
+</sc-for>
+</div>
+<div style="font-size:12px;color:#9c958b;line-height:1.5;">用户在「设置 → 联系客服」发起的会话会出现在这里，你的回复会以「Saminest 客服」的身份发送。</div>
+</sc-if>
+
+<sc-if value="{{ at_users }}" hint-placeholder-val="{{ false }}">
+<div style="display:flex;align-items:center;gap:8px;height:40px;padding:0 12px;border-radius:20px;background:#ffffff;box-shadow:0 0 0 1px #e3ded6;color:#9c958b;"><i class="ph ph-magnifying-glass"></i><input value="{{ userSearch }}" onChange="{{ onUserSearch }}" placeholder="按昵称或邮箱搜索" style="flex:1;min-width:0;border:0;background:transparent;color:#26221e;font-size:16px;outline:none;"></div>
+<sc-for list="{{ admUsers }}" as="u" hint-placeholder-count="4">
+<div style="background:#ffffff;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);padding:12px 14px;">
+<div style="display:flex;align-items:center;gap:12px;">
+<div style="width:40px;height:40px;flex:none;border-radius:20px;background:#efe4d4;display:flex;align-items:center;justify-content:center;font-size:14px;">{{ u.init }}</div>
+<div style="flex:1;min-width:0;"><div style="font-size:15px;">{{ u.name }}</div><div style="font-size:12px;color:#756e65;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ u.email }}</div></div>
+<span style="white-space:nowrap;height:20px;padding:0 7px;border-radius:4px;font-size:11px;display:flex;align-items:center;background:{{ u.stBg }};color:{{ u.stFg }};">{{ u.stText }}</span>
+</div>
+<div style="font-size:12px;color:#9c958b;margin-top:8px;">{{ u.meta }}</div>
+<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;"><sc-for list="{{ u.actions }}" as="a" hint-placeholder-count="2"><button onClick="{{ a.go }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;background:transparent;border:1px solid {{ a.bd }};color:{{ a.fg }};">{{ a.label }}</button></sc-for></div>
+</div>
+</sc-for>
+<sc-if value="{{ admUsersEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:48px 0;text-align:center;color:#756e65;font-size:14px;">没有找到匹配的用户</div></sc-if>
+</sc-if>
+
+<sc-if value="{{ at_cats }}" hint-placeholder-val="{{ false }}">
+<button onClick="{{ newCat }}" style="white-space:nowrap;height:42px;border-radius:8px;border:1px dashed #315bea;background:#eaf0ff;color:#2b52d4;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="ph ph-plus"></i>新建分类</button>
+<sc-for list="{{ admCats }}" as="c" hint-placeholder-count="4">
+<div style="background:#ffffff;border-radius:14px;box-shadow:0 1px 2px rgba(60,45,30,0.04),0 4px 12px rgba(60,45,30,0.05);padding:12px 14px;opacity:{{ c.opacity }};">
+<div style="display:flex;align-items:center;gap:8px;"><span style="font-size:16px;font-weight:500;">{{ c.zh }}</span><span style="font-size:13px;color:#756e65;">{{ c.en }}</span><span style="flex:1;"></span><span style="white-space:nowrap;height:20px;padding:0 7px;border-radius:4px;font-size:11px;display:flex;align-items:center;background:{{ c.stBg }};color:{{ c.stFg }};">{{ c.stText }}</span></div>
+<div style="display:flex;gap:10px;font-size:12px;color:#9c958b;margin-top:4px;font-family:ui-monospace,Menlo,monospace;"><span>slug: {{ c.slug }}</span><span>排序 {{ c.sort }}</span></div>
+<div style="font-size:13px;color:#4a453f;margin-top:6px;">{{ c.desc }}</div>
+<div style="display:flex;gap:8px;margin-top:10px;justify-content:flex-end;"><button onClick="{{ c.edit }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #e3ded6;background:transparent;color:#4a453f;">编辑</button><button onClick="{{ c.toggle }}" style="white-space:nowrap;flex-shrink:0;height:32px;padding:0 12px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #e3ded6;background:transparent;color:#4a453f;">{{ c.toggleLabel }}</button></div>
+</div>
+</sc-for>
+</sc-if>
+
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_login }}" hint-placeholder-val="{{ false }}">
+<div style="padding:60px 28px 30px;display:flex;flex-direction:column;min-height:100%;">
+<div style="width:18px;height:2px;background:#315bea;"></div>
+<div style="font-size:34px;font-weight:500;letter-spacing:-0.03em;margin-top:14px;color:#315bea;">Saminest</div>
+<div style="font-size:15px;color:#756e65;margin-top:6px;line-height:1.5;">DMV 华人同城 · 租房、二手、找搭子</div>
+<div style="display:flex;flex-direction:column;gap:12px;margin-top:44px;">
+<input placeholder="邮箱" style="height:50px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<input type="password" placeholder="密码" style="height:50px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<div style="text-align:right;font-size:13px;color:#756e65;cursor:pointer;">忘记密码？</div>
+<button onClick="{{ doLogin }}" style="white-space:nowrap;flex-shrink:0;height:50px;border-radius:8px;border:1px solid #315bea;background:#315bea;color:#fffefc;font-size:16px;cursor:pointer;margin-top:6px;">登录</button>
+<button onClick="{{ doLogin }}" style="white-space:nowrap;flex-shrink:0;height:50px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#26221e;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"><i class="ph-fill ph-apple-logo" style="font-size:18px;"></i>通过 Apple 登录</button>
+</div>
+<div style="flex:1;"></div>
+<div style="text-align:center;font-size:14px;color:#756e65;margin-top:40px;">还没有账号？<span onClick="{{ toRegister }}" style="color:#315bea;cursor:pointer;">注册</span></div>
+<div onClick="{{ guest }}" style="text-align:center;font-size:13px;color:#9c958b;margin-top:14px;cursor:pointer;">先逛逛</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_register }}" hint-placeholder-val="{{ false }}">
+<div style="padding:24px 28px 30px;display:flex;flex-direction:column;gap:12px;">
+<button onClick="{{ back }}" style="white-space:nowrap;flex-shrink:0;align-self:flex-start;width:36px;height:36px;margin-left:-8px;border:0;background:transparent;color:#26221e;font-size:22px;cursor:pointer;"><i class="ph ph-caret-left"></i></button>
+<div style="font-size:28px;font-weight:500;letter-spacing:-0.02em;">创建账号</div>
+<div style="font-size:14px;color:#756e65;margin-bottom:18px;">用邮箱注册，发帖和报名活动都需要登录</div>
+<input placeholder="昵称" style="height:50px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<input placeholder="邮箱" style="height:50px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<input type="password" placeholder="密码（至少 8 位）" style="height:50px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<input type="password" placeholder="确认密码" style="height:50px;padding:0 14px;border-radius:8px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<div onClick="{{ toggleAgree }}" style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#756e65;line-height:1.5;cursor:pointer;margin-top:4px;">
+<span style="width:18px;height:18px;flex:none;margin-top:1px;border-radius:4px;border:1.5px solid {{ agreeBd }};background:{{ agreeBg }};color:#fffefc;font-size:12px;display:flex;align-items:center;justify-content:center;"><i class="ph-bold ph-check"></i></span>
+<span>我已阅读并同意 <span style="color:#315bea;">用户协议</span> 和 <span style="color:#315bea;">隐私政策</span>，承诺不发布违规内容</span></div>
+<button onClick="{{ doRegister }}" style="white-space:nowrap;flex-shrink:0;height:50px;border-radius:8px;border:1px solid #315bea;background:#315bea;color:#fffefc;font-size:16px;cursor:pointer;margin-top:10px;opacity:{{ agreeOpacity }};">注册</button>
+</div>
+</sc-if>
+</div>
+
+<sc-if value="{{ s_post }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;display:flex;align-items:center;gap:10px;padding:10px 16px 30px;border-top:1px solid #ece8e1;background:#f7f5f1;">
+<button onClick="{{ toggleCurFav }}" style="white-space:nowrap;flex-shrink:0;width:52px;height:46px;border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:{{ cur.favColor }};"><i class="{{ cur.favIcon }}" style="font-size:21px;"></i>收藏</button>
+<button onClick="{{ contactAuthor }}" style="white-space:nowrap;flex-shrink:0;flex:1;height:46px;border-radius:8px;border:1px solid #315bea;background:#315bea;color:#fffefc;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;"><i class="ph ph-chat-circle-text"></i>私信咨询</button>
+<button onClick="{{ sharePost }}" style="white-space:nowrap;flex-shrink:0;width:52px;height:46px;border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:#756e65;"><i class="ph ph-share-fat" style="font-size:21px;"></i>分享</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_act }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;display:flex;align-items:center;gap:10px;padding:10px 16px 30px;border-top:1px solid #ece8e1;background:#f7f5f1;">
+<button onClick="{{ toggleActFav }}" style="white-space:nowrap;flex-shrink:0;width:52px;height:46px;border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:{{ ca.favColor }};"><i class="{{ ca.favIcon }}" style="font-size:21px;"></i>收藏</button>
+<button onClick="{{ joinAct }}" style="white-space:nowrap;flex:1;height:46px;border-radius:8px;cursor:pointer;font-size:15px;border:1px solid {{ ca.joinBd }};background:{{ ca.joinBg }};color:{{ ca.joinFg }};">{{ ca.joinLabel }}</button>
+<button onClick="{{ sharePost }}" style="white-space:nowrap;flex-shrink:0;width:52px;height:46px;border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:11px;color:#756e65;"><i class="ph ph-share-fat" style="font-size:21px;"></i>分享</button>
+</div>
+</sc-if>
+
+<sc-if value="{{ s_chat }}" hint-placeholder-val="{{ false }}">
+<div style="flex:none;display:flex;align-items:center;gap:8px;padding:8px 12px 30px;border-top:1px solid #ece8e1;background:#f7f5f1;">
+<button style="white-space:nowrap;flex-shrink:0;width:38px;height:38px;border:0;background:transparent;color:#756e65;font-size:22px;cursor:pointer;"><i class="ph ph-image"></i></button>
+<input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}" placeholder="发消息…" style="flex:1;height:40px;padding:0 14px;border-radius:20px;border:1px solid #e3ded6;background:#f2efe9;color:#26221e;font-size:16px;outline:none;">
+<button onClick="{{ send }}" style="white-space:nowrap;flex-shrink:0;width:40px;height:40px;border-radius:20px;border:1px solid #315bea;background:transparent;color:#2b52d4;font-size:18px;cursor:pointer;"><i class="ph ph-paper-plane-right"></i></button>
+</div>
+</sc-if>
+
+<sc-if value="{{ showTabs }}" hint-placeholder-val="{{ true }}">
+<div style="flex:none;display:flex;padding:6px 0 28px;border-top:1px solid #ece8e1;background:#f7f5f1;">
+<sc-for list="{{ tabs }}" as="t" hint-placeholder-count="4">
+<button onClick="{{ t.go }}" style="white-space:nowrap;flex-shrink:0;flex:1;border:0;background:transparent;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;font-size:11px;color:{{ t.color }};">
+<span style="position:relative;font-size:24px;line-height:1;"><i class="{{ t.icon }}"></i><sc-if value="{{ t.dot }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;right:-3px;top:-1px;width:8px;height:8px;border-radius:4px;background:#d94b4b;box-shadow:0 0 0 2px #fffefc;"></span></sc-if></span>{{ t.label }}</button>
+</sc-for>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasSheet }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeSheet }}" style="position:absolute;inset:0;background:rgba(38,34,30,0.38);z-index:10;display:flex;flex-direction:column;justify-content:flex-end;">
+<div onClick="{{ stop }}" style="margin:0 8px 30px;display:flex;flex-direction:column;gap:8px;">
+<div style="border-radius:14px;overflow:hidden;background:#ffffff;box-shadow:0 0 0 1px #cdc7bd,0 12px 32px rgba(60,45,30,0.14);">
+<sc-if value="{{ sheetHasTitle }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 16px 6px;font-size:13px;color:#756e65;">{{ sheetTitle }}</div></sc-if>
+<sc-for list="{{ sheetItems }}" as="o" hint-placeholder-count="3">
+<div onClick="{{ o.act }}" style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;cursor:pointer;border-top:1px solid #ece8e1;" style-hover="background:#ece8e1;">
+<i class="{{ o.icon }}" style="font-size:20px;color:{{ o.iconColor }};"></i><div style="flex:1;"><div style="font-size:16px;color:{{ o.color }};">{{ o.label }}</div><sc-if value="{{ o.hasSub }}" hint-placeholder-val="{{ false }}"><div style="font-size:12px;color:#756e65;margin-top:1px;">{{ o.sub }}</div></sc-if></div>
+</div>
+</sc-for>
+</div>
+<button onClick="{{ closeSheet }}" style="white-space:nowrap;flex-shrink:0;height:54px;border-radius:14px;border:0;background:#ffffff;color:#26221e;font-size:16px;cursor:pointer;box-shadow:0 0 0 1px #e3ded6;">取消</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasDlg }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closeDlg }}" style="position:absolute;inset:0;background:rgba(38,34,30,0.38);z-index:12;display:flex;flex-direction:column;justify-content:flex-end;">
+<div onClick="{{ stop }}" style="background:#ffffff;border-radius:20px 20px 0 0;padding:10px 16px 34px;display:flex;flex-direction:column;gap:12px;box-shadow:0 -8px 30px rgba(60,45,30,0.12);max-height:86%;overflow-y:auto;">
+<div style="width:36px;height:4px;border-radius:2px;background:#e3ded6;align-self:center;"></div>
+<div><div style="font-size:18px;font-weight:500;color:#315bea;">{{ dlg.title }}</div><sc-if value="{{ dlg.hasTarget }}" hint-placeholder-val="{{ false }}"><div style="font-size:13px;color:#756e65;margin-top:4px;line-height:1.5;">{{ dlg.target }}</div></sc-if></div>
+<sc-for list="{{ dlg.fields }}" as="f" hint-placeholder-count="0">
+<div><div style="font-size:13px;color:#756e65;margin-bottom:6px;">{{ f.label }}</div><input value="{{ f.value }}" onChange="{{ f.onChange }}" placeholder="{{ f.ph }}" style="width:100%;height:44px;padding:0 12px;border-radius:8px;border:1px solid #e3ded6;background:#f7f5f1;color:#26221e;font-size:16px;outline:none;"></div>
+</sc-for>
+<sc-if value="{{ dlg.hasReason }}" hint-placeholder-val="{{ true }}"><div><div style="font-size:13px;color:#756e65;margin-bottom:6px;">{{ dlg.reasonLabel }}</div><textarea value="{{ dlgReason }}" onChange="{{ onDlgReason }}" placeholder="{{ dlg.reasonPh }}" style="width:100%;height:84px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f7f5f1;color:#26221e;font-size:16px;outline:none;resize:none;line-height:1.5;"></textarea></div></sc-if>
+<sc-if value="{{ dlg.hasCheck }}" hint-placeholder-val="{{ false }}"><div onClick="{{ toggleDlgCheck }}" style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;white-space:nowrap;"><span style="width:20px;height:20px;flex:none;border-radius:4px;border:1.5px solid {{ dlgCheckBd }};background:{{ dlgCheckBg }};color:#fffefc;font-size:12px;display:flex;align-items:center;justify-content:center;"><i class="ph-bold ph-check"></i></span>{{ dlg.checkLabel }}</div></sc-if>
+<sc-if value="{{ dlg.showReason2 }}" hint-placeholder-val="{{ false }}"><div><div style="font-size:13px;color:#756e65;margin-bottom:6px;">{{ dlg.reason2Label }}</div><textarea value="{{ dlgReason2 }}" onChange="{{ onDlgReason2 }}" style="width:100%;height:64px;padding:10px 12px;border-radius:8px;border:1px solid #e3ded6;background:#f7f5f1;color:#26221e;font-size:16px;outline:none;resize:none;"></textarea></div></sc-if>
+<sc-if value="{{ dlg.hasErr }}" hint-placeholder-val="{{ false }}"><div role="alert" style="font-size:13px;color:#d94b4b;display:flex;align-items:center;gap:6px;"><i class="ph ph-warning-circle"></i>{{ dlg.err }}</div></sc-if>
+<div style="display:flex;gap:8px;margin-top:4px;"><button onClick="{{ closeDlg }}" style="white-space:nowrap;flex:1;height:46px;border-radius:8px;border:1px solid #e3ded6;background:transparent;color:#4a453f;font-size:15px;cursor:pointer;">取消</button><button onClick="{{ confirmDlg }}" style="white-space:nowrap;flex:1;height:46px;border-radius:8px;font-size:15px;cursor:pointer;border:1px solid {{ dlg.btnBg }};background:{{ dlg.btnBg }};color:#fffefc;">{{ dlg.confirmLabel }}</button></div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasPicker }}" hint-placeholder-val="{{ false }}">
+<div onClick="{{ closePicker }}" style="position:absolute;inset:0;background:rgba(38,34,30,0.38);z-index:13;display:flex;flex-direction:column;justify-content:flex-end;">
+<div onClick="{{ stop }}" style="height:78%;background:#ffffff;border-radius:20px 20px 0 0;display:flex;flex-direction:column;box-shadow:0 -8px 30px rgba(60,45,30,0.12);">
+<div style="padding:10px 16px 10px;flex:none;">
+<div style="width:36px;height:4px;border-radius:2px;background:#e3ded6;margin:0 auto 12px;"></div>
+<div style="display:flex;align-items:center;"><div style="font-size:18px;font-weight:500;color:#315bea;flex:1;">{{ pickerTitle }}</div><button onClick="{{ closePicker }}" style="white-space:nowrap;width:36px;height:36px;border:0;background:transparent;color:#756e65;font-size:20px;cursor:pointer;"><i class="ph ph-x"></i></button></div>
+<div style="display:flex;align-items:center;gap:8px;height:40px;margin-top:8px;padding:0 12px;border-radius:20px;background:#f2efe9;color:#9c958b;"><i class="ph ph-magnifying-glass"></i><input value="{{ pickQ }}" onChange="{{ onPickQ }}" placeholder="搜索州名或缩写，如 NY、纽约" style="flex:1;min-width:0;border:0;background:transparent;color:#26221e;font-size:16px;outline:none;"></div>
+</div>
+<div class="sm-scroll" style="scrollbar-width:none;-ms-overflow-style:none;flex:1;min-height:0;overflow-y:auto;padding:0 8px 30px;">
+<sc-for list="{{ pickList }}" as="o" hint-placeholder-count="10">
+<div onClick="{{ o.pick }}" style="display:flex;align-items:center;gap:12px;height:48px;padding:0 10px;border-radius:8px;cursor:pointer;background:{{ o.bg }};" style-hover="background:#f7f5f1;">
+<span style="width:30px;font-family:ui-monospace,Menlo,monospace;font-size:13px;color:#756e65;">{{ o.code }}</span><span style="flex:1;font-size:15px;color:{{ o.fg }};">{{ o.zh }}</span><sc-if value="{{ o.on }}" hint-placeholder-val="{{ false }}"><i class="ph-bold ph-check" style="color:#315bea;"></i></sc-if>
+</div>
+</sc-for>
+<sc-if value="{{ pickEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:40px 0;text-align:center;color:#756e65;font-size:14px;">没有找到这个州</div></sc-if>
+</div>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{ hasToast }}" hint-placeholder-val="{{ false }}">
+<div style="position:absolute;left:50%;top:110px;transform:translateX(-50%);z-index:20;padding:10px 16px;border-radius:8px;background:#ece8e1;box-shadow:0 0 0 1px #cdc7bd,0 6px 16px rgba(60,45,30,0.12);font-size:14px;white-space:nowrap;display:flex;align-items:center;gap:8px;"><i class="ph-fill ph-check-circle" style="color:#315bea;"></i>{{ toast }}</div>
+</sc-if>
+
+<div style="position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:#26221e;z-index:30;pointer-events:none;"></div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:410,&quot;height&quot;:864},&quot;variant&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;A&quot;,&quot;B&quot;,&quot;C&quot;],&quot;default&quot;:&quot;A&quot;,&quot;tsType&quot;:&quot;'A'|'B'|'C'&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;home&quot;,&quot;acts&quot;,&quot;msgs&quot;,&quot;me&quot;,&quot;login&quot;],&quot;default&quot;:&quot;home&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  static SCREENS = ['home','post','acts','act','newAct','publish','myPosts','myActs','favs','msgs','chat','me','editMe','user','settings','report','feedback','admin','login','register'];
+  static TITLES = {post:'帖子详情',act:'活动详情',newAct:'发起活动',publish:'发布',myPosts:'我的帖子',myActs:'我的活动',favs:'我的收藏',editMe:'编辑资料',user:'',settings:'设置',report:'举报',feedback:'意见反馈',admin:'管理后台'};
+  static CAT = {rent:'出租',wanted:'求租',used:'二手'};
+  static POSTS = [
+    {id:1,cat:'rent',title:'Fairfax 近 Vienna 站主卧出租，独立卫浴',price:'$1,150/月',loc:'Fairfax, VA',time:'2小时前',img:'主卧照片',h:200,photos:8,author:'Lily Zhang',tags:['独立卫浴','包水电','近地铁'],desc:'三室两卫 townhouse 的主卧，自带卫浴和步入式衣柜。步行 12 分钟到 Vienna 地铁站，附近有 H Mart。\n室友是两位在读研究生，作息规律，不抽烟。10 月 15 日起可入住，最短租期 6 个月。'},
+    {id:2,cat:'used',title:'宜家 MALM 床架 Queen，带床垫',price:'$120',loc:'Rockville, MD',time:'5小时前',img:'床架照片',h:150,photos:4,author:'Kevin Wu',tags:['九成新','需自提'],desc:'用了一年，无损坏。床垫是 Zinus 12 寸记忆棉。周末可以看货，需自提，可帮忙拆装。'},
+    {id:3,cat:'rent',title:'Arlington 一室一厅转租 6 个月',price:'$2,050/月',loc:'Arlington, VA',time:'昨天',img:'客厅照片',h:170,photos:6,author:'Amy Li',tags:['整租','可养猫','健身房'],desc:'Courthouse 附近公寓，一室一厅约 700 尺，楼内有健身房和洗衣房。因工作调动转租到明年 4 月，之后可以跟 leasing office 续签。'},
+    {id:4,cat:'used',title:'九成新 Dyson V11 吸尘器，配件齐全',price:'$260',loc:'Tysons, VA',time:'昨天',img:'吸尘器照片',h:210,photos:3,author:'Jason Liu',tags:['配件齐','可小刀'],desc:'去年黑五买的，电池续航正常，所有刷头都在，原包装盒还在。'},
+    {id:5,cat:'rent',title:'Gaithersburg 次卧出租，限女生',price:'$850/月',loc:'Gaithersburg, MD',time:'2天前',img:'次卧照片',h:160,photos:5,author:'Grace Chen',tags:['限女生','带家具'],desc:'两室公寓次卧，家具齐全，和一位上班族女生合住。附近有 Ride On 公交，开车 10 分钟到 Shady Grove 站。'},
+    {id:6,cat:'used',title:'搬家清仓：书桌 + 人体工学椅',price:'$80',loc:'DC · Navy Yard',time:'3天前',img:'书桌照片',h:185,photos:4,author:'Tom Zhao',tags:['打包价','本周末'],desc:'下周搬家，书桌 120cm 宽，椅子是 Branch Ergonomic。两件一起 $80，本周末前取走。'},
+    {id:7,cat:'wanted',title:'求租 Bethesda 附近单间，10 月入住',price:'预算 $1,000/月',loc:'Bethesda, MD',time:'3小时前',img:'',h:0,photos:0,author:'Rui Wang',tags:['单间','10月'],desc:'在 NIH 做博后，一个人，不抽烟不养宠物。希望步行或公交 20 分钟内到 Medical Center 站，租期一年。'},
+    {id:8,cat:'wanted',title:'两人求租 Herndon 两室，可长租',price:'预算 $2,400/月',loc:'Herndon, VA',time:'1天前',img:'',h:0,photos:0,author:'Mia & Leo',tags:['两室','长租'],desc:'一对上班族情侣，在 Reston 上班，需要带车位的两室，可以签一年以上。'}
+  ];
+  static CH = {food:['吃饭','ph ph-bowl-food'],carpool:['拼车','ph ph-car-simple'],fitness:['健身','ph ph-barbell'],game:['游戏','ph ph-game-controller'],study:['学习','ph ph-book-open'],travel:['旅游','ph ph-airplane-tilt'],entertainment:['娱乐','ph ph-film-slate']};
+  static ACTS = [
+    {id:1,ch:'food',tag:'火锅',title:'周五晚海底捞，还差 2 人',landmark:'海底捞 Tysons Galleria',area:'Tysons, VA',when:'10月3日 周五 19:00',day:'周五',hour:'19:00',group:'本周',cap:6,joined:4,org:'Kevin Wu',desc:'下班后吃海底捞，已经订了 6 人桌。AA，人均大概 $40。男女不限，能吃辣优先。'},
+    {id:2,ch:'carpool',tag:'Costco',title:'周六一起去 Costco，拼车 + 分装',landmark:'Costco Fairfax',area:'Fairfax, VA',when:'10月4日 周六 10:30',day:'周六',hour:'10:30',group:'本周',cap:4,joined:2,org:'Grace Chen',desc:'我开车，可以带 3 个人，从 Fair Lakes 出发。大包装的水果和纸巾可以一起分。'},
+    {id:3,ch:'fitness',tag:'力量训练',title:'Planet Fitness 早起健身搭子',landmark:'Planet Fitness Woodbridge',area:'Woodbridge, VA',when:'每周二 / 四 07:00',day:'周二',hour:'07:00',group:'下周',cap:3,joined:1,org:'Jason Liu',desc:'想找能长期坚持早起的搭子，互相监督。新手也可以，我可以带基础动作。'},
+    {id:4,ch:'entertainment',tag:'徒步',title:'Great Falls 徒步，新手友好',landmark:'Great Falls Park',area:'McLean, VA',when:'10月5日 周日 09:00',day:'周日',hour:'09:00',group:'本周',cap:8,joined:5,org:'Amy Li',desc:'走 Billy Goat Trail A 段，全程约 3 小时。门票按车付费，拼车的话每人几块钱。'},
+    {id:5,ch:'game',tag:'阿瓦隆',title:'线上桌游局：阿瓦隆 / 狼人杀',landmark:'线上 · Discord',area:'线上',when:'10月8日 周三 20:30',day:'周三',hour:'20:30',group:'下周',cap:10,joined:10,org:'Tom Zhao',desc:'每周三固定局，开麦。已满员，可以先关注下周。'},
+    {id:6,ch:'study',tag:'CPA',title:'CPA 备考自习，每周六下午',landmark:'Fairfax Regional Library',area:'Fairfax, VA',when:'10月4日 周六 14:00',day:'周六',hour:'14:00',group:'本周',cap:4,joined:3,org:'Rui Wang',desc:'在备考 FAR，想找一起自习的人。安静学习为主，结束后可以一起吃晚饭。'}
+  ];
+  static ADM = {
+    posts: [
+      {id:'p1',cat:'二手',title:'搬家清仓：书桌 + 人体工学椅',author:'Tom Zhao',time:'1小时前',status:'pending',pid:6},
+      {id:'p2',cat:'出租',title:'Silver Spring 地下室单间，$700 包水电',author:'u_8821',time:'2小时前',status:'pending',pid:5},
+      {id:'p3',cat:'求租',title:'求租 Bethesda 附近单间，10 月入住',author:'Rui Wang',time:'3小时前',status:'pending',pid:7},
+      {id:'p4',cat:'出租',title:'Fairfax 近 Vienna 站主卧出租，独立卫浴',author:'Lily Zhang',time:'昨天',status:'approved',pid:1},
+      {id:'p5',cat:'二手',title:'九成新 Dyson V11 吸尘器，配件齐全',author:'Jason Liu',time:'昨天',status:'approved',pid:4},
+      {id:'p6',cat:'出租',title:'低价出租 Clarendon 两室，需先付定金',author:'u_7720',time:'2天前',status:'rejected',note:'驳回原因：要求先转账，疑似诈骗',pid:3}
+    ],
+    acts: [
+      {id:'a1',title:'周五晚海底捞，还差 2 人',author:'Kevin Wu',time:'今天',status:'open',aid:1},
+      {id:'a2',title:'线上桌游局：阿瓦隆 / 狼人杀',author:'Tom Zhao',time:'昨天',status:'full',aid:5},
+      {id:'a3',title:'周末免费品酒会（名额有限）',author:'u_9031',time:'2天前',status:'cancelled',note:'下架原因：以活动名义推销',aid:2},
+      {id:'a4',title:'Great Falls 徒步，新手友好',author:'Amy Li',time:'9月21日',status:'ended',aid:4}
+    ],
+    reports: [
+      {id:'r1',type:'post',reason:'虚假信息或诈骗',target:'低价出租 Clarendon 两室，需先付定金',desc:'要求先 Zelle 转 $500 定金才能看房，照片是网上找的。',reporter:'Amy Li',time:'1小时前',status:'pending',pid:3},
+      {id:'r2',type:'comment',reason:'骚扰或人身攻击',target:'Fairfax 近 Vienna 站主卧出租，独立卫浴',comment:'这种价格也敢挂出来？',commentDeleted:true,desc:'',reporter:'Lily Zhang',time:'3小时前',status:'pending',pid:1},
+      {id:'r3',type:'activity',reason:'广告或重复发布',target:'周末免费品酒会（名额有限）',desc:'每周重复发，去了是推销保险。',reporter:'Grace Chen',time:'昨天',status:'reviewing',aid:2},
+      {id:'r4',type:'user',reason:'骚扰或人身攻击',target:'u_8821',desc:'私信里一直发广告链接。',reporter:'Mia Lin',time:'昨天',status:'pending'},
+      {id:'r5',type:'post',reason:'违法违禁内容',target:'出售处方药',desc:'',reporter:'Kevin Wu',time:'9月22日',status:'resolved',note:'已核实，帖子已删除',pid:2},
+      {id:'r6',type:'post',reason:'其他',target:'宜家 MALM 床架 Queen，带床垫',desc:'价格太高',reporter:'u_4410',time:'9月20日',status:'dismissed',note:'不属于违规内容',pid:2}
+    ],
+    users: [
+      {id:'u1',name:'Lily Zhang',email:'lily.zhang@gmail.com',joined:'2024-03',posts:6,status:'active'},
+      {id:'u2',name:'Kevin Wu',email:'kevinwu.dc@outlook.com',joined:'2024-11',posts:3,status:'active'},
+      {id:'u3',name:'u_8821',email:'u8821@tempmail.io',joined:'2026-09',posts:9,status:'restricted'},
+      {id:'u4',name:'u_7720',email:'deal7720@yahoo.com',joined:'2026-08',posts:4,status:'suspended'},
+      {id:'u5',name:'Tom Zhao',email:'tomzhao@gmail.com',joined:'2025-01',posts:12,status:'active'}
+    ],
+    cats: [
+      {id:1,slug:'rent',zh:'租房',en:'Rent',desc:'整租、合租、转租',sort:1,active:true},
+      {id:2,slug:'wanted',zh:'求租',en:'Wanted',desc:'发布找房需求',sort:2,active:true},
+      {id:3,slug:'used',zh:'二手',en:'Used',desc:'家具、电器、数码闲置',sort:3,active:true},
+      {id:4,slug:'service',zh:'本地服务',en:'Services',desc:'搬家、清洁、维修',sort:4,active:false}
+    ],
+    support: [
+      {id:11,name:'Grace Chen',time:'10:12',unread:1},
+      {id:12,name:'Mia Lin',time:'昨天',unread:0}
+    ]
+  };
+  static STATES = 'AL阿拉巴马州,AK阿拉斯加州,AZ亚利桑那州,AR阿肯色州,CA加利福尼亚州,CO科罗拉多州,CT康涅狄格州,DE特拉华州,DC哥伦比亚特区,FL佛罗里达州,GA佐治亚州,HI夏威夷州,ID爱达荷州,IL伊利诺伊州,IN印第安纳州,IA艾奥瓦州,KS堪萨斯州,KY肯塔基州,LA路易斯安那州,ME缅因州,MD马里兰州,MA马萨诸塞州,MI密歇根州,MN明尼苏达州,MS密西西比州,MO密苏里州,MT蒙大拿州,NE内布拉斯加州,NV内华达州,NH新罕布什尔州,NJ新泽西州,NM新墨西哥州,NY纽约州,NC北卡罗来纳州,ND北达科他州,OH俄亥俄州,OK俄克拉荷马州,OR俄勒冈州,PA宾夕法尼亚州,RI罗德岛州,SC南卡罗来纳州,SD南达科他州,TN田纳西州,TX得克萨斯州,UT犹他州,VT佛蒙特州,VA弗吉尼亚州,WA华盛顿州,WV西弗吉尼亚州,WI威斯康星州,WY怀俄明州'.split(',').map(x => ({code: x.slice(0, 2), zh: x.slice(2)}));
+  static NAMES = ['LZ','KW','AL','JL','GC','TZ','RW','ML','YC','HS'];
+  static FACE = ['#dfe6fd','#efe4d4','#dcebe4','#f0dfdc'];
+
+  state = {
+    screen: (this.props && this.props.startScreen) || 'home', stack: [],
+    homeCat: 'all', channel: 'all', postId: 1, actId: 1, convId: 1,
+    favs: {1: true, 4: true}, actFavs: {}, joined: {2: true},
+    sheet: null, toast: null, search: false, region: 'ALL', picker: null, pickQ: '', pubState: 'VA', actStateCode: 'VA', meState: 'VA',
+    pubType: 'rent', contact: 'message', actCh: 'food', cap: 4, online: false, actState: 1,
+    reportReason: null, reportTarget: '帖子', fbType: '功能建议',
+    myPostTab: 'live', myActTab: 'mine', adminTab: 'pending', adminDone: {},
+    offPosts: {}, agree: false, draft: '',
+    adm: JSON.parse(JSON.stringify(Component.ADM)), dlg: null, dlgReason: '', dlgReason2: '', dlgCheck: false, dlgErr: '', cf: {}, admSearch: '', admCat: 'all', admStatus: '', repStatus: 'pending', userSearch: '',
+    meName: 'Yuki Chen', meBio: '在 Fairfax 做软件工程师，周末喜欢徒步和火锅。',
+    otherName: 'Lily Zhang',
+    read: {},
+    threads: {
+      1: [{me:false,text:'你好，主卧还在吗？'},{me:true,text:'在的，这周末可以来看房'},{me:false,text:'好的，周六下午两点方便吗？'},{me:true,text:'可以，我把地址发你'}],
+      2: [{me:false,text:'床架还在，你什么时候方便来取？'}],
+      3: [{me:false,text:'Grace 通过了你的报名：周六一起去 Costco'}],
+      4: [{me:false,text:'你好，这里是 Saminest 客服，有什么可以帮你？'}],
+      5: [{me:false,text:'谢谢，那我们周日见！'}],
+      11: [{me:false,text:'你好，我的帖子一直在审核中，能帮忙看看吗？'}],
+      12: [{me:false,text:'密码重置邮件收不到'},{me:true,text:'已经帮你重新发送，请看一下垃圾邮件箱'},{me:false,text:'谢谢，已经可以登录了'}]
+    }
+  };
+  scrollRef = React.createRef();
+
+  componentDidUpdate() {
+    const sc = this.state.screen;
+    if (this._lastScreen !== sc) { this._lastScreen = sc; const el = this.scrollRef.current; if (el) setTimeout(() => { el.scrollTop = sc === 'chat' ? 99999 : 0; }, 0); }
+    const ss = this.props.startScreen;
+    if (this._lastStart !== ss) { const first = this._lastStart === undefined; this._lastStart = ss; if (!first && ss) this.setState({screen: ss, stack: []}); }
+  }
+  componentDidMount() { window.__sm = this; this._lastScreen = this.state.screen; this._lastStart = this.props.startScreen; }
+  go(screen, extra) { this.setState(s => ({stack: [...s.stack, s.screen], screen, sheet: null, ...(extra || {})})); }
+  tab(screen) { this.setState({screen, stack: [], sheet: null}); }
+  back() { this.setState(s => { const st = [...s.stack]; const prev = st.pop() || 'home'; return {screen: prev, stack: st, sheet: null}; }); }
+  flash(msg) { this.setState({toast: msg}); clearTimeout(this._t); this._t = setTimeout(() => this.setState({toast: null}), 1800); }
+  chip(on) { return on ? {bg:'#eaf0ff',color:'#2449c9',bd:'#315bea'} : {bg:'transparent',color:'#6b655d',bd:'#e3ded6'}; }
+  seg(on) { return on ? {bg:'#eaf0ff',color:'#2449c9'} : {bg:'transparent',color:'#756e65'}; }
+  joinedCount(a) { return Math.min(a.cap, a.joined + (this.state.joined[a.id] ? 1 : 0)); }
+  actView(a) {
+    const s = this.state, C = Component;
+    const n = this.joinedCount(a), full = n >= a.cap;
+    const shown = Math.min(a.cap, 6);
+    const slots = [];
+    for (let i = 0; i < shown; i++) {
+      const filled = i < n;
+      const last = i === shown - 1 && a.cap > shown;
+      slots.push({label: last ? '+' + (a.cap - shown + 1) : (filled ? (i === 0 ? a.org.split(' ').map(w => w[0]).join('') : C.NAMES[(a.id + i) % 10]) : '+'),
+        bg: filled ? C.FACE[(a.id + i) % 4] : '#f2efe9', color: filled ? '#26221e' : '#9c958b',
+        open: filled ? () => this.go('user', {otherName: a.org}) : () => this.flash('报名后即可占位')});
+    }
+    const faces = slots.filter((x, i) => i < Math.min(n, 3)).map(x => ({label: x.label, bg: x.bg}));
+    const fav = !!s.actFavs[a.id], mine = !!s.joined[a.id];
+    return {...a, chLabel: C.CH[a.ch][0], icon: C.CH[a.ch][1], slots, faces,
+      countText: n + '/' + a.cap + ' 人', pct: Math.round(n / a.cap * 100) + '%',
+      statusText: mine ? '已报名' : (full ? '已满员' : '还差 ' + (a.cap - n) + ' 人'),
+      statusColor: mine ? '#315bea' : (full ? '#9c958b' : '#756e65'),
+      orgInit: a.org.split(' ').map(w => w[0]).join(''),
+      favIcon: fav ? 'ph-fill ph-heart' : 'ph ph-heart', favColor: fav ? '#315bea' : '#756e65',
+      joinLabel: mine ? '已报名 · 退出' : (full ? '已满员' : '报名参加'),
+      joinBg: mine ? 'transparent' : (full ? 'transparent' : '#315bea'), joinBd: mine || full ? '#e3ded6' : '#315bea', joinFg: mine ? '#4a453f' : (full ? '#9c958b' : '#fffefc'),
+      open: () => this.go('act', {actId: a.id})};
+  }
+  postView(p) {
+    const s = this.state, fav = !!s.favs[p.id];
+    return {...p, catLabel: Component.CAT[p.cat], authorInit: p.author[0],
+      favIcon: fav ? 'ph-fill ph-heart' : 'ph ph-heart', favColor: fav ? '#315bea' : '#756e65',
+      open: () => this.go('post', {postId: p.id}),
+      toggleFav: (e) => { if (e) e.stopPropagation(); this.setState(st => ({favs: {...st.favs, [p.id]: !st.favs[p.id]}})); if (!fav) this.flash('已收藏'); }};
+  }
+
+  renderVals() {
+    const s = this.state, C = Component, V = {};
+    const variant = this.props.variant || 'A';
+    C.SCREENS.forEach(n => { V['s_' + n] = s.screen === n; V['to_' + n] = () => this.go(n); });
+    V.vA = variant === 'A'; V.vB = variant === 'B'; V.vC = variant === 'C';
+    const tabScreens = ['home','acts','msgs','me'];
+    V.showTabs = tabScreens.includes(s.screen);
+    V.showNav = !V.showTabs && !['login','register'].includes(s.screen);
+    V.back = () => this.back();
+    V.stop = (e) => e.stopPropagation();
+    V.toast = s.toast; V.hasToast = !!s.toast;
+    const stLabel = (c) => { if (c === 'ALL') return '全部地区'; const x = C.STATES.find(z => z.code === c); return x ? x.code + ' ' + x.zh : c; };
+    const stateOf = (loc) => { const m = /,\s*([A-Z]{2})$/.exec(loc || ''); if (m) return m[1]; if (/^DC/.test(loc || '')) return 'DC'; return null; };
+    V.regionLabel = stLabel(s.region);
+    V.openRegionPicker = () => this.setState({picker: 'region', pickQ: ''});
+    V.pickActState = () => this.setState({picker: 'act', pickQ: ''});
+    V.pickMeState = () => this.setState({picker: 'me', pickQ: ''});
+    V.pickPubState = () => this.setState({picker: 'pub', pickQ: ''});
+    V.actStateLabel = stLabel(s.actStateCode); V.meStateLabel = stLabel(s.meState); V.pubStateLabel = stLabel(s.pubState);
+    V.pubCityPh = s.pubState === 'VA' ? '例如 Fairfax 或 Tysons Corner' : '例如 城市名或街区';
+    const PK = {region: ['region', '选择地区', true], act: ['actStateCode', '活动所在州', false], me: ['meState', '常驻地区', false], pub: ['pubState', '帖子所在州', false]}[s.picker] || ['region', '', true];
+    V.hasPicker = !!s.picker; V.pickerTitle = PK[1];
+    V.closePicker = () => this.setState({picker: null});
+    V.pickQ = s.pickQ; V.onPickQ = (e) => this.setState({pickQ: e.target.value});
+    const pq = s.pickQ.trim().toLowerCase();
+    const opts = (PK[2] ? [{code: 'ALL', zh: '全部地区'}] : []).concat(C.STATES).filter(o => !pq || o.code.toLowerCase().includes(pq) || o.zh.includes(s.pickQ.trim()));
+    V.pickList = opts.map(o => { const on = s[PK[0]] === o.code; return {code: o.code === 'ALL' ? '' : o.code, zh: o.zh, on, bg: on ? '#eaf0ff' : 'transparent', fg: on ? '#2b52d4' : '#26221e', pick: () => this.setState({[PK[0]]: o.code, picker: null})}; });
+    V.pickEmpty = V.pickList.length === 0;
+    V.search = s.search; V.toggleSearch = () => this.setState(st => ({search: !st.search}));
+
+    const unreadTotal = [1,2,3].filter(i => !s.read[i]).length;
+    V.tabs = [['home','首页','house'],['acts','找搭子','handshake'],['msgs','消息','chat-circle'],['me','我的','user']].map(([k, l, ic]) => {
+      const on = s.screen === k;
+      return {label: l, icon: (on ? 'ph-fill ph-' : 'ph ph-') + ic, color: on ? '#2b52d4' : '#9c958b', dot: (k === 'msgs' && unreadTotal > 0) || k === 'me', go: () => this.tab(k)};
+    });
+
+    V.homeCats = [['all','推荐'],['rent','租房'],['wanted','求租'],['used','二手']].map(([k, l]) => {
+      const on = s.homeCat === k;
+      return {label: l, color: on ? '#26221e' : '#756e65', weight: on ? 500 : 400, bar: on ? '#315bea' : 'transparent', pick: () => this.setState({homeCat: k})};
+    });
+    const inRegion = (loc) => s.region === 'ALL' || stateOf(loc) === s.region;
+    const feedRaw = (s.homeCat === 'all' ? C.POSTS.filter(p => p.cat !== 'wanted') : C.POSTS.filter(p => p.cat === s.homeCat)).filter(p => inRegion(p.loc));
+    V.feed = feedRaw.map(p => this.postView(p));
+    const wanted = s.homeCat === 'wanted';
+    V.feedEmpty = feedRaw.length === 0;
+    V.feedWanted = wanted; V.feedA = V.vA && !wanted; V.feedB = V.vB && !wanted; V.feedC = V.vC && !wanted;
+
+    const cp = C.POSTS.find(p => p.id === s.postId) || C.POSTS[0];
+    V.cur = this.postView(cp);
+    if (cp.cat === 'wanted') V.cur.img = '求租帖 · 无照片';
+    V.toggleCurFav = () => V.cur.toggleFav();
+    V.sharePost = () => this.flash('链接已复制');
+    V.contactAuthor = () => this.go('chat', {convId: 1});
+    V.askOrganizer = () => this.go('chat', {convId: 3});
+    V.comments = [{init:'M',name:'Mia',time:'1小时前',text:'请问可以短租 3 个月吗？'},{init:'L',name:'Lily Zhang',time:'50分钟前',text:'最短 6 个月哦，可以私信细聊'}];
+
+    V.channelChips = [['all','全部','ph ph-squares-four'], ...Object.keys(C.CH).map(k => [k, C.CH[k][0], C.CH[k][1]])].map(([k, l, ic]) => ({label: l, icon: ic, ...this.chip(s.channel === k), pick: () => this.setState({channel: k})}));
+    const actsRaw = C.ACTS.filter(a => (s.channel === 'all' || a.ch === s.channel) && (a.area === '线上' || inRegion(a.area)));
+    V.actsEmpty = actsRaw.length === 0;
+    V.acts = actsRaw.map(a => this.actView(a));
+    V.actGroups = ['本周','下周'].map(g => ({label: g, items: V.acts.filter(a => a.group === g)})).filter(g => g.items.length);
+    const ca = C.ACTS.find(a => a.id === s.actId) || C.ACTS[0];
+    V.ca = this.actView(ca);
+    V.ca.slots = (() => { const n = this.joinedCount(ca); const out = []; for (let i = 0; i < Math.min(ca.cap, 10); i++) { const f = i < n; out.push({label: f ? (i === 0 ? V.ca.orgInit : C.NAMES[(ca.id + i) % 10]) : '+', bg: f ? C.FACE[(ca.id + i) % 4] : '#f2efe9', color: f ? '#26221e' : '#9c958b', open: f ? () => this.go('user', {otherName: i === 0 ? ca.org : 'Mia Lin'}) : () => this.flash('报名后即可占位')}); } return out; })();
+    V.joinAct = () => { const mine = s.joined[ca.id]; if (!mine && this.joinedCount(ca) >= ca.cap) { this.flash('已满员'); return; } this.setState(st => ({joined: {...st.joined, [ca.id]: !mine}})); this.flash(mine ? '已退出活动' : '报名成功，已通知发起人'); };
+    const PEOPLE = [['Kevin Wu',26,'Tysons','刚来 DC 工作一年，爱吃火锅和烧烤'],['Mia Lin',24,'Arlington','GMU 研二，周末有空'],['Leo Zhou',29,'Fairfax','程序员，健身两年，可以带新手'],['Grace Chen',27,'Gaithersburg','喜欢逛 Costco 和做饭'],['Amy Li',25,'McLean','户外爱好者，走过 Shenandoah 大部分步道'],['Rui Wang',31,'Bethesda','NIH 博后，在备考 CPA'],['Tom Zhao',28,null,'桌游、狼人杀老玩家'],['Hana Sun',null,'Rockville','新手，想多认识朋友'],['Jason Liu',30,'Woodbridge','早起型选手'],['Yan Xu',23,null,null]];
+    const nMem = this.joinedCount(ca);
+    const orgIdx = Math.max(0, PEOPLE.findIndex(p => p[0] === ca.org));
+    const order = [orgIdx, ...PEOPLE.map((p, i) => i).filter(i => i !== orgIdx)];
+    const mem = order.slice(0, nMem).map((pi, i) => { const [nm, age, loc, bio] = PEOPLE[pi]; return {init: nm.split(' ').map(w => w[0]).join(''), line: nm + (age != null ? ' ' + age + '岁' : '') + (loc ? ' · 住' + loc : ''), bio: bio || '这个人很懒，还没有写简介', isOrg: i === 0, bg: C.FACE[(ca.id + i) % 4], open: () => this.go('user', {otherName: nm})}; });
+    if (s.joined[ca.id]) mem[mem.length - 1] = {init: V.meInit, line: s.meName + ' 27岁 · 住Fairfax', bio: s.meBio, isOrg: false, bg: '#dfe6fd', open: () => this.tab('me')};
+    V.ca.members = mem; V.ca.memberCount = nMem + ' 人';
+    const baseC = [{init:'M',name:'Mia Lin',time:'2小时前',text:'请问需要提前订位吗？我可能晚到 15 分钟'},{init:V.ca.orgInit,name:ca.org + '（发起人）',time:'1小时前',text:'已经订好了，晚点到没关系，到了群里说一声'}];
+    V.actComments = [...baseC, ...((s.actComments || {})[ca.id] || [])];
+    V.actCommentCount = V.actComments.length;
+    V.actDraft = s.actDraft || '';
+    V.onActDraft = (e) => this.setState({actDraft: e.target.value});
+    V.sendActComment = () => { const t = (s.actDraft || '').trim(); if (!t) return; this.setState(st => { const ac = {...(st.actComments || {})}; ac[ca.id] = [...(ac[ca.id] || []), {init: V.meInit, name: st.meName, time: '刚刚', text: t}]; return {actComments: ac, actDraft: ''}; }); };
+    V.onActDraftKey = (e) => { if (e.key === 'Enter') V.sendActComment(); };
+    V.toggleActFav = () => this.setState(st => ({actFavs: {...st.actFavs, [ca.id]: !st.actFavs[ca.id]}}));
+
+    V.actChPick = Object.keys(C.CH).map(k => ({label: C.CH[k][0], icon: C.CH[k][1], ...this.chip(s.actCh === k), pick: () => this.setState({actCh: k})}));
+    V.statePick = ['DC','VA','MD'].map((l, i) => ({label: l, ...this.seg(s.actState === i), pick: () => this.setState({actState: i})}));
+    V.offline = !s.online;
+    V.toggleOnline = () => this.setState(st => ({online: !st.online}));
+    V.onlineBg = s.online ? '#eaf0ff' : '#f2efe9'; V.onlineBd = s.online ? '#315bea' : '#e3ded6'; V.onlineKnob = s.online ? '#315bea' : '#cdc7bd'; V.onlineLeft = s.online ? '23px' : '3px';
+    V.cap = s.cap; V.capUp = () => this.setState(st => ({cap: Math.min(20, st.cap + 1)})); V.capDown = () => this.setState(st => ({cap: Math.max(2, st.cap - 1)}));
+    V.submitAct = () => { this.back(); this.flash('活动已发布'); };
+
+    V.pubTypes = [['rent','出租'],['wanted','求租'],['used','二手']].map(([k, l]) => ({label: l, ...this.seg(s.pubType === k), pick: () => this.setState({pubType: k})}));
+    V.pubHasPhotos = s.pubType !== 'wanted';
+    V.pubTitlePh = {rent:'例如：Fairfax 主卧出租，独立卫浴',wanted:'例如：求租 Bethesda 单间，10 月入住',used:'例如：九成新宜家书桌'}[s.pubType];
+    V.pubPriceLabel = {rent:'月租',wanted:'预算 / 月',used:'价格'}[s.pubType];
+    V.pubDescPh = {rent:'房型、入住时间、租期、室友情况、周边交通',wanted:'入住时间、预算、希望的位置和房型',used:'成色、购买时间、是否自提'}[s.pubType];
+    V.contactPick = [['message','站内私信'],['wechat','微信'],['phone','电话'],['email','邮箱']].map(([k, l]) => ({label: l, ...this.chip(s.contact === k), pick: () => this.setState({contact: k})}));
+    V.submitPost = () => { this.back(); this.flash('已提交，审核通过后展示'); };
+    V.openPublishSheet = () => this.setState({sheet: 'publish'});
+
+    const mine = [[C.POSTS[0],'live','浏览 128 · 收藏 9'],[C.POSTS[3],'live','浏览 46 · 收藏 3'],[C.POSTS[5],'review','提交于 1 小时前'],[C.POSTS[1],'off','已于 9月20日 下架']];
+    V.myPostTabs = [['live','已发布'],['review','审核中'],['off','已下架']].map(([k, l]) => ({label: l, ...this.seg(s.myPostTab === k), pick: () => this.setState({myPostTab: k})}));
+    V.myPosts = mine.map(([p, st, stats]) => ({p, st: s.offPosts[p.id] ? 'off' : st, stats})).filter(x => x.st === s.myPostTab).map(({p, st, stats}) => ({...this.postView(p), stats,
+      stText: {live:'展示中',review:'审核中',off:'已下架'}[st], stColor: {live:'#315bea',review:'#4a453f',off:'#9c958b'}[st],
+      offLabel: st === 'off' ? '重新上架' : '下架', off: () => { this.setState(x => ({offPosts: {...x.offPosts, [p.id]: st !== 'off'}})); this.flash(st === 'off' ? '已重新提交审核' : '已下架'); }}));
+    V.myPostsEmpty = V.myPosts.length === 0;
+
+    V.myActTabs = [['mine','我发起的'],['joined','我参加的']].map(([k, l]) => ({label: l, ...this.seg(s.myActTab === k), pick: () => this.setState({myActTab: k})}));
+    V.myActs = (s.myActTab === 'mine' ? [C.ACTS[0], C.ACTS[3]] : C.ACTS.filter(a => s.joined[a.id])).map((a, i) => ({...this.actView(a), hasPending: s.myActTab === 'mine' && i === 0, pendingText: '2 人待审核'}));
+
+    V.favPosts = C.POSTS.filter(p => s.favs[p.id]).map(p => this.postView(p));
+    V.favsEmpty = V.favPosts.length === 0;
+
+    const convs = [
+      {id:1,name:'Lily Zhang',last:'可以，我把地址发你',time:'10:24',unread:2,ctx:C.POSTS[0]},
+      {id:2,name:'Kevin Wu',last:'床架还在，你什么时候方便来取？',time:'09:02',unread:1,ctx:C.POSTS[1]},
+      {id:3,name:'活动通知',last:'Grace 通过了你的报名：周六一起去 Costco',time:'昨天',unread:1,sys:'ph ph-bell-simple'},
+      {id:4,name:'Saminest 客服',last:'你好，这里是 Saminest 客服，有什么可以帮你？',time:'周一',unread:0,sys:'ph ph-headset'},
+      {id:5,name:'Amy Li',last:'谢谢，那我们周日见！',time:'9月24日',unread:0}
+    ];
+    V.convs = convs.map(c => { const u = s.read[c.id] ? 0 : c.unread; const th = s.threads[c.id]; return {...c, last: th[th.length - 1].text, unread: u, hasUnread: u > 0, icon: c.sys || '', init: c.sys ? '' : c.name[0], bg: c.sys ? '#eaf0ff' : '#e3ded6', fg: c.sys ? '#2b52d4' : '#26221e', open: () => this.setState(st => ({read: {...st.read, [c.id]: true}}), () => this.go('chat', {convId: c.id}))}; });
+    V.markAllRead = () => this.setState({read: {1: true, 2: true, 3: true}});
+    const cc = [...convs, ...s.adm.support.map(c => ({...c, ctx: null}))].find(c => c.id === s.convId) || convs[0];
+    V.chatHasCtx = !!cc.ctx; V.chatCtx = cc.ctx || {};
+    V.openChatCtx = () => cc.ctx && this.go('post', {postId: cc.ctx.id});
+    V.chatMsgs = (s.threads[cc.id] || []).map(m => ({text: m.text, justify: m.me ? 'flex-end' : 'flex-start', bg: m.me ? '#eaf0ff' : '#ffffff', fg: m.me ? '#2449c9' : '#26221e', bd: m.me ? '#dfe6fd' : '#ece8e1'}));
+    V.draft = s.draft;
+    V.onDraft = (e) => this.setState({draft: e.target.value});
+    V.send = () => { const t = s.draft.trim(); if (!t) return; this.setState(st => ({draft: '', threads: {...st.threads, [cc.id]: [...st.threads[cc.id], {me: true, text: t}]}}), () => { if (this.scrollRef.current) this.scrollRef.current.scrollTop = 99999; }); };
+    V.onDraftKey = (e) => { if (e.key === 'Enter') V.send(); };
+
+    V.meName = s.meName; V.meBio = s.meBio; V.meInit = (s.meName || '我')[0];
+    V.onName = (e) => this.setState({meName: e.target.value}); V.onBio = (e) => this.setState({meBio: e.target.value});
+    V.saveProfile = () => { this.back(); this.flash('资料已保存'); };
+    V.meStats = [[4,'帖子','myPosts'],[2,'活动','myActs'],[V.favPosts.length,'收藏','favs']].map(([n, l, k]) => ({n, label: l, open: () => this.go(k)}));
+    V.meRows = [['ph ph-note','我的帖子','myPosts',''],['ph ph-handshake','我的活动','myActs','2 人待审核'],['ph ph-heart','我的收藏','favs',''],['ph ph-chat-centered-text','意见反馈','feedback',''],['ph ph-shield-check','管理后台','admin',String(s.adm.posts.filter(p => p.status === 'pending').length + s.adm.reports.filter(r => r.status === 'pending').length)]].map(([ic, l, k, b]) => ({icon: ic, label: l, badge: b, hasBadge: !!b, open: () => this.go(k)}));
+
+    const on = s.otherName;
+    V.other = {name: on, init: on[0], meta: 'Fairfax, VA · 2024 年加入 · 已发布 6 条', bio: '在 GMU 读研，房子到期转租，欢迎私信。'};
+    V.otherPosts = [C.POSTS[0], C.POSTS[4], C.POSTS[2]].map(p => this.postView(p));
+    V.messageOther = () => this.go('chat', {convId: 1});
+
+    V.settingGroups = [
+      {title:'账号', rows:[['账号与安全','yuki@example.com',()=>{}],['通知设置','',()=>{}],['已屏蔽用户','2 人',()=>{}]]},
+      {title:'支持', rows:[['意见反馈','',()=>this.go('feedback')],['联系客服','',()=>this.go('chat',{convId:4})],['用户协议','',()=>{}],['隐私政策','',()=>{}]]},
+      {title:'', rows:[['退出登录','',()=>this.setState({sheet:'logout'}),'#26221e',false],['注销账号','',()=>this.flash('注销需二次确认'),'#d94b4b',false]]}
+    ].map(g => ({title: g.title, hasTitle: !!g.title, rows: g.rows.map(([l, v, fn, col, chev]) => ({label: l, value: v, open: fn, color: col || '#26221e', chev: chev !== false}))}));
+
+    V.reportTarget = s.reportTarget;
+    V.reasons = ['虚假信息或诈骗','违法违禁内容','色情低俗','骚扰或人身攻击','广告或重复发布','其他'].map(l => { const o = s.reportReason === l; return {label: l, ring: o ? '#315bea' : '#cdc7bd', dot: o ? '#315bea' : 'transparent', pick: () => this.setState({reportReason: l})}; });
+    V.reportOpacity = s.reportReason ? 1 : 0.45;
+    V.submitReport = () => { if (!s.reportReason) return; this.setState({reportReason: null}); this.back(); this.flash('举报已提交'); };
+
+    V.fbTypes = ['功能建议','问题反馈','内容投诉','其他'].map(l => ({label: l, ...this.chip(s.fbType === l), pick: () => this.setState({fbType: l})}));
+    V.submitFeedback = () => { this.back(); this.flash('感谢反馈'); };
+    V.openSupport = () => this.go('chat', {convId: 4});
+
+    const adm = s.adm;
+    const upd = (key, id, patch) => this.setState(st => ({adm: {...st.adm, [key]: st.adm[key].map(x => x.id === id ? {...x, ...patch} : x)}}));
+    const del = (key, id) => this.setState(st => ({adm: {...st.adm, [key]: st.adm[key].filter(x => x.id !== id)}}));
+    const openDlg = (d) => this.setState({dlg: d, dlgReason: '', dlgReason2: '', dlgCheck: false, dlgErr: ''});
+    const ST = {pending:['待审核','#fff5e6','#a86a17'],approved:['已通过','#eaf7f0','#2e7d52'],rejected:['已驳回','#fdeeee','#b83c3c'],open:['进行中','#eaf0ff','#2b52d4'],full:['已满员','#fff5e6','#a86a17'],cancelled:['已下架','#fdeeee','#b83c3c'],offline:['已下架','#fdeeee','#b83c3c'],ended:['已结束','#f2efe9','#756e65'],active:['正常','#eaf7f0','#2e7d52'],restricted:['受限','#fff5e6','#a86a17'],suspended:['已封禁','#fdeeee','#b83c3c']};
+    const st3 = (k) => ({stText: ST[k][0], stBg: ST[k][1], stFg: ST[k][2]});
+    const nPending = adm.posts.filter(p => p.status === 'pending').length;
+    const nReports = adm.reports.filter(r => r.status === 'pending').length;
+    const nSupport = adm.support.filter(c => !s.read[c.id] && c.unread).length;
+    const TABS = [['pending','待审核',nPending],['all','全部帖子',0],['reports','举报处理',nReports],['support','客服',nSupport],['users','用户管理',0],['cats','分类管理',0]];
+    V.adminTabs = TABS.map(([k, l, n]) => { const on = s.adminTab === k; return {label: l, count: n, hasCount: n > 0, bg: on ? '#315bea' : '#ffffff', color: on ? '#fffefc' : '#4a453f', bd: on ? '#315bea' : '#e3ded6', weight: on ? 500 : 400, cBg: on ? '#fffefc' : '#d94b4b', cFg: on ? '#315bea' : '#fffefc', pick: () => this.setState({adminTab: k})}; });
+    TABS.forEach(([k]) => { V['at_' + k] = s.adminTab === k; });
+
+    V.admPending = adm.posts.filter(p => p.status === 'pending').map(p => ({...p,
+      preview: () => this.go('post', {postId: p.pid}),
+      approve: () => { upd('posts', p.id, {status: 'approved'}); this.flash('已通过，帖子已上线'); },
+      reject: () => openDlg({kind: 'reject', id: p.id, target: p.title})}));
+    V.pendingEmpty = V.admPending.length === 0;
+    V.pendingSummary = nPending + ' 条待审核 · 最早提交的排在前面';
+
+    const isActs = s.admCat === 'acts';
+    V.admSearch = s.admSearch; V.onAdmSearch = (e) => this.setState({admSearch: e.target.value});
+    V.admCatChips = [['all','全部帖子'],['出租','租房'],['求租','求租'],['二手','二手'],['acts','找搭子']].map(([k, l]) => ({label: l, ...this.chip(s.admCat === k), pick: () => this.setState({admCat: k})}));
+    V.admShowStatus = !isActs;
+    V.admStatusSeg = [['','全部'],['pending','待审核'],['approved','已通过'],['rejected','已驳回'],['offline','已下架']].map(([k, l]) => ({label: l, ...this.seg(s.admStatus === k), pick: () => this.setState({admStatus: k})}));
+    const q = s.admSearch.trim();
+    if (isActs) {
+      V.admAll = adm.acts.filter(a => !q || a.title.includes(q)).map(a => ({...a, ...st3(a.status), isAct: true, meta: '找搭子 · 发起人 ' + a.author + ' · ' + a.time, hasNote: !!a.note,
+        preview: () => this.go('act', {actId: a.aid}),
+        cancelOpacity: a.status === 'cancelled' ? 0.45 : 1,
+        cancel: () => { if (a.status !== 'cancelled') openDlg({kind: 'cancelAct', id: a.id, target: a.title}); },
+        del: () => openDlg({kind: 'deleteAct', id: a.id, target: a.title})}));
+    } else {
+      V.admAll = adm.posts.filter(p => (s.admCat === 'all' || p.cat === s.admCat) && (!s.admStatus || p.status === s.admStatus) && (!q || p.title.includes(q))).map(p => ({...p, ...st3(p.status), isAct: false, meta: p.cat + ' · ' + p.author + ' · ' + p.time, hasNote: !!p.note,
+        preview: () => this.go('post', {postId: p.pid}),
+        cancelOpacity: p.status === 'offline' ? 0.45 : 1,
+        cancel: () => { if (p.status !== 'offline') openDlg({kind: 'offlinePost', id: p.id, target: p.title}); },
+        del: () => openDlg({kind: 'deletePost', id: p.id, target: p.title})}));
+    }
+    V.admAllEmpty = V.admAll.length === 0; V.admAllEmptyText = isActs ? '暂无找搭子活动' : '暂无帖子';
+
+    const TL = {post:'帖子',comment:'评论',activity:'活动',user:'用户'};
+    V.repStatusSeg = [['pending','待处理'],['reviewing','处理中'],['resolved','已处理'],['dismissed','已驳回']].map(([k, l]) => ({label: l, ...this.seg(s.repStatus === k), pick: () => this.setState({repStatus: k})}));
+    V.admReports = adm.reports.filter(r => r.status === s.repStatus).map(r => ({...r, typeLabel: TL[r.type], hasComment: r.type === 'comment', commentDeleted: !!r.commentDeleted, isUser: r.type === 'user',
+      descText: r.desc || '（举报人未填写补充说明）', descColor: r.desc ? '#26221e' : '#9c958b', hasNote: !!r.note,
+      open: r.status === 'pending' || r.status === 'reviewing',
+      openTarget: () => { if (r.type === 'user') this.setState({adminTab: 'users', userSearch: r.target}); else if (r.type === 'activity') this.go('act', {actId: r.aid}); else this.go('post', {postId: r.pid}); },
+      toUsers: () => this.setState({adminTab: 'users', userSearch: r.target}),
+      hasContentOps: r.type === 'post' || r.type === 'activity',
+      offLabel: '下架' + TL[r.type], delLabel: '删除' + TL[r.type],
+      contentDone: !!r.content, contentText: r.content === 'offline' ? TL[r.type] + '已下架' : (r.content === 'deleted' ? TL[r.type] + '已删除' : ''), contentNote: r.contentNote || '',
+      offOpacity: r.content ? 0.45 : 1, delOpacity: r.content === 'deleted' ? 0.45 : 1,
+      offline: () => { if (!r.content) openDlg({kind: 'repOffline', id: r.id, tl: TL[r.type], target: TL[r.type] + '：' + r.target}); },
+      remove: () => { if (r.content !== 'deleted') openDlg({kind: 'repDelete', id: r.id, tl: TL[r.type], target: TL[r.type] + '：' + r.target}); },
+      resolve: () => openDlg({kind: 'resolve', id: r.id, rtype: r.type, target: TL[r.type] + '：' + r.target}),
+      dismiss: () => openDlg({kind: 'dismiss', id: r.id, target: TL[r.type] + '：' + r.target})}));
+    V.admReportsEmpty = V.admReports.length === 0;
+
+    V.supportList = adm.support.map(c => { const th = s.threads[c.id] || []; const u = s.read[c.id] ? 0 : c.unread; return {...c, init: c.name[0], last: th.length ? th[th.length - 1].text : '', unread: u, hasUnread: u > 0, open: () => this.setState(st => ({read: {...st.read, [c.id]: true}}), () => this.go('chat', {convId: c.id}))}; });
+
+    V.userSearch = s.userSearch; V.onUserSearch = (e) => this.setState({userSearch: e.target.value});
+    const uq = s.userSearch.trim().toLowerCase();
+    const ACT_L = {restricted:'设为受限',suspended:'设为封禁',active:'恢复正常'};
+    V.admUsers = adm.users.filter(u => !uq || u.name.toLowerCase().includes(uq) || u.email.toLowerCase().includes(uq)).map(u => ({...u, ...st3(u.status), init: u.name[0].toUpperCase(), meta: '注册于 ' + u.joined + ' · 发布 ' + u.posts + ' 条',
+      actions: ['restricted','suspended','active'].filter(k => k !== u.status).map(k => ({label: ACT_L[k], bd: k === 'suspended' ? '#f1c9c9' : (k === 'active' ? '#315bea' : '#e3ded6'), fg: k === 'suspended' ? '#d94b4b' : (k === 'active' ? '#315bea' : '#4a453f'),
+        go: () => openDlg({kind: 'userStatus', id: u.id, to: k, target: u.name + ' · ' + u.email})}))}));
+    V.admUsersEmpty = V.admUsers.length === 0;
+
+    V.admCats = [...adm.cats].sort((a, b) => a.sort - b.sort).map(c => ({...c, stText: c.active ? '启用' : '已停用', stBg: c.active ? '#eaf7f0' : '#f2efe9', stFg: c.active ? '#2e7d52' : '#756e65', opacity: c.active ? 1 : 0.7, toggleLabel: c.active ? '停用' : '启用',
+      toggle: () => { upd('cats', c.id, {active: !c.active}); this.flash(c.active ? '已停用' : '已启用'); },
+      edit: () => this.setState({dlg: {kind: 'cat', id: c.id}, cf: {slug: c.slug, zh: c.zh, en: c.en, desc: c.desc, sort: String(c.sort)}, dlgErr: ''})}));
+    V.newCat = () => this.setState({dlg: {kind: 'cat', id: null}, cf: {slug: '', zh: '', en: '', desc: '', sort: String(adm.cats.length + 1)}, dlgErr: ''});
+
+    const d = s.dlg;
+    V.hasDlg = !!d;
+    V.closeDlg = () => this.setState({dlg: null});
+    V.dlgReason = s.dlgReason; V.dlgReason2 = s.dlgReason2;
+    V.onDlgReason = (e) => this.setState({dlgReason: e.target.value, dlgErr: ''});
+    V.onDlgReason2 = (e) => this.setState({dlgReason2: e.target.value, dlgErr: ''});
+    V.toggleDlgCheck = () => this.setState(st => ({dlgCheck: !st.dlgCheck}));
+    V.dlgCheckBg = s.dlgCheck ? '#315bea' : 'transparent'; V.dlgCheckBd = s.dlgCheck ? '#315bea' : '#cdc7bd';
+    let cfg = {title: '', target: '', reasonLabel: '', reasonPh: '', req: '', confirmLabel: '确认', danger: false, checkLabel: '', reason2Label: '', fields: []};
+    if (d) {
+      const CHECK = {post: ['同时删除该帖子', '删除原因'], comment: ['同时删除该评论', '删除原因'], activity: ['同时下架该活动', '下架原因']};
+      const K = {
+        reject: {title: '驳回帖子', reasonLabel: '驳回原因', reasonPh: '会通知发帖人，例如：信息不完整，请补充价格', req: '请填写驳回原因。', confirmLabel: '确认驳回', danger: true},
+        deletePost: {title: '删除帖子', reasonLabel: '删除原因', reasonPh: '会记录到操作日志', req: '请填写删除原因。', confirmLabel: '确认删除', danger: true},
+        offlinePost: {title: '下架帖子', reasonLabel: '下架原因', reasonPh: '下架后仅发帖人可见，会通知发帖人', req: '请填写下架原因。', confirmLabel: '确认下架', danger: true},
+        repOffline: {title: '', reasonLabel: '下架原因', reasonPh: '会通知发布者', req: '请填写下架原因。', confirmLabel: '确认下架', danger: true},
+        repDelete: {title: '', reasonLabel: '删除原因', reasonPh: '会记录到操作日志', req: '请填写删除原因。', confirmLabel: '确认删除', danger: true},
+        cancelAct: {title: '下架活动', reasonLabel: '下架原因', reasonPh: '下架后活动页保留，但不再接受报名', req: '请填写下架原因。', confirmLabel: '确认下架', danger: true},
+        deleteAct: {title: '删除活动', reasonLabel: '删除原因', req: '请填写删除原因。', confirmLabel: '确认删除', danger: true},
+        resolve: {title: '标记已处理', reasonLabel: '处理说明', reasonPh: '例如：已核实并处理', req: '请填写处理说明。', confirmLabel: '确认标记已处理'},
+        dismiss: {title: '驳回举报', reasonLabel: '处理说明', reasonPh: '例如：举报不成立', req: '请填写处理说明。', confirmLabel: '确认驳回举报'},
+        userStatus: {title: ACT_L[d.to] || '', reasonLabel: '操作原因', reasonPh: '会记录到操作日志', req: '请填写操作原因。', confirmLabel: '确认' + (ACT_L[d.to] || ''), danger: d.to === 'suspended'},
+        cat: {title: d.id ? '编辑分类' : '新建分类', confirmLabel: d.id ? '保存' : '新建分类'}
+      };
+      cfg = {...cfg, ...K[d.kind], target: d.target || ''};
+      if (d.kind === 'repOffline') cfg.title = '下架' + (d.tl || '帖子');
+      if (d.kind === 'repDelete') cfg.title = '删除' + (d.tl || '帖子');
+      if (d.kind === 'resolve' && CHECK[d.rtype]) { cfg.checkLabel = CHECK[d.rtype][0]; cfg.reason2Label = CHECK[d.rtype][1]; }
+      if (d.kind === 'cat') cfg.fields = [['slug','slug','例如 furniture'],['zh','中文名称','例如 家具'],['en','英文名称','例如 Furniture'],['desc','描述',''],['sort','排序','0 或更大的整数']].map(([k, l, ph]) => ({label: l, ph, value: s.cf[k] || '', onChange: (e) => { const v = e.target.value; this.setState(st => ({cf: {...st.cf, [k]: v}, dlgErr: ''})); }}));
+    }
+    V.dlg = {...cfg, hasTarget: !!cfg.target, hasReason: !!cfg.reasonLabel, hasCheck: !!cfg.checkLabel, showReason2: !!cfg.checkLabel && s.dlgCheck, err: s.dlgErr, hasErr: !!s.dlgErr, btnBg: cfg.danger ? '#d94b4b' : '#315bea'};
+    V.confirmDlg = () => {
+      if (!d) return;
+      const r1 = s.dlgReason.trim(), r2 = s.dlgReason2.trim();
+      const fail = (m) => this.setState({dlgErr: m});
+      if (d.kind === 'cat') {
+        const f = s.cf;
+        if (!(f.slug || '').trim()) return fail('请填写 slug。');
+        if (!(f.zh || '').trim()) return fail('请填写中文名称。');
+        const n = Number(f.sort);
+        if (!/^\d+$/.test(String(f.sort).trim()) || n < 0) return fail('排序值必须是不小于 0 的整数。');
+        if (adm.cats.some(c => c.slug === f.slug.trim() && c.id !== d.id)) return fail('该 slug 已被使用，请换一个。');
+        const rec = {slug: f.slug.trim(), zh: f.zh.trim(), en: (f.en || '').trim(), desc: (f.desc || '').trim(), sort: n};
+        if (d.id) upd('cats', d.id, rec); else this.setState(st => ({adm: {...st.adm, cats: [...st.adm.cats, {id: Date.now(), active: true, ...rec}]}}));
+        this.setState({dlg: null}); this.flash(d.id ? '已保存' : '分类已创建'); return;
+      }
+      if (!r1) return fail(cfg.req);
+      if (s.dlgCheck && cfg.checkLabel && !r2) return fail('请填写' + cfg.reason2Label + '。');
+      const done = (msg) => { this.setState({dlg: null}); this.flash(msg); };
+      if (d.kind === 'reject') { upd('posts', d.id, {status: 'rejected', note: '驳回原因：' + r1}); return done('已驳回，已通知发帖人'); }
+      if (d.kind === 'offlinePost') { upd('posts', d.id, {status: 'offline', note: '下架原因：' + r1}); return done('帖子已下架'); }
+      if (d.kind === 'repOffline' || d.kind === 'repDelete') {
+        const off = d.kind === 'repOffline';
+        const rep = adm.reports.find(x => x.id === d.id);
+        this.setState(st => ({adm: {...st.adm,
+          reports: st.adm.reports.map(x => x.id === d.id ? {...x, content: off ? 'offline' : 'deleted', contentNote: (off ? '下架原因：' : '删除原因：') + r1} : x),
+          posts: rep.type === 'post' ? (off ? st.adm.posts.map(p => p.title === rep.target ? {...p, status: 'offline', note: '下架原因：' + r1} : p) : st.adm.posts.filter(p => p.title !== rep.target)) : st.adm.posts,
+          acts: rep.type === 'activity' ? (off ? st.adm.acts.map(a => a.title === rep.target ? {...a, status: 'cancelled', note: '下架原因：' + r1} : a) : st.adm.acts.filter(a => a.title !== rep.target)) : st.adm.acts}}));
+        return done(off ? '内容已下架' : '内容已删除');
+      }
+      if (d.kind === 'deletePost') { del('posts', d.id); return done('帖子已删除'); }
+      if (d.kind === 'cancelAct') { upd('acts', d.id, {status: 'cancelled', note: '下架原因：' + r1}); return done('活动已下架'); }
+      if (d.kind === 'deleteAct') { del('acts', d.id); return done('活动已删除'); }
+      if (d.kind === 'resolve') { upd('reports', d.id, {status: 'resolved', note: r1 + (s.dlgCheck ? '；' + cfg.checkLabel.replace('同时', '已') : '')}); return done('举报已处理'); }
+      if (d.kind === 'dismiss') { upd('reports', d.id, {status: 'dismissed', note: r1}); return done('已驳回举报'); }
+      if (d.kind === 'userStatus') { upd('users', d.id, {status: d.to}); return done('账号状态已更新'); }
+    };
+
+
+    V.doLogin = () => this.tab('home');
+    V.guest = () => this.tab('home');
+    V.toRegister = () => this.go('register');
+    V.toggleAgree = () => this.setState(st => ({agree: !st.agree}));
+    V.agreeBg = s.agree ? '#315bea' : 'transparent'; V.agreeBd = s.agree ? '#315bea' : '#cdc7bd'; V.agreeOpacity = s.agree ? 1 : 0.45;
+    V.doRegister = () => { if (!s.agree) { this.flash('请先同意用户协议'); return; } this.setState({agree: false, screen: 'login', stack: []}); this.flash('注册成功，请登录'); };
+
+    const cc2 = s.screen === 'chat' ? cc : null;
+    V.navTitle = s.screen === 'chat' ? cc.name : (s.screen === 'user' ? on : (C.TITLES[s.screen] || ''));
+    V.navSub = cc2 && cc2.ctx ? '关于：' + C.CAT[cc2.ctx.cat] : '';
+    V.navSubShow = !!V.navSub;
+    V.navMore = ['post','act','user','chat'].includes(s.screen);
+    V.openMore = () => this.setState({sheet: 'more'});
+
+    V.closeSheet = () => this.setState({sheet: null});
+    V.hasSheet = !!s.sheet;
+    const target = {post:'帖子',act:'活动',user:'用户',chat:'用户'}[s.screen] || '帖子';
+    let items = [], title = '';
+    if (s.sheet === 'publish') {
+      title = '你想发布什么？';
+      items = [['ph ph-house-line','出租房源','整租、合租、转租',()=>this.go('publish',{pubType:'rent'})],['ph ph-magnifying-glass','求租','说说你想找什么样的房子',()=>this.go('publish',{pubType:'wanted'})],['ph ph-tag','二手闲置','家具、电器、数码',()=>this.go('publish',{pubType:'used'})],['ph ph-handshake','发起找搭子','吃饭、拼车、健身……',()=>this.go('newAct')]];
+    } else if (s.sheet === 'more') {
+      items = [['ph ph-share-fat','分享','',()=>{this.setState({sheet:null});this.flash('链接已复制');}],['ph ph-flag','举报这个' + target,'',()=>this.go('report',{reportTarget:target})]];
+      if (s.screen === 'user' || s.screen === 'chat') items.push(['ph ph-prohibit','屏蔽该用户','屏蔽后互相看不到对方内容',()=>{this.setState({sheet:null});this.flash('已屏蔽');},'#d94b4b']);
+    } else if (s.sheet === 'logout') {
+      title = '确定退出当前账号？';
+      items = [['ph ph-sign-out','退出登录','',()=>this.setState({sheet:null,screen:'login',stack:[]}),'#d94b4b']];
+    }
+    V.sheetTitle = title; V.sheetHasTitle = !!title;
+    V.sheetItems = items.map(([ic, l, sub, fn, col]) => ({icon: ic, label: l, sub, hasSub: !!sub, act: fn, color: col || '#26221e', iconColor: col || '#315bea'}));
+    V.scrollRef = this.scrollRef;
+    return V;
+  }
+}
+</script>
+</body>
+</html>

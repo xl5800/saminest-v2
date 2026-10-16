@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const clipboardWriteMock = vi.hoisted(() => vi.fn());
+const shareMock = vi.hoisted(() => vi.fn());
 
 const {
   useSearchCommunityPostsQuery,
@@ -47,7 +47,12 @@ vi.mock("../../features/community/use-join-community-mutation", () => ({
 vi.mock("../../features/community/use-leave-community-mutation", () => ({
   useLeaveCommunityMutation
 }));
-vi.mock("@capacitor/clipboard", () => ({ Clipboard: { write: clipboardWriteMock } }));
+// 社区分享卡片任务卡：分享按钮改走 useShareLink() → shareLink()，这里直接
+// mock shareLink（跟 activity-detail-page.test.tsx 同一个做法）。
+vi.mock("../../features/share/share-link", () => ({
+  shareLink: shareMock,
+  isWechatBrowser: () => false
+}));
 // 收藏按钮自己的登录/切换逻辑在 community-post-favorite-button 的测试里覆盖，
 // 这里只关心 Feed 把哪个帖子、多少收藏数交给它。
 vi.mock("../../components/community-post-favorite-button", () => ({
@@ -134,8 +139,8 @@ describe("CommunityFeedPage", () => {
       },
       isError: false
     });
-    clipboardWriteMock.mockReset();
-    clipboardWriteMock.mockResolvedValue(undefined);
+    shareMock.mockReset();
+    shareMock.mockResolvedValue("copied");
     // 默认：不是成员（没有任何静默加入，成员状态只来自真实的成员关系查询）。
     useCommunityMembershipQuery.mockReturnValue({ data: false });
     useCommunityPostsInfiniteQuery.mockReturnValue(postsResult());
@@ -409,28 +414,27 @@ describe("CommunityFeedPage", () => {
   });
 
   describe("share button", () => {
-    it("copies the production URL of the current page and confirms", async () => {
-      renderFeed("/community/dmv-pets");
-
-      fireEvent.click(screen.getByRole("button", { name: "分享" }));
-
-      expect(await screen.findByText("链接已复制")).toBeInTheDocument();
-      expect(clipboardWriteMock).toHaveBeenCalledWith({
-        string: "https://www.saminest.com/community/dmv-pets"
-      });
-    });
-
-    it("stays silent (no confirmation, no alert) when copying fails", async () => {
-      clipboardWriteMock.mockRejectedValue(new Error("denied"));
-      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    it("shares the community link (with a ?s= timestamp) and confirms when it fell back to copying", async () => {
       renderFeed();
 
       fireEvent.click(screen.getByRole("button", { name: "分享" }));
 
-      await waitFor(() => expect(errorSpy).toHaveBeenCalled());
+      expect(await screen.findByText("链接已复制")).toBeInTheDocument();
+      const input = shareMock.mock.calls[0][0];
+      expect(input.title).toBe("DMV 社区 · 华邻");
+      expect(input.text).toBe("覆盖 DC / Maryland / Virginia 的本地华人讨论区");
+      expect(input.url).toMatch(/^https:\/\/www\.saminest\.com\/community\/dmv\?s=\d+$/);
+    });
+
+    it("stays silent (no confirmation, no alert) when sharing failed", async () => {
+      shareMock.mockResolvedValue("failed");
+      renderFeed();
+
+      fireEvent.click(screen.getByRole("button", { name: "分享" }));
+
+      await waitFor(() => expect(shareMock).toHaveBeenCalled());
       expect(screen.queryByText("链接已复制")).not.toBeInTheDocument();
       expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      errorSpy.mockRestore();
     });
   });
 

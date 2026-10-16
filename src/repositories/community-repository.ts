@@ -382,6 +382,8 @@ export interface CommunityPostListItem {
   pinned: boolean;
   commentCount: number;
   favoriteCount: number;
+  /** 点赞数（社区帖子点赞任务卡，community_posts.like_count，触发器维护）。 */
+  likeCount: number;
   createdAt: string;
   authorId: string;
   authorDisplayName: string;
@@ -418,6 +420,7 @@ interface CommunityPostRow {
   pinned: boolean;
   comment_count: number;
   favorite_count: number;
+  like_count: number;
   created_at: string;
   author_id: string;
   author: { display_name: string; avatar_url: string | null } | null;
@@ -428,7 +431,7 @@ interface CommunityPostRow {
 }
 
 const COMMUNITY_POST_LIST_COLUMNS =
-  "id, post_type, title, body, pinned, comment_count, favorite_count, created_at, author_id, author:profiles(display_name, avatar_url), community:communities(name, slug)";
+  "id, post_type, title, body, pinned, comment_count, favorite_count, like_count, created_at, author_id, author:profiles(display_name, avatar_url), community:communities(name, slug)";
 
 /**
  * 把内嵌查询出来的 community_post_images 整理成"全部未软删除图片 URL，按
@@ -449,6 +452,7 @@ function mapCommunityPostListRow(row: CommunityPostRow): CommunityPostListItem {
     pinned: row.pinned,
     commentCount: row.comment_count,
     favoriteCount: row.favorite_count,
+    likeCount: row.like_count,
     createdAt: row.created_at,
     authorId: row.author_id,
     authorDisplayName: row.author?.display_name ?? "未知用户",
@@ -619,6 +623,7 @@ export async function searchCommunityPosts(
     pinned: row.pinned,
     commentCount: row.comment_count,
     favoriteCount: row.favorite_count,
+    likeCount: row.like_count,
     createdAt: row.created_at,
     authorId: row.author_id,
     authorDisplayName: row.author?.display_name ?? "未知用户",
@@ -729,6 +734,7 @@ export async function getCommunityPostDetail(id: string): Promise<CommunityPostD
     pinned: data.pinned,
     commentCount: data.comment_count,
     favoriteCount: data.favorite_count,
+    likeCount: data.like_count,
     createdAt: data.created_at,
     authorId: data.author_id,
     authorDisplayName: data.author?.display_name ?? "未知用户",
@@ -913,5 +919,57 @@ export async function deleteCommunityPost(id: string, authorId: string): Promise
   }
   if (!data) {
     throw new AppError(COMMUNITY_POST_NOT_DELETABLE_MESSAGE, "COMMUNITY_POST_DELETE_FAILED");
+  }
+}
+
+/**
+ * 社区帖子点赞任务卡：当前用户点过赞的社区帖子 id（按钮判断"我赞过没有"用；
+ * 每条帖子的总数直接读 community_posts.like_count）。RLS 只允许读自己的点赞
+ * 记录（community_post_likes_select_own），这里的 user_id 过滤是多一道保险。
+ */
+export async function listLikedCommunityPostIds(userId: string): Promise<string[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("community_post_likes")
+    .select("community_post_id")
+    .eq("user_id", userId);
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POST_LIKES_LIST_FAILED", error);
+  }
+
+  return (data ?? []).map((row) => row.community_post_id);
+}
+
+export interface CommunityPostLikeInput {
+  userId: string;
+  communityPostId: string;
+}
+
+/**
+ * 点赞。主键 (user_id, community_post_id) 保证一人一帖只有一条；撞上主键
+ * （23505，比如两个标签页同时点）当成"已经赞过"，不报错——跟
+ * addCommunityPostFavorite 同一个处理方式。点赞数由数据库触发器加 1。
+ */
+export async function likeCommunityPost(input: CommunityPostLikeInput): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from("community_post_likes")
+    .insert({ user_id: input.userId, community_post_id: input.communityPostId });
+
+  if (error) {
+    if (error.code === "23505") return;
+    throw new AppError(error.message, "COMMUNITY_POST_LIKE_FAILED", error);
+  }
+}
+
+/** 取消点赞。点赞数由数据库触发器减 1。 */
+export async function unlikeCommunityPost(input: CommunityPostLikeInput): Promise<void> {
+  const { error } = await getSupabaseClient()
+    .from("community_post_likes")
+    .delete()
+    .eq("user_id", input.userId)
+    .eq("community_post_id", input.communityPostId);
+
+  if (error) {
+    throw new AppError(error.message, "COMMUNITY_POST_UNLIKE_FAILED", error);
   }
 }

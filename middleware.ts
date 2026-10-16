@@ -21,7 +21,10 @@ export const config = {
   // 使用完整的 Node.js API/生态），middleware 和 api/og/activity.tsx
   // 从此在两个完全不同的运行时构建产物里，不可能再互相牵连。
   runtime: "nodejs",
-  matcher: ["/post/:id", "/activities/:id"]
+  // 社区分享卡片任务卡：加上社区帖子详情（/community/post/:id）和社区主页
+  // （/community/:slug）。/community/:slug 也会匹配到 /community/new、
+  // /community/create 这类固定页面，在 handleCommunityRequest 里跳过。
+  matcher: ["/post/:id", "/activities/:id", "/community/post/:id", "/community/:slug"]
 };
 
 const DESCRIPTION_MAX_LENGTH = 200;
@@ -256,6 +259,159 @@ async function handleActivityRequest(
   });
 }
 
+// ============================================================
+// 社区分享卡片任务卡：/community/post/:id 和 /community/:slug 的 OG 标签
+// ============================================================
+
+/** /community/:slug 里这些是固定页面，不是社区 slug。 */
+const COMMUNITY_RESERVED_SLUGS = new Set(["new", "create", "post"]);
+
+/** 社区成员少于这个数时，卡片描述里不写"N 位邻居已加入"（冷启动阶段人数少，
+ *  写出来反而显得冷清）。 */
+const COMMUNITY_MEMBER_COUNT_DISPLAY_MIN = 50;
+
+const COMMUNITY_POST_TITLE_FROM_BODY_LENGTH = 30;
+
+interface CommunityPostOgRow {
+  title: string | null;
+  body: string;
+  comment_count: number;
+  updated_at: string;
+  author: { display_name: string } | null;
+  community: { name: string } | null;
+  community_post_images: PostImageRow[] | null;
+}
+
+interface CommunityOgRow {
+  name: string;
+  description: string | null;
+  member_count: number;
+  updated_at: string;
+}
+
+async function fetchRows<T>(restUrl: string, supabaseAnonKey: string): Promise<T[] | null> {
+  try {
+    const response = await fetch(restUrl, {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${supabaseAnonKey}` }
+    });
+    if (!response.ok) return null;
+    return (await response.json()) as T[];
+  } catch {
+    return null;
+  }
+}
+
+/** 把 og 标签塞进 index.html 的 <head>，跟上面两个分支是同一个写法。 */
+async function respondWithOgTags(
+  request: Request,
+  tags: { title: string; description: string; image: string }
+): Promise<Response> {
+  const originHtml = await fetch(new URL("/index.html", request.url)).then((response) =>
+    response.text()
+  );
+  const title = escapeHtml(tags.title);
+  const metaTags = [
+    `<title>${title}</title>`,
+    `<meta property="og:title" content="${title}">`,
+    `<meta property="og:description" content="${escapeHtml(truncate(tags.description, DESCRIPTION_MAX_LENGTH))}">`,
+    `<meta property="og:image" content="${escapeHtml(tags.image)}">`,
+    `<meta property="og:url" content="${escapeHtml(request.url)}">`,
+    `<meta property="og:type" content="website">`
+  ].join("\n    ");
+  const html = originHtml
+    .replace(/<title>[^<]*<\/title>/, "")
+    .replace("</head>", `    ${metaTags}\n  </head>`);
+  return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
+}
+
+/** 方图地址只带 id/slug，图上的社区名由 /api/og/community 自己去查——不把
+ *  文字直接放进参数，免得有人拼一个参数就能用我们的域名生成任意文字的图。
+ *  v 是更新时间，图片接口缓存一年，帖子/社区改了以后换一个地址。 */
+function squareImageUrl(request: Request, params: Record<string, string>): string {
+  const imageUrl = new URL("/api/og/community", request.url);
+  for (const [key, value] of Object.entries(params)) imageUrl.searchParams.set(key, value);
+  return imageUrl.toString();
+}
+
+/**
+ * 社区帖子：标题用帖子标题，没有标题就截正文开头；描述是"作者 · 社区 · N 条
+ * 评论｜正文开头"；图片优先用帖子第一张照片，没有照片用 /api/og/community
+ * 生成的方图（💬 + 社区名）。查询走 anon 角色，community_posts 的 RLS 只放行
+ * 审核通过、没删除、所属社区开放中的帖子，查不到就放行走普通页面（不注入
+ * 任何内容），跟帖子分支同一个原则。
+ */
+async function handleCommunityPostRequest(
+  request: Request,
+  postId: string,
+  supabaseUrl: string,
+  supabaseAnonKey: string
+): Promise<Response> {
+  const rows = await fetchRows<CommunityPostOgRow>(
+    `${supabaseUrl}/rest/v1/community_posts?id=eq.${encodeURIComponent(postId)}` +
+      "&select=title,body,comment_count,updated_at,author:profiles(display_name),community:communities(name),community_post_images(public_url,sort_order,deleted_at)",
+    supabaseAnonKey
+  );
+  const post = rows?.[0];
+  if (!post) return next();
+
+  const body = post.body.replace(/\s+/g, " ").trim();
+  const title =
+    post.title?.trim() ||
+    (body.length > COMMUNITY_POST_TITLE_FROM_BODY_LENGTH
+      ? `${body.slice(0, COMMUNITY_POST_TITLE_FROM_BODY_LENGTH)}…`
+      : body);
+  const communityName = post.community?.name ?? "华邻社区";
+  const meta = [post.author?.display_name, communityName, post.comment_count > 0 ? `${post.comment_count} 条评论` : null]
+    .filter(Boolean)
+    .join(" · ");
+  const photo = resolveCoverImageUrl(post.community_post_images);
+
+  return respondWithOgTags(request, {
+    title,
+    description: `${meta}｜${body}`,
+    image:
+      photo ??
+      squareImageUrl(request, {
+        type: "post",
+        id: postId,
+        v: String(new Date(post.updated_at).getTime() || 0)
+      })
+  });
+}
+
+/** 社区主页：标题"社区名 · 华邻"，描述是简介（成员够多时加上人数），图片是
+ *  👥 + 社区名的方图。communities 的 RLS 只放行开放中的社区。 */
+async function handleCommunityRequest(
+  request: Request,
+  slug: string,
+  supabaseUrl: string,
+  supabaseAnonKey: string
+): Promise<Response> {
+  if (COMMUNITY_RESERVED_SLUGS.has(slug)) return next();
+  const rows = await fetchRows<CommunityOgRow>(
+    `${supabaseUrl}/rest/v1/communities?slug=eq.${encodeURIComponent(slug)}` +
+      "&select=name,description,member_count,updated_at",
+    supabaseAnonKey
+  );
+  const community = rows?.[0];
+  if (!community) return next();
+
+  const parts = [community.description?.trim() || "华邻上的同城华人社区，一起交流、互相帮忙。"];
+  if (community.member_count >= COMMUNITY_MEMBER_COUNT_DISPLAY_MIN) {
+    parts.push(`${community.member_count} 位邻居已加入`);
+  }
+
+  return respondWithOgTags(request, {
+    title: `${community.name} · 华邻`,
+    description: parts.join(" · "),
+    image: squareImageUrl(request, {
+      type: "community",
+      slug,
+      v: String(new Date(community.updated_at).getTime() || 0)
+    })
+  });
+}
+
 // 原来这里有一道"只认微信/Facebook/Twitter/WhatsApp 这几个 User-Agent
 // 关键字才查数据库注入 OG 标签，其余请求直接放行"的前置判断，是为了给
 // 普通用户请求省一次数据库查询。但这个判断依赖一份人工维护的关键字名单
@@ -283,6 +439,21 @@ export default async function middleware(request: Request): Promise<Response> {
       return next();
     }
     return handleActivityRequest(request, activityId, supabaseUrl, supabaseAnonKey);
+  }
+
+  // 社区分享卡片任务卡：社区帖子详情、社区主页两个分支，插在帖子分支前面，
+  // 帖子分支下面的代码不变。
+  const communityPostId = url.pathname.match(/^\/community\/post\/([^/]+)\/?$/)?.[1];
+  const communitySlug = communityPostId
+    ? undefined
+    : url.pathname.match(/^\/community\/([^/]+)\/?$/)?.[1];
+  if (communityPostId || communitySlug) {
+    const supabaseUrl = process.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseAnonKey) return next();
+    return communityPostId
+      ? handleCommunityPostRequest(request, communityPostId, supabaseUrl, supabaseAnonKey)
+      : handleCommunityRequest(request, decodeURIComponent(communitySlug as string), supabaseUrl, supabaseAnonKey);
   }
 
   const postId = url.pathname.match(/^\/post\/([^/]+)\/?$/)?.[1];

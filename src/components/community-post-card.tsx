@@ -94,6 +94,10 @@ export function CommunityPostCard({ post, showCommunityTag }: CommunityPostCardP
         communityPostId={post.id}
         commentCount={post.commentCount}
         favoriteCount={post.favoriteCount}
+        likeCount={post.likeCount}
+        title={post.title}
+        body={post.body}
+        communityName={post.communityName}
       />
     </article>
   );

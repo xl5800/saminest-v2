@@ -26,6 +26,9 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  likeCommunityPost,
+  listLikedCommunityPostIds,
+  unlikeCommunityPost,
   listFavoritedCommunityPosts,
   countCommunityPostsSince,
   createCommunityPost,
@@ -1119,5 +1122,45 @@ describe("listFavoritedCommunityPosts", () => {
     await expect(listFavoritedCommunityPosts("user-1")).rejects.toMatchObject({
       code: "FAVORITED_COMMUNITY_POSTS_LIST_FAILED"
     });
+  });
+});
+
+// 社区帖子点赞任务卡。
+describe("community post likes", () => {
+  it("lists the caller's liked post ids", async () => {
+    queryBuilder.eq.mockImplementationOnce(
+      () => Promise.resolve({ data: [{ community_post_id: "p1" }, { community_post_id: "p2" }], error: null }) as never
+    );
+
+    await expect(listLikedCommunityPostIds("user-1")).resolves.toEqual(["p1", "p2"]);
+    expect(fromMock).toHaveBeenCalledWith("community_post_likes");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it("inserts a like row, treating a duplicate (23505) as already liked", async () => {
+    insertMock.mockResolvedValueOnce({ error: null });
+    await likeCommunityPost({ userId: "user-1", communityPostId: "p1" });
+    expect(insertMock).toHaveBeenCalledWith({ user_id: "user-1", community_post_id: "p1" });
+
+    insertMock.mockResolvedValueOnce({ error: { code: "23505", message: "dup" } });
+    await expect(likeCommunityPost({ userId: "user-1", communityPostId: "p1" })).resolves.toBeUndefined();
+
+    insertMock.mockResolvedValueOnce({ error: { code: "42501", message: "rls" } });
+    await expect(likeCommunityPost({ userId: "user-1", communityPostId: "p1" })).rejects.toMatchObject({
+      code: "COMMUNITY_POST_LIKE_FAILED"
+    });
+  });
+
+  it("deletes only the caller's own like row", async () => {
+    queryBuilder.eq
+      .mockImplementationOnce(() => queryBuilder)
+      .mockImplementationOnce(() => Promise.resolve({ error: null }) as never);
+
+    await unlikeCommunityPost({ userId: "user-1", communityPostId: "p1" });
+
+    expect(fromMock).toHaveBeenCalledWith("community_post_likes");
+    expect(queryBuilder.delete).toHaveBeenCalled();
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("community_post_id", "p1");
   });
 });

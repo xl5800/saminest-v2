@@ -19,6 +19,7 @@ const post: CommunityPostListItem = {
   pinned: true,
   commentCount: 0,
   favoriteCount: 0,
+  likeCount: 0,
   createdAt: "2026-10-09T00:00:00.000Z",
   authorId: "u-1",
   authorDisplayName: "一棵树",

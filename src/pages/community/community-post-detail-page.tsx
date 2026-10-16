@@ -1,6 +1,5 @@
-import { Clipboard } from "@capacitor/clipboard";
 import { MessageCircle, Share2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
@@ -11,12 +10,14 @@ import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { useCommunityBySlugQuery } from "../../features/community/use-community-by-slug-query";
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
-import { PRODUCTION_ORIGIN } from "../../utils/constants";
+import { buildCommunityPostShareInput } from "../../features/share/community-share-input";
+import { useShareLink } from "../../features/share/use-share-link";
 import { formatRelativeTimeAgo } from "../../utils/format";
 import {
   COMMUNITY_POST_DETAIL_BODY_CLASS_NAME,
   COMMUNITY_POST_DETAIL_TITLE_CLASS_NAME
 } from "./community-post-type";
+import { CommunityPostLikeButton } from "../../components/community-post-like-button";
 
 interface CommunityPostDetailLocationState {
   publishSuccessMessage?: string;
@@ -32,11 +33,9 @@ interface CommunityPostDetailLocationState {
  * 展示：标题（有则显示，帖子类型 pill 已去掉——发帖页不再让用户选类型）、正文（whitespace-pre-wrap 保留换行）、
  * 作者头像+昵称+相对时间（formatRelativeTimeAgo，复用 utils/format.ts 已有
  * 函数）。操作行（视觉改版任务卡）：三等分——评论数展示（不可点，页面
- * 本身就在评论区上方）/ 收藏（Star，icon 变体）/ 分享（Share2，点击把
- * 生产域名拼的帖子链接写入剪贴板，同 post-share-action-sheet.tsx 的复制
- * 链接用法：@capacitor/clipboard，网页端自动降级 navigator.clipboard；
- * 这里没有抽 src/utils/share.ts，跟阶段十的卡各自内联，避免两边建同名文件
- * 冲突）。顶栏 title 是社区名（按帖子自己的 communitySlug 查所属
+ * 本身就在评论区上方）/ 收藏（Star，icon 变体）/ 分享（Share2，社区分享
+ * 卡片任务卡之后走 useShareLink()：App 系统分享面板 / 微信转发引导 /
+ * navigator.share / 复制链接，跟找搭子活动详情页一致）。顶栏 title 是社区名（按帖子自己的 communitySlug 查所属
  * 社区，useCommunityBySlugQuery），帖子/社区还没加载出来或加载失败时退回"帖子详情"。
  * 举报入口放在顶栏 detail 变体的"…"更多菜单里（一个"举报"链接，跳
  * /community/post/:id/report，未登录由那条路由的 RequireAuth 挡回登录页）；
@@ -60,24 +59,7 @@ export function CommunityPostDetailPage() {
   const { data: community } = useCommunityBySlugQuery(post?.communitySlug);
   // 顶栏只显示所属社区的名字（不再带"· N 位成员"）。
   const topBarTitle = community ? community.name : "帖子详情";
-  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!copyFeedback) return;
-    const timer = window.setTimeout(() => setCopyFeedback(null), 2000);
-    return () => window.clearTimeout(timer);
-  }, [copyFeedback]);
-
-  async function handleShare(): Promise<void> {
-    try {
-      await Clipboard.write({ string: `${PRODUCTION_ORIGIN}/community/post/${id}` });
-      setCopyFeedback("链接已复制");
-    } catch (error) {
-      // 跟 post-share-action-sheet.tsx 同一个态度：复制失败（浏览器拒绝权限
-      // 之类）不是用户能纠正的场景，只留控制台日志，不弹"复制失败"。
-      console.error("复制链接失败：", error);
-    }
-  }
+  const { share, shareUi } = useShareLink();
 
   function renderContent() {
     if (isPending) {
@@ -136,7 +118,10 @@ export function CommunityPostDetailPage() {
           ) : null}
         </article>
 
-        <div className="mt-6 grid grid-cols-3 items-start border-t border-divider pt-4">
+        <div className="mt-6 grid grid-cols-4 items-start border-t border-divider pt-4">
+          <div className="flex justify-center">
+            <CommunityPostLikeButton communityPostId={post.id} likeCount={post.likeCount} variant="icon" />
+          </div>
           <span
             aria-label={`${post.commentCount} 条评论`}
             className="flex flex-col items-center gap-1 text-text-muted"
@@ -150,18 +135,14 @@ export function CommunityPostDetailPage() {
           <button
             type="button"
             aria-label="分享"
-            onClick={() => void handleShare()}
+            onClick={() => void share(buildCommunityPostShareInput(post))}
             className="flex flex-col items-center gap-1 text-text-muted"
           >
             <Share2 size={22} aria-hidden="true" />
             <span className="text-xs">分享</span>
           </button>
         </div>
-        {copyFeedback ? (
-          <p role="status" className="mt-2 text-center text-xs text-primary">
-            {copyFeedback}
-          </p>
-        ) : null}
+        {shareUi}
 
         <div className="mt-6">
           <CommentSection communityPostId={post.id} />
