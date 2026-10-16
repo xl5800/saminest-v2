@@ -348,7 +348,7 @@ async function handleCommunityPostRequest(
 ): Promise<Response> {
   const rows = await fetchRows<CommunityPostOgRow>(
     `${supabaseUrl}/rest/v1/community_posts?id=eq.${encodeURIComponent(postId)}` +
-      "&select=title,body,comment_count,updated_at,author:profiles(display_name),community:communities(name),community_post_images(public_url,sort_order,deleted_at)",
+      "&select=title,body,comment_count,updated_at,author:profiles!community_posts_author_id_fkey(display_name),community:communities(name),community_post_images(public_url,sort_order,deleted_at)",
     supabaseAnonKey
   );
   const post = rows?.[0];

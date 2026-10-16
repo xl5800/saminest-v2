@@ -430,8 +430,13 @@ interface CommunityPostRow {
   community_post_images: PostFeedImageRow[] | null;
 }
 
+// author 必须写明外键 community_posts_author_id_fkey：社区帖子点赞任务卡加了
+// community_post_likes（主键 user_id + community_post_id，同时指向 profiles 和
+// community_posts），PostgREST 会把它当成两张表之间的中间表，于是
+// community_posts → profiles 有了两条路（作者外键 / 经过点赞表），不写明就返回
+// 300 "Could not embed because more than one relationship was found"。
 const COMMUNITY_POST_LIST_COLUMNS =
-  "id, post_type, title, body, pinned, comment_count, favorite_count, like_count, created_at, author_id, author:profiles(display_name, avatar_url), community:communities(name, slug)";
+  "id, post_type, title, body, pinned, comment_count, favorite_count, like_count, created_at, author_id, author:profiles!community_posts_author_id_fkey(display_name, avatar_url), community:communities(name, slug)";
 
 /**
  * 把内嵌查询出来的 community_post_images 整理成"全部未软删除图片 URL，按
@@ -671,7 +676,7 @@ export async function listCommunityPostsForAdmin(
   let query = getSupabaseClient()
     .from("community_posts")
     .select(
-      "id, title, body, status, created_at, author:profiles(display_name), community:communities(name)"
+      "id, title, body, status, created_at, author:profiles!community_posts_author_id_fkey(display_name), community:communities(name)"
     )
     .is("deleted_at", null);
 
