@@ -26,6 +26,7 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock }
     "gte",
     "ilike",
     "order",
+    "not",
     "insert",
     "update"
   ] as const;
@@ -56,6 +57,7 @@ import {
   getActivityParticipationStatus,
   countPendingActivityParticipantsForOrganizer,
   joinActivity,
+  listFavoritedActivities,
   leaveActivity,
   listActivities,
   listActivityParticipantPreviews,
@@ -1461,6 +1463,53 @@ describe("listAllActivitiesForAdmin", () => {
 
     await expect(listAllActivitiesForAdmin()).rejects.toMatchObject({
       code: "ADMIN_ALL_ACTIVITIES_LIST_FAILED"
+    });
+  });
+});
+
+// 收藏列表补全任务卡："我的收藏"页面"找搭子"标签。
+describe("listFavoritedActivities", () => {
+  beforeEach(resetAllMocks);
+
+  const row = (id: string, deletedAt: string | null) => ({
+    id,
+    organizer_id: "org-1",
+    channel: "food",
+    tag_text: null,
+    title: `活动 ${id}`,
+    location: { name: "Fairfax", state_code: "VA" },
+    landmark_text: null,
+    is_online: false,
+    start_at: "2099-01-01T00:00:00.000Z",
+    created_at: "2026-10-01T00:00:00.000Z",
+    capacity: 4,
+    participant_count: 1,
+    status: "open",
+    requires_approval: false,
+    organizer: { display_name: "Barry", avatar_url: null },
+    deleted_at: deletedAt
+  });
+
+  it("queries the user's activity favorites newest first and drops deleted / hidden activities", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [{ activity: row("a1", null) }, { activity: null }, { activity: row("a2", "2026-10-02T00:00:00Z") }],
+      error: null
+    });
+
+    const result = await listFavoritedActivities("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(queryBuilder.not).toHaveBeenCalledWith("activity_id", "is", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result.map((activity) => activity.id)).toEqual(["a1"]);
+    expect(result[0]).toMatchObject({ title: "活动 a1", organizerDisplayName: "Barry", locationName: "Fairfax" });
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(listFavoritedActivities("user-1")).rejects.toMatchObject({
+      code: "FAVORITED_ACTIVITIES_LIST_FAILED"
     });
   });
 });

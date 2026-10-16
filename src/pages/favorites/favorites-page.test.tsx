@@ -16,6 +16,21 @@ vi.mock("../../repositories/favorites-repository", () => ({
   removeFavorite
 }));
 
+// 收藏列表补全任务卡："社区"/"找搭子"两个标签各自的查询。
+const { listFavoritedCommunityPosts, listFavoritedActivities } = vi.hoisted(() => ({
+  listFavoritedCommunityPosts: vi.fn(),
+  listFavoritedActivities: vi.fn()
+}));
+vi.mock("../../repositories/community-repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../repositories/community-repository")>()),
+  listFavoritedCommunityPosts
+}));
+vi.mock("../../repositories/activities-repository", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../repositories/activities-repository")>()),
+  listFavoritedActivities,
+  listActivityParticipantPreviews: vi.fn().mockResolvedValue(new Map())
+}));
+
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { FavoritesPage } from "./favorites-page";
@@ -93,7 +108,7 @@ describe("FavoritesPage", () => {
 
     renderWithProviders(<FavoritesPage />);
 
-    expect(await screen.findByText("暂无收藏。")).toBeInTheDocument();
+    expect(await screen.findByText("还没有收藏的帖子")).toBeInTheDocument();
   });
 
   // 21 号卡（二级页面顶部栏简化）：顶部栏换成 TopBar 的 nav-only 变体，
@@ -105,7 +120,7 @@ describe("FavoritesPage", () => {
 
     renderWithProviders(<FavoritesPage />);
 
-    await screen.findByText("暂无收藏。");
+    await screen.findByText("还没有收藏的帖子");
 
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
     expect(screen.queryByText("华邻")).not.toBeInTheDocument();
@@ -195,6 +210,55 @@ describe("FavoritesPage", () => {
     });
     await waitFor(() => {
       expect(screen.queryByText("Sunny room")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("社区 / 找搭子 tabs (收藏列表补全任务卡)", () => {
+    beforeEach(() => {
+      listFavoritedPosts.mockResolvedValue([]);
+      listFavoritedCommunityPosts.mockReset();
+      listFavoritedActivities.mockReset();
+    });
+
+    it("only queries the selected tab, and lists favorited community posts on the 社区 tab", async () => {
+      listFavoritedCommunityPosts.mockResolvedValue([
+        {
+          id: "cp-1",
+          postType: "discussion",
+          title: "周末有人一起去 Costco 拼单吗",
+          body: "Rockville 那家",
+          pinned: false,
+          commentCount: 3,
+          favoriteCount: 2,
+          createdAt: "2026-10-15T00:00:00.000Z",
+          authorId: "u-2",
+          authorDisplayName: "小王",
+          authorAvatarUrl: null,
+          coverImageUrl: null,
+          images: [],
+          communityName: "DMV 华人社区",
+          communitySlug: "dmv"
+        }
+      ]);
+
+      renderWithProviders(<FavoritesPage />, { initialEntries: ["/favorites"] });
+      await screen.findByText("还没有收藏的帖子");
+      expect(listFavoritedCommunityPosts).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "社区" }));
+
+      expect(await screen.findByText("周末有人一起去 Costco 拼单吗")).toBeInTheDocument();
+      expect(listFavoritedCommunityPosts).toHaveBeenCalledWith("user-1");
+      expect(listFavoritedActivities).not.toHaveBeenCalled();
+    });
+
+    it("opens the 找搭子 tab from ?tab=activities and shows an empty state with a link", async () => {
+      listFavoritedActivities.mockResolvedValue([]);
+
+      renderWithProviders(<FavoritesPage />, { initialEntries: ["/favorites?tab=activities"] });
+
+      expect(await screen.findByText("还没有收藏的搭子活动")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /去找搭子/ })).toHaveAttribute("href", "/activities");
     });
   });
 });

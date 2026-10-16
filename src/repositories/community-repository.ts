@@ -435,6 +435,31 @@ const COMMUNITY_POST_LIST_COLUMNS =
  * sort_order 升序"。列表和详情共用，查询本身已经把这些行带回来了，不需要额外
  * 请求。
  */
+/**
+ * 社区帖子列表行 → CommunityPostListItem。原来直接写在 listCommunityPosts
+ * 里，收藏列表补全任务卡新增的 listFavoritedCommunityPosts 要用同一套映射，
+ * 抽成函数两处共用（不复制一份）。
+ */
+function mapCommunityPostListRow(row: CommunityPostRow): CommunityPostListItem {
+  return {
+    id: row.id,
+    postType: row.post_type,
+    title: row.title,
+    body: row.body,
+    pinned: row.pinned,
+    commentCount: row.comment_count,
+    favoriteCount: row.favorite_count,
+    createdAt: row.created_at,
+    authorId: row.author_id,
+    authorDisplayName: row.author?.display_name ?? "未知用户",
+    authorAvatarUrl: row.author?.avatar_url ?? null,
+    coverImageUrl: resolveCoverImageUrl(row.community_post_images),
+    images: mapPostImageUrls(row.community_post_images),
+    communityName: row.community?.name ?? "",
+    communitySlug: row.community?.slug ?? ""
+  };
+}
+
 function mapPostImageUrls(rows: PostFeedImageRow[] | null): string[] {
   return (rows ?? [])
     .filter((image) => image.deleted_at === null)
@@ -494,25 +519,49 @@ export async function listCommunityPosts(
   const pageRows = hasNextPage ? rows.slice(0, pageSize) : rows;
 
   return {
-    posts: pageRows.map((row) => ({
-      id: row.id,
-      postType: row.post_type,
-      title: row.title,
-      body: row.body,
-      pinned: row.pinned,
-      commentCount: row.comment_count,
-      favoriteCount: row.favorite_count,
-      createdAt: row.created_at,
-      authorId: row.author_id,
-      authorDisplayName: row.author?.display_name ?? "未知用户",
-      authorAvatarUrl: row.author?.avatar_url ?? null,
-      coverImageUrl: resolveCoverImageUrl(row.community_post_images),
-      images: mapPostImageUrls(row.community_post_images),
-      communityName: row.community?.name ?? "",
-      communitySlug: row.community?.slug ?? ""
-    })),
+    posts: pageRows.map(mapCommunityPostListRow),
     hasNextPage
   };
+}
+
+interface FavoritedCommunityPostRow {
+  community_post: (CommunityPostRow & { status: string; deleted_at: string | null }) | null;
+}
+
+/**
+ * "我的收藏"页面"社区"标签用（收藏列表补全任务卡）：当前用户收藏过的社区
+ * 帖子，按收藏时间倒序。
+ *
+ * 原来社区帖子的收藏按钮能写进 favorites，但"我的收藏"页面只读了分类帖子，
+ * 收藏的社区帖子从来没出现过。这里从 favorites 直接嵌套查出帖子，select
+ * 列和行映射跟 listCommunityPosts 共用（COMMUNITY_POST_LIST_COLUMNS /
+ * mapCommunityPostListRow），页面直接复用 CommunityPostCard。
+ *
+ * 只保留审核通过、没删除的帖子；所属社区被关闭后 community_posts 的 RLS
+ * 会让嵌套结果变成 null，同样过滤掉。
+ */
+export async function listFavoritedCommunityPosts(userId: string): Promise<CommunityPostListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("favorites")
+    .select(
+      `community_post:community_posts(${COMMUNITY_POST_LIST_COLUMNS}, status, deleted_at, community_post_images(public_url, sort_order, deleted_at))`
+    )
+    .eq("user_id", userId)
+    .not("community_post_id", "is", null)
+    .order("created_at", { ascending: false })
+    .overrideTypes<FavoritedCommunityPostRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "FAVORITED_COMMUNITY_POSTS_LIST_FAILED", error);
+  }
+
+  return (data ?? [])
+    .map((row) => row.community_post)
+    .filter(
+      (post): post is NonNullable<FavoritedCommunityPostRow["community_post"]> =>
+        post !== null && post.status === "approved" && post.deleted_at === null
+    )
+    .map(mapCommunityPostListRow);
 }
 
 const COMMUNITY_POST_SEARCH_LIMIT = 50;

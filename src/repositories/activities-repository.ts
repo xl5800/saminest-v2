@@ -843,6 +843,45 @@ interface MyJoinedActivityRow {
   status: string;
 }
 
+interface FavoritedActivityRow {
+  activity: (ActivityListRow & { deleted_at: string | null }) | null;
+}
+
+/**
+ * "我的收藏"页面"找搭子"标签用（收藏列表补全任务卡）：当前用户收藏过的
+ * 活动，按收藏时间倒序（最近收藏的在最前）。
+ *
+ * 原来收藏按钮能把活动写进 favorites，但"我的收藏"页面只读了分类帖子，
+ * 收藏的活动从来没有出现过。这里从 favorites 直接嵌套查出活动本身，select
+ * 列复用 ACTIVITY_LIST_SELECT_COLUMNS、行映射复用 mapActivityListRow，
+ * 返回的形状跟找搭子列表完全一样，页面直接复用 ActivityCard。
+ *
+ * 已结束的活动照样返回（收藏是用户自己的记录，卡片上会显示已结束）；已删除
+ * 的在 JS 里过滤掉；被 activities 的 RLS 挡掉的（比如已取消）嵌套结果是
+ * null，同样过滤掉。
+ */
+export async function listFavoritedActivities(userId: string): Promise<ActivityListItem[]> {
+  const { data, error } = await getSupabaseClient()
+    .from("favorites")
+    .select(`activity:activities(${ACTIVITY_LIST_SELECT_COLUMNS}, deleted_at)`)
+    .eq("user_id", userId)
+    .not("activity_id", "is", null)
+    .order("created_at", { ascending: false })
+    .overrideTypes<FavoritedActivityRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "FAVORITED_ACTIVITIES_LIST_FAILED", error);
+  }
+
+  return (data ?? [])
+    .map((row) => row.activity)
+    .filter(
+      (activity): activity is NonNullable<FavoritedActivityRow["activity"]> =>
+        activity !== null && activity.deleted_at === null
+    )
+    .map(mapActivityListRow);
+}
+
 /**
  * "我的活动"页面"我报名的" tab 用：当前用户当前仍报名/申请中
  * （cancelled_at is null）的活动，包括活动之后被发起人取消的情况——这正是

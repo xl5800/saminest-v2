@@ -150,6 +150,7 @@ describe("useToggleCommunityPostFavoriteMutation", () => {
     expect(removeCommunityPostFavorite).not.toHaveBeenCalled();
     expect(invalidatedKeys(invalidateSpy)).toEqual([
       ["community-post-favorites", "user-1"],
+      ["favorited-community-posts", "user-1"],
       ["community-posts"],
       ["community-post-detail", "cp-1"]
     ]);

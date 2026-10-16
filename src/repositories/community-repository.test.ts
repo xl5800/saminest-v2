@@ -26,6 +26,7 @@ vi.mock("../integrations/supabase/client", () => ({
 }));
 
 import {
+  listFavoritedCommunityPosts,
   countCommunityPostsSince,
   createCommunityPost,
   deleteCommunityPost,
@@ -1069,6 +1070,54 @@ describe("listCommunityRequestsForAdmin", () => {
 
     await expect(listCommunityRequestsForAdmin()).rejects.toMatchObject({
       code: "ADMIN_COMMUNITY_REQUESTS_FETCH_FAILED"
+    });
+  });
+});
+
+// 收藏列表补全任务卡："我的收藏"页面"社区"标签。
+describe("listFavoritedCommunityPosts", () => {
+  const row = (id: string, status: string, deletedAt: string | null) => ({
+    id,
+    post_type: "discussion",
+    title: `帖子 ${id}`,
+    body: "正文",
+    pinned: false,
+    comment_count: 1,
+    favorite_count: 2,
+    created_at: "2026-10-01T00:00:00.000Z",
+    author_id: "u-1",
+    author: { display_name: "小王", avatar_url: null },
+    community: { name: "DMV 华人社区", slug: "dmv" },
+    community_post_images: [],
+    status,
+    deleted_at: deletedAt
+  });
+
+  it("returns approved, non-deleted favorited posts newest first", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        { community_post: row("p1", "approved", null) },
+        { community_post: row("p2", "pending", null) },
+        { community_post: row("p3", "approved", "2026-10-02T00:00:00Z") },
+        { community_post: null }
+      ],
+      error: null
+    });
+
+    const result = await listFavoritedCommunityPosts("user-1");
+
+    expect(fromMock).toHaveBeenCalledWith("favorites");
+    expect(queryBuilder.eq).toHaveBeenCalledWith("user_id", "user-1");
+    expect(queryBuilder.not).toHaveBeenCalledWith("community_post_id", "is", null);
+    expect(queryBuilder.order).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(result.map((post) => post.id)).toEqual(["p1"]);
+    expect(result[0]).toMatchObject({ authorDisplayName: "小王", communitySlug: "dmv", favoriteCount: 2 });
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(listFavoritedCommunityPosts("user-1")).rejects.toMatchObject({
+      code: "FAVORITED_COMMUNITY_POSTS_LIST_FAILED"
     });
   });
 });

@@ -33,6 +33,10 @@ export function useToggleActivityFavoriteMutation() {
       void queryClient.invalidateQueries({
         queryKey: ["activity-favorites", variables.userId]
       });
+      // 收藏列表补全任务卡："我的收藏"页面"找搭子"标签的列表。
+      void queryClient.invalidateQueries({
+        queryKey: ["favorited-activities", variables.userId]
+      });
     }
   });
 }

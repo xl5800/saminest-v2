@@ -39,6 +39,10 @@ export function useToggleCommunityPostFavoriteMutation() {
       void queryClient.invalidateQueries({
         queryKey: ["community-post-favorites", variables.userId]
       });
+      // 收藏列表补全任务卡："我的收藏"页面"社区"标签的列表。
+      void queryClient.invalidateQueries({
+        queryKey: ["favorited-community-posts", variables.userId]
+      });
       void queryClient.invalidateQueries({ queryKey: ["community-posts"] });
       void queryClient.invalidateQueries({
         queryKey: ["community-post-detail", variables.communityPostId]

@@ -1,10 +1,15 @@
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 
+import { ActivityCard } from "../../components/activity-card";
+import { CommunityPostCard } from "../../components/community-post-card";
 import { FavoriteButton } from "../../components/favorite-button";
 import { PostThumbnail } from "../../components/post-thumbnail";
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
+import { useActivityParticipantPreviewsQuery } from "../../features/activities/use-activity-participant-previews-query";
+import { useFavoritedActivitiesQuery } from "../../features/favorites/use-favorited-activities-query";
+import { useFavoritedCommunityPostsQuery } from "../../features/favorites/use-favorited-community-posts-query";
 import { useFavoritedPostsQuery } from "../../features/favorites/use-favorited-posts-query";
 import { formatListingDate, formatPrice } from "../../utils/format";
 
@@ -49,7 +54,7 @@ const FAVORITES_SKELETON_COUNT = 4;
  * 还是贴着标题那一行，不会因为整行变高了而显得悬在中间不上不下，点击
  * 区域也不会被缩略图挤小。
  */
-export function FavoritesPage() {
+function PostFavoritesList() {
   const { data: posts, isPending, isError } = useFavoritedPostsQuery();
 
   if (isPending) {
@@ -62,15 +67,16 @@ export function FavoritesPage() {
     // 描述硬套两列网格——完工报告里已经把这处任务卡描述和当前代码的
     // 差异单独指出来。
     return (
-      <main>
-        <TopBar variant="nav-only" />
-        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-          <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
-          <div role="status">
-            <span className="sr-only">加载中…</span>
-            <ul className="flex flex-col gap-2">
-              {Array.from({ length: FAVORITES_SKELETON_COUNT }).map((_, index) => (
-                <li key={index} className="flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-card">
+      <>
+        <div role="status">
+          <span className="sr-only">加载中…</span>
+          <ul className="flex flex-col gap-2">
+            {Array.from({ length: FAVORITES_SKELETON_COUNT }).map(
+              (_, index) => (
+                <li
+                  key={index}
+                  className="flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
+                >
                   <Skeleton className="h-20 w-20 shrink-0 rounded-xl" />
                   <div className="min-w-0 flex-1">
                     <Skeleton className="h-4 w-4/5" />
@@ -79,74 +85,259 @@ export function FavoritesPage() {
                     <Skeleton className="mt-1.5 h-3 w-1/4" />
                   </div>
                 </li>
-              ))}
-            </ul>
-          </div>
+              ),
+            )}
+          </ul>
         </div>
-      </main>
+      </>
     );
   }
 
   if (isError) {
     return (
-      <main>
-        <TopBar variant="nav-only" />
-        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-          <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
-          <p role="alert" className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
-            收藏加载失败，请稍后重试。
-          </p>
-        </div>
-      </main>
+      <>
+        <p
+          role="alert"
+          className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
+        >
+          收藏加载失败，请稍后重试。
+        </p>
+      </>
     );
   }
 
   if (posts.length === 0) {
     return (
-      <main>
-        <TopBar variant="nav-only" />
-        <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-          <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
-          <p role="status" className="text-sm text-text-muted">暂无收藏。</p>
-        </div>
-      </main>
+      <>
+        <EmptyFavorites
+          text="还没有收藏的帖子"
+          to="/categories"
+          linkLabel="去逛逛租房、二手"
+        />
+      </>
     );
   }
+
+  return (
+    <>
+      <ul className="flex flex-col gap-2">
+        {posts.map((post) => (
+          <li
+            key={post.id}
+            className="flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
+          >
+            <PostThumbnail
+              coverImageUrl={post.coverImageUrl}
+              categoryName={post.categoryName}
+              sizeClassName="h-20 w-20 shrink-0 rounded-xl"
+              compact
+              alt={post.title}
+            />
+            <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
+              <Link
+                to={`/post/${post.id}`}
+                className="flex min-w-0 flex-1 flex-col gap-1"
+              >
+                <span className="break-words text-sm font-medium text-text">
+                  {post.title}
+                </span>
+                <span className="text-sm font-semibold text-text">
+                  {formatPrice(
+                    post.priceAmount,
+                    post.priceLabel,
+                    post.currencyCode,
+                  )}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {post.locationName
+                    ? formatLocationDisplayName(post.locationName)
+                    : "地区未填写"}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {formatListingDate(post.createdAt)}
+                </span>
+              </Link>
+              <FavoriteButton postId={post.id} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+type FavoritesTab = "posts" | "community" | "activities";
+
+const TAB_OPTIONS: Array<{ value: FavoritesTab; label: string }> = [
+  { value: "posts", label: "帖子" },
+  { value: "community", label: "社区" },
+  { value: "activities", label: "找搭子" },
+];
+
+function isFavoritesTab(value: string | null): value is FavoritesTab {
+  return value === "posts" || value === "community" || value === "activities";
+}
+
+function EmptyFavorites({
+  text,
+  to,
+  linkLabel,
+}: {
+  text: string;
+  to: string;
+  linkLabel: string;
+}) {
+  return (
+    <div role="status" className="py-10 text-center text-sm text-text-muted">
+      <p>{text}</p>
+      <Link
+        to={to}
+        className="mt-3 inline-block font-medium text-primary hover:underline"
+      >
+        {linkLabel} →
+      </Link>
+    </div>
+  );
+}
+
+function ListSkeleton() {
+  return (
+    <div role="status">
+      <span className="sr-only">加载中…</span>
+      <ul className="flex flex-col gap-2">
+        {Array.from({ length: FAVORITES_SKELETON_COUNT }).map((_, index) => (
+          <li
+            key={index}
+            className="rounded-2xl border border-border bg-card p-3 shadow-card"
+          >
+            <Skeleton className="h-4 w-1/3" />
+            <Skeleton className="mt-2 h-4 w-4/5" />
+            <Skeleton className="mt-1.5 h-3 w-1/2" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function LoadError() {
+  return (
+    <p
+      role="alert"
+      className="rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger"
+    >
+      收藏加载失败，请稍后重试。
+    </p>
+  );
+}
+
+function CommunityFavoritesList() {
+  const { data: posts, isPending, isError } = useFavoritedCommunityPostsQuery();
+  if (isPending) return <ListSkeleton />;
+  if (isError) return <LoadError />;
+  if (posts.length === 0) {
+    return (
+      <EmptyFavorites
+        text="还没有收藏的社区帖子"
+        to="/community"
+        linkLabel="去社区看看"
+      />
+    );
+  }
+  return (
+    <div className="-mx-4 bg-card">
+      {posts.map((post) => (
+        <CommunityPostCard key={post.id} post={post} showCommunityTag />
+      ))}
+    </div>
+  );
+}
+
+function ActivityFavoritesList() {
+  const {
+    data: activities,
+    isPending,
+    isError,
+  } = useFavoritedActivitiesQuery();
+  const { data: participantPreviews } = useActivityParticipantPreviewsQuery(
+    (activities ?? []).map((activity) => activity.id),
+  );
+  if (isPending) return <ListSkeleton />;
+  if (isError) return <LoadError />;
+  if (activities.length === 0) {
+    return (
+      <EmptyFavorites
+        text="还没有收藏的搭子活动"
+        to="/activities"
+        linkLabel="去找搭子"
+      />
+    );
+  }
+  const now = Date.now();
+  return (
+    <ul className="flex flex-col gap-3">
+      {activities.map((activity) => {
+        const isOver =
+          activity.status === "ended" ||
+          new Date(activity.startAt).getTime() < now;
+        return (
+          <li key={activity.id} className={isOver ? "opacity-60" : undefined}>
+            {isOver ? (
+              <p className="mb-1 px-1 text-xs text-text-muted">已结束</p>
+            ) : null}
+            <ActivityCard
+              activity={activity}
+              participants={participantPreviews?.get(activity.id) ?? []}
+            />
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/**
+ * "我的收藏"（收藏列表补全任务卡）：原来只列出租房/二手这些分类帖子，社区
+ * 帖子和找搭子活动的收藏按钮能用、数据也写进了 favorites，但这个页面从来
+ * 不读，用户收藏完在这里找不到。现在顶部分成"帖子 / 社区 / 找搭子"三个
+ * 标签，当前标签记在地址 ?tab= 里（点进详情再返回时停在原来的标签）。每个
+ * 标签只在被选中时才渲染、才发请求。
+ */
+export function FavoritesPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawTab = searchParams.get("tab");
+  const tab: FavoritesTab = isFavoritesTab(rawTab) ? rawTab : "posts";
 
   return (
     <main>
       <TopBar variant="nav-only" />
       <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
         <h1 className="mb-4 text-xl font-bold text-text">我的收藏</h1>
-        <ul className="flex flex-col gap-2">
-          {posts.map((post) => (
-            <li
-              key={post.id}
-              className="flex gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
+        <nav aria-label="收藏分类" className="mb-4 flex gap-2">
+          {TAB_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-current={tab === option.value ? "page" : undefined}
+              onClick={() =>
+                setSearchParams(
+                  option.value === "posts" ? {} : { tab: option.value },
+                  { replace: true },
+                )
+              }
+              className={
+                tab === option.value
+                  ? "flex h-10 flex-1 items-center justify-center rounded-full bg-accent text-sm font-semibold text-white"
+                  : "flex h-10 flex-1 items-center justify-center rounded-full border border-border bg-bg text-sm text-text-muted"
+              }
             >
-              <PostThumbnail
-                coverImageUrl={post.coverImageUrl}
-                categoryName={post.categoryName}
-                sizeClassName="h-20 w-20 shrink-0 rounded-xl"
-                compact
-                alt={post.title}
-              />
-              <div className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                <Link to={`/post/${post.id}`} className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="break-words text-sm font-medium text-text">{post.title}</span>
-                  <span className="text-sm font-semibold text-text">
-                    {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
-                  </span>
-                  <span className="text-xs text-text-muted">
-                    {post.locationName ? formatLocationDisplayName(post.locationName) : "地区未填写"}
-                  </span>
-                  <span className="text-xs text-text-muted">{formatListingDate(post.createdAt)}</span>
-                </Link>
-                <FavoriteButton postId={post.id} />
-              </div>
-            </li>
+              {option.label}
+            </button>
           ))}
-        </ul>
+        </nav>
+        {tab === "posts" ? <PostFavoritesList /> : null}
+        {tab === "community" ? <CommunityFavoritesList /> : null}
+        {tab === "activities" ? <ActivityFavoritesList /> : null}
       </div>
     </main>
   );
