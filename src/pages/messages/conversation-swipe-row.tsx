@@ -14,7 +14,7 @@ import { useUnblockUserMutation } from "../../features/blocks/use-unblock-user-m
 import type { ConversationListItem } from "../../repositories/conversations-repository";
 import { formatPublishedAt } from "../../utils/format";
 
-const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
+const SYSTEM_NOTIFICATION_LABEL = "华邻通知";
 // 把"联系客服"拆成独立会话类型任务卡新增——support 会话在会话列表这一行
 // 的标签/图标，跟 SYSTEM_NOTIFICATION_LABEL（系统通知专属）是两回事，见
 // nickname/avatarElement 里新增的 isSupportConversation 分支。

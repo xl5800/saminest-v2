@@ -73,7 +73,7 @@ export function RegisterPage() {
 
   return (
     <AuthLayout>
-      <h1 className="mb-6 text-xl font-bold text-text">注册 Saminest 账号</h1>
+      <h1 className="mb-6 text-xl font-bold text-text">注册华邻账号</h1>
       {error ? (
         <p className="mb-4 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger" role="alert">
           {error}

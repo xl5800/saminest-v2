@@ -281,7 +281,7 @@ describe("ProfilePage", () => {
 
       await screen.findByText("Alice");
       expect(screen.queryByRole("button", { name: "设置" })).not.toBeInTheDocument();
-      expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+      expect(screen.queryByText("华邻")).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "?" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();

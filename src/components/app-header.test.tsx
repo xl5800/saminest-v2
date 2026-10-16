@@ -62,7 +62,7 @@ describe("AppHeader", () => {
   it("renders the brand link pointing at /", () => {
     renderAt(["/"]);
 
-    expect(screen.getByRole("link", { name: "Saminest" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "华邻" })).toHaveAttribute(
       "href",
       "/"
     );

@@ -85,7 +85,7 @@ describe("LoginPage", () => {
 
     const bottomLinks = screen.getAllByRole("link");
     expect(bottomLinks.map((link) => link.textContent)).toEqual([
-      "Saminest",
+      "华邻",
       "忘记密码？",
       "去注册"
     ]);

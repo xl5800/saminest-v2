@@ -79,13 +79,13 @@ describe("CategoriesPage", () => {
   });
 
   describe("top bar (TopBar home variant)", () => {
-    it("renders only the 'Saminest' brand name with no stray state-name text when no region has been selected yet", () => {
+    it("renders only the '华邻' brand name with no stray state-name text when no region has been selected yet", () => {
       listActiveCategories.mockResolvedValue([]);
       listApprovedPosts.mockResolvedValue({ posts: [], hasNextPage: false });
 
       renderWithProviders(<CategoriesPage />);
 
-      expect(screen.getByText("Saminest")).toBeInTheDocument();
+      expect(screen.getByText("华邻")).toBeInTheDocument();
       expect(screen.queryByText("·")).not.toBeInTheDocument();
     });
 
@@ -106,7 +106,7 @@ describe("CategoriesPage", () => {
       renderWithProviders(<CategoriesPage />);
 
       expect(screen.getByText("Arlington, VA")).toBeInTheDocument();
-      expect(screen.getByText("Saminest")).toBeInTheDocument();
+      expect(screen.getByText("华邻")).toBeInTheDocument();
     });
 
     // 08 号卡：全美 50 州里大多数州没有城市数据，直接选中整个州时没有

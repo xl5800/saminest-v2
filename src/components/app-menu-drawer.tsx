@@ -85,7 +85,7 @@ export function AppMenuDrawer({ onClose }: AppMenuDrawerProps) {
         className="flex h-full w-4/5 max-w-xs flex-col bg-card pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] shadow-card"
       >
         <div className="flex h-14 items-center justify-between px-4">
-          <span className="text-lg font-bold text-primary">Saminest</span>
+          <span className="text-xl font-extrabold tracking-wide text-primary">华邻</span>
           <button
             type="button"
             aria-label="关闭菜单"

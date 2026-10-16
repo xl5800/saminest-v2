@@ -87,7 +87,7 @@ describe("ConversationListPage", () => {
 
       expect(screen.getByRole("heading", { name: "消息" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "通知" })).toBeInTheDocument();
-      expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+      expect(screen.queryByText("华邻")).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: "?" })).not.toBeInTheDocument();
     });
@@ -269,7 +269,7 @@ describe("ConversationListPage", () => {
     expect(screen.getByTestId("conversation-link")).toHaveAttribute("href", "/messages/conv-1");
   });
 
-  it("renders a system-notification row (originType: 'system') with 'Saminest 通知' + a Bell icon instead of otherDisplayName/avatar", () => {
+  it("renders a system-notification row (originType: 'system') with '华邻通知' + a Bell icon instead of otherDisplayName/avatar", () => {
     useMyConversationsQuery.mockReturnValue({
       data: [
         {
@@ -289,7 +289,7 @@ describe("ConversationListPage", () => {
 
     const { container } = renderWithProviders(<ConversationListPage />);
 
-    expect(screen.getByText("Saminest 通知")).toBeInTheDocument();
+    expect(screen.getByText("华邻通知")).toBeInTheDocument();
     expect(container.querySelector("svg.lucide-bell")).toBeInTheDocument();
     expect(container.querySelector("img")).not.toBeInTheDocument();
     expect(screen.getAllByRole("link")).toHaveLength(1);

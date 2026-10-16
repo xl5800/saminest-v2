@@ -51,8 +51,8 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         >
           ←
         </button>
-        <Link to="/" className="flex-1 text-center text-lg font-bold text-primary">
-          Saminest
+        <Link to="/" className="flex-1 text-center text-xl font-extrabold tracking-wide text-primary">
+          华邻
         </Link>
         <span aria-hidden="true" className="w-6 shrink-0" />
       </header>

@@ -108,7 +108,7 @@ describe("FavoritesPage", () => {
     await screen.findByText("暂无收藏。");
 
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
-    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByText("华邻")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
     // "我的收藏"页面内大标题还在，不受顶部栏简化影响。
     expect(screen.getByRole("heading", { name: "我的收藏" })).toBeInTheDocument();

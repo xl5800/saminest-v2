@@ -303,8 +303,11 @@ export function TopBar(props: TopBarProps) {
                 <Menu size={22} aria-hidden="true" />
               </button>
             ) : null}
-            <span className="shrink-0 text-base font-bold leading-tight text-primary">
-              Saminest
+            {/* 品牌改名任务卡：界面品牌名从 Saminest 改成"华邻"——两个字比原来
+                短，字号从 text-base 放大到 text-xl、加粗到 extrabold，让左上角
+                不显得空。网址/包名仍然是 saminest，不受影响。 */}
+            <span className="shrink-0 text-xl font-extrabold leading-tight tracking-wide text-primary">
+              华邻
             </span>
             <button
               type="button"

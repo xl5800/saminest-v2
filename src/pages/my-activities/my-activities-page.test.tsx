@@ -151,7 +151,7 @@ describe("MyActivitiesPage", () => {
     renderWithProviders(<MyActivitiesPage />);
 
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
-    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByText("华邻")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "我的活动" })).toBeInTheDocument();
   });

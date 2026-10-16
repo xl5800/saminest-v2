@@ -42,7 +42,7 @@ export function TermsPage() {
       <p className="mb-6 text-sm text-text-muted">Last Updated / 最后更新：2026-07-09</p>
 
       <p className={paragraphClassName}>
-        欢迎使用 Saminest（以下简称"本平台"、"Saminest"、"我们"）。
+        欢迎使用华邻（Saminest，以下简称"本平台"、"华邻"、"我们"）。
       </p>
       <p className={paragraphClassName}>
         本协议适用于所有访问、浏览、注册、发布信息或使用本平台服务的用户。
@@ -52,7 +52,7 @@ export function TermsPage() {
       </p>
 
       <h2 className={headingClassName}>一、平台介绍</h2>
-      <p className="mb-2 text-base text-text">Saminest 是一个在线信息发布平台，目前主要提供：</p>
+      <p className="mb-2 text-base text-text">华邻是一个在线信息发布平台，目前主要提供：</p>
       <ul className={listClassName}>
         <li>房屋出租（Rental Listings）</li>
         <li>求租信息（Housing Wanted）</li>
@@ -60,7 +60,7 @@ export function TermsPage() {
       </ul>
       <p className="mb-2 text-base text-text">平台仅提供信息发布、浏览及交流服务。</p>
       <p className={paragraphClassName}>
-        Saminest 不是房东、卖家、中介、经纪人、支付机构或物流服务提供者。平台不会参与任何用户之间的实际交易。
+        华邻不是房东、卖家、中介、经纪人、支付机构或物流服务提供者。平台不会参与任何用户之间的实际交易。
       </p>
 
       <h2 className={headingClassName}>二、用户资格</h2>
@@ -186,7 +186,7 @@ export function TermsPage() {
 
       <h2 className={headingClassName}>十、知识产权</h2>
       <p className={paragraphClassName}>
-        Saminest 网站中的 Logo、页面设计、UI、程序代码、数据库、图标和文本（用户发布内容除外）均属于平台所有。未经许可不得复制、转载或商业使用。
+        华邻网站中的 Logo、页面设计、UI、程序代码、数据库、图标和文本（用户发布内容除外）均属于平台所有。未经许可不得复制、转载或商业使用。
       </p>
 
       <h2 className={headingClassName}>十一、账号暂停与终止</h2>
@@ -241,7 +241,7 @@ export function TermsPage() {
       ) : null}
 
       <p className="mb-4 text-base text-text">
-        感谢您使用 Saminest。我们致力于打造一个真实、安全、友好的租房、求租及二手交易社区。
+        感谢您使用华邻。我们致力于打造一个真实、安全、友好的租房、求租及二手交易社区。
       </p>
       </div>
     </main>

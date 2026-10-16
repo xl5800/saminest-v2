@@ -38,7 +38,7 @@ export function PrivacyPage() {
       <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
       <p className="mb-6 text-sm text-text-muted">Last Updated / 最后更新：2026-07-09</p>
 
-      <p className={paragraphClassName}>欢迎使用 Saminest（以下简称"本平台"、"我们"）。</p>
+      <p className={paragraphClassName}>欢迎使用华邻（Saminest，以下简称"本平台"、"华邻"、"我们"）。</p>
       <p className={paragraphClassName}>我们尊重您的隐私，并致力于保护您的个人信息安全。</p>
       <p className={paragraphClassName}>
         本隐私政策说明我们如何收集、使用、存储、共享及保护您的个人信息。当您访问或使用本平台时，即表示您已阅读并同意本隐私政策。
@@ -139,7 +139,7 @@ export function PrivacyPage() {
       <p className={paragraphClassName}>平台将在合理期限内处理您的请求。</p>
 
       <h2 className={headingClassName}>八、儿童隐私</h2>
-      <p className={paragraphClassName}>Saminest 不面向 13 岁以下儿童提供服务。</p>
+      <p className={paragraphClassName}>华邻不面向 13 岁以下儿童提供服务。</p>
       <p className={paragraphClassName}>
         如果我们发现儿童未经监护人同意提供个人信息，我们将在核实后尽快删除相关数据。
       </p>
@@ -154,7 +154,7 @@ export function PrivacyPage() {
       <p className={paragraphClassName}>
         平台可能包含房东网站、外部资源或第三方服务等链接。点击第三方链接后，相关网站的隐私政策将适用于您。
       </p>
-      <p className={paragraphClassName}>Saminest 不对第三方网站负责。</p>
+      <p className={paragraphClassName}>华邻不对第三方网站负责。</p>
 
       <h2 className={headingClassName}>十一、国际数据传输</h2>
       <p className={paragraphClassName}>
@@ -182,7 +182,7 @@ export function PrivacyPage() {
       ) : null}
 
       <p className="mb-4 text-base text-text">
-        感谢您对 Saminest 的信任。我们将持续努力保护您的个人信息安全，并为您提供安全、可靠的租房、求租和二手交易平台。
+        感谢您对华邻的信任。我们将持续努力保护您的个人信息安全，并为您提供安全、可靠的租房、求租和二手交易平台。
       </p>
       </div>
     </main>

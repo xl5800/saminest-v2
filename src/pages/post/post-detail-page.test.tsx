@@ -228,7 +228,7 @@ describe("PostDetailPage", () => {
 
     expect(screen.getByRole("button", { name: "关闭" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();
-    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByText("华邻")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
   });
 

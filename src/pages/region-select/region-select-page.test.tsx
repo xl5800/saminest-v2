@@ -67,7 +67,7 @@ describe("RegionSelectPage", () => {
     renderWithProviders(<RegionSelectPage />);
 
     expect(screen.getByRole("heading", { name: "地区选择" })).toBeInTheDocument();
-    expect(screen.queryByText("Saminest")).not.toBeInTheDocument();
+    expect(screen.queryByText("华邻")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
   });
 

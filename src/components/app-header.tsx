@@ -44,8 +44,8 @@ export function AppHeader() {
           </button>
         ) : null}
 
-        <Link to="/" className="shrink-0 text-lg font-bold text-primary">
-          Saminest
+        <Link to="/" className="shrink-0 text-xl font-extrabold tracking-wide text-primary">
+          华邻
         </Link>
 
         <button

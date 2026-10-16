@@ -38,7 +38,7 @@ describe("TopBar", () => {
   // 都不变的部分（品牌名文字存在、regionLabel/占位文案展示、发布/搜索
   // 图标行为），只是不再假设它们共享同一个 <button>。
   describe("home variant", () => {
-    it("always renders the 'Saminest' brand name", () => {
+    it("always renders the '华邻' brand name", () => {
       renderWithProviders(
         <TopBar
           variant="home"
@@ -49,7 +49,7 @@ describe("TopBar", () => {
         />
       );
 
-      expect(screen.getByText("Saminest")).toBeInTheDocument();
+      expect(screen.getByText("华邻")).toBeInTheDocument();
     });
 
     it("renders a leftmost 菜单 (hamburger) button only when onMenuClick is passed, before the brand name", () => {
@@ -66,7 +66,7 @@ describe("TopBar", () => {
 
       const menuButton = screen.getByRole("button", { name: "菜单" });
       expect(
-        menuButton.compareDocumentPosition(screen.getByText("Saminest")) & Node.DOCUMENT_POSITION_FOLLOWING
+        menuButton.compareDocumentPosition(screen.getByText("华邻")) & Node.DOCUMENT_POSITION_FOLLOWING
       ).toBeTruthy();
       fireEvent.click(menuButton);
       expect(onMenuClick).toHaveBeenCalledTimes(1);
@@ -219,7 +219,7 @@ describe("TopBar", () => {
           />
         );
 
-        const brand = screen.getByText("Saminest");
+        const brand = screen.getByText("华邻");
         expect(brand.tagName).not.toBe("BUTTON");
         expect(brand.closest("button")).toBeNull();
       });
@@ -236,7 +236,7 @@ describe("TopBar", () => {
         );
 
         expect(
-          screen.queryByRole("button", { name: /Saminest/ })
+          screen.queryByRole("button", { name: /华邻/ })
         ).not.toBeInTheDocument();
         expect(screen.getByRole("button", { name: "Arlington, VA" })).toBeInTheDocument();
       });
@@ -274,7 +274,7 @@ describe("TopBar", () => {
           />
         );
 
-        const brand = screen.getByText("Saminest");
+        const brand = screen.getByText("华邻");
         const regionButton = screen.getByRole("button", { name: "选择地区" });
         const createButton = screen.getByRole("button", { name: "发布" });
         const searchButton = screen.getByRole("button", { name: "搜索" });

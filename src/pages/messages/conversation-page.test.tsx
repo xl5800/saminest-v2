@@ -1002,12 +1002,12 @@ describe("MessageConversationPage", () => {
       });
     }
 
-    it("shows 'Saminest 通知' + '官方通知' in the header instead of otherDisplayName/postTitle, with a Bell icon (not an avatar/initial)", () => {
+    it("shows '华邻通知' + '官方通知' in the header instead of otherDisplayName/postTitle, with a Bell icon (not an avatar/initial)", () => {
       mockSystemConversation();
 
       const { container } = renderPage();
 
-      expect(screen.getByRole("heading", { name: "Saminest 通知" })).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: "华邻通知" })).toBeInTheDocument();
       expect(screen.getByText("官方通知")).toBeInTheDocument();
       expect(container.querySelector("header svg.lucide-bell")).toBeInTheDocument();
       expect(container.querySelector("header img")).not.toBeInTheDocument();
@@ -1392,7 +1392,7 @@ describe("MessageConversationPage", () => {
       expect(container.querySelector('[data-message-owner="system"]')).toBeInTheDocument();
       expect(container.querySelector('[data-message-owner="other"]')).not.toBeInTheDocument();
       // 会话本身仍然是普通会话，不是系统通知会话——header 用 Bob 的昵称，
-      // 不是"Saminest 通知"，这条消息只是这个普通会话里的一条特殊消息。
+      // 不是"华邻通知"，这条消息只是这个普通会话里的一条特殊消息。
       expect(screen.getByRole("heading", { name: "Bob" })).toBeInTheDocument();
     });
 

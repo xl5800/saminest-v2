@@ -28,7 +28,7 @@ const SESSION_EXPIRED_MESSAGE = "登录状态已失效，请重新登录后再�
 const EMPTY_CONVERSATION_MESSAGE = "还没有消息，发一条打个招呼吧。";
 const LOAD_ERROR_MESSAGE = "消息加载失败，请刷新页面重试。";
 const DEFAULT_OTHER_PARTY_LABEL = "对方";
-const SYSTEM_NOTIFICATION_LABEL = "Saminest 通知";
+const SYSTEM_NOTIFICATION_LABEL = "华邻通知";
 const SYSTEM_NOTIFICATION_SUBTITLE = "官方通知";
 // 把"联系客服"拆成独立会话类型任务卡：support 会话的 header 标题/副标题，
 // 跟 SYSTEM_NOTIFICATION_LABEL/SYSTEM_NOTIFICATION_SUBTITLE 是两组独立的
@@ -947,7 +947,7 @@ export function MessageConversationPage() {
                       <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? "items-end" : "items-start"}`}>
                         {/* 联系客服改成真聊天任务卡：客服回复的气泡上面
                             加一行"官方客服"标签——系统会话的 header 固定
-                            显示"Saminest 通知"，如果不额外标注，用户没法
+                            显示"华邻通知"，如果不额外标注，用户没法
                             从气泡本身分清"这是自动通知"还是"真人客服在
                             回复"。 */}
                         {isAdminReply ? (

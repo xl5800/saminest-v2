@@ -9,7 +9,7 @@ describe("AuthLayout", () => {
     cleanup();
   });
 
-  it("renders a back button and the centered Saminest wordmark, with no 发布 button", () => {
+  it("renders a back button and the centered 华邻 wordmark, with no 发布 button", () => {
     render(
       <MemoryRouter initialEntries={["/login"]}>
         <AuthLayout>
@@ -19,7 +19,7 @@ describe("AuthLayout", () => {
     );
 
     expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Saminest" })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: "华邻" })).toHaveAttribute("href", "/");
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
     expect(screen.getByText("page content")).toBeInTheDocument();
   });

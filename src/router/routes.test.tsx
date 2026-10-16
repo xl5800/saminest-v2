@@ -693,7 +693,7 @@ describe("app routes", () => {
 
     // 14 号卡改版：居中的"找搭子"标题换成了 TopBar home 变体的"Saminest"
     // 品牌胶囊（不再有任何居中大标题），见 activity-list-page.tsx。
-    expect(await screen.findByText("Saminest")).toBeInTheDocument();
+    expect(await screen.findByText("华邻")).toBeInTheDocument();
   });
 
   it("renders the activity detail page at /activities/:id (not-found state when the activity doesn't resolve)", async () => {
@@ -709,7 +709,7 @@ describe("app routes", () => {
     renderAt("/activities/new");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -729,7 +729,7 @@ describe("app routes", () => {
     renderAt("/activities/act-1/report");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -745,7 +745,7 @@ describe("app routes", () => {
     renderAt("/activities/act-1/notify");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -761,7 +761,7 @@ describe("app routes", () => {
     renderAt("/activities/act-1/notify");
 
     expect(await screen.findByRole("heading", { name: "通知参与者" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
   });
 
   // 社区功能阶段二：/community 和 /community/post/:id 公开可浏览，
@@ -775,7 +775,7 @@ describe("app routes", () => {
     expect(screen.getByRole("heading", { level: 1, name: "社区" })).toBeInTheDocument();
     expect(await screen.findByRole("heading", { level: 2, name: "DMV 社区" })).toBeInTheDocument();
     expect(screen.queryByText("暂无帖子，欢迎发布第一条")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "社区" })).toHaveAttribute("aria-current", "page");
   });
@@ -789,7 +789,7 @@ describe("app routes", () => {
 
     expect(await screen.findByRole("heading", { level: 1, name: "DMV 社区" })).toBeInTheDocument();
     expect(await screen.findByText("暂无帖子，欢迎发布第一条")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
     expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "社区" })).toHaveAttribute("aria-current", "page");
   });
@@ -808,7 +808,7 @@ describe("app routes", () => {
   it("redirects /community/new to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/new");
 
-    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
   });
 
   it("renders the create-community-post page at /community/:slug/new when a session exists, with neither the global AppHeader nor BottomNav and no community picker", async () => {
@@ -818,14 +818,14 @@ describe("app routes", () => {
 
     expect(await screen.findByPlaceholderText("添加正文")).toBeInTheDocument();
     expect(screen.queryByLabelText("选择社区")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
 
   it("redirects /community/:slug/new to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/dmv/new");
 
-    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
   });
 
   it("at the global /community/new, a user who joined nothing sees the join-a-community prompt instead of the form (still without AppHeader/BottomNav)", async () => {
@@ -835,7 +835,7 @@ describe("app routes", () => {
 
     expect(await screen.findByText("你还没有加入任何社区，发帖前请先加入一个社区。")).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("添加正文")).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
   });
 
@@ -863,14 +863,14 @@ describe("app routes", () => {
     renderAt("/community/post/cp-1");
 
     expect(await screen.findByText("帖子不存在或已被删除。")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
   });
 
   // 社区功能阶段四：举报社区帖子表单页。
   it("redirects /community/post/:id/report to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/post/cp-1/report");
 
-    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
   });
 
   it("renders the report form at /community/post/:id/report when a session exists, without the global AppHeader", () => {
@@ -879,14 +879,14 @@ describe("app routes", () => {
     renderAt("/community/post/cp-1/report");
 
     expect(screen.getByRole("heading", { name: "举报帖子" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
   });
 
   // 社区功能阶段六：编辑自己的社区帖子 / 我的社区发帖管理页，都需要登录。
   it("redirects /community/post/:id/edit to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/post/cp-1/edit");
 
-    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
   });
 
   it("renders the edit page at /community/post/:id/edit when a session exists (not-found state when the post doesn't resolve)", async () => {
@@ -900,7 +900,7 @@ describe("app routes", () => {
   it("redirects /my-community-posts to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/my-community-posts");
 
-    expect(screen.getByRole("heading", { name: "登录 Saminest" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
   });
 
   it("renders the my-community-posts page at /my-community-posts when a session exists", async () => {
@@ -915,7 +915,7 @@ describe("app routes", () => {
     renderAt("/login");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
@@ -925,7 +925,7 @@ describe("app routes", () => {
     renderAt("/register");
 
     expect(
-      screen.getByRole("heading", { name: "注册 Saminest 账号" })
+      screen.getByRole("heading", { name: "注册华邻账号" })
     ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
@@ -973,14 +973,14 @@ describe("app routes", () => {
     renderAt("/does-not-exist");
 
     expect(screen.getByRole("heading", { name: "页面未找到" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
   });
 
   it("redirects /publish to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/publish");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1001,7 +1001,7 @@ describe("app routes", () => {
     renderAt("/post/post-1/report");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1017,7 +1017,7 @@ describe("app routes", () => {
     renderAt("/messages");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1034,7 +1034,7 @@ describe("app routes", () => {
     renderAt("/messages/conversation-1");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1045,7 +1045,7 @@ describe("app routes", () => {
 
     expect(await screen.findByRole("heading", { name: "对方" })).toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
   });
 
@@ -1095,7 +1095,7 @@ describe("app routes", () => {
     renderAt("/favorites");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1112,7 +1112,7 @@ describe("app routes", () => {
     renderAt("/blocked-users");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1128,7 +1128,7 @@ describe("app routes", () => {
     renderAt("/profile");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1147,7 +1147,7 @@ describe("app routes", () => {
     renderAt("/profile/edit");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1179,7 +1179,7 @@ describe("app routes", () => {
     renderAt("/users/user-2/report");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1195,7 +1195,7 @@ describe("app routes", () => {
     renderAt("/feedback");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1213,7 +1213,7 @@ describe("app routes", () => {
     renderAt("/my-posts");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1232,7 +1232,7 @@ describe("app routes", () => {
     renderAt("/my-activities");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1250,7 +1250,7 @@ describe("app routes", () => {
     renderAt("/admin/posts");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1280,7 +1280,7 @@ describe("app routes", () => {
     renderAt("/admin/posts/all");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1310,7 +1310,7 @@ describe("app routes", () => {
     renderAt("/admin/reports");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1340,7 +1340,7 @@ describe("app routes", () => {
     renderAt("/admin/feedback");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1370,7 +1370,7 @@ describe("app routes", () => {
     renderAt("/admin/users");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 
@@ -1400,7 +1400,7 @@ describe("app routes", () => {
     renderAt("/admin/categories");
 
     expect(
-      screen.getByRole("heading", { name: "登录 Saminest" })
+      screen.getByRole("heading", { name: "登录华邻" })
     ).toBeInTheDocument();
   });
 

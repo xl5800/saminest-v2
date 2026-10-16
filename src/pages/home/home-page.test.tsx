@@ -101,10 +101,10 @@ describe("HomePage (community aggregate feed)", () => {
   }
 
   describe("top bar (TopBar home variant)", () => {
-    it("renders the 'Saminest' brand name with no stray separator when no region has been selected", () => {
+    it("renders the '华邻' brand name with no stray separator when no region has been selected", () => {
       renderWithProviders(<HomePage />);
 
-      expect(screen.getByText("Saminest")).toBeInTheDocument();
+      expect(screen.getByText("华邻")).toBeInTheDocument();
       expect(screen.queryByText("·")).not.toBeInTheDocument();
     });
 

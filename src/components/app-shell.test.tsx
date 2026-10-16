@@ -151,7 +151,7 @@ describe("AppShell", () => {
       renderShell("/this-route-does-not-exist");
 
       expect(screen.getByText("not-found page")).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
 
@@ -165,7 +165,7 @@ describe("AppShell", () => {
       renderShell("/activities/123/notify");
 
       expect(screen.getByText("activity-notify page")).toBeInTheDocument();
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
 
@@ -181,14 +181,14 @@ describe("AppShell", () => {
       renderShell("/totally-unmigrated");
 
       expect(screen.getByText("unmigrated page")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "Saminest" })).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "华邻" })).toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
 
     it("renders neither AppHeader nor BottomNav on a fully-immersive page (/login)", () => {
       renderShell("/login");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     });
 
@@ -198,7 +198,7 @@ describe("AppShell", () => {
     it("renders BottomNav but NOT AppHeader on a page that has migrated to its own TopBar (home, \"/\")", () => {
       renderShell("/");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
 
@@ -206,7 +206,7 @@ describe("AppShell", () => {
     it("renders BottomNav but NOT AppHeader on the migrated categories tab page (\"/categories\")", () => {
       renderShell("/categories");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
 
@@ -221,7 +221,7 @@ describe("AppShell", () => {
       (path) => {
         renderShell(path);
 
-        expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
         expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
       }
     );
@@ -237,7 +237,7 @@ describe("AppShell", () => {
       (path) => {
         renderShell(path);
 
-        expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
         expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
       }
     );
@@ -249,7 +249,7 @@ describe("AppShell", () => {
     it("renders neither AppHeader nor BottomNav on the fully-immersive post detail page (\"/post/123\")", () => {
       renderShell("/post/123");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     });
 
@@ -265,28 +265,28 @@ describe("AppShell", () => {
     ])("renders BottomNav but NOT AppHeader on the %s page (%s)", (path) => {
       renderShell(path);
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
     });
 
     it("renders neither AppHeader nor BottomNav on the fully-immersive create-community-post page (\"/community/new\")", () => {
       renderShell("/community/new");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     });
 
     it("renders neither AppHeader nor BottomNav on the community-scoped create page (\"/community/dmv-pets/new\")", () => {
       renderShell("/community/dmv-pets/new");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     });
 
     it("renders neither AppHeader nor BottomNav on the fully-immersive edit-community-post page (\"/community/post/123/edit\")", () => {
       renderShell("/community/post/123/edit");
 
-      expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
       expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
     });
 
@@ -319,7 +319,7 @@ describe("AppShell", () => {
       (path) => {
         renderShell(path);
 
-        expect(screen.queryByRole("link", { name: "Saminest" })).not.toBeInTheDocument();
+        expect(screen.queryByRole("link", { name: "华邻" })).not.toBeInTheDocument();
         expect(screen.getByRole("navigation", { name: "底部导航" })).toBeInTheDocument();
       }
     );

@@ -77,12 +77,12 @@ describe("ActivityListPage", () => {
   });
 
   describe("TopBar (14 号卡：顶部栏合并成一个胶囊按钮)", () => {
-    it("renders the 'Saminest' brand pill (same as the home page), with a placeholder when no region is selected", () => {
+    it("renders the '华邻' brand pill (same as the home page), with a placeholder when no region is selected", () => {
       listActivities.mockReturnValue(new Promise(() => {}));
 
       renderWithProviders(<ActivityListPage />);
 
-      expect(screen.getByText("Saminest")).toBeInTheDocument();
+      expect(screen.getByText("华邻")).toBeInTheDocument();
       expect(screen.getByText("选择地区")).toBeInTheDocument();
     });
 
