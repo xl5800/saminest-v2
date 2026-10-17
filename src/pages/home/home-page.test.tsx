@@ -161,10 +161,12 @@ describe("HomePage (community aggregate feed)", () => {
       expect(navigateMock).toHaveBeenCalledWith("/search");
     });
 
-    it("shows the fixed '推荐' tab", () => {
+    // 界面配色和字体任务卡：只有一个选项的"推荐"标签栏去掉了，等真的有
+    // 第二个标签（关注/附近）再加回来。
+    it("no longer shows the single-option '推荐' tab row", () => {
       renderWithProviders(<HomePage />);
 
-      expect(screen.getByText("推荐")).toBeInTheDocument();
+      expect(screen.queryByText("推荐")).not.toBeInTheDocument();
     });
   });
 

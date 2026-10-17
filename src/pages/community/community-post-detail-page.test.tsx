@@ -144,10 +144,14 @@ describe("CommunityPostDetailPage", () => {
     expect(useCommunityBySlugQuery).toHaveBeenCalledWith("dmv-pets");
   });
 
-  it("renders title and body at the same sizes as the list preview (18px / 15px)", () => {
+  // 界面配色和字体任务卡：详情页标题 20px 半粗体，正文跟列表一样 15px。
+  it("renders a 20px semibold title over a 15px body", () => {
     renderPage();
 
-    expect(screen.getByRole("heading", { level: 1, name: "推荐一家中餐馆" })).toHaveClass("text-lg");
+    expect(screen.getByRole("heading", { level: 1, name: "推荐一家中餐馆" })).toHaveClass(
+      "text-xl",
+      "font-semibold"
+    );
     expect(screen.getByText(/第一行/)).toHaveClass("text-[15px]");
   });
 

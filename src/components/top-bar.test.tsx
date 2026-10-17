@@ -179,7 +179,9 @@ describe("TopBar", () => {
     // bg-primary + text-white，其它图标按钮（这里断言"搜索"）继续用原来
     // 的 bg-card + text-text，确认改动没有波及 ICON_BUTTON_CLASS_NAME
     // 本身，也没有影响这个按钮的尺寸/圆角（h-9 w-9 rounded-full 不变）。
-    it("gives the '＋' create button a blue background with a white icon, without changing its size/shape or affecting the search button's styling", () => {
+    // 界面配色和字体任务卡：顶栏改白以后，"＋"发布按钮从蓝底白字改回跟搜索
+    // 按钮一样的细线条图标（参照 Facebook/Reddit 顶栏），蓝色只留给"华邻"logo。
+    it("renders the '＋' create button as a plain icon button styled exactly like the search button", () => {
       renderWithProviders(
         <TopBar
           variant="home"
@@ -191,14 +193,10 @@ describe("TopBar", () => {
       );
 
       const createButton = screen.getByRole("button", { name: "发布" });
-      expect(createButton.className).toMatch(/\bbg-primary\b/);
-      expect(createButton.className).toMatch(/\btext-white\b/);
-      expect(createButton.className).not.toMatch(/\bbg-card\b/);
-      expect(createButton.className).toMatch(/\bh-9\b/);
-      expect(createButton.className).toMatch(/\bw-9\b/);
-      expect(createButton.className).toMatch(/rounded-full/);
-
       const searchButton = screen.getByRole("button", { name: "搜索" });
+      expect(createButton.className).toBe(searchButton.className);
+      expect(createButton.className).not.toMatch(/\bbg-primary\b/);
+
       expect(searchButton.className).toMatch(/\bbg-card\b/);
       expect(searchButton.className).toMatch(/\btext-text\b/);
       expect(searchButton.className).not.toMatch(/bg-primary\b/);

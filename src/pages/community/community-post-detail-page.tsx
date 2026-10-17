@@ -100,7 +100,7 @@ export function CommunityPostDetailPage() {
               </span>
             )}
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-text">{post.authorDisplayName}</p>
+              <p className="truncate text-sm font-semibold text-text">{post.authorDisplayName}</p>
               <p className="text-xs text-text-muted">{formatRelativeTimeAgo(post.createdAt)}</p>
             </div>
           </div>
@@ -160,7 +160,7 @@ export function CommunityPostDetailPage() {
   }
 
   return (
-    <main data-testid="community-post-detail-page">
+    <main data-testid="community-post-detail-page" className="min-h-screen bg-card">
       <TopBar
         variant="detail"
         title={topBarTitle}

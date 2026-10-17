@@ -89,8 +89,11 @@ const ICON_BUTTON_CLASS_NAME =
  * 不需要连带改别处。内部图标按钮（`ICON_BUTTON_CLASS_NAME`，36px）比新的
  * 44px 行高小，`items-center` 依然能垂直居中，不会被撑破或裁切。
  */
+// 界面配色和字体任务卡：顶栏背景从 bg-bg-secondary（#e9ebee 偏深的灰）改成
+// 纯白 bg-card，下面保留 border-topbar-line 细线跟内容分开——参照
+// Facebook/Reddit 顶栏都是白底。五个 variant 共用这一个类，全站顶栏一起变白。
 const STICKY_CARD_CLASS_NAME =
-  "sticky top-0 z-10 -mt-[env(safe-area-inset-top)] border-b border-topbar-line bg-bg-secondary pt-[env(safe-area-inset-top)]";
+  "sticky top-0 z-10 -mt-[env(safe-area-inset-top)] border-b border-topbar-line bg-card pt-[env(safe-area-inset-top)]";
 const HEADER_ROW_CLASS_NAME = "flex h-11 items-center justify-between px-4";
 
 function EmptySlot() {
@@ -326,15 +329,13 @@ export function TopBar(props: TopBarProps) {
                 type="button"
                 aria-label="发布"
                 onClick={props.onCreateClick}
-                // 首页"＋发布"按钮改蓝色任务卡：只有这一个按钮单独换成
-                // bg-primary + text-white，不改 ICON_BUTTON_CLASS_NAME 本身
-                // （那个类还给返回/更多/搜索/关闭等其它图标按钮用，改了会
-                // 导致全站图标按钮都变蓝）。尺寸/圆角/间距（h-9 w-9
-                // rounded-full）照抄 ICON_BUTTON_CLASS_NAME，只换背景和
-                // 图标颜色这两处。
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white"
+                // 界面配色和字体任务卡：原来"首页＋发布按钮改蓝色任务卡"把它
+                // 做成蓝底白字的实心圆，视觉上比"华邻"logo 还抢眼；顶栏改白
+                // 以后改回跟搜索按钮同一个 ICON_BUTTON_CLASS_NAME 的细线条
+                // 图标（图标放大到 22 跟菜单图标一致），蓝色只留给 logo。
+                className={ICON_BUTTON_CLASS_NAME}
               >
-                <Plus size={18} aria-hidden="true" />
+                <Plus size={22} aria-hidden="true" />
               </button>
             ) : null}
             <button
@@ -357,11 +358,12 @@ export function TopBar(props: TopBarProps) {
       <header className={STICKY_CARD_CLASS_NAME}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <EmptySlot />
-          {/* design handoff 第 2 项（页面标题用品牌蓝）：tab 变体标题
-              text-text → text-primary，目前调用点是消息页「消息」/分类页
-              「分类」——卡片内部自己的标题（活动卡片/帖子卡片等）不受影响，
-              那些标题不经过这个组件。 */}
-          <h1 className="flex-1 truncate text-center text-xl font-bold text-primary">{props.title}</h1>
+          {/* 界面配色和字体任务卡：design handoff 第 2 项曾把所有顶栏标题改成
+              品牌蓝 text-primary，这次统一改回深色 text-text（参照
+              Facebook/Reddit：页面标题是黑色，蓝色只留给 logo 和可点的操作，
+              否则全站一片蓝、蓝字还容易被当成链接）。下面 detail / create /
+              nav-only 三个变体同理。 */}
+          <h1 className="flex-1 truncate text-center text-xl font-bold text-text">{props.title}</h1>
           {props.right ? (
             <button
               type="button"
@@ -384,11 +386,8 @@ export function TopBar(props: TopBarProps) {
       <header className={STICKY_CARD_CLASS_NAME}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <BackButton onBack={props.onBack} />
-          {/* design handoff 第 2 项：detail 变体标题 text-text → text-primary
-              （所有二级页 TopBar 标题统一用品牌蓝，卡片内部自己的标题不受
-              影响，那些不经过这个组件）。 */}
           {props.title ? (
-            <h1 className="flex-1 truncate text-center text-base font-bold text-primary">
+            <h1 className="flex-1 truncate text-center text-base font-bold text-text">
               {props.title}
             </h1>
           ) : (
@@ -416,8 +415,7 @@ export function TopBar(props: TopBarProps) {
           >
             <X size={18} aria-hidden="true" />
           </button>
-          {/* design handoff 第 2 项：create 变体标题 text-text → text-primary。 */}
-          <h1 className="flex-1 truncate text-center text-base font-bold text-primary">
+          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
             {props.title}
           </h1>
           <button
@@ -438,9 +436,8 @@ export function TopBar(props: TopBarProps) {
     <header className={STICKY_CARD_CLASS_NAME}>
       <div className={HEADER_ROW_CLASS_NAME}>
         <BackButton onBack={props.onBack} />
-        {/* design handoff 第 2 项：nav-only 变体标题 text-text → text-primary。 */}
         {props.title ? (
-          <h1 className="flex-1 truncate text-center text-base font-bold text-primary">
+          <h1 className="flex-1 truncate text-center text-base font-bold text-text">
             {props.title}
           </h1>
         ) : (

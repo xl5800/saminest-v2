@@ -53,11 +53,13 @@ describe("CommunityPostCard", () => {
     expect(screen.getByText("置顶")).toBeInTheDocument();
   });
 
-  it("title uses the same regular weight as the body (size alone sets it apart)", () => {
+  // 界面配色和字体任务卡：标题学 Reddit 加粗到半粗体（17px semibold），正文
+  // 保持 15px 常规——中文用 bold(700) 太重，所以是 semibold 不是 bold。
+  it("sets the title in 17px semibold so it stands apart from the regular-weight body", () => {
     renderWithProviders(<CommunityPostCard post={post} showCommunityTag />);
 
     const title = screen.getByText("dc有人一起打麻将吗");
-    expect(title).toHaveClass("text-lg", "font-normal");
+    expect(title).toHaveClass("text-[17px]", "font-semibold");
     expect(title).not.toHaveClass("font-bold");
     expect(screen.getByText("求打麻将搭子")).toHaveClass("text-text-body");
   });

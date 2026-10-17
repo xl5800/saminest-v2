@@ -48,15 +48,16 @@ const COMMUNITY_PATH = "/community";
  *   创建社区）+ Saminest + 地区按钮（点击去 /region-select，地区目前
  *   只是展示，社区帖子没有地区维度，不做筛选）、"＋"打开 PublishActionSheet、
  *   搜索图标（跳全站搜索页 /search，同时搜社区和社区帖子）。
- * - "推荐"Tab：固定的蓝色下划线标题，没有任何切换逻辑，只是给后面"关注/最新"
- *   之类的 Tab 预留视觉位置。
+ * - 原来顶栏下面有一行固定的"推荐"Tab（只有一个选项、没有切换逻辑），界面配色
+ *   和字体任务卡把它去掉了，等真有第二个 Tab（关注/附近）再加回来。页面整体
+ *   改成白底（bg-card），参照 Facebook/Reddit 的信息流。
  * - （零加入时）引导加入社区的横幅。原来顶部的"我的社区"横向卡片区已经删掉——
  *   "我在哪些社区"这个信息改成每条帖子上可点击的社区名标签（点了去对应社区的
  *   Feed 页）。
  * - 帖子流：每条帖子是共用的 CommunityPostCard（showCommunityTag，右上角带可
  *   点击的社区名标签），跟单个社区页的帖子长得完全一样，结构说明见
  *   community-post-card.tsx。分页沿用"哨兵元素 + IntersectionObserver"无限滚动。
- *   **没有点赞图标**——社区帖子 v1 没有点赞。帖子是公开可读的，游客也能看到。
+ *   帖子是公开可读的，游客也能看到。
  */
 export function HomePage() {
   const navigate = useNavigate();
@@ -164,7 +165,7 @@ export function HomePage() {
   }
 
   return (
-    <main data-testid="home-page">
+    <main data-testid="home-page" className="min-h-screen bg-card">
       <TopBar
         variant="home"
         regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
@@ -172,16 +173,6 @@ export function HomePage() {
         onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={() => navigate(SEARCH_PATH)}
         onMenuClick={() => setMenuOpen(true)}
-        bottomSlot={
-          <div className="px-4">
-            <span
-              aria-current="page"
-              className="inline-block border-b-2 border-primary py-2 text-base font-semibold text-primary"
-            >
-              推荐
-            </span>
-          </div>
-        }
       />
 
       {showJoinBanner ? (

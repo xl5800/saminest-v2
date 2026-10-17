@@ -52,7 +52,7 @@ export function CommunityPostCard({ post, showCommunityTag }: CommunityPostCardP
               {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
             </span>
           )}
-          <span className="min-w-0 truncate text-sm text-text">{post.authorDisplayName}</span>
+          <span className="min-w-0 truncate text-sm font-semibold text-text">{post.authorDisplayName}</span>
           <span className="shrink-0 text-xs text-text-subtle">
             {formatRelativeTimeAgo(post.createdAt)}
           </span>
