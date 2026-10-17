@@ -49,8 +49,7 @@ const COMMUNITY_PATH = "/community";
  *   只是展示，社区帖子没有地区维度，不做筛选）、"＋"打开 PublishActionSheet、
  *   搜索图标（跳全站搜索页 /search，同时搜社区和社区帖子）。
  * - 原来顶栏下面有一行固定的"推荐"Tab（只有一个选项、没有切换逻辑），界面配色
- *   和字体任务卡把它去掉了，等真有第二个 Tab（关注/附近）再加回来。页面整体
- *   改成白底（bg-card），参照 Facebook/Reddit 的信息流。
+ *   和字体任务卡把它去掉了，等真有第二个 Tab（关注/附近）再加回来。
  * - （零加入时）引导加入社区的横幅。原来顶部的"我的社区"横向卡片区已经删掉——
  *   "我在哪些社区"这个信息改成每条帖子上可点击的社区名标签（点了去对应社区的
  *   Feed 页）。
@@ -165,7 +164,7 @@ export function HomePage() {
   }
 
   return (
-    <main data-testid="home-page" className="min-h-screen bg-card">
+    <main data-testid="home-page">
       <TopBar
         variant="home"
         regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}

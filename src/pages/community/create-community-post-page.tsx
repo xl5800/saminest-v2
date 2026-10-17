@@ -493,7 +493,7 @@ export function CreateCommunityPostPage() {
                 value={selectedCommunityId}
                 onChange={(event) => setPickedCommunityId(event.target.value)}
                 required
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
               >
                 {(myCommunities ?? []).map((joined) => (
                   <option key={joined.id} value={joined.id}>

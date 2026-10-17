@@ -65,7 +65,7 @@ export function CommunityFormFields({
           onChange={(event) => onNameChange(event.target.value)}
           maxLength={COMMUNITY_NAME_MAX_LENGTH}
           placeholder="比如：DMV 华人羽毛球"
-          className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-placeholder focus:outline-none focus:ring-4 focus:ring-primary-light"
+          className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-placeholder focus:outline-none focus:ring-4 focus:ring-primary-light"
         />
       </label>
 
@@ -82,7 +82,7 @@ export function CommunityFormFields({
           maxLength={COMMUNITY_DESCRIPTION_MAX_LENGTH}
           rows={3}
           placeholder="这个社区聊什么？"
-          className="w-full resize-none rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-placeholder focus:outline-none focus:ring-4 focus:ring-primary-light"
+          className="w-full resize-none rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-placeholder focus:outline-none focus:ring-4 focus:ring-primary-light"
         />
       </label>
 
@@ -125,7 +125,7 @@ export function CommunityFormFields({
           aria-label="添加其他州"
           value=""
           onChange={(event) => addState(event.target.value)}
-          className="mt-3 w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+          className="mt-3 w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
         >
           <option value="">＋ 添加其他州</option>
           {otherStates.map((state) => (

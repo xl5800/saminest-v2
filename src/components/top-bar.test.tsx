@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
@@ -37,6 +37,26 @@ describe("TopBar", () => {
   // 单独一组"拆分后的独立元素"测试；这里保留的几个测试断言的是拆分前后
   // 都不变的部分（品牌名文字存在、regionLabel/占位文案展示、发布/搜索
   // 图标行为），只是不再假设它们共享同一个 <button>。
+  // 全站白底任务卡：停在页面最上面时顶栏下面没有线，往下滚动以后才显示。
+  it("shows the bottom hairline only after the page has been scrolled", () => {
+    renderWithProviders(<TopBar variant="tab" title="消息" />);
+    const header = screen.getByRole("banner");
+    expect(header).toHaveClass("border-transparent");
+    expect(header).not.toHaveClass("border-topbar-line");
+
+    act(() => {
+      Object.defineProperty(window, "scrollY", { value: 120, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(header).toHaveClass("border-topbar-line");
+
+    act(() => {
+      Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
+      window.dispatchEvent(new Event("scroll"));
+    });
+    expect(header).toHaveClass("border-transparent");
+  });
+
   describe("home variant", () => {
     it("always renders the '华邻' brand name", () => {
       renderWithProviders(

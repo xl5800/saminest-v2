@@ -90,10 +90,26 @@ const ICON_BUTTON_CLASS_NAME =
  * 44px 行高小，`items-center` 依然能垂直居中，不会被撑破或裁切。
  */
 // 界面配色和字体任务卡：顶栏背景从 bg-bg-secondary（#e9ebee 偏深的灰）改成
-// 纯白 bg-card，下面保留 border-topbar-line 细线跟内容分开——参照
-// Facebook/Reddit 顶栏都是白底。五个 variant 共用这一个类，全站顶栏一起变白。
+// 纯白 bg-card——参照 Facebook/Reddit 顶栏都是白底。五个 variant 共用这一个类，
+// 全站顶栏一起变白。
+// 全站白底任务卡：页面底色也改成白色以后，顶栏下面那条常驻细线成了页面上唯一
+// 的"断层"。改成 iOS 原生导航栏的做法：停在页面最上面时没有线（边框透明），
+// 往下滚动、内容滑到顶栏下面时才淡淡显示 border-topbar-line，见 useScrolled()。
+// border-b 一直保留（只换颜色），线出现/消失时页面不会跳动 1px。
 const STICKY_CARD_CLASS_NAME =
-  "sticky top-0 z-10 -mt-[env(safe-area-inset-top)] border-b border-topbar-line bg-card pt-[env(safe-area-inset-top)]";
+  "sticky top-0 z-10 -mt-[env(safe-area-inset-top)] border-b bg-card pt-[env(safe-area-inset-top)] transition-colors duration-200";
+
+/** 页面是否已经往下滚动过（滚动距离 > 0）。 */
+function useScrolled(): boolean {
+  const [scrolled, setScrolled] = useState(() => typeof window !== "undefined" && window.scrollY > 0);
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 0);
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    return () => window.removeEventListener("scroll", update);
+  }, []);
+  return scrolled;
+}
 const HEADER_ROW_CLASS_NAME = "flex h-11 items-center justify-between px-4";
 
 function EmptySlot() {
@@ -282,10 +298,12 @@ export type TopBarProps =
 
 export function TopBar(props: TopBarProps) {
   const goBack = useGoBack();
+  const scrolled = useScrolled();
+  const headerClassName = `${STICKY_CARD_CLASS_NAME} ${scrolled ? "border-topbar-line" : "border-transparent"}`;
 
   if (props.variant === "home") {
     return (
-      <header className={STICKY_CARD_CLASS_NAME}>
+      <header className={headerClassName}>
         <div className={HEADER_ROW_CLASS_NAME}>
           {/* 顶部栏拆分任务卡：08 号卡把"州名 · Saminest 单行文字"合并成一个
               两行堆叠的圆角胶囊按钮（品牌名+地区都在同一个 <button> 里）；这次
@@ -355,7 +373,7 @@ export function TopBar(props: TopBarProps) {
 
   if (props.variant === "tab") {
     return (
-      <header className={STICKY_CARD_CLASS_NAME}>
+      <header className={headerClassName}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <EmptySlot />
           {/* 界面配色和字体任务卡：design handoff 第 2 项曾把所有顶栏标题改成
@@ -383,7 +401,7 @@ export function TopBar(props: TopBarProps) {
 
   if (props.variant === "detail") {
     return (
-      <header className={STICKY_CARD_CLASS_NAME}>
+      <header className={headerClassName}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <BackButton onBack={props.onBack} />
           {props.title ? (
@@ -405,7 +423,7 @@ export function TopBar(props: TopBarProps) {
 
   if (props.variant === "create") {
     return (
-      <header className={STICKY_CARD_CLASS_NAME}>
+      <header className={headerClassName}>
         <div className={HEADER_ROW_CLASS_NAME}>
           <button
             type="button"
@@ -433,7 +451,7 @@ export function TopBar(props: TopBarProps) {
 
   // variant === "nav-only"
   return (
-    <header className={STICKY_CARD_CLASS_NAME}>
+    <header className={headerClassName}>
       <div className={HEADER_ROW_CLASS_NAME}>
         <BackButton onBack={props.onBack} />
         {props.title ? (

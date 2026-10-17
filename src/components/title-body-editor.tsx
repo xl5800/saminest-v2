@@ -46,7 +46,7 @@ export function TitleBodyEditor({
   }
 
   return (
-    <div className="mb-4 rounded-xl bg-card px-3.5 py-3">
+    <div className="mb-4 rounded-xl bg-field px-3.5 py-3">
       <input
         type="text"
         aria-label={titleAriaLabel}

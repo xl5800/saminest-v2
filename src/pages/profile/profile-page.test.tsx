@@ -489,7 +489,10 @@ describe("ProfilePage", () => {
       await screen.findByText("Alice");
       const button = screen.getByRole("button", { name: "退出登录" });
       expect(button).toHaveClass("text-danger");
-      expect(button.className).not.toContain("border");
+      // 全站白底任务卡：页面改白以后，按钮跟上面的功能分组一样加了一圈浅灰
+      // border-border 才看得出边界；仍然不是原来那种红色描边按钮。
+      expect(button.className).not.toMatch(/border-danger/);
+      expect(button).toHaveClass("border-border");
     });
   });
 });

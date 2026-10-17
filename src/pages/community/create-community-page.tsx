@@ -170,7 +170,7 @@ export function CreateCommunityPage() {
           {requests.map((request) => {
             const status = STATUS_LABELS[request.status] ?? STATUS_LABELS.pending;
             return (
-              <li key={request.id} className="rounded-xl bg-card p-3">
+              <li key={request.id} className="rounded-xl border border-border bg-card p-3">
                 <div className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-base text-text">{request.name}</span>
                   <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}>

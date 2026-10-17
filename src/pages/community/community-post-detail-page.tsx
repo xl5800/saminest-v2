@@ -162,7 +162,7 @@ export function CommunityPostDetailPage() {
   }
 
   return (
-    <main data-testid="community-post-detail-page" className="min-h-screen bg-card">
+    <main data-testid="community-post-detail-page">
       <TopBar
         variant="detail"
         title={topBarTitle}

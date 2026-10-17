@@ -865,7 +865,7 @@ export function PublishPage() {
                     <select
                       value={posterGender}
                       onChange={(event) => setPosterGender(event.target.value)}
-                      className="w-full appearance-none rounded-xl bg-card px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                      className="w-full appearance-none rounded-xl bg-field px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                     >
                       <option value="">请选择性别</option>
                       {GENDER_OPTIONS.map((option) => (
@@ -889,7 +889,7 @@ export function PublishPage() {
                     inputMode="numeric"
                     value={posterAge}
                     onChange={(event) => setPosterAge(event.target.value)}
-                    className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                    className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
                   />
                 </label>
               </>
@@ -903,7 +903,7 @@ export function PublishPage() {
                 step="0.01"
                 value={price}
                 onChange={(event) => setPrice(event.target.value)}
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
             </label>
 
@@ -920,7 +920,7 @@ export function PublishPage() {
                   "×"清除按钮嵌套进主按钮里，避免"<button> 嵌套 <button>"
                   这种非法 HTML 结构，跟 activity-card.tsx 顶部注释里
                   "<a> 嵌套可交互 <button>"是同一类问题、同一个规避方式。 */}
-              <div className="flex items-center gap-1 rounded-xl bg-card px-3.5 py-3">
+              <div className="flex items-center gap-1 rounded-xl bg-field px-3.5 py-3">
                 <button
                   type="button"
                   onClick={handleOpenRegionSelect}
@@ -963,7 +963,7 @@ export function PublishPage() {
                 value={locationText}
                 onChange={(event) => setLocationText(event.target.value)}
                 maxLength={LOCATION_TEXT_MAX_LENGTH}
-                className="w-full rounded-xl bg-card px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
+                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
                 placeholder="比如：曼哈顿 / 近地铁站"
               />
             </label>
