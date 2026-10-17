@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { likeCommunityPost, unlikeCommunityPost } from "../../repositories/community-repository";
+import { track } from "../analytics/track";
 
 export interface ToggleCommunityPostLikeInput {
   userId: string;
@@ -24,6 +25,9 @@ export function useToggleCommunityPostLikeMutation() {
       } else {
         await likeCommunityPost(target);
       }
+    },
+    onSuccess: (_result, variables) => {
+      if (!variables.isCurrentlyLiked) track("content_liked", { type: "community_post" });
     },
     onSettled: (_result, _error, variables) => {
       void queryClient.invalidateQueries({ queryKey: ["community-post-likes", variables.userId] });

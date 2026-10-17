@@ -13,6 +13,7 @@ import { AppError } from "../../utils/app-error";
 import { carryRedirect } from "../../utils/auth-redirect";
 import { isLikelyEmail, isLikelyPhone, normalizePhoneDigits, phoneToShadowEmail } from "../../utils/phone-identity";
 import { useFinishAuth } from "../../router/use-finish-auth";
+import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "登录失败，请稍后重试。";
 
@@ -69,6 +70,7 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       await authService.signIn({ email: loginEmail, password });
+      track("logged_in", { method: isLikelyEmail(trimmedIdentifier) ? "email" : "phone" });
       // 注册登录简化任务卡：回到去登录之前的页面，见 router/use-finish-auth.ts。
       finishAuth();
     } catch (cause) {

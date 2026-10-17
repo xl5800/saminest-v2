@@ -15,6 +15,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { CONTACT_METHOD_OPTIONS } from "../publish/publish-validation";
 import { validateActivityInput } from "./activity-validation";
+import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
 
@@ -255,6 +256,7 @@ export function CreateActivityPage() {
         contactValue: validation.data.contactValue,
         requiresApproval: validation.data.requiresApproval
       });
+      track("content_created", { type: "activity" });
       navigate(`/activities/${created.id}`, { replace: true });
     } catch (submitError) {
       // 跟 publish-page.tsx 的 createPost 分支同一个模式：账号受限是一个

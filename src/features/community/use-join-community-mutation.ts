@@ -3,6 +3,7 @@ import { type QueryClient, useMutation, useQueryClient } from "@tanstack/react-q
 import { type JoinCommunityInput, joinCommunity } from "../../repositories/community-repository";
 import { COMMUNITY_MEMBERSHIP_QUERY_KEY } from "./use-community-membership-query";
 import { MY_COMMUNITIES_QUERY_KEY } from "./use-my-communities-query";
+import { track } from "../analytics/track";
 
 /**
  * 加入/退出社区成功后共用的缓存处理：
@@ -36,6 +37,7 @@ export function useJoinCommunityMutation() {
     mutationFn: joinCommunity,
     // 重复加入（23505 被当成功吞掉）也会走到这里，多一次轻量重新拉取，没有副作用。
     onSuccess: (_data, input) => {
+      track("community_joined", {});
       applyCommunityMembershipChange(queryClient, input, true);
     }
   });

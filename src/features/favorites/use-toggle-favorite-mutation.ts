@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { addFavorite, removeFavorite } from "../../repositories/favorites-repository";
+import { track } from "../analytics/track";
 
 export interface ToggleFavoriteInput {
   userId: string;
@@ -28,6 +29,7 @@ export function useToggleFavoriteMutation() {
       }
     },
     onSuccess: (_result, variables) => {
+      if (!variables.isCurrentlyFavorited) track("content_favorited", { type: "classified" });
       void queryClient.invalidateQueries({
         queryKey: ["favorites", variables.userId]
       });

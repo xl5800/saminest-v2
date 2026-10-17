@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { createActivityConversation } from "../../repositories/conversations-repository";
+import { track } from "../analytics/track";
 
 /**
  * 创建（或获取已有的）与活动发起人之间的私聊会话——活动详情页"联系发起人"
@@ -23,6 +24,7 @@ import { createActivityConversation } from "../../repositories/conversations-rep
  */
 export function useCreateActivityConversationMutation() {
   return useMutation({
-    mutationFn: (activityId: string) => createActivityConversation(activityId)
+    mutationFn: (activityId: string) => createActivityConversation(activityId),
+    onSuccess: () => track("contact_started", { type: "activity" })
   });
 }

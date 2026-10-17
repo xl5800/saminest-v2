@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { createProfileConversation } from "../../repositories/conversations-repository";
+import { track } from "../analytics/track";
 
 /**
  * 公开个人主页"发消息"按钮用。结构照抄
@@ -11,6 +12,7 @@ import { createProfileConversation } from "../../repositories/conversations-repo
  */
 export function useCreateProfileConversationMutation() {
   return useMutation({
-    mutationFn: (targetUserId: string) => createProfileConversation(targetUserId)
+    mutationFn: (targetUserId: string) => createProfileConversation(targetUserId),
+    onSuccess: () => track("contact_started", { type: "profile" })
   });
 }

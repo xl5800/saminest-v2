@@ -12,6 +12,7 @@ import { useCommunityBySlugQuery } from "../../features/community/use-community-
 import { useCommunityPostDetailQuery } from "../../features/community/use-community-post-detail-query";
 import { buildCommunityPostShareInput } from "../../features/share/community-share-input";
 import { useShareLink } from "../../features/share/use-share-link";
+import { useTrackContentView } from "../../features/analytics/use-track-content-view";
 import { formatRelativeTimeAgo } from "../../utils/format";
 import {
   COMMUNITY_POST_DETAIL_BODY_CLASS_NAME,
@@ -55,6 +56,7 @@ export function CommunityPostDetailPage() {
   const publishSuccessMessage = locationState?.publishSuccessMessage;
   const publishBackTo = locationState?.publishBackTo;
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
+  useTrackContentView("community_post", id, Boolean(post));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { data: community } = useCommunityBySlugQuery(post?.communitySlug);
   // 顶栏只显示所属社区的名字（不再带"· N 位成员"）。
@@ -135,7 +137,7 @@ export function CommunityPostDetailPage() {
           <button
             type="button"
             aria-label="分享"
-            onClick={() => void share(buildCommunityPostShareInput(post))}
+            onClick={() => void share(buildCommunityPostShareInput(post), "community_post")}
             className="flex flex-col items-center gap-1 text-text-muted"
           >
             <Share2 size={22} aria-hidden="true" />

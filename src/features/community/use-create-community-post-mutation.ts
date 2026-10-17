@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { createCommunityPost } from "../../repositories/community-repository";
+import { track } from "../analytics/track";
 
 export function useCreateCommunityPostMutation() {
   const queryClient = useQueryClient();
@@ -10,6 +11,7 @@ export function useCreateCommunityPostMutation() {
     // 以 ["community-posts"] 开头，新帖子要让它们全部失效，不能只失效发帖所在
     // 社区那一份。
     onSuccess: () => {
+      track("content_created", { type: "community_post" });
       void queryClient.invalidateQueries({ queryKey: ["community-posts"] });
     }
   });

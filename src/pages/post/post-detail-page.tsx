@@ -19,6 +19,7 @@ import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatPrice, formatRelativeTimeAgo, isPriceUnset } from "../../utils/format";
 import { useGoBack } from "../../router/use-go-back";
 import { useShareLink } from "../../features/share/use-share-link";
+import { useTrackContentView } from "../../features/analytics/use-track-content-view";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -175,6 +176,7 @@ export function PostDetailPage() {
   const publishSuccessMessage = state?.publishSuccessMessage;
 
   const { data, isPending, isError } = usePostDetailQuery(id ?? "");
+  useTrackContentView("classified", id, Boolean(data));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   // 任务卡3：点击底部工具栏"分享"图标弹出的自定义弹层（复制链接/分享到
   // 微信/举报），见 post-share-action-sheet.tsx。
@@ -221,8 +223,10 @@ export function PostDetailPage() {
     await share({
       title: post.title,
       text: formatPrice(post.priceAmount, post.priceLabel, post.currencyCode),
-      url: `${PRODUCTION_ORIGIN}/post/${id}`
-    });
+      // 数据分析任务卡：跟找搭子活动、社区帖子一样带上 ?s= 分享时间戳——
+      // 既让微信每次重新抓卡片，也让 track.ts 能认出"从分享链接打开"。
+      url: `${PRODUCTION_ORIGIN}/post/${id}?s=${Date.now()}`
+    }, "classified");
   }
 
   const priceUnset = data ? isPriceUnset(data.priceAmount, data.priceLabel) : true;

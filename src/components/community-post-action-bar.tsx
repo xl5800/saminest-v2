@@ -46,7 +46,10 @@ export function CommunityPostActionBar({
   const { share, shareUi } = useShareLink();
 
   function handleShare(): void {
-    void share(buildCommunityPostShareInput({ id: communityPostId, title, body, communityName }));
+    void share(
+      buildCommunityPostShareInput({ id: communityPostId, title, body, communityName }),
+      "community_post"
+    );
   }
 
   return (

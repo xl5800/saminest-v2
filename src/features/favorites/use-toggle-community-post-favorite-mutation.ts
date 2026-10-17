@@ -4,6 +4,7 @@ import {
   addCommunityPostFavorite,
   removeCommunityPostFavorite
 } from "../../repositories/favorites-repository";
+import { track } from "../analytics/track";
 
 export interface ToggleCommunityPostFavoriteInput {
   userId: string;
@@ -36,6 +37,7 @@ export function useToggleCommunityPostFavoriteMutation() {
       }
     },
     onSuccess: (_result, variables) => {
+      if (!variables.isCurrentlyFavorited) track("content_favorited", { type: "community_post" });
       void queryClient.invalidateQueries({
         queryKey: ["community-post-favorites", variables.userId]
       });

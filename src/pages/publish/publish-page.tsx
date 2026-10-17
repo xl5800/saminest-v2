@@ -38,6 +38,7 @@ import {
   TITLE_MAX_LENGTH,
   validatePublishInput
 } from "./publish-validation";
+import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
 const PUBLISH_SUCCESS_MESSAGE = "发布成功，等待审核";
@@ -639,6 +640,7 @@ export function PublishPage() {
           posterGender: validation.data.posterGender
         });
         resolvedPostId = created.id;
+        track("content_created", { type: "classified" });
       } catch (submitError) {
         // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：
         // 账号受限是一个明确、可操作的失败原因（重试没有用，需要联系

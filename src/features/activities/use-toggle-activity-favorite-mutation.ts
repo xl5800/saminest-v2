@@ -4,6 +4,7 @@ import {
   addActivityFavorite,
   removeActivityFavorite
 } from "../../repositories/favorites-repository";
+import { track } from "../analytics/track";
 
 export interface ToggleActivityFavoriteInput {
   userId: string;
@@ -30,6 +31,7 @@ export function useToggleActivityFavoriteMutation() {
       }
     },
     onSuccess: (_result, variables) => {
+      if (!variables.isCurrentlyFavorited) track("content_favorited", { type: "activity" });
       void queryClient.invalidateQueries({
         queryKey: ["activity-favorites", variables.userId]
       });

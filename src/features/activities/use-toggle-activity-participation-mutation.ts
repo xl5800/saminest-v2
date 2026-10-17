@@ -4,6 +4,7 @@ import { createActivityConversation } from "../../repositories/conversations-rep
 import { joinActivity, leaveActivity } from "../../repositories/activities-repository";
 import { sendMessage } from "../../repositories/messages-repository";
 import { getMyProfile } from "../../repositories/profiles-repository";
+import { track } from "../analytics/track";
 
 export interface ToggleActivityParticipationInput {
   activityId: string;
@@ -112,6 +113,7 @@ export function useToggleActivityParticipationMutation() {
       }
     },
     onSuccess: (_result, variables) => {
+      if (!variables.isCurrentlyJoined) track("activity_joined", {});
       void queryClient.invalidateQueries({
         queryKey: ["activity-detail", variables.activityId]
       });

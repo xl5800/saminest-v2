@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { type ContentType, track } from "../analytics/track";
 import { shareLink, type ShareLinkInput } from "./share-link";
 
 const COPIED_TOAST_MS = 2000;
@@ -19,7 +20,9 @@ export function useShareLink() {
     return () => clearTimeout(timer);
   }, [showCopied]);
 
-  async function share(input: ShareLinkInput): Promise<void> {
+  /** analyticsType：数据分析任务卡，记 share_clicked 时区分分享的是什么。 */
+  async function share(input: ShareLinkInput, analyticsType: ContentType | "community"): Promise<void> {
+    track("share_clicked", { type: analyticsType });
     let result;
     try {
       result = await shareLink(input);

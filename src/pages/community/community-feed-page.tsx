@@ -206,7 +206,7 @@ export function CommunityFeedPage() {
           <button
             type="button"
             aria-label="分享"
-            onClick={() => void share(buildCommunityShareInput(community))}
+            onClick={() => void share(buildCommunityShareInput(community), "community")}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-bg text-text"
           >
             <Share2 size={18} aria-hidden="true" />

@@ -1,6 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 
 import { createDirectConversation } from "../../repositories/conversations-repository";
+import { track } from "../analytics/track";
 
 /**
  * 创建（或获取已有的）与帖子发布者之间的私聊会话。这一轮没有"会话列表"
@@ -9,6 +10,7 @@ import { createDirectConversation } from "../../repositories/conversations-repos
  */
 export function useCreateDirectConversationMutation() {
   return useMutation({
-    mutationFn: (postId: string) => createDirectConversation(postId)
+    mutationFn: (postId: string) => createDirectConversation(postId),
+    onSuccess: () => track("contact_started", { type: "classified" })
   });
 }

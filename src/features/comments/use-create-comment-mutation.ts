@@ -4,6 +4,7 @@ import {
   createComment,
   type CreateCommentInput
 } from "../../repositories/comments-repository";
+import { track } from "../analytics/track";
 
 /**
  * 发表评论/回复（parentId 是 null 还是某条评论的 id，由调用方决定，这个
@@ -36,6 +37,14 @@ export function useCreateCommentMutation() {
   return useMutation({
     mutationFn: (input: CreateCommentInput) => createComment(input),
     onSuccess: (_data, variables) => {
+      track("comment_created", {
+        type:
+          "postId" in variables
+            ? "classified"
+            : "communityPostId" in variables
+              ? "community_post"
+              : "activity"
+      });
       if ("postId" in variables) {
         void queryClient.invalidateQueries({
           queryKey: ["post-comments", variables.postId]

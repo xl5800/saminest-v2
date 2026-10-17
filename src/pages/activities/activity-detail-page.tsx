@@ -10,6 +10,7 @@ import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatLocationDisplayName } from "../../data/us-states";
 import { useActivityDetailQuery } from "../../features/activities/use-activity-detail-query";
+import { useTrackContentView } from "../../features/analytics/use-track-content-view";
 import { useActivityParticipantsQuery } from "../../features/activities/use-activity-participants-query";
 import { useActivityParticipationAction } from "../../features/activities/use-activity-participation-action";
 import { usePendingActivityParticipantsQuery } from "../../features/activities/use-pending-activity-participants-query";
@@ -236,6 +237,7 @@ export function ActivityDetailPage() {
   const { share, shareUi } = useShareLink();
 
   const { data, isPending, isError } = useActivityDetailQuery(id ?? "");
+  useTrackContentView("activity", id, Boolean(data));
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
 
   const isOrganizer = !!session && !!data && session.user.id === data.organizerId;
@@ -281,7 +283,7 @@ export function ActivityDetailPage() {
       // 都是一个新链接，微信就会重新抓一次标题/描述/图片。这个参数页面
       // 本身不读，只是让链接不一样。
       url: `${PRODUCTION_ORIGIN}/activities/${id}?s=${Date.now()}`
-    });
+    }, "activity");
   }
 
   return (

@@ -663,10 +663,11 @@ describe("PostDetailPage", () => {
       fireEvent.click(screen.getByRole("button", { name: /分享到微信/ }));
 
       await waitFor(() => {
+        // 数据分析任务卡：链接末尾带 ?s= 分享时间戳，跟活动/社区帖子一致。
         expect(shareMock).toHaveBeenCalledWith({
           title: "Sunny room near metro",
           text: "USD 1,200",
-          url: "https://www.saminest.com/post/post-1"
+          url: expect.stringMatching(/^https:\/\/www\.saminest\.com\/post\/post-1\?s=\d+$/)
         });
       });
       // 分享到微信点击后弹层立即关闭——系统分享面板会覆盖在上面。

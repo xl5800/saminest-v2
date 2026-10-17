@@ -13,6 +13,7 @@ import { AppError } from "../../utils/app-error";
 import { carryRedirect } from "../../utils/auth-redirect";
 import { MIN_PASSWORD_LENGTH, validateRegisterInput } from "./register-validation";
 import { useFinishAuth } from "../../router/use-finish-auth";
+import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "注册失败，请稍后重试。";
 
@@ -62,6 +63,7 @@ export function RegisterPage() {
     setSubmitting(true);
     try {
       await authService.signUp(validation.data);
+      track("signed_up", { method: "phone" in validation.data ? "phone" : "email" });
       // 注册登录简化任务卡：回到去登录之前的页面，见 router/use-finish-auth.ts。
       finishAuth();
     } catch (cause) {

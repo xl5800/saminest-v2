@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import { App } from "./App";
 import { initializeMobileShell } from "./app/mobile-bootstrap";
+import { initAnalytics } from "./features/analytics/track";
 import "./index.css";
 
 createRoot(document.getElementById("root")!).render(
@@ -12,3 +13,4 @@ createRoot(document.getElementById("root")!).render(
 );
 
 void initializeMobileShell();
+initAnalytics();
