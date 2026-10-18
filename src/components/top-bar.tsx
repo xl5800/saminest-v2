@@ -337,10 +337,10 @@ export function TopBar(props: TopBarProps) {
                 onClick={props.onRegionClick}
                 className="flex min-w-0 shrink items-center gap-1 text-left text-text"
               >
-                <span className="truncate text-xl font-bold leading-tight">
+                <span className="truncate text-[17px] font-semibold leading-tight">
                   {props.regionLabel ?? "选择地区"}
                 </span>
-                <ChevronDown size={20} aria-hidden="true" className="shrink-0" />
+                <ChevronDown size={16} aria-hidden="true" className="shrink-0" />
               </button>
             ) : (
               <span className="shrink-0 text-xl font-extrabold leading-tight tracking-wide text-primary">

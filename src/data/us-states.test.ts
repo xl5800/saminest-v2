@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatSelectedRegionLabel, formatStateLabel, formatStateLabelByCode, US_STATES } from "./us-states";
+import { formatSelectedRegionLabel, formatShortRegionLabel, formatStateLabel, formatStateLabelByCode, US_STATES } from "./us-states";
 
 describe("US_STATES", () => {
   it("has exactly 51 entries (50 states + DC)", () => {
@@ -112,5 +112,21 @@ describe("formatSelectedRegionLabel", () => {
         cityName: "Washington, DC"
       })
     ).toBe("Washington, DC");
+  });
+});
+
+describe("formatShortRegionLabel", () => {
+  it("shows the Chinese state name without the state code or 州", () => {
+    expect(formatShortRegionLabel({ stateCode: "VA", cityName: null })).toBe("弗吉尼亚");
+    expect(formatShortRegionLabel({ stateCode: "MD", cityName: null })).toBe("马里兰");
+  });
+
+  it("keeps names that don't end in 州 (DC) as they are", () => {
+    expect(formatShortRegionLabel({ stateCode: "DC", cityName: null })).toBe("哥伦比亚特区");
+  });
+
+  it("shows just the city name when a city is selected", () => {
+    expect(formatShortRegionLabel({ stateCode: "VA", cityName: "Woodbridge" })).toBe("Woodbridge");
+    expect(formatShortRegionLabel({ stateCode: "DC", cityName: "Washington, DC" })).toBe("Washington");
   });
 });

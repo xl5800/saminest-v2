@@ -79,6 +79,15 @@ describe("HomePage (four category tabs)", () => {
     expect(navigateMock).toHaveBeenCalledWith("/search");
   });
 
+  it("shows a short Chinese region name (no state code, no 州) on the left", () => {
+    useSelectedRegionStore.setState({
+      selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
+    });
+    renderWithProviders(<HomePage />);
+
+    expect(screen.getByRole("button", { name: "弗吉尼亚" })).toBeInTheDocument();
+  });
+
   it("navigates to the region picker from the region title (placeholder when no region is selected)", () => {
     renderWithProviders(<HomePage />);
 

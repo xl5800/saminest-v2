@@ -150,3 +150,19 @@ export function formatSelectedRegionLabel(region: {
   const alreadyHasStateCode = region.cityName.trim().endsWith(`, ${region.stateCode}`);
   return alreadyHasStateCode ? region.cityName : `${region.cityName}, ${region.stateCode}`;
 }
+
+/**
+ * 首页顶栏用的短地区名（首页改版）：只显示中文名，不带州代码、不带"州"字——
+ * 选了州显示"弗吉尼亚"，选了城市显示城市名（"Woodbridge"，去掉", VA"）。
+ * 其它页面仍然用上面的 formatSelectedRegionLabel（"VA 弗吉尼亚州"）。
+ */
+export function formatShortRegionLabel(region: { stateCode: string; cityName: string | null }): string {
+  if (region.cityName) {
+    const suffix = `, ${region.stateCode}`;
+    const city = region.cityName.trim();
+    return city.endsWith(suffix) ? city.slice(0, -suffix.length) : city;
+  }
+  const state = US_STATES.find((candidate) => candidate.code === region.stateCode);
+  if (!state) return region.stateCode;
+  return state.nameZh.endsWith("州") ? state.nameZh.slice(0, -1) : state.nameZh;
+}

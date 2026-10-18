@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { hideSplashScreen } from "../../app/splash-screen";
 
 import { TopBar } from "../../components/top-bar";
-import { formatSelectedRegionLabel } from "../../data/us-states";
+import { formatShortRegionLabel } from "../../data/us-states";
 import { ActivityFeed } from "../../features/activities/activity-feed";
 import { useCategoriesQuery } from "../../features/categories/use-categories-query";
 import {
@@ -267,7 +267,7 @@ export function HomePage() {
       <TopBar
         variant="home"
         hideBrand
-        regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
+        regionLabel={selectedRegion ? formatShortRegionLabel(selectedRegion) : null}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onSearchClick={() => navigate(SEARCH_PATH)}
         bottomSlot={
