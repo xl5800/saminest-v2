@@ -41,10 +41,13 @@ export function ActivityFeed({ searchQuery = "" }: { searchQuery?: string }) {
     ? (activities ?? []).filter((activity) => activity.title.toLowerCase().includes(trimmedQuery))
     : activities;
 
+  // 首页改版：频道筛选跟首页"全部 / 招聘 / 求职"那排小筛选用同一套样式
+  // （高 32px、14px 字、选中浅蓝底蓝字、未选中浅灰底），原来是 44px 高的
+  // 实心蓝胶囊，放在首页"找搭子"标签里跟其它标签的筛选大小不一致。
   const inactivePillClassName =
-    "flex h-11 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted";
+    "flex h-8 shrink-0 items-center rounded-full bg-field px-3.5 text-sm whitespace-nowrap text-text-body";
   const activePillClassName =
-    "flex h-11 items-center justify-center rounded-full px-4 text-sm whitespace-nowrap bg-accent text-white font-semibold";
+    "flex h-8 shrink-0 items-center rounded-full bg-primary-light px-3.5 text-sm font-semibold whitespace-nowrap text-primary";
 
   // 08 号卡 8.4：选中了某个州（且没有额外叠加频道筛选）但这个州压根没有
   // 任何活动时，展示专门的"发起第一个"引导，而不是通用的"换个筛选条件试试"
@@ -61,7 +64,7 @@ export function ActivityFeed({ searchQuery = "" }: { searchQuery?: string }) {
 
   return (
     <>
-      <nav aria-label="频道筛选" className="mb-2 flex gap-2 overflow-x-auto py-1">
+      <nav aria-label="频道筛选" className="-mx-4 mb-1 flex gap-2 overflow-x-auto px-4 pb-2 pt-3">
         <button
           type="button"
           aria-current={channel === "" ? "page" : undefined}

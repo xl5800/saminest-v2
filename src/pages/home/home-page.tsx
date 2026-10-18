@@ -1,3 +1,4 @@
+import { Briefcase, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -19,11 +20,11 @@ const SEARCH_PATH = "/search";
 
 export type HomeTab = "jobs" | "housing" | "used" | "buddies";
 
-export const HOME_TABS: Array<{ key: HomeTab; label: string }> = [
-  { key: "jobs", label: "招聘求职" },
-  { key: "housing", label: "房屋租售" },
-  { key: "used", label: "二手闲置" },
-  { key: "buddies", label: "找搭子" }
+export const HOME_TABS: Array<{ key: HomeTab; label: string; Icon: LucideIcon }> = [
+  { key: "jobs", label: "招聘求职", Icon: Briefcase },
+  { key: "housing", label: "房屋租售", Icon: Home },
+  { key: "used", label: "二手闲置", Icon: ShoppingBag },
+  { key: "buddies", label: "找搭子", Icon: Handshake }
 ];
 
 const DEFAULT_TAB: HomeTab = "jobs";
@@ -255,7 +256,7 @@ export function HomePage() {
         return <div className="pt-2">{renderPostTab("used", "grid")}</div>;
       case "buddies":
         return (
-          <div className="mx-auto max-w-2xl px-4 pt-2">
+          <div className="mx-auto max-w-2xl px-4">
             <ActivityFeed />
           </div>
         );
@@ -281,10 +282,13 @@ export function HomePage() {
                   role="tab"
                   aria-selected={selected}
                   onClick={() => selectTab(item.key)}
-                  className={`relative flex-1 py-2.5 text-[15px] whitespace-nowrap ${
-                    selected ? "font-semibold text-text" : "text-text-muted"
+                  className={`relative flex flex-1 flex-col items-center gap-1 pb-2.5 pt-1.5 text-[13px] whitespace-nowrap ${
+                    selected ? "font-semibold text-primary" : "text-text-muted"
                   }`}
                 >
+                  {/* 每个标签配一个线性图标（跟底部导航同一套 lucide 图标），
+                      选中时图标和文字一起变蓝、线条加粗。 */}
+                  <item.Icon aria-hidden="true" size={24} strokeWidth={selected ? 2.25 : 1.75} />
                   {item.label}
                   {selected ? (
                     <span
