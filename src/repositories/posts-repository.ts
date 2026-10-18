@@ -1,6 +1,11 @@
 import { getSupabaseClient } from "../integrations/supabase/client";
 import type { TablesInsert, TablesUpdate } from "../types/database.generated";
 import { AppError } from "../utils/app-error";
+import {
+  type JobFieldsInput,
+  NEGOTIABLE_SALARY_LABEL,
+  normalizeJobPerks
+} from "../features/posts/job-fields";
 
 export interface PostListItem {
   id: string;
@@ -37,6 +42,12 @@ export interface PostFeedItem extends PostListItem {
   posterAge: number | null;
   /** 31 号卡新增：发帖人自己选择的性别，来自 posts.poster_gender，同上。 */
   posterGender: string | null;
+  /** 招聘求职任务卡新增：分类 slug（首页"招聘求职"标签要区分招聘/求职），
+   *  以及工作帖的三个结构化字段，其它分类恒为 null / 空数组。 */
+  categorySlug: string | null;
+  salaryUnit: string | null;
+  employmentType: string | null;
+  jobPerks: string[];
 }
 
 export interface ListApprovedPostsInput {
@@ -63,6 +74,9 @@ export interface ListApprovedPostsInput {
    *  这几个不属于"推荐混合发现流"的列表场景不传，求租帖子在那些地方正常
    *  展示，不受影响。 */
   excludeCategoryId?: string;
+  /** 招聘求职任务卡新增：同时查几个分类（首页"招聘求职"标签的"全部"=
+   *  招聘 + 求职两个分类）。跟 categoryId 二选一；两个都传时 categoryId 优先。 */
+  categoryIds?: string[];
   page: number;
   pageSize: number;
 }
@@ -92,9 +106,12 @@ interface PostFeedRow {
   // 31 号卡新增，见 PostFeedItem.posterAge/posterGender 的注释。
   poster_age: number | null;
   poster_gender: string | null;
+  salary_unit: string | null;
+  employment_type: string | null;
+  job_perks: string[] | null;
   location: { name: string } | null;
   location_text: string | null;
-  category: { name_zh: string } | null;
+  category: { name_zh: string; slug: string } | null;
   // 31 号卡新增 avatar_url——求租 Tab 的文字卡片要展示发帖人小头像，取法
   // 照抄 getPostDetail() 的 author:profiles(display_name, avatar_url)。
   author: { display_name: string; avatar_url: string | null } | null;
@@ -219,7 +236,8 @@ function sanitizeSearchTerm(raw: string): string {
 export async function listApprovedPosts(
   input: ListApprovedPostsInput
 ): Promise<ListApprovedPostsResult> {
-  const { categoryId, searchQuery, stateCode, authorId, excludeCategoryId, page, pageSize } = input;
+  const { categoryId, categoryIds, searchQuery, stateCode, authorId, excludeCategoryId, page, pageSize } =
+    input;
   const from = page * pageSize;
   const to = from + pageSize;
 
@@ -235,7 +253,7 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      `id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, ${locationSelect}, location_text, category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)`
+      `id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, ${locationSelect}, location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)`
     )
     .eq("status", "approved")
     .is("deleted_at", null)
@@ -245,13 +263,15 @@ export async function listApprovedPosts(
 
   if (categoryId) {
     query = query.eq("category_id", categoryId);
+  } else if (categoryIds && categoryIds.length > 0) {
+    query = query.in("category_id", categoryIds);
   }
 
   // 31 号卡：只有在没有指定 categoryId 的"推荐"这种未筛选场景，才把求租
   // 分类排除掉——categoryId 有值时（不管是不是求租分类自己）完全忽略
   // excludeCategoryId，两个条件天然不会同时需要，见 ListApprovedPostsInput
   // 上面这个字段的注释。
-  if (!categoryId && excludeCategoryId) {
+  if (!categoryId && !categoryIds?.length && excludeCategoryId) {
     query = query.neq("category_id", excludeCategoryId);
   }
 
@@ -296,7 +316,11 @@ export async function listApprovedPosts(
       favoriteCount: row.favorite_count,
       commentCount: row.comment_count,
       posterAge: row.poster_age,
-      posterGender: row.poster_gender
+      posterGender: row.poster_gender,
+      categorySlug: row.category?.slug ?? null,
+      salaryUnit: row.salary_unit,
+      employmentType: row.employment_type,
+      jobPerks: normalizeJobPerks(row.job_perks)
     })),
     hasNextPage
   };
@@ -373,6 +397,12 @@ export interface PostDetail {
    *  发布时间"不变，不重复。 */
   posterAge: number | null;
   posterGender: string | null;
+  /** 招聘求职任务卡新增：详情页按分类决定显示工作信息块、隐藏评论区；
+   *  编辑表单回填工作字段。 */
+  categorySlug: string | null;
+  salaryUnit: string | null;
+  employmentType: string | null;
+  jobPerks: string[];
 }
 
 interface PostDetailImageRow {
@@ -400,8 +430,11 @@ interface PostDetailRow {
   comment_count: number;
   poster_age: number | null;
   poster_gender: string | null;
+  salary_unit: string | null;
+  employment_type: string | null;
+  job_perks: string[] | null;
   location: { name: string } | null;
-  category: { name_zh: string } | null;
+  category: { name_zh: string; slug: string } | null;
   author: { display_name: string; avatar_url: string | null } | null;
   post_images: PostDetailImageRow[] | null;
 }
@@ -440,7 +473,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -487,7 +520,11 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     images,
     commentCount: data.comment_count,
     posterAge: data.poster_age,
-    posterGender: data.poster_gender
+    posterGender: data.poster_gender,
+    categorySlug: data.category?.slug ?? null,
+    salaryUnit: data.salary_unit,
+    employmentType: data.employment_type,
+    jobPerks: normalizeJobPerks(data.job_perks)
   };
 }
 
@@ -641,6 +678,26 @@ export interface CreatePostInput {
    *  注释。 */
   posterAge: number | null;
   posterGender: string | null;
+  /** 招聘求职任务卡新增：只有招聘 / 求职分类传，其它分类不传或传 null。 */
+  job?: JobFieldsInput | null;
+}
+
+/**
+ * 招聘求职任务卡：工作字段 → posts 的列。不是工作帖（job 为 null）时三列清空，
+ * price_label 不写（不碰其它分类原有的 price_label）；工作帖选了"面议"时
+ * price_label 写"面议"、price_amount 由调用方传 null，没选面议时清掉
+ * price_label，让列表显示数字薪资。
+ */
+function jobColumns(job: JobFieldsInput | null | undefined) {
+  if (!job) {
+    return { salary_unit: null, employment_type: null, job_perks: [] as string[] };
+  }
+  return {
+    salary_unit: job.negotiable ? null : job.salaryUnit,
+    employment_type: job.employmentType,
+    job_perks: normalizeJobPerks(job.perks),
+    price_label: job.negotiable ? NEGOTIABLE_SALARY_LABEL : null
+  };
 }
 
 export interface CreatePostResult {
@@ -672,6 +729,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     contact_value: input.contactValue,
     poster_age: input.posterAge,
     poster_gender: input.posterGender,
+    ...jobColumns(input.job),
     status: "pending"
   };
 
@@ -876,6 +934,8 @@ export interface UpdatePostInput {
   /** 31 号卡新增，见 CreatePostInput.posterAge/posterGender 的注释。 */
   posterAge: number | null;
   posterGender: string | null;
+  /** 招聘求职任务卡新增，见 CreatePostInput.job。 */
+  job?: JobFieldsInput | null;
 }
 
 /**
@@ -903,7 +963,8 @@ export async function updatePost(input: UpdatePostInput): Promise<void> {
     contact_method: input.contactMethod,
     contact_value: input.contactValue,
     poster_age: input.posterAge,
-    poster_gender: input.posterGender
+    poster_gender: input.posterGender,
+    ...jobColumns(input.job)
   };
 
   if (input.currentStatus === "approved") {

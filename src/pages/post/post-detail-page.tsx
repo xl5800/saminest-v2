@@ -17,6 +17,13 @@ import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import type { PostDetail } from "../../repositories/posts-repository";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatPrice, formatRelativeTimeAgo, isPriceUnset } from "../../utils/format";
+import {
+  JOB_SEEKING_CATEGORY_SLUG,
+  employmentTypeLabel,
+  formatSalary,
+  isJobCategorySlug,
+  jobPerkLabels
+} from "../../features/posts/job-fields";
 import { useGoBack } from "../../router/use-go-back";
 import { useShareLink } from "../../features/share/use-share-link";
 import { useTrackContentView } from "../../features/analytics/use-track-content-view";
@@ -230,6 +237,14 @@ export function PostDetailPage() {
   }
 
   const priceUnset = data ? isPriceUnset(data.priceAmount, data.priceLabel) : true;
+  // 招聘求职任务卡：工作帖显示薪资（带单位、不填就是面议）+ 工作类型 / 福利
+  // 标签，并且不显示留言区（工作信息直接私信联系，不在公开留言里谈）。
+  const isJobPost = Boolean(data && isJobCategorySlug(data.categorySlug));
+  const jobTags = data && isJobPost
+    ? [employmentTypeLabel(data.employmentType), ...jobPerkLabels(data.jobPerks)].filter(
+        (tag): tag is string => Boolean(tag)
+      )
+    : [];
   const hasImmersiveHeader = Boolean(data && data.images.length > 0);
 
   // 任务卡3：沉浸式头图——只在原生壳（App，不是网页版）+ 帖子确实有图片
@@ -350,7 +365,13 @@ export function PostDetailPage() {
             共用同一个 sr-only 播报文字，不重复播报两次。 */}
         {isPending ? <Skeleton className="h-[50dvh] w-full rounded-none" /> : null}
 
-        <div className="mx-auto max-w-2xl px-4 py-6">
+        {/* 招聘求职任务卡：没有图片的帖子（工作帖基本都没图）正文会顶到最上面，
+            被左上角固定的关闭按钮压住标题——这种情况往下让出关闭按钮的高度。 */}
+        <div
+          className={`mx-auto max-w-2xl px-4 py-6 ${
+            hasImmersiveHeader ? "" : "pt-[calc(3.75rem+env(safe-area-inset-top))]"
+          }`}
+        >
           <WechatBrowserBanner />
 
           {publishSuccessMessage ? (
@@ -399,12 +420,32 @@ export function PostDetailPage() {
             <div className="space-y-4">
               <div>
                 <h1 className="text-lg font-semibold text-text">{data.title}</h1>
-                {priceUnset ? null : (
+                {isJobPost ? (
+                  <p className="mt-1 text-2xl font-bold text-text">
+                    {data.categorySlug === JOB_SEEKING_CATEGORY_SLUG ? (
+                      <span className="mr-1 text-base font-semibold text-text-muted">期望</span>
+                    ) : null}
+                    {formatSalary(data.priceAmount, data.priceLabel, data.salaryUnit)}
+                  </p>
+                ) : priceUnset ? null : (
                   <p className="mt-1 text-2xl font-bold text-text">
                     {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
                   </p>
                 )}
               </div>
+
+              {jobTags.length > 0 ? (
+                <ul aria-label="工作信息" className="flex flex-wrap gap-2">
+                  {jobTags.map((tag) => (
+                    <li
+                      key={tag}
+                      className="rounded-full bg-primary-light px-3 py-1 text-sm font-medium text-primary"
+                    >
+                      {tag}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
 
               <p className="text-sm text-text-muted">
                 {data.locationName ? formatLocationDisplayName(data.locationName) : "地区未填写"}
@@ -436,7 +477,7 @@ export function PostDetailPage() {
             </div>
           ) : null}
 
-          {id ? <CommentSection postId={id} /> : null}
+          {id && !isJobPost ? <CommentSection postId={id} /> : null}
 
           {lightboxIndex !== null ? (
             <ImageLightbox

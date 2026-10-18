@@ -27,6 +27,11 @@ export interface PendingPostFormDraft {
    *  字段被清空。 */
   posterAge: string;
   posterGender: string;
+  /** 招聘求职任务卡新增：工作帖的薪资单位 / 工作类型 / 福利，同样要在跳转
+   *  /region-select 前存下来。可选：其它分类不用传。 */
+  jobSalaryUnit?: string;
+  jobEmploymentType?: string;
+  jobPerks?: string[];
   images: File[];
   /** 编辑模式下已经上传的图片——一并存进草稿，是为了在恢复草稿时能整个
    *  跳过 publish-page.tsx 那个"从 existingPost 回填表单"的 effect（见该

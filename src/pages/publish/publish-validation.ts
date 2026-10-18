@@ -19,6 +19,12 @@
  * （create-activity-page.tsx / activity-validation.ts）还在用它。
  */
 
+import {
+  type JobFieldsInput,
+  isEmploymentType,
+  isSalaryUnit,
+  normalizeJobPerks
+} from "../../features/posts/job-fields";
 import { MAX_AGE, MIN_AGE } from "../profile/edit-profile-validation";
 
 /**
@@ -104,6 +110,9 @@ export interface PublishFormInput {
    *  的处理），不需要一个额外的"是不是求租分类"参数来切换校验逻辑。 */
   posterAge: string;
   posterGender: string;
+  /** 招聘求职任务卡新增：只有招聘 / 求职分类传（表单原始值），其它分类不传。
+   *  工作帖的薪资数字仍然走上面的 price（不填 = 面议）。 */
+  job?: { salaryUnit: string; employmentType: string; perks: string[] } | null;
 }
 
 export interface PublishFormData {
@@ -117,6 +126,7 @@ export interface PublishFormData {
   contactValue: string | null;
   posterAge: number | null;
   posterGender: string | null;
+  job: JobFieldsInput | null;
 }
 
 export interface PublishValidationError {
@@ -198,16 +208,37 @@ export function validatePublishInput(
     );
   }
 
+  // 招聘求职任务卡：工作帖的 price 是薪资，报错文案跟着改叫"薪资"。
+  const priceNoun = input.job ? "薪资" : "价格";
   let priceAmount: number | null = null;
   if (priceRaw) {
     const parsed = Number(priceRaw);
     if (!Number.isFinite(parsed)) {
-      return fail("PUBLISH_PRICE_INVALID", "价格必须是数字。");
+      return fail("PUBLISH_PRICE_INVALID", `${priceNoun}必须是数字。`);
     }
     if (parsed < 0) {
-      return fail("PUBLISH_PRICE_NEGATIVE", "价格不能小于 0。");
+      return fail("PUBLISH_PRICE_NEGATIVE", `${priceNoun}不能小于 0。`);
     }
     priceAmount = parsed;
+  }
+
+  // 招聘求职任务卡：工作类型必选；薪资不填就是面议（不另设"面议"开关）；
+  // 填了薪资才需要单位。取值范围跟数据库 check 约束一致，见 job-fields.ts。
+  let job: JobFieldsInput | null = null;
+  if (input.job) {
+    if (!isEmploymentType(input.job.employmentType)) {
+      return fail("PUBLISH_EMPLOYMENT_TYPE_REQUIRED", "请选择工作类型。");
+    }
+    const negotiable = priceAmount === null;
+    if (!negotiable && !isSalaryUnit(input.job.salaryUnit)) {
+      return fail("PUBLISH_SALARY_UNIT_REQUIRED", "请选择薪资单位。");
+    }
+    job = {
+      salaryUnit: !negotiable && isSalaryUnit(input.job.salaryUnit) ? input.job.salaryUnit : null,
+      employmentType: input.job.employmentType,
+      perks: normalizeJobPerks(input.job.perks),
+      negotiable
+    };
   }
 
   // 31 号卡：性别/年龄"可选、不强制"——留空直接通过，不因为是求租分类就
@@ -246,7 +277,8 @@ export function validatePublishInput(
       contactMethod: "message",
       contactValue: null,
       posterAge,
-      posterGender: posterGenderRaw || null
+      posterGender: posterGenderRaw || null,
+      job
     },
     error: null
   };

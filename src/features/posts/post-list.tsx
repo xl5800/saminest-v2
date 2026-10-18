@@ -1,11 +1,22 @@
 import { MapPin } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 
 import { PostThumbnail } from "../../components/post-thumbnail";
 import { Skeleton } from "../../components/skeleton";
 import { formatLocationDisplayName } from "../../data/us-states";
-import { formatPrice, formatWantedPosterMeta, isPriceUnset } from "../../utils/format";
+import {
+  formatPrice,
+  formatRelativeTimeAgo,
+  formatWantedPosterMeta,
+  isPriceUnset
+} from "../../utils/format";
+import {
+  JOB_SEEKING_CATEGORY_SLUG,
+  employmentTypeLabel,
+  formatSalary,
+  jobPerkLabels
+} from "./job-fields";
 import { usePostsInfiniteQuery } from "./use-posts-query";
 
 // 高频页面骨架屏任务卡：占位卡片数量——网格 6 个（两列 x 3 行，铺满一屏
@@ -47,7 +58,13 @@ export interface PostListProps {
    *  （variant="grid"，也是不传时的默认值）——两种布局的容器结构本来就
    *  不一样，不是在现有 .map() 里加 if/else 判断每张卡片，而是整个渲染
    *  路径分两套，见下面组件内部的实现。 */
-  variant?: "grid" | "wanted";
+  variant?: "grid" | "wanted" | "job";
+  /** 招聘求职任务卡新增：同时查几个分类（首页"招聘求职"标签的"全部"），
+   *  透传给 usePostsInfiniteQuery。 */
+  categoryIds?: string[];
+  /** 招聘求职任务卡新增：没有内容（且不是在搜索）时显示的自定义空状态，
+   *  传了就用它，优先于下面的地区空状态 / "暂无帖子"。 */
+  emptyState?: ReactNode;
 }
 
 /**
@@ -164,10 +181,12 @@ export function PostList({
   onPublishClick,
   authorId,
   excludeCategoryId,
-  variant = "grid"
+  variant = "grid",
+  categoryIds,
+  emptyState
 }: PostListProps) {
   const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode, authorId, excludeCategoryId });
+    usePostsInfiniteQuery({ categoryId, searchQuery, stateCode, authorId, excludeCategoryId, categoryIds });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
 
@@ -196,6 +215,20 @@ export function PostList({
   // 不能共用同一套占位。role="status" + sr-only 文字保留原来的无障碍
   // 播报，骨架块本身是纯视觉装饰（aria-hidden，Skeleton 组件已内置）。
   if (isPending) {
+    if (variant === "job") {
+      return (
+        <div role="status">
+          <span className="sr-only">加载中…</span>
+          {Array.from({ length: WANTED_SKELETON_COUNT }).map((_, index) => (
+            <div key={index} className="border-b border-divider px-4 py-3">
+              <Skeleton className="h-5 w-4/5" />
+              <Skeleton className="mt-2 h-5 w-1/4" />
+              <Skeleton className="mt-2 h-4 w-2/5" />
+            </div>
+          ))}
+        </div>
+      );
+    }
     if (variant === "wanted") {
       return (
         <div role="status">
@@ -246,6 +279,9 @@ export function PostList({
   // 内容，才展示"这个地区还没有内容"+去发布的引导——这个空状态明确要求
   // "选中了某个州"这个前提，未选择州时零结果一律退回原来的"暂无帖子"。
   if (posts.length === 0) {
+    if (!searchQuery && emptyState) {
+      return <>{emptyState}</>;
+    }
     if (!searchQuery && stateCode) {
       return (
         <div
@@ -267,6 +303,58 @@ export function PostList({
       );
     }
     return <p role="status">{searchQuery ? "没有找到相关帖子。" : "暂无帖子。"}</p>;
+  }
+
+  // 招聘求职任务卡：工作帖单列文字行（不需要图片）。标题 → 薪资（求职帖
+  // 前面加"期望"，没填就是"面议"）→ 工作类型 / 福利小标签 → 地区 · 发布时间。
+  // "全部"里招聘、求职混在一起，求职帖标题前加一个"求职"小标记区分。
+  if (variant === "job") {
+    return (
+      <div>
+        <ul>
+          {posts.map((post) => {
+            const isJobSeeking = post.categorySlug === JOB_SEEKING_CATEGORY_SLUG;
+            const tags = [employmentTypeLabel(post.employmentType), ...jobPerkLabels(post.jobPerks)].filter(
+              (tag): tag is string => Boolean(tag)
+            );
+            const meta = [
+              post.locationName ? formatLocationDisplayName(post.locationName) : null,
+              formatRelativeTimeAgo(post.createdAt)
+            ].filter(Boolean);
+            return (
+              <li key={post.id} className="border-b border-divider">
+                <Link to={`/post/${post.id}`} className="block px-4 py-3">
+                  <p className="line-clamp-2 break-words text-base font-semibold text-text">
+                    {isJobSeeking ? (
+                      <span className="mr-1.5 inline-block rounded bg-success-light px-1.5 py-0.5 align-[2px] text-xs font-semibold text-success">
+                        求职
+                      </span>
+                    ) : null}
+                    {post.title}
+                  </p>
+                  <p className="mt-1 text-base font-bold text-text">
+                    {isJobSeeking ? <span className="mr-1 text-sm font-medium text-text-muted">期望</span> : null}
+                    {formatSalary(post.priceAmount, post.priceLabel, post.salaryUnit)}
+                  </p>
+                  {tags.length > 0 ? (
+                    <p className="mt-1.5 flex flex-wrap gap-1.5">
+                      {tags.map((tag) => (
+                        <span key={tag} className="rounded bg-field px-1.5 py-0.5 text-xs text-text-body">
+                          {tag}
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
+                  <p className="mt-1.5 truncate text-xs text-text-muted">{meta.join(" · ")}</p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
+        {isFetchingNextPage ? <p role="status">加载更多…</p> : null}
+      </div>
+    );
   }
 
   if (variant === "wanted") {

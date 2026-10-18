@@ -1,442 +1,201 @@
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useMyCommunitiesQuery, useCommunityPostsInfiniteQuery, navigateMock, hideSplashScreen } =
-  vi.hoisted(() => ({
-    useMyCommunitiesQuery: vi.fn(),
-    useCommunityPostsInfiniteQuery: vi.fn(),
-    navigateMock: vi.fn(),
-    hideSplashScreen: vi.fn()
-  }));
+const { useCategoriesQuery, postListMock, navigateMock, hideSplashScreen } = vi.hoisted(() => ({
+  useCategoriesQuery: vi.fn(),
+  postListMock: vi.fn(),
+  navigateMock: vi.fn(),
+  hideSplashScreen: vi.fn()
+}));
 
 vi.mock("../../app/splash-screen", () => ({ hideSplashScreen }));
-
-vi.mock("../../features/community/use-my-communities-query", () => ({ useMyCommunitiesQuery }));
-vi.mock("../../features/community/use-community-posts-query", () => ({
-  useCommunityPostsInfiniteQuery
+vi.mock("../../features/categories/use-categories-query", () => ({ useCategoriesQuery }));
+// 列表本身各有测试，这里只验证首页给每个标签传了什么；空状态原样渲染出来，
+// 方便验证"还没有工作信息"那段文案。
+vi.mock("../../features/posts/post-list", () => ({
+  PostList: (props: Record<string, unknown>) => {
+    postListMock(props);
+    return (
+      <div data-testid="post-list" data-variant={String(props.variant)}>
+        {props.emptyState as React.ReactNode}
+      </div>
+    );
+  }
 }));
-// 收藏按钮自己的 hook 会打 Supabase，这里只验证首页把它放进了操作行。
-vi.mock("../../components/community-post-favorite-button", () => ({
-  CommunityPostFavoriteButton: ({ communityPostId }: { communityPostId: string }) => (
-    <button type="button" aria-label="收藏" data-post-id={communityPostId} />
-  )
+vi.mock("../../features/activities/activity-feed", () => ({
+  ActivityFeed: () => <div data-testid="activity-feed" />
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
 });
 
-import { useAuthStore } from "../../store/auth-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { renderWithProviders } from "../../test/render-with-providers";
-import { HomePage } from "./home-page";
+import { HOME_TAB_STORAGE_KEY, HomePage } from "./home-page";
 
-const initialAuthState = useAuthStore.getState();
 const initialRegionState = useSelectedRegionStore.getState();
 
-const samplePost = {
-  id: "cp-1",
-  postType: "question",
-  title: "有人去过 Tysons 吗",
-  body: "周末想去逛逛，求推荐",
-  pinned: false,
-  commentCount: 3,
-  favoriteCount: 5,
-  createdAt: "2026-08-01T00:00:00.000Z",
-  authorId: "user-2",
-  authorDisplayName: "Bob",
-  authorAvatarUrl: null,
-  coverImageUrl: null as string | null,
-  images: [] as string[],
-  communityName: "DMV 宠物社区",
-  communitySlug: "dmv-pets"
-};
+const CATEGORIES = [
+  { id: "cat-rent", slug: "rent", nameZh: "租房" },
+  { id: "cat-wanted", slug: "wanted", nameZh: "求租" },
+  { id: "cat-used", slug: "used", nameZh: "二手" },
+  { id: "cat-hiring", slug: "hiring", nameZh: "招聘" },
+  { id: "cat-seeking", slug: "job-seeking", nameZh: "求职" }
+];
 
-function joined(id: string, slug: string, name: string) {
-  return {
-    id,
-    slug,
-    name,
-    description: null,
-    memberCount: 1,
-    isOfficial: false,
-    stateCodes: ["DC", "MD", "VA"]
-  };
+function lastPostListProps(): Record<string, unknown> {
+  return postListMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
 }
 
-function postsResult(overrides: Record<string, unknown> = {}) {
-  return {
-    data: { pages: [{ posts: [samplePost], hasNextPage: false }] },
-    isPending: false,
-    isError: false,
-    fetchNextPage: vi.fn(),
-    hasNextPage: false,
-    isFetchingNextPage: false,
-    ...overrides
-  };
-}
-
-describe("HomePage (community aggregate feed)", () => {
+describe("HomePage (four category tabs)", () => {
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
   });
 
   beforeEach(() => {
-    useAuthStore.setState(initialAuthState, true);
+    window.localStorage.clear();
+    // jsdom 没实现 scrollTo；切换标签会回到顶部。
+    vi.spyOn(window, "scrollTo").mockImplementation(() => {});
     useSelectedRegionStore.setState(initialRegionState, true);
-    localStorage.clear();
+    useCategoriesQuery.mockReset();
+    useCategoriesQuery.mockReturnValue({ data: CATEGORIES, isPending: false, isError: false });
+    postListMock.mockReset();
     navigateMock.mockReset();
-    useMyCommunitiesQuery.mockReset();
-    useCommunityPostsInfiniteQuery.mockReset();
     hideSplashScreen.mockReset();
-
-    // 默认：游客，没有已加入列表（useMyCommunitiesQuery 在没有 userId 时不发请求）。
-    useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
-    useCommunityPostsInfiniteQuery.mockReturnValue(postsResult());
   });
 
-  function loginAs(userId: string): void {
-    useAuthStore.getState().setSession({ user: { id: userId } } as never);
-  }
-
-  describe("top bar (TopBar home variant)", () => {
-    it("renders the '华邻' brand name with no stray separator when no region has been selected", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByText("华邻")).toBeInTheDocument();
-      expect(screen.queryByText("·")).not.toBeInTheDocument();
+  it("shows the region on the left and a search button, with no 华邻 brand and no ＋ / menu buttons", () => {
+    useSelectedRegionStore.setState({
+      selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
     });
+    renderWithProviders(<HomePage />);
 
-    it("renders '{cityName}, {stateCode}' for a selected DMV city and navigates to /region-select when the region button is clicked", () => {
-      useSelectedRegionStore.getState().setSelectedRegion({
-        stateCode: "VA",
-        stateName: "Virginia",
-        cityId: "loc-arlington",
-        cityName: "Arlington"
-      });
+    expect(screen.queryByText("华邻")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "菜单" })).not.toBeInTheDocument();
 
-      renderWithProviders(<HomePage />);
+    fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+    expect(navigateMock).toHaveBeenCalledWith("/search");
+  });
 
-      fireEvent.click(screen.getByText("Arlington, VA"));
-      expect(navigateMock).toHaveBeenCalledWith("/region-select");
-    });
+  it("navigates to the region picker from the region title (placeholder when no region is selected)", () => {
+    renderWithProviders(<HomePage />);
 
-    it("renders '<code> <中文州名>' when a state with no city data has been selected", () => {
-      useSelectedRegionStore.getState().setSelectedRegion({
-        stateCode: "CA",
-        stateName: "California",
-        cityId: null,
-        cityName: null
-      });
+    fireEvent.click(screen.getByRole("button", { name: /选择地区/ }));
+    expect(navigateMock).toHaveBeenCalledWith("/region-select");
+  });
 
-      renderWithProviders(<HomePage />);
+  it("renders the four tabs in order with 招聘求职 selected by default", () => {
+    renderWithProviders(<HomePage />);
 
-      expect(screen.getByText("CA 加利福尼亚州")).toBeInTheDocument();
-    });
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["招聘求职", "房屋租售", "二手闲置", "找搭子"]);
+    expect(screen.getByRole("tab", { name: "招聘求职" })).toHaveAttribute("aria-selected", "true");
+  });
 
-    it("opens the '选择发布类型' action sheet when the ＋ icon is clicked", async () => {
-      renderWithProviders(<HomePage />);
+  it("lists hiring + job-seeking posts together under 全部, in the job format", () => {
+    renderWithProviders(<HomePage />);
 
-      fireEvent.click(screen.getByRole("button", { name: "发布" }));
-
-      expect(await screen.findByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
-    });
-
-    it("opens the side menu (我的社区 / 创建社区) from the hamburger button", () => {
-      renderWithProviders(<HomePage />);
-
-      fireEvent.click(screen.getByRole("button", { name: "菜单" }));
-
-      const menu = screen.getByRole("dialog", { name: "菜单" });
-      expect(within(menu).getByRole("button", { name: /我的社区/ })).toBeInTheDocument();
-      expect(within(menu).getByRole("button", { name: /创建社区/ })).toBeInTheDocument();
-    });
-
-    it("navigates to the site-wide search page /search from the search icon", () => {
-      renderWithProviders(<HomePage />);
-
-      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-
-      expect(navigateMock).toHaveBeenCalledWith("/search");
-    });
-
-    // 界面配色和字体任务卡：只有一个选项的"推荐"标签栏去掉了，等真的有
-    // 第二个标签（关注/附近）再加回来。
-    it("no longer shows the single-option '推荐' tab row", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.queryByText("推荐")).not.toBeInTheDocument();
+    expect(lastPostListProps()).toMatchObject({
+      variant: "job",
+      categoryId: undefined,
+      categoryIds: ["cat-hiring", "cat-seeking"]
     });
   });
 
-  describe("feed scope (personalised first, all communities as the fallback)", () => {
-    it('queries ALL communities for a logged-out visitor and shows the join-a-community banner linking to /community', () => {
-      renderWithProviders(<HomePage />);
+  it("narrows to a single job category with the 招聘 / 求职 chips", () => {
+    renderWithProviders(<HomePage />);
 
-      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith("all");
-      expect(useMyCommunitiesQuery).toHaveBeenCalledWith(undefined);
-      expect(screen.getByRole("link", { name: /还没加入任何社区/ })).toHaveAttribute(
-        "href",
-        "/community"
-      );
-    });
+    fireEvent.click(screen.getByRole("button", { name: "求职" }));
+    expect(lastPostListProps()).toMatchObject({ categoryId: "cat-seeking", categoryIds: undefined });
 
-    it("queries only the joined communities, with no banner, once the user has joined at least one", () => {
-      loginAs("user-1");
-      useMyCommunitiesQuery.mockReturnValue({
-        data: [joined("c-2", "dmv-pets", "DMV 宠物社区"), joined("c-3", "dmv-students", "DMV 留学生社区")],
-        isError: false
-      });
-
-      renderWithProviders(<HomePage />);
-
-      expect(useMyCommunitiesQuery).toHaveBeenCalledWith("user-1");
-      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith(["c-2", "c-3"]);
-      expect(screen.queryByRole("link", { name: /还没加入任何社区/ })).not.toBeInTheDocument();
-    });
-
-    it("falls back to ALL communities (with the banner) for a logged-in user who has joined nothing yet", () => {
-      loginAs("user-1");
-      useMyCommunitiesQuery.mockReturnValue({ data: [], isError: false });
-
-      renderWithProviders(<HomePage />);
-
-      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith("all");
-      expect(screen.getByRole("link", { name: /还没加入任何社区/ })).toBeInTheDocument();
-    });
-
-    it("does not query posts (scope undefined, skeleton shown) until a logged-in user's joined list has loaded, and shows no banner meanwhile", () => {
-      loginAs("user-1");
-      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
-      useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
-
-      renderWithProviders(<HomePage />);
-
-      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith(undefined);
-      expect(screen.getByRole("status")).toHaveTextContent("加载中…");
-      expect(screen.queryByRole("link", { name: /还没加入任何社区/ })).not.toBeInTheDocument();
-    });
-
-    it("falls back to ALL communities without the banner when the joined list fails to load (can't tell the user joined nothing)", () => {
-      loginAs("user-1");
-      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: true });
-
-      renderWithProviders(<HomePage />);
-
-      expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith("all");
-      expect(screen.queryByRole("link", { name: /还没加入任何社区/ })).not.toBeInTheDocument();
-    });
-
-    it("no longer renders the 我的社区 card row or the dashed 加入更多 card", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.queryByRole("region", { name: "我的社区" })).not.toBeInTheDocument();
-      expect(screen.queryByText("加入更多")).not.toBeInTheDocument();
-    });
+    fireEvent.click(screen.getByRole("button", { name: "招聘" }));
+    expect(lastPostListProps()).toMatchObject({ categoryId: "cat-hiring" });
   });
 
-  // 启动图：首页第一屏帖子请求结束（成功或失败）才收起，还在加载时不收起，
-  // 见 app/splash-screen.ts。
-  describe("splash screen", () => {
-    it("does not hide the splash screen while the first page of posts is still loading", () => {
-      useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
-      renderWithProviders(<HomePage />);
+  it("offers free publishing from the jobs empty state", () => {
+    renderWithProviders(<HomePage />);
 
-      expect(hideSplashScreen).not.toHaveBeenCalled();
-    });
-
-    it("hides the splash screen once the first page of posts has loaded", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(hideSplashScreen).toHaveBeenCalled();
-    });
-
-    it("hides the splash screen when the posts request fails, so the user is not stuck on it", () => {
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({ data: undefined, isPending: true, isError: true })
-      );
-      renderWithProviders(<HomePage />);
-
-      expect(hideSplashScreen).toHaveBeenCalled();
-    });
-
-    it("keeps the splash screen while a logged-in user's joined-communities list is still loading (feed scope unknown)", () => {
-      loginAs("user-1");
-      useMyCommunitiesQuery.mockReturnValue({ data: undefined, isError: false });
-      useCommunityPostsInfiniteQuery.mockReturnValue(postsResult({ data: undefined, isPending: true }));
-      renderWithProviders(<HomePage />);
-
-      expect(hideSplashScreen).not.toHaveBeenCalled();
-    });
+    expect(screen.getByText("还没有工作信息，你要招人吗？")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "免费发布" }));
+    expect(navigateMock).toHaveBeenCalledWith("/publish?category=hiring");
   });
 
-  describe("post feed", () => {
-    it("renders a clickable community-name tag on each post that links to that community's feed, outside the detail link", () => {
-      renderWithProviders(<HomePage />);
-
-      const tag = screen.getByRole("link", { name: "DMV 宠物社区" });
-      expect(tag).toHaveAttribute("href", "/community/dmv-pets");
-      const detailLink = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
-      expect(detailLink).not.toContainElement(tag);
-      expect(tag).not.toContainElement(detailLink);
+  it("shows the jobs empty state without querying when the job categories don't exist yet", () => {
+    useCategoriesQuery.mockReturnValue({
+      data: CATEGORIES.filter((category) => !["hiring", "job-seeking"].includes(category.slug)),
+      isPending: false,
+      isError: false
     });
+    renderWithProviders(<HomePage />);
 
-    it("renders a post row linking to its detail page with separate title and body, author, and comment count", () => {
-      renderWithProviders(<HomePage />);
-
-      const link = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
-      expect(link).toHaveAttribute("href", "/community/post/cp-1");
-      expect(screen.getByText("有人去过 Tysons 吗")).toBeInTheDocument();
-      expect(screen.getByText("周末想去逛逛，求推荐")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Bob/ })).toHaveAttribute(
-        "href",
-        "/community/post/cp-1"
-      );
-      expect(screen.getByLabelText("3 条评论")).toBeInTheDocument();
-    });
-
-    // 社区帖子点赞任务卡：操作行多了一个大拇指点赞按钮。
-    it("renders the action row with like, favorite and share", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByRole("button", { name: "收藏" })).toHaveAttribute("data-post-id", "cp-1");
-      expect(screen.getByRole("button", { name: "分享帖子" })).toBeEnabled();
-      expect(screen.getByRole("button", { name: "点赞" })).toHaveTextContent("赞");
-    });
-
-    it("keeps the action buttons outside the detail-page link", () => {
-      renderWithProviders(<HomePage />);
-
-      const link = screen.getByRole("link", { name: /有人去过 Tysons 吗/ });
-      expect(link).not.toContainElement(screen.getByRole("button", { name: "收藏" }));
-      expect(link).not.toContainElement(screen.getByRole("button", { name: "分享帖子" }));
-    });
-
-    it("uses the body as the headline (and no separate preview) when the post has no title", () => {
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({
-          data: { pages: [{ posts: [{ ...samplePost, title: null }], hasNextPage: false }] }
-        })
-      );
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getAllByText("周末想去逛逛，求推荐")).toHaveLength(1);
-    });
-
-    function renderWithImages(images: string[]) {
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({
-          data: { pages: [{ posts: [{ ...samplePost, images }], hasNextPage: false }] }
-        })
-      );
-      return renderWithProviders(<HomePage />);
-    }
-
-    // 跟 community-feed-page.test.tsx 的图片区域测试同一套断言——首页帖子卡片
-    // 的图片区域直接复用同一个 PostImageCarousel（文字下方满宽展示，不是旁边
-    // 的小方块缩略图），行为理应逐条保持一致。
-    it("renders no image area (no carousel, no placeholder) on a card without images", () => {
-      const { container } = renderWithImages([]);
-
-      expect(container.querySelector("li a img")).toBeNull();
-      expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
-    });
-
-    it("renders a single image full-width under the text, without a scroller or dots", () => {
-      const { container } = renderWithImages(["https://x/cover.webp"]);
-
-      const img = container.querySelector("li a img");
-      expect(img).toHaveAttribute("src", "https://x/cover.webp");
-      expect(img).toHaveClass("object-cover");
-      expect(screen.queryByTestId("post-image-carousel-scroller")).not.toBeInTheDocument();
-      expect(screen.queryByRole("img", { name: /第 \d+ 张/ })).not.toBeInTheDocument();
-    });
-
-    it("renders every image in a swipeable carousel with dots when the post has several", () => {
-      const urls = ["https://x/1.webp", "https://x/2.webp", "https://x/3.webp"];
-      const { container } = renderWithImages(urls);
-
-      expect(screen.getByTestId("post-image-carousel-scroller")).toBeInTheDocument();
-      expect(
-        Array.from(container.querySelectorAll("li a img")).map((i) => i.getAttribute("src"))
-      ).toEqual(urls);
-      expect(screen.getByRole("img", { name: "第 1 张，共 3 张" })).toBeInTheDocument();
-    });
-
-    it("shows a loading status while the first page is pending", () => {
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({ data: undefined, isPending: true })
-      );
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByRole("status")).toHaveTextContent("加载中…");
-    });
-
-    it("shows an error alert when posts fail to load", () => {
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({ data: undefined, isPending: false, isError: true })
-      );
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByRole("alert")).toHaveTextContent("社区加载失败，请稍后重试。");
-    });
-
-    it("shows the empty state with a link to the community create page", () => {
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({ data: { pages: [{ posts: [], hasNextPage: false }] } })
-      );
-
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByText("暂无帖子，欢迎发布第一条")).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: "去发布" })).toHaveAttribute("href", "/community/new");
-    });
-
-    it("is visible to logged-out visitors (no auth gate on the feed)", () => {
-      renderWithProviders(<HomePage />);
-
-      expect(screen.getByText("有人去过 Tysons 吗")).toBeInTheDocument();
-    });
+    expect(postListMock).not.toHaveBeenCalled();
+    expect(screen.getByText("还没有工作信息，你要招人吗？")).toBeInTheDocument();
   });
 
-  describe("pagination", () => {
-    it("fetches the next page when the sentinel scrolls into view and more pages exist", () => {
-      const fetchNextPage = vi.fn();
-      let callback: IntersectionObserverCallback | undefined;
-      class FakeIntersectionObserver {
-        constructor(cb: IntersectionObserverCallback) {
-          callback = cb;
-        }
-        observe = vi.fn();
-        disconnect = vi.fn();
-      }
-      vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
-      useCommunityPostsInfiniteQuery.mockReturnValue(
-        postsResult({ hasNextPage: true, fetchNextPage })
-      );
+  it("shows rentals as a grid and 求租 as text cards under 房屋租售", () => {
+    renderWithProviders(<HomePage />);
 
-      renderWithProviders(<HomePage />);
+    fireEvent.click(screen.getByRole("tab", { name: "房屋租售" }));
+    expect(lastPostListProps()).toMatchObject({ categoryId: "cat-rent", variant: "grid" });
 
-      callback?.([{ isIntersecting: true } as IntersectionObserverEntry], {} as IntersectionObserver);
+    fireEvent.click(screen.getByRole("button", { name: "求租" }));
+    expect(lastPostListProps()).toMatchObject({ categoryId: "cat-wanted", variant: "wanted" });
+  });
 
-      expect(fetchNextPage).toHaveBeenCalledTimes(1);
+  it("shows used items as a grid and passes the selected state to the list", () => {
+    useSelectedRegionStore.setState({
+      selectedRegion: { stateCode: "MD", stateName: "Maryland", cityId: null, cityName: null }
     });
+    renderWithProviders(<HomePage />);
 
-    it("does not observe anything when there is no next page", () => {
-      const observe = vi.fn();
-      class FakeIntersectionObserver {
-        observe = observe;
-        disconnect = vi.fn();
-      }
-      vi.stubGlobal("IntersectionObserver", FakeIntersectionObserver);
+    fireEvent.click(screen.getByRole("tab", { name: "二手闲置" }));
+    expect(lastPostListProps()).toMatchObject({ categoryId: "cat-used", variant: "grid", stateCode: "MD" });
+  });
 
-      renderWithProviders(<HomePage />);
+  it("shows the activity feed under 找搭子", () => {
+    renderWithProviders(<HomePage />);
 
-      expect(observe).not.toHaveBeenCalled();
-    });
+    fireEvent.click(screen.getByRole("tab", { name: "找搭子" }));
+    expect(screen.getByTestId("activity-feed")).toBeInTheDocument();
+  });
+
+  it("remembers the last tab across visits", () => {
+    renderWithProviders(<HomePage />);
+    fireEvent.click(screen.getByRole("tab", { name: "二手闲置" }));
+    expect(window.localStorage.getItem(HOME_TAB_STORAGE_KEY)).toBe("used");
+    cleanup();
+
+    renderWithProviders(<HomePage />);
+    expect(screen.getByRole("tab", { name: "二手闲置" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("falls back to 招聘求职 when the stored tab is unknown", () => {
+    window.localStorage.setItem(HOME_TAB_STORAGE_KEY, "bogus");
+    renderWithProviders(<HomePage />);
+
+    expect(screen.getByRole("tab", { name: "招聘求职" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("waits for the categories before rendering a list, then hides the splash screen", () => {
+    useCategoriesQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    renderWithProviders(<HomePage />);
+
+    expect(postListMock).not.toHaveBeenCalled();
+    expect(hideSplashScreen).not.toHaveBeenCalled();
+
+    useCategoriesQuery.mockReturnValue({ data: CATEGORIES, isPending: false, isError: false });
+    fireEvent.click(screen.getByRole("tab", { name: "房屋租售" }));
+    expect(hideSplashScreen).toHaveBeenCalled();
+    expect(postListMock).toHaveBeenCalled();
+  });
+
+  it("shows an error when the categories fail to load", () => {
+    useCategoriesQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+    renderWithProviders(<HomePage />);
+
+    expect(screen.getByRole("alert")).toHaveTextContent("加载失败");
+    expect(hideSplashScreen).toHaveBeenCalled();
   });
 });

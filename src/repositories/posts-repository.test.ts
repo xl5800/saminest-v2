@@ -23,7 +23,8 @@ const { queryBuilder, overrideTypesMock, singleMock, maybeSingleMock, thenMock }
     "insert",
     "update",
     "limit",
-    "or"
+    "or",
+    "in"
   ] as const;
   for (const method of chain) {
     builder[method] = vi.fn(() => builder);
@@ -77,7 +78,7 @@ describe("listApprovedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, location:locations(name), location_text, category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)"
+      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -242,7 +243,11 @@ describe("listApprovedPosts", () => {
           favoriteCount: 3,
           commentCount: 7,
           posterAge: 25,
-          posterGender: "女"
+          posterGender: "女",
+          categorySlug: null,
+          salaryUnit: undefined,
+          employmentType: undefined,
+          jobPerks: []
         }
       ],
       hasNextPage: false
@@ -515,6 +520,9 @@ describe("createPost", () => {
       contact_value: "a@b.com",
       poster_age: 25,
       poster_gender: "女",
+      salary_unit: null,
+      employment_type: null,
+      job_perks: [],
       status: "pending"
     });
     expect(queryBuilder.select).toHaveBeenCalledWith("id");
@@ -872,7 +880,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, location:locations(name), category:categories(name_zh), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -909,7 +917,9 @@ describe("getPostDetail", () => {
         { id: "img-1", publicUrl: "https://img.example.com/1.jpg", sortOrder: 0 },
         { id: "img-2", publicUrl: "https://img.example.com/2.jpg", sortOrder: 2 }
       ],
-      commentCount: 4
+      commentCount: 4,
+      categorySlug: null,
+      jobPerks: []
     });
   });
 
@@ -1297,7 +1307,10 @@ describe("updatePost", () => {
       contact_method: "email",
       contact_value: "a@b.com",
       poster_age: 30,
-      poster_gender: "男"
+      poster_gender: "男",
+      salary_unit: null,
+      employment_type: null,
+      job_perks: []
     });
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
   });
@@ -1469,6 +1482,134 @@ describe("deleteMyPost", () => {
 
     await expect(deleteMyPost("post-1")).rejects.toMatchObject({
       code: "MY_POST_DELETE_NOT_FOUND"
+    });
+  });
+});
+
+// 招聘求职任务卡：工作帖字段的读写。
+describe("job posts", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+    singleMock.mockReset();
+    maybeSingleMock.mockReset();
+  });
+
+  const baseCreate = {
+    authorId: "user-1",
+    categoryId: "cat-hiring",
+    locationId: null,
+    locationText: null,
+    title: "餐馆招服务员",
+    description: "Rockville 中餐馆招服务员，有经验优先。",
+    contactMethod: null,
+    contactValue: null,
+    posterAge: null,
+    posterGender: null
+  };
+
+  it("writes salary unit, employment type and perks, and clears price_label when a salary is given", async () => {
+    singleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await createPost({
+      ...baseCreate,
+      priceAmount: 18,
+      job: {
+        salaryUnit: "hour",
+        employmentType: "part_time",
+        perks: ["housing", "meals", "meals"],
+        negotiable: false
+      }
+    });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        price_amount: 18,
+        price_label: null,
+        salary_unit: "hour",
+        employment_type: "part_time",
+        job_perks: ["meals", "housing"],
+        status: "pending"
+      })
+    );
+  });
+
+  it("writes price_label 面议 and no salary unit when the salary is negotiable", async () => {
+    singleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await createPost({
+      ...baseCreate,
+      priceAmount: null,
+      job: { salaryUnit: "hour", employmentType: "full_time", perks: [], negotiable: true }
+    });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        price_amount: null,
+        price_label: "面议",
+        salary_unit: null,
+        employment_type: "full_time",
+        job_perks: []
+      })
+    );
+  });
+
+  it("does not write price_label for non-job posts", async () => {
+    singleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await createPost({ ...baseCreate, priceAmount: 1200, job: null });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith(
+      expect.not.objectContaining({ price_label: expect.anything() })
+    );
+  });
+
+  it("filters by several categories with .in() when categoryIds is given", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [], error: null });
+
+    await listApprovedPosts({ categoryIds: ["cat-hiring", "cat-seeking"], page: 0, pageSize: 20 });
+
+    expect(queryBuilder.in).toHaveBeenCalledWith("category_id", ["cat-hiring", "cat-seeking"]);
+    expect(queryBuilder.eq).not.toHaveBeenCalledWith("category_id", expect.anything());
+  });
+
+  it("maps the job columns and category slug on feed rows", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "post-1",
+          title: "餐馆招服务员",
+          price_amount: 18,
+          price_label: null,
+          currency_code: "USD",
+          created_at: "2026-10-18T00:00:00.000Z",
+          favorite_count: 0,
+          comment_count: 0,
+          poster_age: null,
+          poster_gender: null,
+          salary_unit: "hour",
+          employment_type: "part_time",
+          job_perks: ["housing", "meals"],
+          location: null,
+          location_text: "Rockville",
+          category: { name_zh: "招聘", slug: "hiring" },
+          author: null,
+          post_images: []
+        }
+      ],
+      error: null
+    });
+
+    const result = await listApprovedPosts({ page: 0, pageSize: 20 });
+
+    expect(result.posts[0]).toMatchObject({
+      categorySlug: "hiring",
+      salaryUnit: "hour",
+      employmentType: "part_time",
+      jobPerks: ["meals", "housing"]
     });
   });
 });

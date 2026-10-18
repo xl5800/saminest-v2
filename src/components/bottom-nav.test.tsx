@@ -1,4 +1,4 @@
-import { cleanup, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { useHasUnreadSystemNotificationQuery, useHasPendingActivityParticipantsQuery } =
@@ -29,46 +29,36 @@ describe("BottomNav", () => {
     useHasPendingActivityParticipantsQuery.mockReturnValue({ data: false });
   });
 
-  it("renders exactly 6 flat destination links, with no separate publish button", () => {
-    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
-
-    const links = screen.getAllByRole("link");
-    expect(links).toHaveLength(6);
-    expect(screen.getByRole("link", { name: /首页/ })).toHaveAttribute("href", "/");
-    expect(screen.getByRole("link", { name: /分类/ })).toHaveAttribute(
-      "href",
-      "/categories"
-    );
-    expect(screen.getByRole("link", { name: /社区/ })).toHaveAttribute(
-      "href",
-      "/community"
-    );
-    expect(screen.getByRole("link", { name: /找搭子/ })).toHaveAttribute(
-      "href",
-      "/activities"
-    );
-    expect(screen.getByRole("link", { name: /消息/ })).toHaveAttribute(
-      "href",
-      "/messages"
-    );
-    expect(screen.getByRole("link", { name: /我的/ })).toHaveAttribute(
-      "href",
-      "/profile"
-    );
-    expect(screen.queryByRole("link", { name: /^发布$/ })).not.toBeInTheDocument();
-  });
-
-  it("orders the tabs 首页 / 社区 / 分类 / 找搭子 / 消息 / 我的 (社区 in the second slot)", () => {
+  // 首页改版（招聘求职任务卡）：首页 · 社区 · ＋ · 消息 · 我的。
+  it("renders 4 destination links plus a center 发布 button", () => {
     renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
 
     expect(screen.getAllByRole("link").map((link) => link.textContent)).toEqual([
       "首页",
       "社区",
-      "分类",
-      "找搭子",
       "消息",
       "我的"
     ]);
+    expect(screen.getByRole("link", { name: /首页/ })).toHaveAttribute("href", "/");
+    expect(screen.getByRole("link", { name: /社区/ })).toHaveAttribute("href", "/community");
+    expect(screen.getByRole("link", { name: /消息/ })).toHaveAttribute("href", "/messages");
+    expect(screen.getByRole("link", { name: /我的/ })).toHaveAttribute("href", "/profile");
+    expect(screen.queryByRole("link", { name: /分类/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /找搭子/ })).not.toBeInTheDocument();
+
+    const nav = screen.getByRole("navigation", { name: "底部导航" });
+    const order = Array.from(nav.querySelectorAll("a, button")).map(
+      (element) => element.getAttribute("aria-label") ?? element.textContent
+    );
+    expect(order).toEqual(["首页", "社区", "发布", "消息", "我的"]);
+  });
+
+  it("opens the 选择发布类型 sheet from the center ＋ button", () => {
+    renderWithProviders(<BottomNav />, { initialEntries: ["/"] });
+
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    expect(screen.getByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
   });
 
   it("marks '首页' as the active item with aria-current when on /", () => {
@@ -78,10 +68,7 @@ describe("BottomNav", () => {
       "aria-current",
       "page"
     );
-    expect(screen.getByRole("link", { name: /分类/ })).not.toHaveAttribute(
-      "aria-current"
-    );
-    expect(screen.getByRole("link", { name: /找搭子/ })).not.toHaveAttribute(
+    expect(screen.getByRole("link", { name: /社区/ })).not.toHaveAttribute(
       "aria-current"
     );
   });
@@ -102,27 +89,6 @@ describe("BottomNav", () => {
     renderWithProviders(<BottomNav />, { initialEntries: ["/community/post/post-1"] });
 
     expect(screen.getByRole("link", { name: /社区/ })).toHaveAttribute(
-      "aria-current",
-      "page"
-    );
-  });
-
-  it("marks '找搭子' as the active item with aria-current when on /activities", () => {
-    renderWithProviders(<BottomNav />, { initialEntries: ["/activities"] });
-
-    expect(screen.getByRole("link", { name: /找搭子/ })).toHaveAttribute(
-      "aria-current",
-      "page"
-    );
-    expect(screen.getByRole("link", { name: /首页/ })).not.toHaveAttribute(
-      "aria-current"
-    );
-  });
-
-  it("marks '找搭子' as active on a nested activities path (e.g. an activity detail page)", () => {
-    renderWithProviders(<BottomNav />, { initialEntries: ["/activities/act-1"] });
-
-    expect(screen.getByRole("link", { name: /找搭子/ })).toHaveAttribute(
       "aria-current",
       "page"
     );

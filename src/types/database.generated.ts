@@ -1111,6 +1111,9 @@ export type Database = {
           price_label: string | null
           published_at: string | null
           rejection_reason: string | null
+          salary_unit: string | null
+          employment_type: string | null
+          job_perks: string[]
           status: string
           title: string
           updated_at: string
@@ -1140,6 +1143,9 @@ export type Database = {
           price_label?: string | null
           published_at?: string | null
           rejection_reason?: string | null
+          salary_unit?: string | null
+          employment_type?: string | null
+          job_perks?: string[]
           status?: string
           title: string
           updated_at?: string
@@ -1169,6 +1175,9 @@ export type Database = {
           price_label?: string | null
           published_at?: string | null
           rejection_reason?: string | null
+          salary_unit?: string | null
+          employment_type?: string | null
+          job_perks?: string[]
           status?: string
           title?: string
           updated_at?: string

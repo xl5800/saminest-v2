@@ -15,6 +15,8 @@ export interface UsePostsInfiniteQueryInput {
   /** 31 号卡新增，透传给 listApprovedPosts——首页"推荐"流排除求租分类帖子
    *  用，见该函数 input 类型上的注释。 */
   excludeCategoryId?: string;
+  /** 招聘求职任务卡新增：同时查几个分类，见 ListApprovedPostsInput.categoryIds。 */
+  categoryIds?: string[];
   pageSize?: number;
 }
 
@@ -35,7 +37,7 @@ export interface UsePostsInfiniteQueryInput {
  */
 export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
   const pageSize = input.pageSize ?? DEFAULT_POSTS_PAGE_SIZE;
-  const { categoryId, searchQuery, stateCode, authorId, excludeCategoryId } = input;
+  const { categoryId, searchQuery, stateCode, authorId, excludeCategoryId, categoryIds } = input;
 
   return useInfiniteQuery({
     queryKey: [
@@ -50,6 +52,7 @@ export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
         // 就是求租分类自己，不带 excludeCategoryId）这两个场景如果凑巧算出
         // 同一组其它参数，会被 TanStack Query 误判成同一个缓存条目。
         excludeCategoryId: excludeCategoryId ?? null,
+        categoryIds: categoryIds ?? null,
         pageSize
       }
     ],
@@ -60,6 +63,7 @@ export function usePostsInfiniteQuery(input: UsePostsInfiniteQueryInput) {
         stateCode,
         authorId,
         excludeCategoryId,
+        categoryIds,
         page: pageParam,
         pageSize
       }),

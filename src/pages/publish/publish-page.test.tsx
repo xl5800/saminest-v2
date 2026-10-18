@@ -456,7 +456,8 @@ describe("PublishPage", () => {
         contactMethod: "message",
         contactValue: null,
         posterAge: null,
-        posterGender: null
+        posterGender: null,
+        job: null
       });
     });
 
@@ -1405,6 +1406,96 @@ describe("PublishPage in edit mode", () => {
       expect(updatePost).toHaveBeenCalledWith(
         expect.objectContaining({ posterAge: 31, posterGender: "不透露" })
       );
+    });
+  });
+
+  // 招聘求职任务卡：招聘 / 求职分类下"价格"换成薪资 + 单位 + 工作类型（+ 招聘的福利）。
+  describe("招聘求职分类专属字段", () => {
+    beforeEach(() => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" },
+        { id: "cat-4", slug: "hiring", nameZh: "招聘" },
+        { id: "cat-5", slug: "job-seeking", nameZh: "求职" }
+      ]);
+    });
+
+    it("replaces the price field with salary, employment type and perks for 招聘", async () => {
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      selectCategory("招聘");
+
+      expect(screen.queryByText("价格（可选）")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("薪资")).toBeInTheDocument();
+      expect(screen.getByRole("radio", { name: "兼职" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "包住" })).toBeInTheDocument();
+    });
+
+    it("labels the salary as 期望薪资 and hides perks for 求职", async () => {
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      selectCategory("求职");
+
+      expect(screen.getByLabelText("期望薪资")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "包住" })).not.toBeInTheDocument();
+    });
+
+    it("requires an employment type before submitting a job post", async () => {
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      selectCategory("招聘");
+      fillTitle("餐馆招服务员");
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      expect(await screen.findByText("请选择工作类型。")).toBeInTheDocument();
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    it("submits the job fields with the salary amount and unit", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      selectCategory("招聘");
+      fillTitle("餐馆招服务员");
+      fireEvent.change(screen.getByLabelText("薪资"), { target: { value: "18" } });
+      fireEvent.click(screen.getByRole("radio", { name: "兼职" }));
+      fireEvent.click(screen.getByRole("button", { name: "包住" }));
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(
+          expect.objectContaining({
+            categoryId: "cat-4",
+            priceAmount: 18,
+            job: { salaryUnit: "hour", employmentType: "part_time", perks: ["housing"], negotiable: false }
+          })
+        );
+      });
+    });
+
+    it("submits a 求职 post with no salary as 面议 and never sends perks", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      selectCategory("招聘");
+      fireEvent.click(screen.getByRole("button", { name: "包吃" }));
+      selectCategory("求职");
+      fillTitle("找厨房帮工");
+      fireEvent.click(screen.getByRole("radio", { name: "全职" }));
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(
+          expect.objectContaining({
+            priceAmount: null,
+            job: { salaryUnit: null, employmentType: "full_time", perks: [], negotiable: true }
+          })
+        );
+      });
     });
   });
 });

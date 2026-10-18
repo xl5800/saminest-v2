@@ -1,5 +1,8 @@
-import { Handshake, Home, LayoutGrid, MessageCircle, UserRound, Users } from "lucide-react";
+import { Home, MessageCircle, Plus, UserRound, Users } from "lucide-react";
+import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
+
+import { PublishActionSheet } from "./publish-action-sheet";
 
 import { useHasPendingActivityParticipantsQuery } from "../features/activities/use-has-pending-activity-participants-query";
 import { useHasUnreadSystemNotificationQuery } from "../features/conversations/use-has-unread-system-notification-query";
@@ -10,11 +13,17 @@ interface NavItem {
   Icon: typeof Home;
 }
 
-const NAV_ITEMS: NavItem[] = [
+// 首页改版（招聘求职任务卡）：6 项改成 首页 · 社区 · ＋ · 消息 · 我的。
+// "分类"跟首页的四个分类标签重复、"找搭子"变成了首页的一个标签，两项拿掉
+// （/categories、/activities 路由还在，其它地方的链接照常能进）；中间加
+// 蓝色圆形"＋"，点开"选择发布类型"弹层——发布入口从首页顶栏挪到这里，
+// 任何页面都能直接发布。
+const LEFT_NAV_ITEMS: NavItem[] = [
   { to: "/", label: "首页", Icon: Home },
-  { to: "/community", label: "社区", Icon: Users },
-  { to: "/categories", label: "分类", Icon: LayoutGrid },
-  { to: "/activities", label: "找搭子", Icon: Handshake },
+  { to: "/community", label: "社区", Icon: Users }
+];
+
+const RIGHT_NAV_ITEMS: NavItem[] = [
   { to: "/messages", label: "消息", Icon: MessageCircle },
   { to: "/profile", label: "我的", Icon: UserRound }
 ];
@@ -41,6 +50,7 @@ function isActivePath(pathname: string, to: string): boolean {
  * /community/new 这些子路径都能让这一项高亮），NAV_ITEMS 数组继续靠
  * flex-1 自动均分宽度，不需要额外适配。
  *
+ * （历史，已被首页改版取代：中间现在有"＋"发布按钮，见 NAV_ITEMS 上方注释）
  * 6 个平级目的地，没有中间的"发布"圆形按钮——全局发布入口已经统一收到
  * AppHeader 右上角（点开 Action Sheet 选发布类型，见 publish-action-sheet.tsx），
  * 底部导航只负责"去哪"，不再混一个"做什么"的操作型按钮进来，跟其它 4 个
@@ -89,39 +99,56 @@ export function BottomNav() {
   const location = useLocation();
   const { data: hasUnread } = useHasUnreadSystemNotificationQuery();
   const { data: hasPendingApproval } = useHasPendingActivityParticipantsQuery();
+  const [publishSheetOpen, setPublishSheetOpen] = useState(false);
+
+  function renderItem({ to, label, Icon }: NavItem) {
+    const active = isActivePath(location.pathname, to);
+    const showUnreadDot = to === "/messages" && hasUnread === true;
+    const showPendingApprovalDot = to === "/profile" && hasPendingApproval === true;
+    return (
+      <Link
+        key={to}
+        to={to}
+        aria-current={active ? "page" : undefined}
+        className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-xs ${
+          active ? "font-semibold text-primary" : "text-nav-icon"
+        }`}
+      >
+        <span className="relative">
+          <Icon aria-hidden="true" size={22} strokeWidth={active ? 2.5 : 2} />
+          {showUnreadDot || showPendingApprovalDot ? (
+            <span
+              aria-hidden="true"
+              data-testid={showUnreadDot ? "unread-dot" : "pending-approval-dot"}
+              className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger"
+            />
+          ) : null}
+        </span>
+        {label}
+      </Link>
+    );
+  }
 
   return (
-    <nav
-      aria-label="底部导航"
-      className="fixed inset-x-0 bottom-0 z-10 flex items-center border-t border-border bg-card pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5"
-    >
-      {NAV_ITEMS.map(({ to, label, Icon }) => {
-        const active = isActivePath(location.pathname, to);
-        const showUnreadDot = to === "/messages" && hasUnread === true;
-        const showPendingApprovalDot = to === "/profile" && hasPendingApproval === true;
-        return (
-          <Link
-            key={to}
-            to={to}
-            aria-current={active ? "page" : undefined}
-            className={`flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-xs ${
-              active ? "font-semibold text-primary" : "text-nav-icon"
-            }`}
+    <>
+      <nav
+        aria-label="底部导航"
+        className="fixed inset-x-0 bottom-0 z-10 flex items-center border-t border-border bg-card pb-[calc(0.375rem+env(safe-area-inset-bottom))] pt-1.5"
+      >
+        {LEFT_NAV_ITEMS.map(renderItem)}
+        <div className="flex flex-1 items-center justify-center">
+          <button
+            type="button"
+            aria-label="发布"
+            onClick={() => setPublishSheetOpen(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-white shadow-card hover:bg-primary-hover"
           >
-            <span className="relative">
-              <Icon aria-hidden="true" size={22} strokeWidth={active ? 2.5 : 2} />
-              {showUnreadDot || showPendingApprovalDot ? (
-                <span
-                  aria-hidden="true"
-                  data-testid={showUnreadDot ? "unread-dot" : "pending-approval-dot"}
-                  className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger"
-                />
-              ) : null}
-            </span>
-            {label}
-          </Link>
-        );
-      })}
-    </nav>
+            <Plus aria-hidden="true" size={26} strokeWidth={2.5} />
+          </button>
+        </div>
+        {RIGHT_NAV_ITEMS.map(renderItem)}
+      </nav>
+      {publishSheetOpen ? <PublishActionSheet onClose={() => setPublishSheetOpen(false)} /> : null}
+    </>
   );
 }

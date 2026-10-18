@@ -812,6 +812,62 @@ describe("PostDetailPage", () => {
     ).toBeInTheDocument();
   });
 
+  // 招聘求职任务卡
+  it("shows the salary with its unit, the job tags, and no comment section for a hiring post", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: {
+        ...samplePostDetail,
+        title: "餐馆招服务员",
+        priceAmount: 18,
+        categoryName: "招聘",
+        categorySlug: "hiring",
+        salaryUnit: "hour",
+        employmentType: "part_time",
+        jobPerks: ["meals", "housing"],
+        commentCount: 3
+      },
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(screen.getByText("$18/时")).toBeInTheDocument();
+    const tags = screen.getByRole("list", { name: "工作信息" });
+    expect(tags).toHaveTextContent("兼职");
+    expect(tags).toHaveTextContent("包吃");
+    expect(tags).toHaveTextContent("包住");
+    expect(screen.queryByRole("heading", { name: /留言/ })).not.toBeInTheDocument();
+  });
+
+  it("shows 期望 面议 for a job-seeking post with no salary", () => {
+    usePostDetailQuery.mockReturnValue({
+      data: {
+        ...samplePostDetail,
+        priceAmount: null,
+        priceLabel: "面议",
+        categorySlug: "job-seeking",
+        salaryUnit: null,
+        employmentType: "full_time",
+        jobPerks: []
+      },
+      isPending: false,
+      isError: false
+    });
+
+    renderWithProviders(<PostDetailPage />, {
+      initialEntries: ["/post/post-1"],
+      route: "/post/:id"
+    });
+
+    expect(screen.getByText("期望")).toBeInTheDocument();
+    expect(screen.getByText("面议")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "工作信息" })).toHaveTextContent("全职");
+  });
+
   it("shows the publish success message as its own banner above the real post content", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,

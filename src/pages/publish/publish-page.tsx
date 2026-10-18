@@ -16,6 +16,10 @@ import { useCategoriesQuery } from "../../features/categories/use-categories-que
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
 import { useUpdatePostMutation } from "../../features/my-posts/use-update-post-mutation";
+import {
+  HIRING_CATEGORY_SLUG,
+  isJobCategorySlug
+} from "../../features/posts/job-fields";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import {
@@ -38,6 +42,7 @@ import {
   TITLE_MAX_LENGTH,
   validatePublishInput
 } from "./publish-validation";
+import { JobFieldsSection } from "./job-fields-section";
 import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
@@ -320,6 +325,12 @@ export function PublishPage() {
   // 和 handleOpenRegionSelect() 里存草稿的地方。
   const [posterAge, setPosterAge] = useState(initialDraft?.posterAge ?? "");
   const [posterGender, setPosterGender] = useState(initialDraft?.posterGender ?? "");
+  // 招聘求职任务卡：工作帖专属字段（薪资数字仍然用上面的 price），同样吃
+  // 草稿回填。薪资单位默认时薪（华人招工最常见），工作类型默认不选、提交时
+  // 校验必选。
+  const [jobSalaryUnit, setJobSalaryUnit] = useState(initialDraft?.jobSalaryUnit ?? "hour");
+  const [jobEmploymentType, setJobEmploymentType] = useState(initialDraft?.jobEmploymentType ?? "");
+  const [jobPerks, setJobPerks] = useState<string[]>(initialDraft?.jobPerks ?? []);
   const [images, setImages] = useState<File[]>(initialDraft?.images ?? []);
   const [existingImages, setExistingImages] = useState<PostDetailImage[]>(
     initialDraft?.existingImages ?? []
@@ -405,6 +416,9 @@ export function PublishPage() {
     // 不应该被一个之后可能变过的 profile 值悄悄覆盖，见组件顶部注释。
     setPosterAge(existingPost.posterAge !== null ? String(existingPost.posterAge) : "");
     setPosterGender(existingPost.posterGender ?? "");
+    setJobSalaryUnit(existingPost.salaryUnit ?? "hour");
+    setJobEmploymentType(existingPost.employmentType ?? "");
+    setJobPerks(existingPost.jobPerks);
     setExistingImages(existingPost.images);
   }, [isEditMode, existingPost]);
 
@@ -437,6 +451,9 @@ export function PublishPage() {
   // 分支）。
   const selectedCategorySlug = categories?.find((category) => category.id === categoryId)?.slug;
   const isWantedCategory = selectedCategorySlug === "wanted";
+  // 招聘求职任务卡：同一种写法判断是不是工作帖（招聘 / 求职）。
+  const isJobCategory = isJobCategorySlug(selectedCategorySlug);
+  const isHiringCategory = selectedCategorySlug === HIRING_CATEGORY_SLUG;
 
   // 31 号卡：年龄自动填充——只在"新建 + 当前是求租分类 + profile 已经查到"
   // 时生效一次（ageAutoFilledRef 挡住之后的重复赋值，声明和理由见上面）。
@@ -529,6 +546,9 @@ export function PublishPage() {
       locationText,
       posterAge,
       posterGender,
+      jobSalaryUnit,
+      jobEmploymentType,
+      jobPerks,
       images,
       existingImages
     });
@@ -590,7 +610,16 @@ export function PublishPage() {
       description,
       price,
       posterAge: isWantedCategory ? posterAge : "",
-      posterGender: isWantedCategory ? posterGender : ""
+      posterGender: isWantedCategory ? posterGender : "",
+      // 招聘求职任务卡：跟上面同一个兜底思路——不是工作帖就不传，工作字段
+      // 在 posts-repository 里统一清空；求职帖没有福利选项，福利一律不提交。
+      job: isJobCategory
+        ? {
+            salaryUnit: jobSalaryUnit,
+            employmentType: jobEmploymentType,
+            perks: isHiringCategory ? jobPerks : []
+          }
+        : null
     });
     if (!validation.success) {
       setError(validation.error.message);
@@ -614,7 +643,8 @@ export function PublishPage() {
           contactMethod: validation.data.contactMethod,
           contactValue: validation.data.contactValue,
           posterAge: validation.data.posterAge,
-          posterGender: validation.data.posterGender
+          posterGender: validation.data.posterGender,
+          job: validation.data.job
         });
       } catch (submitError) {
         setError(
@@ -637,7 +667,8 @@ export function PublishPage() {
           contactMethod: validation.data.contactMethod,
           contactValue: validation.data.contactValue,
           posterAge: validation.data.posterAge,
-          posterGender: validation.data.posterGender
+          posterGender: validation.data.posterGender,
+          job: validation.data.job
         });
         resolvedPostId = created.id;
         track("content_created", { type: "classified" });
@@ -895,17 +926,31 @@ export function PublishPage() {
               </>
             ) : null}
 
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
-              <input
-                type="number"
-                min={0}
-                step="0.01"
-                value={price}
-                onChange={(event) => setPrice(event.target.value)}
-                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+            {isJobCategory ? (
+              <JobFieldsSection
+                isHiring={isHiringCategory}
+                salary={price}
+                onSalaryChange={setPrice}
+                salaryUnit={jobSalaryUnit}
+                onSalaryUnitChange={setJobSalaryUnit}
+                employmentType={jobEmploymentType}
+                onEmploymentTypeChange={setJobEmploymentType}
+                perks={jobPerks}
+                onPerksChange={setJobPerks}
               />
-            </label>
+            ) : (
+              <label className="mb-4 block">
+                <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={price}
+                  onChange={(event) => setPrice(event.target.value)}
+                  className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                />
+              </label>
+            )}
 
             <div className="mb-4">
               {/* design_handoff_saminest_ios 第 6 项（README「发布帖子：原

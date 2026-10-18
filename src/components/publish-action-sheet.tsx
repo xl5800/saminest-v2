@@ -24,6 +24,9 @@ interface PublishOption {
 // docs/saminest_codex_reference_pack/design-reference/05-publish-flow.md 5.1 节。
 const OPTIONS: PublishOption[] = [
   { key: "community", emoji: "💬", label: "发布社区帖子", to: "/community/new" },
+  // 招聘求职任务卡：首页第一个标签是招聘求职，发布入口紧跟社区帖子。
+  { key: "hiring", emoji: "💼", label: "发布招聘", to: "/publish?category=hiring" },
+  { key: "job-seeking", emoji: "🙋", label: "发布求职", to: "/publish?category=job-seeking" },
   { key: "activity", emoji: "🤝", label: "发起搭子", to: "/activities/new" },
   { key: "rent", emoji: "🏠", label: "发布租房", to: "/publish?category=rent" },
   { key: "wanted", emoji: "🔑", label: "发布求租", to: "/publish?category=wanted" },
@@ -109,7 +112,7 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
                   type="button"
                   onClick={() => handleSelect(option)}
                   className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold ${
-                    emphasized ? "bg-primary-light text-primary" : "bg-bg text-text"
+                    emphasized ? "bg-primary-light text-primary" : "bg-field text-text"
                   }`}
                 >
                   <span aria-hidden="true" className="text-xl">

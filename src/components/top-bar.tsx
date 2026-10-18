@@ -231,6 +231,10 @@ interface TopBarHomeProps {
    *  其它没有分类 Chips 的页面（包括复用 home 变体的找搭子列表页）不用
    *  改自己的调用代码。 */
   bottomSlot?: ReactNode;
+  /** 首页改版（招聘求职任务卡）：首页不再显示"华邻"品牌名，左边只放地区——
+   *  传 true 时不渲染品牌名，地区从小胶囊换成左上角的粗体标题（"DMV ⌄"）。
+   *  不传保持原样（找搭子列表页还是品牌名 + 地区胶囊）。 */
+  hideBrand?: boolean;
 }
 
 interface TopBarTabProps {
@@ -327,19 +331,34 @@ export function TopBar(props: TopBarProps) {
             {/* 品牌改名任务卡：界面品牌名从 Saminest 改成"华邻"——两个字比原来
                 短，字号从 text-base 放大到 text-xl、加粗到 extrabold，让左上角
                 不显得空。网址/包名仍然是 saminest，不受影响。 */}
-            <span className="shrink-0 text-xl font-extrabold leading-tight tracking-wide text-primary">
-              华邻
-            </span>
-            <button
-              type="button"
-              onClick={props.onRegionClick}
-              className="flex min-w-0 shrink-0 items-center gap-0.5 rounded-full border border-border bg-card px-3 py-1.5 text-left"
-            >
-              <span className="truncate text-xs font-medium leading-tight text-text-muted">
-                {props.regionLabel ?? "选择地区"}
+            {props.hideBrand ? (
+              <button
+                type="button"
+                onClick={props.onRegionClick}
+                className="flex min-w-0 shrink items-center gap-1 text-left text-text"
+              >
+                <span className="truncate text-xl font-bold leading-tight">
+                  {props.regionLabel ?? "选择地区"}
+                </span>
+                <ChevronDown size={20} aria-hidden="true" className="shrink-0" />
+              </button>
+            ) : (
+              <span className="shrink-0 text-xl font-extrabold leading-tight tracking-wide text-primary">
+                华邻
               </span>
-              <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-text-muted" />
-            </button>
+            )}
+            {props.hideBrand ? null : (
+              <button
+                type="button"
+                onClick={props.onRegionClick}
+                className="flex min-w-0 shrink-0 items-center gap-0.5 rounded-full border border-border bg-card px-3 py-1.5 text-left"
+              >
+                <span className="truncate text-xs font-medium leading-tight text-text-muted">
+                  {props.regionLabel ?? "选择地区"}
+                </span>
+                <ChevronDown size={14} aria-hidden="true" className="shrink-0 text-text-muted" />
+              </button>
+            )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {props.onCreateClick ? (

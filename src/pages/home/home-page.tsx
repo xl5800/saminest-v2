@@ -1,195 +1,307 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 import { hideSplashScreen } from "../../app/splash-screen";
 
-import { AppMenuDrawer } from "../../components/app-menu-drawer";
-import { CommunityPostCard } from "../../components/community-post-card";
-import { PublishActionSheet } from "../../components/publish-action-sheet";
-import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
 import { formatSelectedRegionLabel } from "../../data/us-states";
-import { useCommunityPostsInfiniteQuery } from "../../features/community/use-community-posts-query";
-import { useMyCommunitiesQuery } from "../../features/community/use-my-communities-query";
-import { useAuthStore } from "../../store/auth-store";
+import { ActivityFeed } from "../../features/activities/activity-feed";
+import { useCategoriesQuery } from "../../features/categories/use-categories-query";
+import {
+  HIRING_CATEGORY_SLUG,
+  JOB_SEEKING_CATEGORY_SLUG
+} from "../../features/posts/job-fields";
+import { PostList } from "../../features/posts/post-list";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
-
-const SKELETON_COUNT = 4;
 
 const REGION_SELECT_PATH = "/region-select";
 const SEARCH_PATH = "/search";
 
-/** 社区入口统一路径。这里直接写死字符串而不是从 router/routes.tsx 引常量：
- *  routes.tsx 是并行任务卡（阶段九/十/十一）也在改的文件，这张卡不碰它。 */
-const COMMUNITY_PATH = "/community";
+export type HomeTab = "jobs" | "housing" | "used" | "buddies";
+
+export const HOME_TABS: Array<{ key: HomeTab; label: string }> = [
+  { key: "jobs", label: "招聘求职" },
+  { key: "housing", label: "房屋租售" },
+  { key: "used", label: "二手闲置" },
+  { key: "buddies", label: "找搭子" }
+];
+
+const DEFAULT_TAB: HomeTab = "jobs";
+
+/** 记住上次停在哪个标签（从帖子详情返回、下次打开 App 都回到同一个标签）。
+ *  只是个人便利，读写失败（隐私模式等）就当没记过，回到默认的招聘求职。 */
+export const HOME_TAB_STORAGE_KEY = "saminest.home-tab";
+
+function readStoredTab(): HomeTab {
+  try {
+    const stored = window.localStorage.getItem(HOME_TAB_STORAGE_KEY);
+    return HOME_TABS.some((tab) => tab.key === stored) ? (stored as HomeTab) : DEFAULT_TAB;
+  } catch {
+    return DEFAULT_TAB;
+  }
+}
+
+function writeStoredTab(tab: HomeTab): void {
+  try {
+    window.localStorage.setItem(HOME_TAB_STORAGE_KEY, tab);
+  } catch {
+    // 存不了就算了，不影响切换本身。
+  }
+}
+
+type JobFilter = "all" | typeof HIRING_CATEGORY_SLUG | typeof JOB_SEEKING_CATEGORY_SLUG;
+type HousingFilter = "rent" | "wanted";
+
+const JOB_FILTERS: Array<{ key: JobFilter; label: string }> = [
+  { key: "all", label: "全部" },
+  { key: HIRING_CATEGORY_SLUG, label: "招聘" },
+  { key: JOB_SEEKING_CATEGORY_SLUG, label: "求职" }
+];
+
+const HOUSING_FILTERS: Array<{ key: HousingFilter; label: string }> = [
+  { key: "rent", label: "出租" },
+  { key: "wanted", label: "求租" }
+];
+
+function FilterChips<K extends string>({
+  label,
+  options,
+  value,
+  onChange
+}: {
+  label: string;
+  options: Array<{ key: K; label: string }>;
+  value: K;
+  onChange: (key: K) => void;
+}) {
+  return (
+    <div role="group" aria-label={label} className="flex gap-2 px-4 pb-2 pt-3">
+      {options.map((option) => {
+        const selected = option.key === value;
+        return (
+          <button
+            key={option.key}
+            type="button"
+            aria-pressed={selected}
+            onClick={() => onChange(option.key)}
+            className={`flex h-8 items-center rounded-full px-3.5 text-sm whitespace-nowrap ${
+              selected ? "bg-primary-light font-semibold text-primary" : "bg-field text-text-body"
+            }`}
+          >
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 /**
- * 首页（`/`）——阶段八起是"社区聚合 Feed"。
+ * 首页（`/`）——首页改版（招聘求职任务卡）起是四个分类标签的信息流。
  *
- * 原来挂在这里的"推荐/租房/二手/求租"分类信息流（带分类 Chips、搜索、求租
- * 单列卡片）整体搬到了底部导航的"分类"Tab（pages/categories/
- * categories-page.tsx，路径 `/categories`），逻辑原样保留。这个页面是社区聚合
- * Feed。
+ * 之前首页是社区聚合 Feed，现在社区有底部导航自己的"社区"Tab，首页改成
+ * 本地生活信息：招聘求职（默认、第一个）· 房屋租售 · 二手闲置 · 找搭子。
+ * 这几类帖子格式不一样（工作帖是文字行、租房 / 二手是图片网格、求租是
+ * 文字卡片、找搭子是活动卡片），不能混在一个流里，所以用标签分开，每个
+ * 标签用各自的列表格式：
+ * - 招聘求职：全部 / 招聘 / 求职 三个小筛选，PostList 的 job 文字行；
+ *   没有内容时显示"还没有工作信息，你要招人吗？免费发布"。
+ * - 房屋租售：出租（图片网格）/ 求租（文字卡片），原来分类页的两种格式。
+ * - 二手闲置：图片网格。
+ * - 找搭子：跟 /activities 同一个 ActivityFeed（频道筛选 + 活动卡片）。
  *
- * 数据范围（阶段十三，个性化优先）：
- * - 用户已经加入了至少一个社区 → 只聚合这些已加入社区的帖子；
- * - 一个社区都没加入（游客，或者刚注册还没点过"加入"的新用户）→ 展示全部社区
- *   的帖子作为兜底内容，同时在信息流上方显示一条引导横幅，跳 /community（社区
- *   浏览页）去加入社区。横幅纯粹跟着"已加入数量是否为 0"走，加入任意一个社区后
- *   下次渲染自动消失，没有关闭交互。
- * - 这个兜底只是内容展示层面的，**不会**帮用户创建 community_members 记录——
- *   整个应用已经没有任何"静默自动加入"，用户必须自己点"加入"才算数。
- * - 已登录用户的"已加入列表"还没加载出来之前不发帖子请求（范围未知），统一
- *   展示骨架屏；已加入列表加载失败时退回"全部社区"兜底、不显示引导横幅（拿不到
- *   列表不等于用户没加入，不该错误地告诉 TA"还没加入任何社区"）。
+ * 顶栏：左边是地区（"DMV ⌄"，点了去 /region-select），右边是搜索；不再显示
+ * "华邻"品牌名，"＋"发布挪到了底部导航中间。四个标签固定在顶栏下面
+ * （TopBar 的 bottomSlot），跟顶栏是同一张吸顶卡片。
  *
- * 结构（自上而下）：
- * - TopBar home 变体：最左侧"三条横线"菜单按钮（打开 AppMenuDrawer：我的社区 /
- *   创建社区）+ Saminest + 地区按钮（点击去 /region-select，地区目前
- *   只是展示，社区帖子没有地区维度，不做筛选）、"＋"打开 PublishActionSheet、
- *   搜索图标（跳全站搜索页 /search，同时搜社区和社区帖子）。
- * - 原来顶栏下面有一行固定的"推荐"Tab（只有一个选项、没有切换逻辑），界面配色
- *   和字体任务卡把它去掉了，等真有第二个 Tab（关注/附近）再加回来。
- * - （零加入时）引导加入社区的横幅。原来顶部的"我的社区"横向卡片区已经删掉——
- *   "我在哪些社区"这个信息改成每条帖子上可点击的社区名标签（点了去对应社区的
- *   Feed 页）。
- * - 帖子流：每条帖子是共用的 CommunityPostCard（showCommunityTag，右上角带可
- *   点击的社区名标签），跟单个社区页的帖子长得完全一样，结构说明见
- *   community-post-card.tsx。分页沿用"哨兵元素 + IntersectionObserver"无限滚动。
- *   帖子是公开可读的，游客也能看到。
+ * 地区筛选：每个标签都按当前选中的州过滤（跟原来分类页、找搭子页同一个
+ * useSelectedRegionStore）。
  */
 export function HomePage() {
   const navigate = useNavigate();
-  const [publishSheetOpen, setPublishSheetOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
-  const session = useAuthStore((s) => s.session);
-  const userId = session?.user.id;
+  const stateCode = selectedRegion?.stateCode;
+  const [tab, setTab] = useState<HomeTab>(readStoredTab);
+  const [jobFilter, setJobFilter] = useState<JobFilter>("all");
+  const [housingFilter, setHousingFilter] = useState<HousingFilter>("rent");
 
-  // 游客不查已加入列表（enabled 被 userId 挡住），直接按"零加入"处理。
-  const { data: myCommunities, isError: myCommunitiesError } = useMyCommunitiesQuery(userId);
-  const joinedIds = myCommunities?.map((community) => community.id);
+  const { data: categories, isPending: categoriesPending, isError: categoriesError } =
+    useCategoriesQuery();
+  const categoryIdBySlug = new Map((categories ?? []).map((category) => [category.slug, category.id]));
 
-  // undefined = 范围未知（已登录但已加入列表还没回来），帖子查询先不发。
-  let scope: string[] | "all" | undefined;
-  if (!userId || myCommunitiesError) {
-    scope = "all";
-  } else if (joinedIds) {
-    scope = joinedIds.length > 0 ? joinedIds : "all";
-  }
-  const showJoinBanner = !userId || (joinedIds !== undefined && joinedIds.length === 0);
-
-  const { data, isPending, isError, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useCommunityPostsInfiniteQuery(scope);
-
-  // 启动图：首页第一屏帖子请求结束（成功或失败）再收起，避免启动图一闪而过
-  // 之后看到骨架屏，见 app/splash-screen.ts。之后再进首页时这里重复调用
-  // 也没关系，hideSplashScreen 只有第一次生效。
+  // 启动图：分类查回来（成功或失败）再收起——各标签的列表都要先知道分类 id；
+  // 找搭子标签不依赖分类，直接收起。hideSplashScreen 只有第一次调用生效。
   useEffect(() => {
-    if (!isPending || isError) {
+    if (tab === "buddies" || !categoriesPending) {
       hideSplashScreen();
     }
-  }, [isPending, isError]);
+  }, [tab, categoriesPending]);
 
-  const sentinelRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver((entries) => {
-      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
-        void fetchNextPage();
-      }
-    });
-    observer.observe(sentinel);
-    return () => {
-      observer.disconnect();
-    };
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  function selectTab(next: HomeTab): void {
+    setTab(next);
+    writeStoredTab(next);
+    window.scrollTo({ top: 0 });
+  }
 
-  const posts = data?.pages.flatMap((page) => page.posts) ?? [];
+  function publish(categorySlug: string): void {
+    navigate(`/publish?category=${categorySlug}`);
+  }
 
-  function renderFeed() {
-    if (isError) {
+  function renderJobsEmptyState(filter: JobFilter) {
+    const seeking = filter === JOB_SEEKING_CATEGORY_SLUG;
+    return (
+      <div role="status" className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+        <p className="text-base text-text-body">
+          {seeking ? "还没有求职信息，你在找工作吗？" : "还没有工作信息，你要招人吗？"}
+        </p>
+        <button
+          type="button"
+          onClick={() => publish(seeking ? JOB_SEEKING_CATEGORY_SLUG : HIRING_CATEGORY_SLUG)}
+          className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover"
+        >
+          免费发布
+        </button>
+      </div>
+    );
+  }
+
+  /** 帖子类标签都要先拿到分类 id 才能查；分类还没回来 / 查失败时的占位。 */
+  function renderCategoriesGate() {
+    if (categoriesError) {
       return (
         <p role="alert" className="px-4 py-6 text-sm text-text-muted">
-          社区加载失败，请稍后重试。
+          加载失败，请稍后重试。
         </p>
       );
     }
+    return (
+      <p role="status" className="sr-only">
+        加载中…
+      </p>
+    );
+  }
 
-    // 已加入列表还没返回时 scope 是 undefined，帖子查询被 enabled 挡住、
-    // isPending 也为 true，统一展示骨架屏。
-    if (isPending) {
-      return (
-        <div role="status">
-          <span className="sr-only">加载中…</span>
-          {Array.from({ length: SKELETON_COUNT }).map((_, index) => (
-            <div key={index} className="border-b border-divider px-4 py-4">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="mt-3 h-5 w-4/5" />
-              <Skeleton className="mt-2 h-4 w-full" />
-            </div>
-          ))}
-        </div>
-      );
-    }
+  function renderJobs() {
+    const hiringId = categoryIdBySlug.get(HIRING_CATEGORY_SLUG);
+    const seekingId = categoryIdBySlug.get(JOB_SEEKING_CATEGORY_SLUG);
+    const jobCategoryIds = [hiringId, seekingId].filter((id): id is string => Boolean(id));
+    const activeId = jobFilter === "all" ? undefined : categoryIdBySlug.get(jobFilter);
 
-    if (posts.length === 0) {
-      return (
-        <div role="status" className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-          <p className="text-sm text-text-muted">暂无帖子，欢迎发布第一条</p>
-          <Link
-            to={`${COMMUNITY_PATH}/new`}
-            className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
-          >
-            去发布
-          </Link>
-        </div>
+    let list;
+    if (!categories) {
+      list = renderCategoriesGate();
+    } else if (jobFilter === "all" ? jobCategoryIds.length === 0 : !activeId) {
+      // 分类还没建好（迁移没跑）时不能不带分类条件去查——那会把所有帖子都查出来。
+      list = renderJobsEmptyState(jobFilter);
+    } else {
+      list = (
+        <PostList
+          key={`jobs-${jobFilter}`}
+          variant="job"
+          categoryId={activeId}
+          categoryIds={jobFilter === "all" ? jobCategoryIds : undefined}
+          stateCode={stateCode}
+          emptyState={renderJobsEmptyState(jobFilter)}
+        />
       );
     }
 
     return (
-      <div>
-        <ul>
-          {posts.map((post) => (
-            <li key={post.id}>
-              <CommunityPostCard post={post} showCommunityTag />
-            </li>
-          ))}
-        </ul>
-        {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
-        {isFetchingNextPage ? <p role="status" className="py-3 text-center text-sm text-text-muted">加载更多…</p> : null}
-      </div>
+      <>
+        <FilterChips label="招聘求职筛选" options={JOB_FILTERS} value={jobFilter} onChange={setJobFilter} />
+        {list}
+      </>
     );
+  }
+
+  function renderPostTab(slug: string, variant: "grid" | "wanted") {
+    if (!categories) return renderCategoriesGate();
+    const categoryId = categoryIdBySlug.get(slug);
+    if (!categoryId) {
+      return (
+        <p role="status" className="px-4 py-6 text-sm text-text-muted">
+          暂无帖子。
+        </p>
+      );
+    }
+    return (
+      <PostList
+        key={slug}
+        variant={variant}
+        categoryId={categoryId}
+        stateCode={stateCode}
+        onPublishClick={() => publish(slug)}
+      />
+    );
+  }
+
+  function renderContent() {
+    switch (tab) {
+      case "jobs":
+        return renderJobs();
+      case "housing":
+        return (
+          <>
+            <FilterChips
+              label="房屋租售筛选"
+              options={HOUSING_FILTERS}
+              value={housingFilter}
+              onChange={setHousingFilter}
+            />
+            {renderPostTab(housingFilter, housingFilter === "wanted" ? "wanted" : "grid")}
+          </>
+        );
+      case "used":
+        return <div className="pt-2">{renderPostTab("used", "grid")}</div>;
+      case "buddies":
+        return (
+          <div className="mx-auto max-w-2xl px-4 pt-2">
+            <ActivityFeed />
+          </div>
+        );
+    }
   }
 
   return (
     <main data-testid="home-page">
       <TopBar
         variant="home"
+        hideBrand
         regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
-        onCreateClick={() => setPublishSheetOpen(true)}
         onSearchClick={() => navigate(SEARCH_PATH)}
-        onMenuClick={() => setMenuOpen(true)}
+        bottomSlot={
+          <div role="tablist" aria-label="首页分类" className="flex px-2">
+            {HOME_TABS.map((item) => {
+              const selected = item.key === tab;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => selectTab(item.key)}
+                  className={`relative flex-1 py-2.5 text-[15px] whitespace-nowrap ${
+                    selected ? "font-semibold text-text" : "text-text-muted"
+                  }`}
+                >
+                  {item.label}
+                  {selected ? (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-x-1/4 bottom-0 h-[3px] rounded-full bg-primary"
+                    />
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        }
       />
 
-      {showJoinBanner ? (
-        <Link
-          to={COMMUNITY_PATH}
-          className="mx-4 mt-4 flex items-center justify-between gap-3 rounded-card-lg bg-primary-light px-4 py-3 text-sm text-primary"
-        >
-          <span>还没加入任何社区？去看看有哪些社区可以加入</span>
-          <span aria-hidden="true" className="shrink-0 font-semibold">
-            去看看 ›
-          </span>
-        </Link>
-      ) : null}
-
-      <div className="mt-4 pb-24 md:pb-6">{renderFeed()}</div>
-
-      {publishSheetOpen ? <PublishActionSheet onClose={() => setPublishSheetOpen(false)} /> : null}
-      {menuOpen ? <AppMenuDrawer onClose={() => setMenuOpen(false)} /> : null}
+      <div role="tabpanel" aria-label={HOME_TABS.find((item) => item.key === tab)?.label} className="pb-24 md:pb-6">
+        {renderContent()}
+      </div>
     </main>
   );
 }

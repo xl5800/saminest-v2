@@ -16,7 +16,7 @@ describe("PublishActionSheet", () => {
     cleanup();
   });
 
-  it("renders the five publish options in the fixed order defined by 05-publish-flow.md, with '发布社区帖子' first", () => {
+  it("renders the seven publish options in the fixed order defined by 05-publish-flow.md, with '发布社区帖子' first", () => {
     navigateMock.mockReset();
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
       initialEntries: ["/"]
@@ -25,6 +25,8 @@ describe("PublishActionSheet", () => {
     const buttons = screen.getAllByRole("button").filter((button) => button.textContent !== "取消");
     expect(buttons.map((button) => button.textContent)).toEqual([
       "💬发布社区帖子",
+      "💼发布招聘",
+      "🙋发布求职",
       "🤝发起搭子",
       "🏠发布租房",
       "🔑发布求租",
@@ -43,17 +45,28 @@ describe("PublishActionSheet", () => {
     expect(communityButton.className).toContain("text-primary");
   });
 
-  it("does not emphasize the other four options", () => {
+  it("does not emphasize the other options", () => {
     navigateMock.mockReset();
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
       initialEntries: ["/"]
     });
 
-    for (const name of [/发起搭子/, /发布租房/, /发布求租/, /发布二手/]) {
+    for (const name of [/发布招聘/, /发布求职/, /发起搭子/, /发布租房/, /发布求租/, /发布二手/]) {
       const button = screen.getByRole("button", { name });
       expect(button.className).not.toContain("bg-primary-light");
-      expect(button.className).toContain("bg-bg");
+      expect(button.className).toContain("bg-field");
     }
+  });
+
+  it("navigates to /publish?category=hiring when '发布招聘' is clicked", () => {
+    navigateMock.mockReset();
+    const onClose = vi.fn();
+    renderWithProviders(<PublishActionSheet onClose={onClose} />, { initialEntries: ["/"] });
+
+    fireEvent.click(screen.getByRole("button", { name: /发布招聘/ }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(navigateMock).toHaveBeenCalledWith("/publish?category=hiring");
   });
 
   it("navigates to /publish?category=rent when '发布租房' is clicked, and closes", () => {

@@ -39,9 +39,50 @@ describe("validatePublishInput", () => {
         contactMethod: "message",
         contactValue: null,
         posterAge: null,
-        posterGender: null
+        posterGender: null,
+        job: null
       }
     });
+  });
+
+  // 招聘求职任务卡
+  it("requires an employment type for job posts", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      job: { salaryUnit: "hour", employmentType: "", perks: [] }
+    });
+    expect(result.error?.code).toBe("PUBLISH_EMPLOYMENT_TYPE_REQUIRED");
+  });
+
+  it("treats an empty salary as 面议 and drops the unit", () => {
+    const result = validatePublishInput({
+      ...validInput,
+      price: "",
+      job: { salaryUnit: "hour", employmentType: "either", perks: ["training", "bogus"] }
+    });
+    expect(result.data?.job).toEqual({
+      salaryUnit: null,
+      employmentType: "either",
+      perks: ["training"],
+      negotiable: true
+    });
+  });
+
+  it("requires a valid salary unit when a salary is given, and calls it 薪资 in errors", () => {
+    expect(
+      validatePublishInput({
+        ...validInput,
+        price: "20",
+        job: { salaryUnit: "week", employmentType: "full_time", perks: [] }
+      }).error?.code
+    ).toBe("PUBLISH_SALARY_UNIT_REQUIRED");
+    expect(
+      validatePublishInput({
+        ...validInput,
+        price: "-1",
+        job: { salaryUnit: "hour", employmentType: "full_time", perks: [] }
+      }).error?.message
+    ).toBe("薪资不能小于 0。");
   });
 
   it("requires a category to be selected", () => {
