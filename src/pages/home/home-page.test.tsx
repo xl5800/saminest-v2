@@ -1,10 +1,22 @@
 import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { navigateMock, hideSplashScreen } = vi.hoisted(() => ({
+const { navigateMock, hideSplashScreen, flags } = vi.hoisted(() => ({
   navigateMock: vi.fn(),
-  hideSplashScreen: vi.fn()
+  hideSplashScreen: vi.fn(),
+  flags: { NEARBY_USED_ENABLED: false }
 }));
+
+// 功能开关：附近功能默认关着（首页精简），单独几个用例打开它测位置条。
+vi.mock("../../config/feature-flags", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/feature-flags")>();
+  return {
+    ...actual,
+    get NEARBY_USED_ENABLED() {
+      return flags.NEARBY_USED_ENABLED;
+    }
+  };
+});
 
 vi.mock("../../app/splash-screen", () => ({ hideSplashScreen }));
 // 附近的二手列表和选位置弹层自己有测试（features/nearby/），这里只确认首页放了它们。
@@ -34,6 +46,7 @@ describe("HomePage (icon entries)", () => {
     useSelectedRegionStore.setState(initialRegionState, true);
     navigateMock.mockReset();
     hideSplashScreen.mockReset();
+    flags.NEARBY_USED_ENABLED = false;
   });
 
   it("shows a short Chinese region name with a location icon, and a search button, with no brand", () => {
@@ -65,15 +78,25 @@ describe("HomePage (icon entries)", () => {
     ]);
   });
 
-  it("shows nearby used items below the icons, with a 更多 link to /used", () => {
+  it("shows used items right below the icons, with no heading, 更多 link or location bar", () => {
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByRole("heading", { name: "附近的二手闲置" })).toBeInTheDocument();
     expect(screen.getByTestId("nearby-used-list")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "更多" })).toHaveAttribute("href", "/used");
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "更多" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /显示附近的二手/ })).not.toBeInTheDocument();
   });
 
-  it("never opens the location sheet on its own; the location bar opens it", () => {
+  it("uses grey icon tiles instead of blue ones", () => {
+    renderWithProviders(<HomePage />);
+
+    const tile = screen.getByRole("link", { name: "招聘求职" }).querySelector("span");
+    expect(tile).toHaveClass("bg-field", "text-text-body");
+    expect(tile).not.toHaveClass("text-primary");
+  });
+
+  it("with the nearby feature on: never opens the location sheet on its own; the location bar opens it", () => {
+    flags.NEARBY_USED_ENABLED = true;
     useSelectedRegionStore.setState({
       selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
     });

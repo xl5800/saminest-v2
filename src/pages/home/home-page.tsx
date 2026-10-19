@@ -1,10 +1,11 @@
-import { Briefcase, ChevronRight, Gift, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
+import { Briefcase, Gift, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { hideSplashScreen } from "../../app/splash-screen";
 
 import { TopBar } from "../../components/top-bar";
+import { NEARBY_USED_ENABLED } from "../../config/feature-flags";
 import { formatShortRegionLabel } from "../../data/us-states";
 import { NearbyLocationBar } from "../../features/nearby/nearby-location-bar";
 import { NearbyLocationSheet } from "../../features/nearby/nearby-location-sheet";
@@ -37,6 +38,11 @@ export const HOME_ENTRIES: Array<{ to: string; label: string; Icon: LucideIcon }
  *   保留）。标题下面是位置条，点了打开选位置的弹层（用现在的位置 / 输入
  *   邮编 / 范围）；打开 App 时不主动请求定位。没设位置就按当前州显示二手。
  *
+ * - 首页精简（2026-10-19）：去掉"附近的二手闲置 / 更多"标题行（图标行已经
+ *   有"二手闲置"入口）；附近功能先关掉（NEARBY_USED_ENABLED），图标下面直接
+ *   是左上角所选州的二手闲置。功能打开后图标下面多一条位置条。图标从蓝底蓝色
+ *   改成浅灰底、深灰图标（参考 Yelp），首页上蓝色只留给地区图标和底部导航。
+ *
  * 发布入口在底部导航中间的"＋"。
  */
 export function HomePage() {
@@ -63,7 +69,7 @@ export function HomePage() {
       <nav aria-label="分类入口" className="grid grid-cols-5 gap-1 px-3 pt-3">
         {HOME_ENTRIES.map(({ to, label, Icon }) => (
           <Link key={to} to={to} className="flex flex-col items-center gap-1.5 rounded-2xl py-2 active:bg-surface-pressed">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-light text-primary">
+            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-field text-text-body">
               <Icon aria-hidden="true" size={24} strokeWidth={2} />
             </span>
             <span className="whitespace-nowrap text-[13px] text-text">{label}</span>
@@ -71,17 +77,10 @@ export function HomePage() {
         ))}
       </nav>
 
-      <section aria-labelledby="home-nearby-heading" className="mt-4">
-        <div className="flex items-center justify-between px-4 pb-1">
-          <h2 id="home-nearby-heading" className="text-lg font-bold text-text">
-            附近的二手闲置
-          </h2>
-          <Link to="/used" className="flex items-center text-sm text-primary">
-            更多
-            <ChevronRight aria-hidden="true" size={16} />
-          </Link>
-        </div>
-        <NearbyLocationBar regionLabel={regionLabel} onClick={() => setLocationSheetOpen(true)} />
+      <section aria-label="二手闲置" className="mt-2">
+        {NEARBY_USED_ENABLED ? (
+          <NearbyLocationBar regionLabel={regionLabel} onClick={() => setLocationSheetOpen(true)} />
+        ) : null}
         <div className="pt-2">
           <NearbyUsedList />
         </div>

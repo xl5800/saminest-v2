@@ -19,3 +19,11 @@ export const USER_PROFILE_PAGE_ENABLED = false;
  * 手机号注册过的账号照样能登录。改回 true 就恢复手机号注册。
  */
 export const PHONE_REGISTRATION_ENABLED = false;
+
+/**
+ * 首页"附近的二手闲置"（定位 / 输入邮编、按距离排序、范围选择）。暂时关闭
+ * （BARRY 2026-10-19）：现在内容不多，首页下面直接按左上角选的州显示二手闲置，
+ * 不显示位置条。附近功能的代码（features/nearby/、list_nearby_posts 函数）都
+ * 还在，改回 true 就在首页恢复位置条和按距离排序。
+ */
+export const NEARBY_USED_ENABLED = false;

@@ -1,10 +1,22 @@
 import { cleanup, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listNearbyPostIds, listApprovedPostsByIds } = vi.hoisted(() => ({
+const { listNearbyPostIds, listApprovedPostsByIds, flags } = vi.hoisted(() => ({
   listNearbyPostIds: vi.fn(),
-  listApprovedPostsByIds: vi.fn()
+  listApprovedPostsByIds: vi.fn(),
+  flags: { NEARBY_USED_ENABLED: true }
 }));
+
+// 这个文件测的是附近功能打开时的行为；最后一个用例测关掉时退回按州显示。
+vi.mock("../../config/feature-flags", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/feature-flags")>();
+  return {
+    ...actual,
+    get NEARBY_USED_ENABLED() {
+      return flags.NEARBY_USED_ENABLED;
+    }
+  };
+});
 
 vi.mock("../../repositories/nearby-repository", () => ({ listNearbyPostIds }));
 vi.mock("../../repositories/posts-repository", () => ({ listApprovedPostsByIds }));
@@ -62,6 +74,7 @@ describe("NearbyUsedList", () => {
   beforeEach(() => {
     listNearbyPostIds.mockReset();
     listApprovedPostsByIds.mockReset();
+    flags.NEARBY_USED_ENABLED = true;
     useNearbyLocationStore.setState({
       location: { latitude: 39.08, longitude: -77.15, label: "Rockville", source: "zip", zip: "20850" },
       radiusMiles: DEFAULT_NEARBY_RADIUS
@@ -82,6 +95,14 @@ describe("NearbyUsedList", () => {
     const list = screen.getByTestId("post-list");
     expect(list).toHaveAttribute("data-category", "cat-1");
     expect(list).toHaveAttribute("data-state", "VA");
+    expect(listNearbyPostIds).not.toHaveBeenCalled();
+  });
+
+  it("ignores a saved location and shows used items by state while the nearby feature is off", () => {
+    flags.NEARBY_USED_ENABLED = false;
+    renderWithProviders(<NearbyUsedList />);
+
+    expect(screen.getByTestId("post-list")).toHaveAttribute("data-category", "cat-1");
     expect(listNearbyPostIds).not.toHaveBeenCalled();
   });
 

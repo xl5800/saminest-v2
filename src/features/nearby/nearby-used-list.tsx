@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Skeleton } from "../../components/skeleton";
+import { NEARBY_USED_ENABLED } from "../../config/feature-flags";
 import { CategoriesGate, NoPostsYet } from "../categories/categories-gate";
 import { useNearbyPostsInfiniteQuery } from "../posts/use-nearby-posts-query";
 import { PostGridCard, PostList } from "../posts/post-list";
@@ -21,13 +22,15 @@ const SKELETON_COUNT = 4;
  * - 设了位置：按距离从近到远，范围内的排前面；看完范围内的，自动接着显示
  *   更远的，中间一条"以下距离超过 X 英里"；没填邮编的帖子排最后，前面一条
  *   "以下未标注位置"。卡片上显示距离。
- * - 没设位置：跟二手闲置页一样，按当前选中的州显示（复用 PostList）。
+ * - 没设位置，或者附近功能关着（NEARBY_USED_ENABLED）：跟二手闲置页一样，
+ *   按当前选中的州显示（复用 PostList）。功能关着时，以前在这台手机上设过的
+ *   位置也不用。
  */
 export function NearbyUsedList() {
   const location = useNearbyLocationStore((s) => s.location);
   const radiusMiles = useNearbyLocationStore((s) => s.radiusMiles);
 
-  if (!location) return <UsedByStateList />;
+  if (!NEARBY_USED_ENABLED || !location) return <UsedByStateList />;
   return <NearbyList location={location} radiusMiles={radiusMiles} />;
 }
 
