@@ -1114,6 +1114,7 @@ export type Database = {
           salary_unit: string | null
           employment_type: string | null
           job_perks: string[]
+          zip_code: string | null
           status: string
           title: string
           updated_at: string
@@ -1146,6 +1147,7 @@ export type Database = {
           salary_unit?: string | null
           employment_type?: string | null
           job_perks?: string[]
+          zip_code?: string | null
           status?: string
           title: string
           updated_at?: string
@@ -1178,6 +1180,7 @@ export type Database = {
           salary_unit?: string | null
           employment_type?: string | null
           job_perks?: string[]
+          zip_code?: string | null
           status?: string
           title?: string
           updated_at?: string
@@ -1362,6 +1365,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      zip_codes: {
+        Row: {
+          city: string
+          latitude: number
+          longitude: number
+          state_code: string
+          zip: string
+        }
+        Insert: {
+          city: string
+          latitude: number
+          longitude: number
+          state_code: string
+          zip: string
+        }
+        Update: {
+          city?: string
+          latitude?: number
+          longitude?: number
+          state_code?: string
+          zip?: string
+        }
+        Relationships: []
       }
     }
     Views: {

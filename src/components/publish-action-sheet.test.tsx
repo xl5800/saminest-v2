@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
@@ -8,171 +8,90 @@ vi.mock("react-router-dom", async (importOriginal) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+import { useSelectedRegionStore } from "../store/selected-region-store";
 import { renderWithProviders } from "../test/render-with-providers";
 import { PublishActionSheet } from "./publish-action-sheet";
+
+const initialRegionState = useSelectedRegionStore.getState();
+
+function optionButtons() {
+  return screen.getAllByRole("button").filter((button) => button.getAttribute("aria-label") !== "关闭");
+}
 
 describe("PublishActionSheet", () => {
   afterEach(() => {
     cleanup();
   });
 
-  it("renders the seven publish options in the fixed order defined by 05-publish-flow.md, with '发布社区帖子' first", () => {
+  beforeEach(() => {
     navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/"]
-    });
+    useSelectedRegionStore.setState(initialRegionState, true);
+  });
 
-    const buttons = screen.getAllByRole("button").filter((button) => button.textContent !== "取消");
-    expect(buttons.map((button) => button.textContent)).toEqual([
-      "💬发布社区帖子",
-      "💼发布招聘",
-      "🙋发布求职",
-      "🤝发起搭子",
-      "🏠发布租房",
-      "🔑发布求租",
-      "🛍发布二手"
+  // 首页图标入口改版：四列图标网格。
+  it("renders the seven publish options in a fixed order, with 社区帖子 first", () => {
+    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />);
+
+    expect(optionButtons().map((button) => button.textContent)).toEqual([
+      "社区帖子",
+      "招聘",
+      "求职",
+      "房屋出租",
+      "求租",
+      "二手闲置",
+      "找搭子"
     ]);
   });
 
-  it("always emphasizes '发布社区帖子' (blue-light background), regardless of which page opened the sheet", () => {
-    navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/activities"]
-    });
+  it("titles the sheet with the selected region, falling back to 选择发布类型", () => {
+    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "选择发布类型" })).toBeInTheDocument();
+    cleanup();
 
-    const communityButton = screen.getByRole("button", { name: /发布社区帖子/ });
-    expect(communityButton.className).toContain("bg-primary-light");
-    expect(communityButton.className).toContain("text-primary");
+    useSelectedRegionStore.setState({
+      selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
+    });
+    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "发布到弗吉尼亚" })).toBeInTheDocument();
   });
 
-  it("does not emphasize the other options", () => {
-    navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/"]
-    });
+  it("highlights only 社区帖子 with a solid blue icon", () => {
+    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />);
 
-    for (const name of [/发布招聘/, /发布求职/, /发起搭子/, /发布租房/, /发布求租/, /发布二手/]) {
-      const button = screen.getByRole("button", { name });
-      expect(button.className).not.toContain("bg-primary-light");
-      expect(button.className).toContain("bg-field");
+    const [community, ...others] = optionButtons();
+    expect(community.querySelector("span")?.className).toContain("bg-primary text-white");
+    for (const button of others) {
+      expect(button.querySelector("span")?.className).toContain("bg-primary-light");
     }
   });
 
-  it("navigates to /publish?category=hiring when '发布招聘' is clicked", () => {
-    navigateMock.mockReset();
+  it.each([
+    ["社区帖子", "/community/new"],
+    ["招聘", "/publish?category=hiring"],
+    ["求职", "/publish?category=job-seeking"],
+    ["房屋出租", "/publish?category=rent"],
+    ["求租", "/publish?category=wanted"],
+    ["二手闲置", "/publish?category=used"],
+    ["找搭子", "/activities/new"]
+  ])("navigates to the right form when %s is chosen, and closes once", (label, to) => {
     const onClose = vi.fn();
-    renderWithProviders(<PublishActionSheet onClose={onClose} />, { initialEntries: ["/"] });
+    renderWithProviders(<PublishActionSheet onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /发布招聘/ }));
+    fireEvent.click(screen.getByRole("button", { name: label }));
 
-    expect(onClose).toHaveBeenCalled();
-    expect(navigateMock).toHaveBeenCalledWith("/publish?category=hiring");
-  });
-
-  it("navigates to /publish?category=rent when '发布租房' is clicked, and closes", () => {
-    navigateMock.mockReset();
-    const onClose = vi.fn();
-    renderWithProviders(<PublishActionSheet onClose={onClose} />, {
-      initialEntries: ["/"]
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /发布租房/ }));
-
-    expect(navigateMock).toHaveBeenCalledWith("/publish?category=rent");
+    expect(navigateMock).toHaveBeenCalledWith(to);
+    // 只调用一次：选项按钮的点击没有冒泡到背景再关一次。
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("navigates to /publish?category=wanted when '发布求租' is clicked", () => {
-    navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/"]
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /发布求租/ }));
-
-    expect(navigateMock).toHaveBeenCalledWith("/publish?category=wanted");
-  });
-
-  it("navigates to /publish?category=used when '发布二手' is clicked", () => {
-    navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/"]
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /发布二手/ }));
-
-    expect(navigateMock).toHaveBeenCalledWith("/publish?category=used");
-  });
-
-  it("navigates to /activities/new when '发起搭子' is clicked", () => {
-    navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/"]
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /发起搭子/ }));
-
-    expect(navigateMock).toHaveBeenCalledWith("/activities/new");
-  });
-
-  it("navigates to /community/new when '发布社区帖子' is clicked", () => {
-    navigateMock.mockReset();
-    renderWithProviders(<PublishActionSheet onClose={vi.fn()} />, {
-      initialEntries: ["/"]
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: /发布社区帖子/ }));
-
-    expect(navigateMock).toHaveBeenCalledWith("/community/new");
-  });
-
-  it("calls onClose when the backdrop is clicked", () => {
-    navigateMock.mockReset();
+  it("closes via the round × button, the backdrop, or Escape", () => {
     const onClose = vi.fn();
-    renderWithProviders(<PublishActionSheet onClose={onClose} />, {
-      initialEntries: ["/"]
-    });
+    renderWithProviders(<PublishActionSheet onClose={onClose} />);
 
-    fireEvent.click(screen.getByRole("dialog"));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls onClose when the 取消 button is clicked", () => {
-    navigateMock.mockReset();
-    const onClose = vi.fn();
-    renderWithProviders(<PublishActionSheet onClose={onClose} />, {
-      initialEntries: ["/"]
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "取消" }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("calls onClose when Escape is pressed", () => {
-    navigateMock.mockReset();
-    const onClose = vi.fn();
-    renderWithProviders(<PublishActionSheet onClose={onClose} />, {
-      initialEntries: ["/"]
-    });
-
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    fireEvent.click(screen.getByRole("dialog", { name: "选择发布类型" }));
     fireEvent.keyDown(window, { key: "Escape" });
 
-    expect(onClose).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not call onClose when an option button itself is clicked (only navigates)", () => {
-    navigateMock.mockReset();
-    const onClose = vi.fn();
-    renderWithProviders(<PublishActionSheet onClose={onClose} />, {
-      initialEntries: ["/"]
-    });
-
-    // onClose 确实被调用了（选完关闭是预期行为），但不是因为事件冒泡到了
-    // 背景 —— 用 stopPropagation 验证：只调用一次，不是背景 + 按钮各触发一次。
-    fireEvent.click(screen.getByRole("button", { name: /发布租房/ }));
-
-    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(3);
   });
 });

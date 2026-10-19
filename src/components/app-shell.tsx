@@ -170,6 +170,10 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/settings/delete-account",
   // 短信验证码登录任务卡新增：设置登录密码页自带 TopBar。
   "/settings/password",
+  // 首页图标入口改版新增：三个列表页自带 TopBar。
+  "/jobs",
+  "/housing",
+  "/used",
   "/blocked-users",
   "/my-posts",
   "/admin/posts",

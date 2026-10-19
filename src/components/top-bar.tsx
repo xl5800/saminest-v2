@@ -1,4 +1,4 @@
-import { ArrowLeft, ChevronDown, Menu, MoreHorizontal, Plus, Search, X } from "lucide-react";
+import { ArrowLeft, ChevronDown, MapPin, Menu, MoreHorizontal, Plus, Search, X } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import { useGoBack } from "../router/use-go-back";
@@ -337,6 +337,8 @@ export function TopBar(props: TopBarProps) {
                 onClick={props.onRegionClick}
                 className="flex min-w-0 shrink items-center gap-1 text-left text-text"
               >
+                {/* 首页图标入口改版：地区前面加定位图标，一眼看出"当前地区、可以点"。 */}
+                <MapPin size={18} aria-hidden="true" className="shrink-0 text-primary" />
                 <span className="truncate text-[17px] font-semibold leading-tight">
                   {props.regionLabel ?? "选择地区"}
                 </span>

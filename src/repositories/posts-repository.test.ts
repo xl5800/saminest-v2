@@ -523,6 +523,7 @@ describe("createPost", () => {
       salary_unit: null,
       employment_type: null,
       job_perks: [],
+      zip_code: null,
       status: "pending"
     });
     expect(queryBuilder.select).toHaveBeenCalledWith("id");
@@ -880,7 +881,7 @@ describe("getPostDetail", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, zip_code, location:locations(name), category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
@@ -919,7 +920,8 @@ describe("getPostDetail", () => {
       ],
       commentCount: 4,
       categorySlug: null,
-      jobPerks: []
+      jobPerks: [],
+      zipCode: null
     });
   });
 
@@ -1310,7 +1312,8 @@ describe("updatePost", () => {
       poster_gender: "男",
       salary_unit: null,
       employment_type: null,
-      job_perks: []
+      job_perks: [],
+      zip_code: null
     });
     expect(queryBuilder.eq).toHaveBeenCalledWith("id", "post-1");
   });
@@ -1611,5 +1614,39 @@ describe("job posts", () => {
       employmentType: "part_time",
       jobPerks: ["meals", "housing"]
     });
+  });
+});
+
+// 发布页 ZIP 定位任务卡
+describe("zip code on posts", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    singleMock.mockReset();
+  });
+
+  it("writes the zip code the user entered", async () => {
+    singleMock.mockResolvedValue({ data: { id: "post-1" }, error: null });
+
+    await createPost({
+      authorId: "user-1",
+      categoryId: "cat-1",
+      locationId: "loc-md",
+      locationText: "Rockville, MD",
+      title: "九成新书桌",
+      description: "",
+      priceAmount: 40,
+      contactMethod: "message",
+      contactValue: null,
+      posterAge: null,
+      posterGender: null,
+      zipCode: "20850"
+    });
+
+    expect(queryBuilder.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ zip_code: "20850", location_text: "Rockville, MD" })
+    );
   });
 });

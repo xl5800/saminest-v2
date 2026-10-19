@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, X } from "lucide-react";
+import { ChevronDown, ChevronRight, MapPin, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -14,6 +14,7 @@ import { useCategoriesQuery } from "../../features/categories/use-categories-que
 // type = 'state' 行本身（不是活动专属的数据），发帖表单需要同一份数据来
 // 做同样的反查，没有必要另建一个几乎一样的 hook。
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
+import { useZipCodeQuery } from "../../features/locations/use-zip-code-query";
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
 import { useUpdatePostMutation } from "../../features/my-posts/use-update-post-mutation";
 import {
@@ -46,6 +47,28 @@ import { JobFieldsSection } from "./job-fields-section";
 import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
+
+/**
+ * 发布页 ZIP 定位任务卡：记住上次发帖填的邮编，下次新建帖子自动带上（大多数
+ * 人一直在同一个地方发帖）。只是个人便利，读写失败（隐私模式等）就当没记过。
+ */
+export const LAST_ZIP_CODE_STORAGE_KEY = "saminest.last-zip-code";
+
+function readLastZipCode(): string {
+  try {
+    return window.localStorage.getItem(LAST_ZIP_CODE_STORAGE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLastZipCode(zip: string): void {
+  try {
+    window.localStorage.setItem(LAST_ZIP_CODE_STORAGE_KEY, zip);
+  } catch {
+    // 存不了就算了。
+  }
+}
 const PUBLISH_SUCCESS_MESSAGE = "发布成功，等待审核";
 const PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE =
   "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。";
@@ -331,6 +354,15 @@ export function PublishPage() {
   const [jobSalaryUnit, setJobSalaryUnit] = useState(initialDraft?.jobSalaryUnit ?? "hour");
   const [jobEmploymentType, setJobEmploymentType] = useState(initialDraft?.jobEmploymentType ?? "");
   const [jobPerks, setJobPerks] = useState<string[]>(initialDraft?.jobPerks ?? []);
+  // 发布页 ZIP 定位任务卡：邮编输入框。新建帖子默认带上次填的邮编；编辑帖子
+  // 由下面"从 existingPost 回填"的 effect 填入帖子自己存的邮编。
+  const [zipCode, setZipCode] = useState(
+    () => initialDraft?.zipCode ?? (postId ? "" : readLastZipCode())
+  );
+  // 已经把哪个邮编的查询结果填进了州 / 城市——同一个邮编只自动填一次，用户
+  // 之后手动改州或城市不会被覆盖。恢复草稿时草稿里的州 / 城市就是最新的，
+  // 当作已经填过；编辑模式回填时设成帖子自己的邮编。
+  const appliedZipRef = useRef<string | null>(initialDraft ? (initialDraft.zipCode ?? "") : null);
   const [images, setImages] = useState<File[]>(initialDraft?.images ?? []);
   const [existingImages, setExistingImages] = useState<PostDetailImage[]>(
     initialDraft?.existingImages ?? []
@@ -419,6 +451,8 @@ export function PublishPage() {
     setJobSalaryUnit(existingPost.salaryUnit ?? "hour");
     setJobEmploymentType(existingPost.employmentType ?? "");
     setJobPerks(existingPost.jobPerks);
+    setZipCode(existingPost.zipCode ?? "");
+    appliedZipRef.current = existingPost.zipCode;
     setExistingImages(existingPost.images);
   }, [isEditMode, existingPost]);
 
@@ -498,6 +532,24 @@ export function PublishPage() {
   // （比如离开这里去发一条不同的帖子）时被误读；但反查暂时查不到时先不清
   // （见下面注释，跟 create-activity-page.tsx 是同一个时序问题、同一个
   // 处理方式）。
+  // 发布页 ZIP 定位任务卡：输入满 5 位就查城市 / 州，查到后自动填进"所在州"
+  // 和"城市 / 具体位置"（写成 "Rockville, MD"，列表和详情页直接显示这一串）。
+  // 两个字段照常显示、可以手动改；查不到时提示用户手动选。
+  const trimmedZipCode = zipCode.trim();
+  const zipQuery = useZipCodeQuery(trimmedZipCode);
+  const zipLocation = zipQuery.data;
+  useEffect(() => {
+    if (!zipLocation || zipLocation.zip !== trimmedZipCode) return;
+    if (appliedZipRef.current === zipLocation.zip) return;
+    const resolvedStateId = regionsByStateCode.get(zipLocation.stateCode);
+    // 州列表还没查回来时先不填，查回来后这个 effect 会重新跑。
+    if (!resolvedStateId) return;
+    appliedZipRef.current = zipLocation.zip;
+    setLocationId(resolvedStateId);
+    setRegionLabel(formatStateLabelByCode(zipLocation.stateCode));
+    setLocationText(`${zipLocation.city}, ${zipLocation.stateCode}`);
+  }, [zipLocation, trimmedZipCode, regionsByStateCode]);
+
   const pendingRegion = usePendingFormRegionStore((s) => s.pendingRegion);
   const clearPendingRegion = usePendingFormRegionStore((s) => s.clearPendingRegion);
 
@@ -549,6 +601,7 @@ export function PublishPage() {
       jobSalaryUnit,
       jobEmploymentType,
       jobPerks,
+      zipCode,
       images,
       existingImages
     });
@@ -619,7 +672,8 @@ export function PublishPage() {
             employmentType: jobEmploymentType,
             perks: isHiringCategory ? jobPerks : []
           }
-        : null
+        : null,
+      zipCode
     });
     if (!validation.success) {
       setError(validation.error.message);
@@ -644,7 +698,8 @@ export function PublishPage() {
           contactValue: validation.data.contactValue,
           posterAge: validation.data.posterAge,
           posterGender: validation.data.posterGender,
-          job: validation.data.job
+          job: validation.data.job,
+          zipCode: validation.data.zipCode
         });
       } catch (submitError) {
         setError(
@@ -668,7 +723,8 @@ export function PublishPage() {
           contactValue: validation.data.contactValue,
           posterAge: validation.data.posterAge,
           posterGender: validation.data.posterGender,
-          job: validation.data.job
+          job: validation.data.job,
+          zipCode: validation.data.zipCode
         });
         resolvedPostId = created.id;
         track("content_created", { type: "classified" });
@@ -684,6 +740,11 @@ export function PublishPage() {
         setSubmitting(false);
         return;
       }
+    }
+
+    // 发布页 ZIP 定位任务卡：记住这次填的邮编，下次新建帖子自动带上。
+    if (validation.data.zipCode) {
+      writeLastZipCode(validation.data.zipCode);
     }
 
     // 帖子已经创建/更新成功，之后图片阶段无论成功、部分失败还是整体失败，
@@ -951,6 +1012,43 @@ export function PublishPage() {
                 />
               </label>
             )}
+
+            {/* 发布页 ZIP 定位任务卡：邮编放在"所在州"上面，填满 5 位自动带出
+                城市 / 州并填进下面两个字段（仍可手动改）。 */}
+            <div className="mb-4">
+              <label htmlFor="publish-zip-code" className="mb-2 block text-xs font-semibold text-text">
+                邮编（ZIP）
+              </label>
+              <input
+                id="publish-zip-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="postal-code"
+                maxLength={5}
+                value={zipCode}
+                onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ""))}
+                placeholder="输入邮编，自动填写城市"
+                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
+              />
+              {trimmedZipCode.length === 5 ? (
+                <p role="status" className="mt-2 flex items-center gap-1 text-sm">
+                  {zipQuery.isPending ? (
+                    <span className="text-text-muted">查询中…</span>
+                  ) : zipQuery.isError ? (
+                    <span className="text-danger">邮编查询失败，请在下面手动选择州和城市。</span>
+                  ) : zipLocation ? (
+                    <>
+                      <MapPin aria-hidden="true" size={14} className="shrink-0 text-primary" />
+                      <span className="font-medium text-text">
+                        {zipLocation.city}, {zipLocation.stateCode}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-danger">没找到这个邮编，请在下面手动选择州和城市。</span>
+                  )}
+                </p>
+              ) : null}
+            </div>
 
             <div className="mb-4">
               {/* design_handoff_saminest_ios 第 6 项（README「发布帖子：原

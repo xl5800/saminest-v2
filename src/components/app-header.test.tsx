@@ -92,7 +92,7 @@ describe("AppHeader", () => {
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
   });
 
-  it("opens the publish action sheet when 发布 is clicked, and closes it via its own 取消 button", () => {
+  it("opens the publish action sheet when 发布 is clicked, and closes it via its own 关闭 button", () => {
     renderAt(["/"]);
 
     expect(screen.queryByRole("dialog", { name: "选择发布类型" })).not.toBeInTheDocument();
@@ -101,7 +101,7 @@ describe("AppHeader", () => {
 
     expect(screen.getByRole("dialog", { name: "选择发布类型" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "取消" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
 
     expect(screen.queryByRole("dialog", { name: "选择发布类型" })).not.toBeInTheDocument();
   });

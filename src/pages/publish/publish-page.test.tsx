@@ -16,6 +16,7 @@ const {
   insertPostImages,
   removeOwnPostImage,
   getMyProfile,
+  lookupZipCode,
   navigateMock
 } = vi.hoisted(() => ({
   listActiveCategories: vi.fn(),
@@ -37,7 +38,14 @@ const {
   // 函数（见 use-my-profile-query.ts），照抄 profile-page.test.tsx 已有的
   // mock 方式，不重新发明一套。
   getMyProfile: vi.fn(),
+  // 发布页 ZIP 定位任务卡
+  lookupZipCode: vi.fn(),
   navigateMock: vi.fn()
+}));
+
+vi.mock("../../repositories/zip-codes-repository", () => ({
+  lookupZipCode,
+  ZIP_CODE_PATTERN: /^\d{5}$/
 }));
 
 vi.mock("../../repositories/categories-repository", () => ({
@@ -72,7 +80,7 @@ import { usePendingPostFormDraftStore } from "../../store/pending-post-form-draf
 import { useAuthStore } from "../../store/auth-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { AppError } from "../../utils/app-error";
-import { PublishPage } from "./publish-page";
+import { LAST_ZIP_CODE_STORAGE_KEY, PublishPage } from "./publish-page";
 
 const initialAuthState = useAuthStore.getState();
 const initialPendingRegionState = usePendingFormRegionStore.getState();
@@ -158,6 +166,8 @@ describe("PublishPage", () => {
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
     getMyProfile.mockReset();
+    lookupZipCode.mockReset();
+    window.localStorage.clear();
     navigateMock.mockReset();
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
     // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
@@ -457,7 +467,8 @@ describe("PublishPage", () => {
         contactValue: null,
         posterAge: null,
         posterGender: null,
-        job: null
+        job: null,
+        zipCode: null
       });
     });
 
@@ -1043,6 +1054,61 @@ describe("PublishPage", () => {
       });
     });
   });
+  // 发布页 ZIP 定位任务卡
+  describe("邮编定位", () => {
+    beforeEach(() => {
+      listActiveActivityRegions.mockResolvedValue([
+        { id: "loc-md", name: "MD", stateCode: "MD" },
+        { id: "loc-va", name: "VA", stateCode: "VA" }
+      ]);
+    });
+
+    it("fills the state and city from a 5-digit zip code and submits them with the zip", async () => {
+      lookupZipCode.mockResolvedValue({ zip: "20850", city: "Rockville", stateCode: "MD" });
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "20850" } });
+
+      expect(await screen.findByText("Rockville, MD")).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByLabelText("城市 / 具体位置（可选）")).toHaveValue("Rockville, MD");
+      });
+
+      selectCategory("租房");
+      fillTitle(SAMPLE_TITLE);
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(
+          expect.objectContaining({ locationId: "loc-md", locationText: "Rockville, MD", zipCode: "20850" })
+        );
+      });
+      expect(window.localStorage.getItem(LAST_ZIP_CODE_STORAGE_KEY)).toBe("20850");
+    });
+
+    it("tells the user to pick the state manually when the zip code is unknown", async () => {
+      lookupZipCode.mockResolvedValue(null);
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "00001" } });
+
+      expect(await screen.findByText("没找到这个邮编，请在下面手动选择州和城市。")).toBeInTheDocument();
+    });
+
+    it("pre-fills the zip code used last time for a new post", async () => {
+      window.localStorage.setItem(LAST_ZIP_CODE_STORAGE_KEY, "22030");
+      lookupZipCode.mockResolvedValue({ zip: "22030", city: "Fairfax", stateCode: "VA" });
+      renderWithProviders(<PublishPage />);
+
+      expect(screen.getByLabelText("邮编（ZIP）")).toHaveValue("22030");
+      await waitFor(() => {
+        expect(screen.getByLabelText("城市 / 具体位置（可选）")).toHaveValue("Fairfax, VA");
+      });
+    });
+  });
 });
 
 describe("PublishPage in edit mode", () => {
@@ -1094,6 +1160,8 @@ describe("PublishPage in edit mode", () => {
     insertPostImages.mockReset();
     removeOwnPostImage.mockReset();
     getMyProfile.mockReset();
+    lookupZipCode.mockReset();
+    window.localStorage.clear();
     navigateMock.mockReset();
     usePendingFormRegionStore.setState(initialPendingRegionState, true);
     // 27 号卡：新增的草稿 store 同理要在每个测试之间重置——不然某个测试
@@ -1498,4 +1566,5 @@ describe("PublishPage in edit mode", () => {
       });
     });
   });
+
 });

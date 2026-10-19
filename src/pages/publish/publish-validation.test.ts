@@ -40,9 +40,16 @@ describe("validatePublishInput", () => {
         contactValue: null,
         posterAge: null,
         posterGender: null,
-        job: null
+        job: null,
+        zipCode: null
       }
     });
+  });
+
+  // 发布页 ZIP 定位任务卡
+  it("accepts an empty or 5-digit zip code and rejects anything else", () => {
+    expect(validatePublishInput({ ...validInput, zipCode: " 20850 " }).data?.zipCode).toBe("20850");
+    expect(validatePublishInput({ ...validInput, zipCode: "2085" }).error?.message).toBe("邮编要是 5 位数字。");
   });
 
   // 招聘求职任务卡

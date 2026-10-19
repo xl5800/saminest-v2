@@ -32,6 +32,8 @@ export interface PendingPostFormDraft {
   jobSalaryUnit?: string;
   jobEmploymentType?: string;
   jobPerks?: string[];
+  /** 发布页 ZIP 定位任务卡：邮编输入框原文，同样要在跳转 /region-select 前存下来。 */
+  zipCode?: string;
   images: File[];
   /** 编辑模式下已经上传的图片——一并存进草稿，是为了在恢复草稿时能整个
    *  跳过 publish-page.tsx 那个"从 existingPost 回填表单"的 effect（见该

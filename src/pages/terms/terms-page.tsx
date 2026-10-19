@@ -243,6 +243,11 @@ export function TermsPage() {
       <p className="mb-4 text-base text-text">
         感谢您使用华邻。我们致力于打造一个真实、安全、友好的租房、求租及二手交易社区。
       </p>
+
+      {/* 发布页 ZIP 定位任务卡：邮编数据来自 GeoNames（CC BY 4.0），按许可要求注明出处。 */}
+      <p className="mb-4 text-xs text-text-muted">
+        邮编与城市对照数据来自 GeoNames（geonames.org），依据 CC BY 4.0 许可使用。
+      </p>
       </div>
     </main>
   );

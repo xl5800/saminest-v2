@@ -1,5 +1,19 @@
+import {
+  Handshake,
+  Home,
+  type LucideIcon,
+  Megaphone,
+  MessageSquareText,
+  Search,
+  ShoppingBag,
+  UserRoundSearch,
+  X
+} from "lucide-react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+
+import { formatShortRegionLabel } from "../data/us-states";
+import { useSelectedRegionStore } from "../store/selected-region-store";
 
 export interface PublishActionSheetProps {
   onClose: () => void;
@@ -7,30 +21,28 @@ export interface PublishActionSheetProps {
 
 interface PublishOption {
   key: string;
-  emoji: string;
+  Icon: LucideIcon;
   label: string;
   to: string;
 }
 
 /**
- * 固定顺序 + 固定高亮（05-publish-flow.md 5.1）：「发起搭子」永远排第一、
- * 永远是浅蓝底高亮项，跟点开这个弹层之前用户在哪个页面无关——这个弹层
- * 现在只有一个入口（首页顶部「＋」，见 home-page.tsx），不再是"找搭子
- * 页面打开时顺带把发起搭子排前面"这种按路径变化的场景，所以不需要也不应该
- * 再按 pathname 重新排序/加粗，那是这次改版之前的旧逻辑。
+ * 固定顺序 + 固定高亮（05-publish-flow.md 5.1）：第一项永远是浅蓝底高亮项，
+ * 跟点开这个弹层之前用户在哪个页面无关。
  */
 // 产品决策更新：固定第一项 + 固定高亮改成了「发布社区帖子」，不再是「发起搭子」。
-// 上面这段历史注释仍然描述的是旧规则，仅供参考背景，如需精简请一并更新
-// docs/saminest_codex_reference_pack/design-reference/05-publish-flow.md 5.1 节。
+// 首页图标入口改版：选项从 emoji + 竖排列表改成线性图标的四列网格（两行），
+// 第一项"社区帖子"是蓝色实心图标；文字去掉"发布"两个字（标题已经是"发布到…"），
+// 出租写成"房屋出租"，二手写成"二手闲置"，跟首页入口的叫法一致。
 const OPTIONS: PublishOption[] = [
-  { key: "community", emoji: "💬", label: "发布社区帖子", to: "/community/new" },
-  // 招聘求职任务卡：首页第一个标签是招聘求职，发布入口紧跟社区帖子。
-  { key: "hiring", emoji: "💼", label: "发布招聘", to: "/publish?category=hiring" },
-  { key: "job-seeking", emoji: "🙋", label: "发布求职", to: "/publish?category=job-seeking" },
-  { key: "activity", emoji: "🤝", label: "发起搭子", to: "/activities/new" },
-  { key: "rent", emoji: "🏠", label: "发布租房", to: "/publish?category=rent" },
-  { key: "wanted", emoji: "🔑", label: "发布求租", to: "/publish?category=wanted" },
-  { key: "used", emoji: "🛍", label: "发布二手", to: "/publish?category=used" }
+  { key: "community", Icon: MessageSquareText, label: "社区帖子", to: "/community/new" },
+  // 招聘求职任务卡：首页第一个入口是招聘求职，发布入口紧跟社区帖子。
+  { key: "hiring", Icon: Megaphone, label: "招聘", to: "/publish?category=hiring" },
+  { key: "job-seeking", Icon: UserRoundSearch, label: "求职", to: "/publish?category=job-seeking" },
+  { key: "rent", Icon: Home, label: "房屋出租", to: "/publish?category=rent" },
+  { key: "wanted", Icon: Search, label: "求租", to: "/publish?category=wanted" },
+  { key: "used", Icon: ShoppingBag, label: "二手闲置", to: "/publish?category=used" },
+  { key: "activity", Icon: Handshake, label: "找搭子", to: "/activities/new" }
 ];
 
 const EMPHASIZED_KEY = OPTIONS[0].key;
@@ -64,6 +76,8 @@ const EMPHASIZED_KEY = OPTIONS[0].key;
  */
 export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
   const navigate = useNavigate();
+  const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
+  const title = selectedRegion ? `发布到${formatShortRegionLabel(selectedRegion)}` : "选择发布类型";
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
@@ -102,8 +116,9 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
         className="w-full rounded-t-3xl bg-card p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-card"
         onClick={(event) => event.stopPropagation()}
       >
-        <p className="mb-3 text-center text-sm font-medium text-text-muted">选择发布类型</p>
-        <ul className="flex flex-col gap-2">
+        <span aria-hidden="true" className="mx-auto mb-3 block h-1 w-10 rounded-full bg-border" />
+        <h2 className="mb-4 px-1 text-lg font-bold text-primary">{title}</h2>
+        <ul className="grid grid-cols-4 gap-y-4">
           {OPTIONS.map((option) => {
             const emphasized = option.key === EMPHASIZED_KEY;
             return (
@@ -111,12 +126,14 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
                 <button
                   type="button"
                   onClick={() => handleSelect(option)}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-base font-semibold ${
-                    emphasized ? "bg-primary-light text-primary" : "bg-field text-text"
-                  }`}
+                  className="flex w-full flex-col items-center gap-1.5 text-[13px] text-text"
                 >
-                  <span aria-hidden="true" className="text-xl">
-                    {option.emoji}
+                  <span
+                    className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
+                      emphasized ? "bg-primary text-white" : "bg-primary-light text-primary"
+                    }`}
+                  >
+                    <option.Icon aria-hidden="true" size={26} />
                   </span>
                   {option.label}
                 </button>
@@ -126,10 +143,11 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
         </ul>
         <button
           type="button"
+          aria-label="关闭"
           onClick={onClose}
-          className="mt-3 w-full rounded-xl border border-border px-4 py-3 text-base font-medium text-text hover:bg-bg"
+          className="mx-auto mt-5 flex h-11 w-11 items-center justify-center rounded-full bg-field text-text"
         >
-          取消
+          <X aria-hidden="true" size={20} />
         </button>
       </div>
     </div>

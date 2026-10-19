@@ -113,6 +113,8 @@ export interface PublishFormInput {
   /** 招聘求职任务卡新增：只有招聘 / 求职分类传（表单原始值），其它分类不传。
    *  工作帖的薪资数字仍然走上面的 price（不填 = 面议）。 */
   job?: { salaryUnit: string; employmentType: string; perks: string[] } | null;
+  /** 发布页 ZIP 定位任务卡：邮编输入框原文（可选）。 */
+  zipCode?: string;
 }
 
 export interface PublishFormData {
@@ -127,6 +129,7 @@ export interface PublishFormData {
   posterAge: number | null;
   posterGender: string | null;
   job: JobFieldsInput | null;
+  zipCode: string | null;
 }
 
 export interface PublishValidationError {
@@ -260,6 +263,13 @@ export function validatePublishInput(
     posterAge = parsedPosterAge;
   }
 
+  // 发布页 ZIP 定位任务卡：邮编可选；填了必须是 5 位数字（跟数据库
+  // posts_zip_code_format_check 一致）。
+  const zipCodeRaw = (input.zipCode ?? "").trim();
+  if (zipCodeRaw && !/^\d{5}$/.test(zipCodeRaw)) {
+    return fail("PUBLISH_ZIP_CODE_INVALID", "邮编要是 5 位数字。");
+  }
+
   if (posterGenderRaw && !GENDER_VALUES.includes(posterGenderRaw)) {
     return fail("PUBLISH_POSTER_GENDER_INVALID", "性别选项不正确。");
   }
@@ -278,7 +288,8 @@ export function validatePublishInput(
       contactValue: null,
       posterAge,
       posterGender: posterGenderRaw || null,
-      job
+      job,
+      zipCode: zipCodeRaw || null
     },
     error: null
   };

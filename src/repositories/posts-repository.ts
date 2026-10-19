@@ -403,6 +403,8 @@ export interface PostDetail {
   salaryUnit: string | null;
   employmentType: string | null;
   jobPerks: string[];
+  /** 发布页 ZIP 定位任务卡：发帖时填的邮编（编辑表单回填用），没填为 null。 */
+  zipCode: string | null;
 }
 
 interface PostDetailImageRow {
@@ -433,6 +435,7 @@ interface PostDetailRow {
   salary_unit: string | null;
   employment_type: string | null;
   job_perks: string[] | null;
+  zip_code: string | null;
   location: { name: string } | null;
   category: { name_zh: string; slug: string } | null;
   author: { display_name: string; avatar_url: string | null } | null;
@@ -473,7 +476,7 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .select(
-      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
+      "id, status, title, description, price_amount, price_label, currency_code, category_id, location_id, location_text, created_at, author_id, contact_method, contact_value, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, zip_code, location:locations(name), category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(id, public_url, sort_order, deleted_at)"
     )
     .eq("id", postId)
     .is("deleted_at", null)
@@ -524,7 +527,8 @@ export async function getPostDetail(postId: string): Promise<PostDetail | null> 
     categorySlug: data.category?.slug ?? null,
     salaryUnit: data.salary_unit,
     employmentType: data.employment_type,
-    jobPerks: normalizeJobPerks(data.job_perks)
+    jobPerks: normalizeJobPerks(data.job_perks),
+    zipCode: data.zip_code ?? null
   };
 }
 
@@ -680,6 +684,8 @@ export interface CreatePostInput {
   posterGender: string | null;
   /** 招聘求职任务卡新增：只有招聘 / 求职分类传，其它分类不传或传 null。 */
   job?: JobFieldsInput | null;
+  /** 发布页 ZIP 定位任务卡：用户填的邮编（5 位数字），没填传 null / 不传。 */
+  zipCode?: string | null;
 }
 
 /**
@@ -730,6 +736,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     poster_age: input.posterAge,
     poster_gender: input.posterGender,
     ...jobColumns(input.job),
+    zip_code: input.zipCode ?? null,
     status: "pending"
   };
 
@@ -936,6 +943,8 @@ export interface UpdatePostInput {
   posterGender: string | null;
   /** 招聘求职任务卡新增，见 CreatePostInput.job。 */
   job?: JobFieldsInput | null;
+  /** 发布页 ZIP 定位任务卡，见 CreatePostInput.zipCode。 */
+  zipCode?: string | null;
 }
 
 /**
@@ -964,7 +973,8 @@ export async function updatePost(input: UpdatePostInput): Promise<void> {
     contact_value: input.contactValue,
     poster_age: input.posterAge,
     poster_gender: input.posterGender,
-    ...jobColumns(input.job)
+    ...jobColumns(input.job),
+    zip_code: input.zipCode ?? null
   };
 
   if (input.currentStatus === "approved") {

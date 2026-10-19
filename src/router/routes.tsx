@@ -46,6 +46,9 @@ import { SearchPage } from "../pages/search/search-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { HousingPage } from "../pages/browse/housing-page";
+import { JobsPage } from "../pages/browse/jobs-page";
+import { UsedPage } from "../pages/browse/used-page";
 import { DeleteAccountPage } from "../pages/settings/delete-account-page";
 import { SetPasswordPage } from "../pages/settings/set-password-page";
 import { SettingsPage } from "../pages/settings/settings-page";
@@ -446,6 +449,19 @@ export const router = createBrowserRouter([
             </RequireAdmin>
           </RequireAuth>
         )
+      },
+      {
+        // 首页图标入口改版：首页四个图标进到的列表页（找搭子用现有的 /activities）。
+        path: "jobs",
+        element: <JobsPage />
+      },
+      {
+        path: "housing",
+        element: <HousingPage />
+      },
+      {
+        path: "used",
+        element: <UsedPage />
       },
       {
         path: "login",
