@@ -1,105 +1,100 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useListCommunitiesQuery, useSearchCommunityPostsQuery } = vi.hoisted(() => ({
-  useListCommunitiesQuery: vi.fn(),
-  useSearchCommunityPostsQuery: vi.fn()
+const { useCategoriesQuery, postListMock } = vi.hoisted(() => ({
+  useCategoriesQuery: vi.fn(),
+  postListMock: vi.fn()
 }));
 
-vi.mock("../../features/community/use-list-communities-query", () => ({ useListCommunitiesQuery }));
-vi.mock("../../features/community/use-search-community-posts-query", () => ({
-  useSearchCommunityPostsQuery
-}));
-// 社区卡片自己的加入/退出逻辑在 browse-community-card 的测试里覆盖，这里只关心
-// 搜索页把哪些社区交给它渲染。
-vi.mock("../community/browse-community-card", () => ({
-  BrowseCommunityCard: ({ community }: { community: { name: string } }) => (
-    <div data-testid="community-result">{community.name}</div>
-  )
+vi.mock("../../features/categories/use-categories-query", () => ({ useCategoriesQuery }));
+// 列表本身有自己的测试，这里只验证搜索页给 PostList 传了什么。
+vi.mock("../../features/posts/post-list", () => ({
+  PostList: (props: Record<string, unknown>) => {
+    postListMock(props);
+    return <div data-testid="post-list" />;
+  }
 }));
 // 防抖直接透传，测试里不用等计时器。
 vi.mock("../../utils/use-debounced-value", () => ({
   useDebouncedValue: <T,>(value: T) => value
 }));
 
+import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { SearchPage } from "./search-page";
 
-const communities = [
-  { id: "c-1", name: "DMV 华人社区", slug: "dmv", description: "本地华人讨论", memberCount: 1, isOfficial: true, stateCodes: [] },
-  { id: "c-2", name: "DMV 宠物社区", slug: "dmv-pets", description: null, memberCount: 1, isOfficial: false, stateCodes: [] }
+const initialRegionState = useSelectedRegionStore.getState();
+
+const CATEGORIES = [
+  { id: "cat-rent", slug: "rent", nameZh: "租房" },
+  { id: "cat-wanted", slug: "wanted", nameZh: "求租" },
+  { id: "cat-used", slug: "used", nameZh: "二手" },
+  { id: "cat-hiring", slug: "hiring", nameZh: "招聘" },
+  { id: "cat-seeking", slug: "job-seeking", nameZh: "求职" },
+  { id: "cat-free", slug: "free", nameZh: "免费物品" }
 ];
 
-const post = {
-  id: "cp-1",
-  postType: "discussion",
-  title: "宠物医院推荐",
-  body: "想找一家靠谱的宠物医院",
-  pinned: false,
-  commentCount: 2,
-  favoriteCount: 0,
-  createdAt: "2026-08-01T00:00:00.000Z",
-  authorId: "u-1",
-  authorDisplayName: "Alice",
-  authorAvatarUrl: null,
-  coverImageUrl: null,
-  images: [],
-  communityName: "DMV 宠物社区",
-  communitySlug: "dmv-pets"
-};
+function lastPostListProps(): Record<string, unknown> {
+  return postListMock.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+}
+
+function typeKeyword(value: string): void {
+  fireEvent.change(screen.getByRole("searchbox", { name: "搜索帖子" }), { target: { value } });
+}
 
 describe("SearchPage", () => {
   afterEach(() => cleanup());
 
   beforeEach(() => {
-    useListCommunitiesQuery.mockReturnValue({ data: communities, isPending: false, isError: false });
-    useSearchCommunityPostsQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
+    useSelectedRegionStore.setState(initialRegionState, true);
+    useCategoriesQuery.mockReturnValue({ data: CATEGORIES, isPending: false, isError: false });
+    postListMock.mockReset();
   });
 
-  it("shows a hint and no results before anything is typed", () => {
+  it("shows a hint and does not query before anything is typed", () => {
     renderWithProviders(<SearchPage />);
 
-    expect(screen.getByRole("searchbox", { name: "搜索社区和帖子" })).toBeInTheDocument();
-    expect(screen.getByText("输入关键词，搜索社区和帖子")).toBeInTheDocument();
-    expect(screen.queryByTestId("community-result")).not.toBeInTheDocument();
+    expect(screen.getByText("输入关键词，搜索招聘、房屋、二手和免费物品")).toBeInTheDocument();
+    expect(postListMock).not.toHaveBeenCalled();
   });
 
-  it("searches both communities and posts with the same keyword", () => {
-    useSearchCommunityPostsQuery.mockReturnValue({ data: [post], isPending: false, isError: false });
-    renderWithProviders(<SearchPage />);
-
-    fireEvent.change(screen.getByRole("searchbox", { name: "搜索社区和帖子" }), {
-      target: { value: "宠物" }
+  it("searches all classified categories in the selected state", () => {
+    useSelectedRegionStore.setState({
+      selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
     });
-
-    expect(useSearchCommunityPostsQuery).toHaveBeenLastCalledWith("宠物");
-    const communityResults = screen.getAllByTestId("community-result");
-    expect(communityResults.map((node) => node.textContent)).toEqual(["DMV 宠物社区"]);
-    const postLink = screen.getByRole("link", { name: /宠物医院推荐/ });
-    expect(postLink).toHaveAttribute("href", "/community/post/cp-1");
-    expect(postLink).toHaveTextContent("Alice");
-  });
-
-  it("shows empty messages for each section when nothing matches", () => {
-    useSearchCommunityPostsQuery.mockReturnValue({ data: [], isPending: false, isError: false });
     renderWithProviders(<SearchPage />);
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "搜索社区和帖子" }), {
-      target: { value: "完全不相关" }
-    });
+    expect(screen.getByPlaceholderText("在弗吉尼亚搜索工作、房屋、二手…")).toBeInTheDocument();
+    typeKeyword(" 书桌 ");
 
-    expect(screen.getByText("没有找到相关社区")).toBeInTheDocument();
-    expect(screen.getByText("没有找到相关帖子")).toBeInTheDocument();
+    expect(lastPostListProps()).toMatchObject({
+      variant: "grid",
+      searchQuery: "书桌",
+      stateCode: "VA",
+      categoryIds: ["cat-hiring", "cat-seeking", "cat-rent", "cat-wanted", "cat-used", "cat-free"]
+    });
   });
 
-  it("shows an error when the post search fails", () => {
-    useSearchCommunityPostsQuery.mockReturnValue({ data: undefined, isPending: false, isError: true });
+  it("narrows the search to one kind with the chips", () => {
     renderWithProviders(<SearchPage />);
+    typeKeyword("餐馆");
 
-    fireEvent.change(screen.getByRole("searchbox", { name: "搜索社区和帖子" }), {
-      target: { value: "x" }
-    });
+    fireEvent.click(screen.getByRole("button", { name: "招聘求职" }));
+    expect(lastPostListProps()).toMatchObject({ variant: "job", categoryIds: ["cat-hiring", "cat-seeking"] });
 
-    expect(screen.getByRole("alert")).toHaveTextContent("搜索失败，请稍后重试。");
+    fireEvent.click(screen.getByRole("button", { name: "房屋租售" }));
+    expect(lastPostListProps()).toMatchObject({ variant: "grid", categoryIds: ["cat-rent", "cat-wanted"] });
+
+    fireEvent.click(screen.getByRole("button", { name: "免费物品" }));
+    expect(lastPostListProps()).toMatchObject({ categoryIds: ["cat-free"] });
+  });
+
+  it("does not query without any category to search in", () => {
+    useCategoriesQuery.mockReturnValue({ data: [], isPending: false, isError: false });
+    renderWithProviders(<SearchPage />);
+    typeKeyword("书桌");
+
+    expect(postListMock).not.toHaveBeenCalled();
+    expect(screen.getByText("没有找到相关帖子。")).toBeInTheDocument();
   });
 });

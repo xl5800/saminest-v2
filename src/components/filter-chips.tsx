@@ -16,7 +16,7 @@ export function FilterChips<K extends string>({
   onChange: (key: K) => void;
 }) {
   return (
-    <div role="group" aria-label={label} className="flex gap-2 px-4 pb-2 pt-3">
+    <div role="group" aria-label={label} className="flex gap-2 overflow-x-auto px-4 pb-2 pt-3">
       {options.map((option) => {
         const selected = option.key === value;
         return (

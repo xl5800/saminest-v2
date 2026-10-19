@@ -56,11 +56,40 @@ describe("browse pages", () => {
     navigateMock.mockReset();
   });
 
+  // 分类页顶栏统一任务卡：四个页面顶栏都是"返回 + 地区 + 搜索 + 发布"，
+  // 搜索只搜当前分类，发布只能发当前分类。
+  describe("shared top bar", () => {
+    it.each([
+      ["JobsPage", <JobsPage key="jobs" />, "搜索招聘求职", "/publish?category=hiring&only=hiring,job-seeking"],
+      ["HousingPage", <HousingPage key="housing" />, "搜索房屋租售", "/publish?category=rent&only=rent,wanted"],
+      ["UsedPage", <UsedPage key="used" />, "搜索二手闲置", "/publish?category=used&only=used"],
+      ["FreePage", <FreePage key="free" />, "搜索免费物品", "/publish?category=free&only=free"]
+    ])("%s has back, region, a scoped search and a scoped publish", (_name, page, placeholder, publishPath) => {
+      useSelectedRegionStore.setState({
+        selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
+      });
+      renderWithProviders(page);
+
+      expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "弗吉尼亚" }));
+      expect(navigateMock).toHaveBeenCalledWith("/region-select");
+
+      expect(screen.queryByRole("searchbox")).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "搜索" }));
+      fireEvent.change(screen.getByRole("searchbox", { name: placeholder }), { target: { value: " 书桌 " } });
+      return vi.waitFor(() => {
+        expect(lastPostListProps()).toMatchObject({ searchQuery: "书桌" });
+      }).then(() => {
+        fireEvent.click(screen.getByRole("button", { name: "发布" }));
+        expect(navigateMock).toHaveBeenCalledWith(publishPath);
+      });
+    });
+  });
+
   describe("JobsPage", () => {
     it("lists hiring + job-seeking together under 全部, in the job format", () => {
       renderWithProviders(<JobsPage />);
 
-      expect(screen.getByRole("heading", { name: "招聘求职" })).toBeInTheDocument();
       expect(lastPostListProps()).toMatchObject({
         variant: "job",
         categoryId: undefined,
@@ -74,7 +103,7 @@ describe("browse pages", () => {
       fireEvent.click(screen.getByRole("button", { name: "求职" }));
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-seeking", categoryIds: undefined });
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
-      expect(navigateMock).toHaveBeenCalledWith("/publish?category=job-seeking");
+      expect(navigateMock).toHaveBeenCalledWith("/publish?category=job-seeking&only=hiring,job-seeking");
 
       fireEvent.click(screen.getByRole("button", { name: "招聘" }));
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-hiring" });
@@ -85,7 +114,7 @@ describe("browse pages", () => {
 
       expect(screen.getByText("还没有工作信息，你要招人吗？")).toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "免费发布" }));
-      expect(navigateMock).toHaveBeenCalledWith("/publish?category=hiring");
+      expect(navigateMock).toHaveBeenCalledWith("/publish?category=hiring&only=hiring,job-seeking");
     });
 
     it("shows the empty state without querying when the job categories don't exist yet", () => {
@@ -123,7 +152,7 @@ describe("browse pages", () => {
       fireEvent.click(screen.getByRole("button", { name: "求租" }));
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-wanted", variant: "wanted" });
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
-      expect(navigateMock).toHaveBeenCalledWith("/publish?category=wanted");
+      expect(navigateMock).toHaveBeenCalledWith("/publish?category=wanted&only=rent,wanted");
     });
   });
 
@@ -131,7 +160,6 @@ describe("browse pages", () => {
     it("shows used items as a grid", () => {
       renderWithProviders(<UsedPage />);
 
-      expect(screen.getByRole("heading", { name: "二手闲置" })).toBeInTheDocument();
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-used", variant: "grid" });
     });
   });
@@ -141,10 +169,9 @@ describe("browse pages", () => {
     it("shows free items as a grid with a free-publish empty state", () => {
       renderWithProviders(<FreePage />);
 
-      expect(screen.getByRole("heading", { name: "免费物品" })).toBeInTheDocument();
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-free", variant: "grid" });
       fireEvent.click(screen.getByRole("button", { name: "免费发布" }));
-      expect(navigateMock).toHaveBeenCalledWith("/publish?category=free");
+      expect(navigateMock).toHaveBeenCalledWith("/publish?category=free&only=free");
     });
 
     it("shows the empty state without querying when the free category doesn't exist yet", () => {

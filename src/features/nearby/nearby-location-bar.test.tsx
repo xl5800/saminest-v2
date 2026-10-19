@@ -19,7 +19,7 @@ describe("NearbyLocationBar", () => {
     renderWithProviders(<NearbyLocationBar regionLabel="弗吉尼亚" onClick={onClick} />);
 
     const bar = screen.getByRole("button");
-    expect(bar).toHaveTextContent("弗吉尼亚 ·显示附近的二手");
+    expect(bar).toHaveTextContent("弗吉尼亚 ·显示附近的二手闲置");
     fireEvent.click(bar);
     expect(onClick).toHaveBeenCalled();
   });

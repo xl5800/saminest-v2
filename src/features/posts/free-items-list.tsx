@@ -4,13 +4,14 @@ import { CategoriesGate } from "../categories/categories-gate";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { FREE_CATEGORY_SLUG } from "./free-items";
 import { PostList } from "./post-list";
+import { buildPublishPath } from "./publish-path";
 
 /**
  * 免费物品任务卡：免费物品的图片网格 + "还没有免费物品"空状态，用在
  * 免费物品页（/free）（首页下方已换成"附近的二手"）。按当前选中的州筛选。分类还没建好（迁移没跑）时
  * 直接显示空状态，不能不带分类条件去查。
  */
-export function FreeItemsList() {
+export function FreeItemsList({ searchQuery }: { searchQuery?: string } = {}) {
   const navigate = useNavigate();
   const stateCode = useSelectedRegionStore((s) => s.selectedRegion?.stateCode);
 
@@ -19,7 +20,7 @@ export function FreeItemsList() {
       <p className="text-base text-text-body">还没有免费物品，你有闲置想送人吗？</p>
       <button
         type="button"
-        onClick={() => navigate(`/publish?category=${FREE_CATEGORY_SLUG}`)}
+        onClick={() => navigate(buildPublishPath(FREE_CATEGORY_SLUG, [FREE_CATEGORY_SLUG]))}
         className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover"
       >
         免费发布
@@ -32,7 +33,7 @@ export function FreeItemsList() {
       {(idBySlug) => {
         const categoryId = idBySlug.get(FREE_CATEGORY_SLUG);
         if (!categoryId) return emptyState;
-        return <PostList variant="grid" categoryId={categoryId} stateCode={stateCode} emptyState={emptyState} />;
+        return <PostList variant="grid" categoryId={categoryId} stateCode={stateCode} searchQuery={searchQuery} emptyState={emptyState} />;
       }}
     </CategoriesGate>
   );

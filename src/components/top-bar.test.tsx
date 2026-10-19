@@ -281,7 +281,7 @@ describe("TopBar", () => {
         );
       });
 
-      it("keeps the left-to-right order: brand name, then region button, then create/search icons", () => {
+      it("keeps the left-to-right order: brand name, then region button, then search, then create", () => {
         renderWithProviders(
           <TopBar
             variant="home"
@@ -299,15 +299,32 @@ describe("TopBar", () => {
 
         // compareDocumentPosition 的 DOCUMENT_POSITION_FOLLOWING（4）表示
         // 参数节点在调用节点之后，两两比较确认渲染顺序是"品牌名 → 地区
-        // 按钮 → 发布 → 搜索"，从左到右、顺序不变。
+        // 按钮 → 搜索 → 发布"（分类页顶栏统一任务卡起"＋"放在最右边）。
         expect(
           brand.compareDocumentPosition(regionButton) & Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy();
         expect(
-          regionButton.compareDocumentPosition(createButton) & Node.DOCUMENT_POSITION_FOLLOWING
+          regionButton.compareDocumentPosition(searchButton) & Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy();
         expect(
-          createButton.compareDocumentPosition(searchButton) & Node.DOCUMENT_POSITION_FOLLOWING
+          searchButton.compareDocumentPosition(createButton) & Node.DOCUMENT_POSITION_FOLLOWING
+        ).toBeTruthy();
+      });
+
+      // 分类页顶栏统一任务卡
+      it("renders a back button before the region only when showBack is set", () => {
+        renderWithProviders(
+          <TopBar variant="home" hideBrand regionLabel="弗吉尼亚" onRegionClick={vi.fn()} onSearchClick={vi.fn()} />
+        );
+        expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();
+        cleanup();
+
+        renderWithProviders(
+          <TopBar variant="home" hideBrand showBack regionLabel="弗吉尼亚" onRegionClick={vi.fn()} onSearchClick={vi.fn()} />
+        );
+        const back = screen.getByRole("button", { name: "返回" });
+        expect(
+          back.compareDocumentPosition(screen.getByRole("button", { name: "弗吉尼亚" })) & Node.DOCUMENT_POSITION_FOLLOWING
         ).toBeTruthy();
       });
     });

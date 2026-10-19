@@ -143,7 +143,7 @@ describe("NearbyUsedList", () => {
     listApprovedPostsByIds.mockResolvedValue([]);
     renderWithProviders(<NearbyUsedList />);
 
-    expect(await screen.findByText("附近还没有二手，欢迎发布第一条")).toBeInTheDocument();
+    expect(await screen.findByText("附近还没有二手闲置，欢迎发布第一条")).toBeInTheDocument();
   });
 
   it("shows an error when loading fails", async () => {

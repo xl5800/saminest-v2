@@ -68,7 +68,7 @@ describe("HomePage (icon entries)", () => {
   it("shows nearby used items below the icons, with a 更多 link to /used", () => {
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByRole("heading", { name: "附近的二手" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "附近的二手闲置" })).toBeInTheDocument();
     expect(screen.getByTestId("nearby-used-list")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "更多" })).toHaveAttribute("href", "/used");
   });

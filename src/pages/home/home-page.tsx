@@ -74,7 +74,7 @@ export function HomePage() {
       <section aria-labelledby="home-nearby-heading" className="mt-4">
         <div className="flex items-center justify-between px-4 pb-1">
           <h2 id="home-nearby-heading" className="text-lg font-bold text-text">
-            附近的二手
+            附近的二手闲置
           </h2>
           <Link to="/used" className="flex items-center text-sm text-primary">
             更多

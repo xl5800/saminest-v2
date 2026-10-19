@@ -239,6 +239,49 @@ describe("PublishPage", () => {
     expect(screen.getByRole("radio", { name: "租房" })).not.toBeChecked();
   });
 
+  // 分类页顶栏统一任务卡：从分类页"＋"进来时只能选那个页面的分类。
+  describe("?only= (publishing from a category page)", () => {
+    beforeEach(() => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "rent", nameZh: "租房" },
+        { id: "cat-2", slug: "wanted", nameZh: "求租" },
+        { id: "cat-3", slug: "used", nameZh: "二手" },
+        { id: "cat-4", slug: "hiring", nameZh: "招聘" }
+      ]);
+    });
+
+    it("shows only the listed categories, preselecting ?category", async () => {
+      renderWithProviders(<PublishPage />, { initialEntries: ["/publish?category=wanted&only=rent,wanted"] });
+
+      expect(await screen.findByRole("radio", { name: "求租" })).toBeChecked();
+      expect(screen.getAllByRole("radio").map((radio) => radio.textContent)).toEqual(["租房", "求租"]);
+      expect(screen.getByRole("heading", { name: "发布帖子" })).toBeInTheDocument();
+    });
+
+    it("hides the category choice entirely when only one category is allowed, and names it in the title", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      lookupZipCode.mockResolvedValue({ zip: "20850", city: "Rockville", stateCode: "MD" });
+      renderWithProviders(<PublishPage />, { initialEntries: ["/publish?category=used&only=used"] });
+
+      expect(await screen.findByRole("heading", { name: "发布二手" })).toBeInTheDocument();
+      expect(screen.queryByRole("radiogroup", { name: "分类" })).not.toBeInTheDocument();
+
+      fillTitle(SAMPLE_TITLE);
+      fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "20850" } });
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(expect.objectContaining({ categoryId: "cat-3" }));
+      });
+    });
+
+    it("still shows every category without ?only (the bottom ＋ entry)", async () => {
+      renderWithProviders(<PublishPage />, { initialEntries: ["/publish?category=used"] });
+
+      await screen.findByRole("radio", { name: "二手" });
+      expect(screen.getAllByRole("radio")).toHaveLength(4);
+    });
+  });
+
   // ---- 发布页简化改版（任务卡 7）------------------------------------------
 
   it("renders the category as a radiogroup of pill tab buttons (single choice) instead of a <select>", async () => {

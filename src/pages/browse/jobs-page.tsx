@@ -1,11 +1,12 @@
-import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { FilterChips } from "../../components/filter-chips";
-import { TopBar } from "../../components/top-bar";
+import { CategoryTopBar } from "../../components/category-top-bar";
 import { HIRING_CATEGORY_SLUG, JOB_SEEKING_CATEGORY_SLUG } from "../../features/posts/job-fields";
 import { PostList } from "../../features/posts/post-list";
+import { buildPublishPath } from "../../features/posts/publish-path";
+import { useInlineSearch } from "../../utils/use-inline-search";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { CategoriesGate } from "../../features/categories/categories-gate";
 
@@ -22,12 +23,17 @@ const JOB_FILTERS: Array<{ key: JobFilter; label: string }> = [
  * 现在首页只放图标，点"招聘求职"进到这里。内容跟原来的标签一样：全部 /
  * 招聘 / 求职三个筛选，PostList 的 job 文字行，按当前选中的州筛选；没有
  * 内容时引导"免费发布"。右上角"＋"直接发招聘（求职筛选下发求职）。
+ *
+ * 分类页顶栏统一任务卡：顶栏换成跟首页一样的"地区 + 搜索 + ＋"，左边加返回。
+ * 搜索只搜招聘 / 求职（跟着当前筛选），"＋"进发布页后只能选招聘或求职。
  */
 export function JobsPage() {
   const navigate = useNavigate();
   const stateCode = useSelectedRegionStore((s) => s.selectedRegion?.stateCode);
   const [filter, setFilter] = useState<JobFilter>("all");
   const publishSlug = filter === JOB_SEEKING_CATEGORY_SLUG ? JOB_SEEKING_CATEGORY_SLUG : HIRING_CATEGORY_SLUG;
+  const publishPath = buildPublishPath(publishSlug, [HIRING_CATEGORY_SLUG, JOB_SEEKING_CATEGORY_SLUG]);
+  const search = useInlineSearch();
 
   function renderEmptyState() {
     const seeking = filter === JOB_SEEKING_CATEGORY_SLUG;
@@ -38,7 +44,7 @@ export function JobsPage() {
         </p>
         <button
           type="button"
-          onClick={() => navigate(`/publish?category=${publishSlug}`)}
+          onClick={() => navigate(publishPath)}
           className="rounded-full bg-primary px-6 py-2.5 text-sm font-semibold text-white hover:bg-primary-hover"
         >
           免费发布
@@ -49,15 +55,7 @@ export function JobsPage() {
 
   return (
     <main data-testid="jobs-page" className="pb-24 md:pb-6">
-      <TopBar
-        variant="nav-only"
-        title="招聘求职"
-        right={{
-          icon: <Plus size={20} aria-hidden="true" />,
-          label: "发布",
-          onClick: () => navigate(`/publish?category=${publishSlug}`)
-        }}
-      />
+      <CategoryTopBar search={search} searchPlaceholder="搜索招聘求职" onCreateClick={() => navigate(publishPath)} />
       <FilterChips label="招聘求职筛选" options={JOB_FILTERS} value={filter} onChange={setFilter} />
       <CategoriesGate>
         {(idBySlug) => {
@@ -76,6 +74,7 @@ export function JobsPage() {
               categoryId={activeId}
               categoryIds={filter === "all" ? allIds : undefined}
               stateCode={stateCode}
+              searchQuery={search.query}
               emptyState={renderEmptyState()}
             />
           );

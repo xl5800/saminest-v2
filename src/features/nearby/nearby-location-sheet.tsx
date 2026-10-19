@@ -130,7 +130,7 @@ export function NearbyLocationSheet({ onClose }: { onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
       >
         <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
-        <p className="text-lg font-semibold text-text">看哪里附近的二手</p>
+        <p className="text-lg font-semibold text-text">看哪里附近的二手闲置</p>
 
         <button
           type="button"

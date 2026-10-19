@@ -5,12 +5,14 @@ import { Skeleton } from "../../components/skeleton";
 import { CategoriesGate, NoPostsYet } from "../categories/categories-gate";
 import { useNearbyPostsInfiniteQuery } from "../posts/use-nearby-posts-query";
 import { PostGridCard, PostList } from "../posts/post-list";
+import { buildPublishPath } from "../posts/publish-path";
 import { useNearbyLocationStore, type NearbyLocation } from "../../store/nearby-location-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { formatDistanceMiles } from "../../utils/format-distance";
 
 export const USED_CATEGORY_SLUG = "used";
 const NEARBY_CATEGORY_SLUGS = [USED_CATEGORY_SLUG];
+const USED_PUBLISH_PATH = buildPublishPath(USED_CATEGORY_SLUG, [USED_CATEGORY_SLUG]);
 const SKELETON_COUNT = 4;
 
 /**
@@ -42,7 +44,7 @@ function UsedByStateList() {
             variant="grid"
             categoryId={categoryId}
             stateCode={stateCode}
-            onPublishClick={() => navigate(`/publish?category=${USED_CATEGORY_SLUG}`)}
+            onPublishClick={() => navigate(USED_PUBLISH_PATH)}
           />
         );
       }}
@@ -104,10 +106,10 @@ function NearbyList({ location, radiusMiles }: { location: NearbyLocation; radiu
   if (items.length === 0) {
     return (
       <div role="status" className="flex flex-col items-center gap-3 px-6 py-12 text-center">
-        <p className="text-sm text-text-muted">附近还没有二手，欢迎发布第一条</p>
+        <p className="text-sm text-text-muted">附近还没有二手闲置，欢迎发布第一条</p>
         <button
           type="button"
-          onClick={() => navigate(`/publish?category=${USED_CATEGORY_SLUG}`)}
+          onClick={() => navigate(USED_PUBLISH_PATH)}
           className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-white hover:bg-primary-hover"
         >
           去发布

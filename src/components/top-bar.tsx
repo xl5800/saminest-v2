@@ -235,6 +235,10 @@ interface TopBarHomeProps {
    *  传 true 时不渲染品牌名，地区从小胶囊换成左上角的粗体标题（"DMV ⌄"）。
    *  不传保持原样（找搭子列表页还是品牌名 + 地区胶囊）。 */
   hideBrand?: boolean;
+  /** 分类页顶栏统一任务卡：招聘求职 / 房屋租售 / 二手闲置 / 免费物品 / 找搭子
+   *  这几个从首页图标点进去的页面，顶栏跟首页一样（地区 + 搜索 + ＋），最左边
+   *  多一个返回按钮。首页不传。 */
+  showBack?: boolean;
 }
 
 interface TopBarTabProps {
@@ -317,7 +321,12 @@ export function TopBar(props: TopBarProps) {
               图标暗示"这是可点选项"）；最右侧的"＋"发布/搜索图标完全不变，
               只是不再跟品牌名共享同一个 flex 容器，各自在自己的分组里，见下面
               两个 <div>。 */}
-          <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <div className="flex min-w-0 shrink items-center gap-2">
+            {props.showBack ? (
+              <span className="-ml-2 shrink-0">
+                <BackButton />
+              </span>
+            ) : null}
             {props.onMenuClick ? (
               <button
                 type="button"
@@ -363,6 +372,15 @@ export function TopBar(props: TopBarProps) {
             )}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {/* 分类页顶栏统一任务卡：搜索在前、"＋"在最右边（"‹ 地区 …… 🔍 ＋"）。 */}
+            <button
+              type="button"
+              aria-label="搜索"
+              onClick={props.onSearchClick}
+              className={ICON_BUTTON_CLASS_NAME}
+            >
+              <Search size={18} aria-hidden="true" />
+            </button>
             {props.onCreateClick ? (
               <button
                 type="button"
@@ -377,14 +395,6 @@ export function TopBar(props: TopBarProps) {
                 <Plus size={22} aria-hidden="true" />
               </button>
             ) : null}
-            <button
-              type="button"
-              aria-label="搜索"
-              onClick={props.onSearchClick}
-              className={ICON_BUTTON_CLASS_NAME}
-            >
-              <Search size={18} aria-hidden="true" />
-            </button>
           </div>
         </div>
         {props.bottomSlot}

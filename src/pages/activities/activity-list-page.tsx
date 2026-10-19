@@ -1,17 +1,10 @@
-import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { Fab } from "../../components/fab";
-import { TopBar } from "../../components/top-bar";
-import { formatSelectedRegionLabel } from "../../data/us-states";
+import { CategoryTopBar } from "../../components/category-top-bar";
 import { ActivityFeed } from "../../features/activities/activity-feed";
-import { useSelectedRegionStore } from "../../store/selected-region-store";
-import { useDebouncedValue } from "../../utils/use-debounced-value";
+import { useInlineSearch } from "../../utils/use-inline-search";
 
-const REGION_SELECT_PATH = "/region-select";
-// 跟 home-page.tsx 的 SEARCH_DEBOUNCE_MS 用同一个值——18 号卡明确要求"复用
-// 首页同款的 debounce 模式"，这里没有理由取一个不同的延迟数字。
-const SEARCH_DEBOUNCE_MS = 400;
+const CREATE_ACTIVITY_PATH = "/activities/new";
 
 /**
  * "找搭子"活动列表页（/activities，公开，不需要登录，游客也能刷）。
@@ -28,6 +21,12 @@ const SEARCH_DEBOUNCE_MS = 400;
  * 明确要求。
  *
  * 活动卡片本身抽成了共享组件 ActivityCard（见该文件顶部注释）。
+ *
+ * 分类页顶栏统一任务卡（最新，覆盖下面各卡里关于顶栏 / 悬浮按钮 / 搜索框
+ * 的描述）：顶栏换成跟首页和其它分类页一样的 CategoryTopBar——"‹ 📍弗吉尼亚 ⌄
+ * ……… 🔍 ＋"，不再显示"华邻"品牌名；地区用首页同款的短名称。原来右下角
+ * 的"发起搭子"悬浮按钮去掉，发起入口统一放到顶栏"＋"。搜索框的展开 / 收起
+ * 逻辑搬进了共用的 useInlineSearch，仍然只按标题筛找搭子活动。
  *
  * 首页改版（招聘求职任务卡）：频道筛选 + 列表这一段抽成了
  * features/activities/activity-feed.tsx，首页"找搭子"标签共用；下面各卡的
@@ -82,48 +81,19 @@ const SEARCH_DEBOUNCE_MS = 400;
  */
 export function ActivityListPage() {
   const navigate = useNavigate();
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [inputValue, setInputValue] = useState("");
-  const debouncedSearchQuery = useDebouncedValue(inputValue, SEARCH_DEBOUNCE_MS);
-  const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
-
-  function handleToggleSearch(): void {
-    setIsSearchOpen((current) => {
-      const next = !current;
-      if (!next) {
-        setInputValue("");
-      }
-      return next;
-    });
-  }
+  const search = useInlineSearch();
 
   return (
     <main data-testid="activity-list-page" className="pb-24">
-      <TopBar
-        variant="home"
-        regionLabel={selectedRegion ? formatSelectedRegionLabel(selectedRegion) : null}
-        onRegionClick={() => navigate(REGION_SELECT_PATH)}
-        onSearchClick={handleToggleSearch}
+      <CategoryTopBar
+        search={search}
+        searchPlaceholder="搜索找搭子活动"
+        onCreateClick={() => navigate(CREATE_ACTIVITY_PATH)}
       />
 
-      {isSearchOpen ? (
-        <div className="px-4 pb-2">
-          <input
-            type="search"
-            autoFocus
-            placeholder="搜找搭子活动…"
-            value={inputValue}
-            onChange={(event) => setInputValue(event.target.value)}
-            className="h-13 w-full rounded-search border border-border bg-card px-4 text-base text-text shadow-search"
-          />
-        </div>
-      ) : null}
-
       <div className="mx-auto max-w-2xl px-4 pt-2">
-        <ActivityFeed searchQuery={debouncedSearchQuery} />
+        <ActivityFeed searchQuery={search.query} />
       </div>
-
-      <Fab label="发起搭子" variant="dark" onClick={() => navigate("/activities/new")} />
     </main>
   );
 }

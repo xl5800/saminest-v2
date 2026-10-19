@@ -24,6 +24,7 @@ import {
   isJobCategorySlug
 } from "../../features/posts/job-fields";
 import { FREE_CATEGORY_SLUG, FREE_PRICE_LABEL } from "../../features/posts/free-items";
+import { PUBLISH_ONLY_PARAM } from "../../features/posts/publish-path";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import {
@@ -280,6 +281,16 @@ export function PublishPage() {
   const session = useAuthStore((s) => s.session);
   const [searchParams] = useSearchParams();
   const presetCategorySlug = searchParams.get("category");
+  // 分类页顶栏统一任务卡：从分类页的"＋"进来时（?only=rent,wanted），只显示
+  // 这几个分类；只有一个时整个分类选项都不显示，标题直接写"发布二手"。编辑
+  // 模式和底部导航"＋"进来时不受影响，照样显示全部分类。
+  const onlyCategorySlugs = isEditMode
+    ? null
+    : (searchParams
+        .get(PUBLISH_ONLY_PARAM)
+        ?.split(",")
+        .map((slug) => slug.trim())
+        .filter(Boolean) ?? null);
 
   const { data: categories, isError: categoriesError } = useCategoriesQuery();
   const {
@@ -471,6 +482,11 @@ export function PublishPage() {
   // 先不生效，等分类数据到了之后重新渲染会自然纠正，不需要额外的 loading
   // 分支）。
   const selectedCategorySlug = categories?.find((category) => category.id === categoryId)?.slug;
+  const categoryOptions =
+    onlyCategorySlugs && onlyCategorySlugs.length > 0
+      ? (categories ?? []).filter((category) => onlyCategorySlugs.includes(category.slug))
+      : (categories ?? []);
+  const singleCategory = onlyCategorySlugs?.length === 1 ? categoryOptions[0] : undefined;
   const isWantedCategory = selectedCategorySlug === "wanted";
   // 招聘求职任务卡：同一种写法判断是不是工作帖（招聘 / 求职）。
   const isJobCategory = isJobCategorySlug(selectedCategorySlug);
@@ -814,7 +830,7 @@ export function PublishPage() {
     <main className="min-h-dvh bg-bg pb-10">
       <TopBar
         variant="create"
-        title={isEditMode ? "编辑帖子" : "发布帖子"}
+        title={isEditMode ? "编辑帖子" : singleCategory ? `发布${singleCategory.nameZh}` : "发布帖子"}
         onSubmit={() => void submitForm()}
         submitLabel={submitLabel}
         submitDisabled={submitting || loadingExistingPost || loadError}
@@ -862,36 +878,38 @@ export function PublishPage() {
                 状态筛选 Chips 的 aria-pressed 开关语义不同，这里是表单里的
                 必选单选）。选中态 primary 蓝底白字，未选中态浅底灰字，样式
                 跟 category-nav.tsx 的 Chips 一致。 */}
-            <div className="mb-4">
-              <span id="publish-category-label" className="mb-2 block text-xs font-semibold text-text">
-                分类
-              </span>
-              <div
-                role="radiogroup"
-                aria-labelledby="publish-category-label"
-                className="flex flex-wrap gap-2"
-              >
-                {(categories ?? []).map((category) => {
-                  const selected = category.id === categoryId;
-                  return (
-                    <button
-                      key={category.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={selected}
-                      onClick={() => setCategoryId(category.id)}
-                      className={
-                        selected
-                          ? "flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold whitespace-nowrap text-white"
-                          : "flex h-10 items-center justify-center rounded-full border border-border bg-card px-5 text-sm whitespace-nowrap text-text-muted"
-                      }
-                    >
-                      {category.nameZh}
-                    </button>
-                  );
-                })}
+            {singleCategory ? null : (
+              <div className="mb-4">
+                <span id="publish-category-label" className="mb-2 block text-xs font-semibold text-text">
+                  分类
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="publish-category-label"
+                  className="flex flex-wrap gap-2"
+                >
+                  {categoryOptions.map((category) => {
+                    const selected = category.id === categoryId;
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => setCategoryId(category.id)}
+                        className={
+                          selected
+                            ? "flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold whitespace-nowrap text-white"
+                            : "flex h-10 items-center justify-center rounded-full border border-border bg-card px-5 text-sm whitespace-nowrap text-text-muted"
+                        }
+                      >
+                        {category.nameZh}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
             {categoriesError ? (
               <p role="alert" className="mb-4 rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
                 分类加载失败，请刷新页面重试。

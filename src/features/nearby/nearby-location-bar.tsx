@@ -5,7 +5,7 @@ import { useNearbyLocationStore } from "../../store/nearby-location-store";
 /**
  * 首页"附近的二手"任务卡：列表上方的位置条，点了打开选位置的弹层。
  * 设了位置："📍 Rockville 附近 · 50 英里 ⌄"；
- * 没设位置："📍 {州名} · 显示附近的二手 ›"——这是请求定位的唯一入口，
+ * 没设位置："📍 {州名} · 显示附近的二手闲置 ›"——这是请求定位的唯一入口，
  * 打开 App 时不主动弹任何定位提示。
  */
 export function NearbyLocationBar({ regionLabel, onClick }: { regionLabel: string | null; onClick: () => void }) {
@@ -28,7 +28,7 @@ export function NearbyLocationBar({ regionLabel, onClick }: { regionLabel: strin
       ) : (
         <>
           {regionLabel ? <span className="shrink-0 text-text-muted">{regionLabel} ·</span> : null}
-          <span className="truncate font-medium text-primary">显示附近的二手</span>
+          <span className="truncate font-medium text-primary">显示附近的二手闲置</span>
           <ChevronRight aria-hidden="true" size={14} className="shrink-0 text-primary" />
         </>
       )}

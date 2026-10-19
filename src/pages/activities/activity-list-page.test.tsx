@@ -67,7 +67,7 @@ describe("ActivityListPage", () => {
   // 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：居中的"找搭子"
   // 标题整个删掉了，顶部换成 TopBar home 变体的"Saminest + 当前地区"
   // 胶囊——不再有任何居中大标题，也不再有改版前的"🤝 一起去"。
-  it("no longer renders a centered '找搭子'/'🤝 一起去' heading — the TopBar is now the home-variant brand pill", () => {
+  it("no longer renders a centered '找搭子'/'🤝 一起去' heading — the TopBar shows the region instead", () => {
     listActivities.mockReturnValue(new Promise(() => {}));
 
     renderWithProviders(<ActivityListPage />);
@@ -76,17 +76,20 @@ describe("ActivityListPage", () => {
     expect(screen.queryByText("🤝 一起去")).not.toBeInTheDocument();
   });
 
-  describe("TopBar (14 号卡：顶部栏合并成一个胶囊按钮)", () => {
-    it("renders the '华邻' brand pill (same as the home page), with a placeholder when no region is selected", () => {
+  // 分类页顶栏统一任务卡：顶栏跟首页和其它分类页一样——返回 + 地区（短名称）
+  // + 搜索 + ＋，不再显示"华邻"。
+  describe("TopBar (分类页顶栏统一任务卡)", () => {
+    it("shows back and a placeholder region, with no 华邻 brand", () => {
       listActivities.mockReturnValue(new Promise(() => {}));
 
       renderWithProviders(<ActivityListPage />);
 
-      expect(screen.getByText("华邻")).toBeInTheDocument();
-      expect(screen.getByText("选择地区")).toBeInTheDocument();
+      expect(screen.queryByText("华邻")).not.toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "选择地区" })).toBeInTheDocument();
     });
 
-    it("shows the globally selected region's label on the pill's second line — same store/format as the home page", () => {
+    it("shows the short region name, same as the home page", () => {
       listActivities.mockReturnValue(new Promise(() => {}));
       useSelectedRegionStore.getState().setSelectedRegion({
         stateCode: "VA",
@@ -97,7 +100,7 @@ describe("ActivityListPage", () => {
 
       renderWithProviders(<ActivityListPage />);
 
-      expect(screen.getByText("VA 弗吉尼亚州")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "弗吉尼亚" })).toBeInTheDocument();
     });
 
     it("navigates to /region-select when the region button is clicked, same route as the home page's entry point", () => {
@@ -110,27 +113,18 @@ describe("ActivityListPage", () => {
       expect(navigateMock).toHaveBeenCalledWith("/region-select");
     });
 
-    it("renders only a search icon on the right — no '＋' create button (this page's FAB is the only publish entry point)", () => {
-      listActivities.mockReturnValue(new Promise(() => {}));
-
-      renderWithProviders(<ActivityListPage />);
-
-      expect(screen.getByRole("button", { name: "搜索" })).toBeInTheDocument();
-      expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
-    });
-
     it("toggles a search input open/closed when the search icon is clicked", () => {
       listActivities.mockReturnValue(new Promise(() => {}));
 
       renderWithProviders(<ActivityListPage />);
 
-      expect(screen.queryByPlaceholderText("搜找搭子活动…")).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("搜索找搭子活动")).not.toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      expect(screen.getByPlaceholderText("搜找搭子活动…")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("搜索找搭子活动")).toBeInTheDocument();
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      expect(screen.queryByPlaceholderText("搜找搭子活动…")).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("搜索找搭子活动")).not.toBeInTheDocument();
     });
   });
 
@@ -145,7 +139,7 @@ describe("ActivityListPage", () => {
       await screen.findByRole("link", { name: /周末吃火锅/ });
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+      fireEvent.change(screen.getByPlaceholderText("搜索找搭子活动"), {
         target: { value: "火锅" }
       });
 
@@ -160,7 +154,7 @@ describe("ActivityListPage", () => {
       await screen.findByRole("link", { name: /周末吃火锅/ });
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+      fireEvent.change(screen.getByPlaceholderText("搜索找搭子活动"), {
         target: { value: "火锅" }
       });
 
@@ -180,7 +174,7 @@ describe("ActivityListPage", () => {
       await screen.findByRole("link", { name: /Board Game Night/ });
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+      fireEvent.change(screen.getByPlaceholderText("搜索找搭子活动"), {
         target: { value: "game" }
       });
 
@@ -205,7 +199,7 @@ describe("ActivityListPage", () => {
       await screen.findByRole("link", { name: /周末吃火锅/ });
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+      fireEvent.change(screen.getByPlaceholderText("搜索找搭子活动"), {
         target: { value: "不存在的关键字" }
       });
 
@@ -226,7 +220,7 @@ describe("ActivityListPage", () => {
       await screen.findByRole("link", { name: /周末吃火锅/ });
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      const input = screen.getByPlaceholderText("搜找搭子活动…");
+      const input = screen.getByPlaceholderText("搜索找搭子活动");
       fireEvent.change(input, { target: { value: "火锅" } });
       await waitFor(
         () => {
@@ -252,7 +246,7 @@ describe("ActivityListPage", () => {
       await screen.findByRole("link", { name: /周末吃火锅/ });
 
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+      fireEvent.change(screen.getByPlaceholderText("搜索找搭子活动"), {
         target: { value: "火锅" }
       });
       await waitFor(
@@ -274,7 +268,7 @@ describe("ActivityListPage", () => {
 
       // 再打开一次搜索框，输入框应该是空的，不是残留上次的关键字。
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      expect(screen.getByPlaceholderText("搜找搭子活动…")).toHaveValue("");
+      expect(screen.getByPlaceholderText("搜索找搭子活动")).toHaveValue("");
     });
 
     // 18.3：关键字筛选是在服务端已经按分类过滤过的 activities 数组基础上
@@ -293,7 +287,7 @@ describe("ActivityListPage", () => {
 
       // 先输入一个两条活动标题都包含的关键字"周末"。
       fireEvent.click(screen.getByRole("button", { name: "搜索" }));
-      fireEvent.change(screen.getByPlaceholderText("搜找搭子活动…"), {
+      fireEvent.change(screen.getByPlaceholderText("搜索找搭子活动"), {
         target: { value: "周末" }
       });
       await waitFor(
@@ -313,7 +307,7 @@ describe("ActivityListPage", () => {
       await waitFor(() => {
         expect(listActivities).toHaveBeenCalledWith({ channel: "carpool", stateCode: undefined });
       });
-      expect(screen.getByPlaceholderText("搜找搭子活动…")).toHaveValue("周末");
+      expect(screen.getByPlaceholderText("搜索找搭子活动")).toHaveValue("周末");
       expect(await screen.findByRole("link", { name: /周末拼车去纽约/ })).toBeInTheDocument();
       expect(screen.queryByRole("link", { name: /周末吃火锅/ })).not.toBeInTheDocument();
     });
@@ -518,11 +512,7 @@ describe("ActivityListPage", () => {
         screen.queryByText("暂时没有符合条件的活动，换个筛选条件试试，或者自己发起一个。")
       ).not.toBeInTheDocument();
 
-      // 页面上这时有两个"发起搭子"按钮——空状态里的这个 + 常驻的悬浮 Fab，
-      // 空状态的按钮先出现在 DOM 里（见 activity-list-page.tsx 里 Fab 是
-      // 挂在这段内容后面的），取第一个。
-      const [emptyStatePublishButton] = screen.getAllByRole("button", { name: "发起搭子" });
-      fireEvent.click(emptyStatePublishButton);
+      fireEvent.click(screen.getByRole("button", { name: "发起搭子" }));
       expect(navigateMock).toHaveBeenCalledWith("/activities/new");
     });
 
@@ -558,15 +548,15 @@ describe("ActivityListPage", () => {
     });
   });
 
-  // 04 号卡验收标准：悬浮按钮点击后直接进入发布搭子内容表单，中间没有
-  // 类型选择弹层。
-  it("navigates straight to /activities/new when the dark FAB '发起搭子' is clicked (no type-selection sheet in between)", async () => {
+  // 分类页顶栏统一任务卡：原来的"发起搭子"悬浮按钮换成顶栏"＋"，点了直接
+  // 进发起页，中间没有类型选择弹层。
+  it("navigates straight to /activities/new from the top bar ＋ (no floating button, no type-selection sheet)", async () => {
     listActivities.mockResolvedValue([]);
 
     renderWithProviders(<ActivityListPage />);
     await waitFor(() => expect(listActivities).toHaveBeenCalled());
 
-    fireEvent.click(screen.getByRole("button", { name: /发起搭子/ }));
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
     expect(navigateMock).toHaveBeenCalledWith("/activities/new");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
