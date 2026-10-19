@@ -56,13 +56,14 @@ describe("PublishActionSheet", () => {
     expect(screen.getByRole("heading", { name: "发布到弗吉尼亚" })).toBeInTheDocument();
   });
 
-  it("highlights only 社区帖子 with a solid blue icon", () => {
+  // 首页图标改灰任务卡：八个图标都是浅灰底、深灰图标，没有哪个单独用蓝色突出。
+  it("shows every option with the same grey icon tile, none highlighted in blue", () => {
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />);
 
-    const [community, ...others] = optionButtons();
-    expect(community.querySelector("span")?.className).toContain("bg-primary text-white");
-    for (const button of others) {
-      expect(button.querySelector("span")?.className).toContain("bg-primary-light");
+    for (const button of optionButtons()) {
+      const tile = button.querySelector("span");
+      expect(tile).toHaveClass("bg-field", "text-text-body");
+      expect(tile?.className).not.toContain("primary");
     }
   });
 

@@ -48,7 +48,6 @@ const OPTIONS: PublishOption[] = [
   { key: "activity", Icon: Handshake, label: "找搭子", to: "/activities/new" }
 ];
 
-const EMPHASIZED_KEY = OPTIONS[0].key;
 
 /**
  * 首页顶部「＋」触发的"选择发布类型"半屏弹层（05-publish-flow.md 5.1）。
@@ -120,10 +119,9 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
         onClick={(event) => event.stopPropagation()}
       >
         <span aria-hidden="true" className="mx-auto mb-3 block h-1 w-10 rounded-full bg-border" />
-        <h2 className="mb-4 px-1 text-lg font-bold text-primary">{title}</h2>
+        <h2 className="mb-4 px-1 text-lg font-bold text-text">{title}</h2>
         <ul className="grid grid-cols-4 gap-y-4">
           {OPTIONS.map((option) => {
-            const emphasized = option.key === EMPHASIZED_KEY;
             return (
               <li key={option.key}>
                 <button
@@ -131,11 +129,9 @@ export function PublishActionSheet({ onClose }: PublishActionSheetProps) {
                   onClick={() => handleSelect(option)}
                   className="flex w-full flex-col items-center gap-1.5 text-[13px] text-text"
                 >
-                  <span
-                    className={`flex h-14 w-14 items-center justify-center rounded-2xl ${
-                      emphasized ? "bg-primary text-white" : "bg-primary-light text-primary"
-                    }`}
-                  >
+                  {/* 首页图标改灰任务卡：跟首页图标一样浅灰底、深灰图标，第一个
+                      不再单独用实心蓝底突出。 */}
+                  <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-field text-text-body">
                     <option.Icon aria-hidden="true" size={26} />
                   </span>
                   {option.label}
