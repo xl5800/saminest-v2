@@ -34,3 +34,16 @@ export function isLikelyEmail(input: string): boolean {
 export function phoneToShadowEmail(phoneDigits: string): string {
   return `${phoneDigits}@${SHADOW_EMAIL_DOMAIN}`;
 }
+
+/**
+ * 短信验证码登录任务卡：用户在 "+1" 后面填的号码 → Supabase / Twilio 要的
+ * E.164 格式（"+12025550123"）。只接受美国 / 加拿大号码（10 位，或者带着
+ * 国码 1 的 11 位），其它返回 null——Twilio Verify 那边也只开放了这两个
+ * 国家。
+ */
+export function toUsPhoneE164(input: string): string | null {
+  const digits = normalizePhoneDigits(input);
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return null;
+}

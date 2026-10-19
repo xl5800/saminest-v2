@@ -48,6 +48,10 @@ function daysRemaining(iso: string): number {
 export function DeleteAccountPage() {
   const session = useAuthStore((s) => s.session);
   const email = session?.user.email ?? "";
+  // 短信验证码登录任务卡：手机号注册的账号没有邮箱、通常也没有密码，没法用
+  // "邮箱 + 密码"重新确认身份——这类账号只要求手动输入"注销"二次确认（本来
+  // 就是登录状态下操作；注销请求还有冷静期，可以撤回）。邮箱老账号照旧要密码。
+  const requiresPassword = Boolean(email);
 
   const { data: status, isPending, isError } = useAccountDeletionStatusQuery();
   const requestMutation = useRequestAccountDeletionMutation();
@@ -76,7 +80,7 @@ export function DeleteAccountPage() {
     setValidationError(null);
     setSubmitError(null);
 
-    if (!password) {
+    if (requiresPassword && !password) {
       setValidationError(PASSWORD_REQUIRED_MESSAGE);
       return;
     }
@@ -85,15 +89,17 @@ export function DeleteAccountPage() {
       return;
     }
 
-    setVerifyingPassword(true);
-    try {
-      await authService.verifyCurrentPassword(email, password);
-    } catch (error) {
+    if (requiresPassword) {
+      setVerifyingPassword(true);
+      try {
+        await authService.verifyCurrentPassword(email, password);
+      } catch (error) {
+        setVerifyingPassword(false);
+        setSubmitError(error instanceof AppError ? error.message : REQUEST_DEFAULT_ERROR_MESSAGE);
+        return;
+      }
       setVerifyingPassword(false);
-      setSubmitError(error instanceof AppError ? error.message : REQUEST_DEFAULT_ERROR_MESSAGE);
-      return;
     }
-    setVerifyingPassword(false);
 
     try {
       await requestMutation.mutateAsync();
@@ -186,15 +192,17 @@ export function DeleteAccountPage() {
               </p>
             ) : null}
 
-            <div className="mb-4">
-              <PasswordInput
-                id="delete-account-password"
-                label="输入当前密码确认身份"
-                value={password}
-                onChange={setPassword}
-                autoComplete="current-password"
-              />
-            </div>
+            {requiresPassword ? (
+              <div className="mb-4">
+                <PasswordInput
+                  id="delete-account-password"
+                  label="输入当前密码确认身份"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="current-password"
+                />
+              </div>
+            ) : null}
 
             {/* 全 App 视觉 Token 体系（第二批）：这个确认输入框的 focus
                 态是危险操作专属的红色版本，跟其它表单的柔光处理是同一个

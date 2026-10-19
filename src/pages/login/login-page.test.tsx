@@ -1,22 +1,25 @@
 import { MemoryRouter } from "react-router-dom";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { authMock, navigateMock, triggerAuthEvent } = vi.hoisted(() => {
   let capturedCallback: ((event: string, session: unknown) => void) | null = null;
-  const onAuthStateChange = vi.fn(
-    (callback: (event: string, session: unknown) => void) => {
-      capturedCallback = callback;
-      return { data: { subscription: { unsubscribe: vi.fn() } } };
-    }
-  );
+  const onAuthStateChange = vi.fn((callback: (event: string, session: unknown) => void) => {
+    capturedCallback = callback;
+    return { data: { subscription: { unsubscribe: vi.fn() } } };
+  });
   const getSession = vi.fn(() => Promise.resolve({ data: { session: null } }));
-  const signInWithPassword = vi.fn();
   const triggerAuthEvent = (event: string, session: unknown) => {
     capturedCallback?.(event, session);
   };
   return {
-    authMock: { signInWithPassword, getSession, onAuthStateChange },
+    authMock: {
+      signInWithPassword: vi.fn(),
+      signInWithOtp: vi.fn(),
+      verifyOtp: vi.fn(),
+      getSession,
+      onAuthStateChange
+    },
     navigateMock: vi.fn(),
     triggerAuthEvent
   };
@@ -33,11 +36,14 @@ vi.mock("react-router-dom", async (importOriginal) => {
 
 import { useAuthBootstrap } from "../../app/use-auth-bootstrap";
 import { useAuthStore } from "../../store/auth-store";
-import { LoginPage } from "./login-page";
+import { LoginPage, OTP_RESEND_SECONDS } from "./login-page";
 
 const initialAuthState = useAuthStore.getState();
+const OLD_USER = { id: "user-1", created_at: "2026-01-01T00:00:00.000Z" };
 
-function renderLoginPage(initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/login") {
+function renderLoginPage(
+  initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/login"
+) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <LoginPage />
@@ -45,282 +51,248 @@ function renderLoginPage(initialEntry: string | { pathname: string; search?: str
   );
 }
 
+function fillPhone(value = "(843) 748-1464") {
+  fireEvent.change(screen.getByLabelText("手机号"), { target: { value } });
+}
+
+async function sendCode() {
+  authMock.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+  fireEvent.click(screen.getByRole("button", { name: "获取验证码" }));
+  await screen.findByText("验证码已发送，请查收短信。");
+}
+
 describe("LoginPage", () => {
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
   });
 
   beforeEach(() => {
     authMock.signInWithPassword.mockReset();
+    authMock.signInWithOtp.mockReset();
+    authMock.verifyOtp.mockReset();
     authMock.onAuthStateChange.mockClear();
     authMock.getSession.mockClear();
     navigateMock.mockReset();
     useAuthStore.setState(initialAuthState, true);
   });
 
-  it("renders the email and password fields plus a link to /register", () => {
+  it("opens on 短信验证 with a fixed +1 prefix, a code field and the 无需注册 hint", () => {
     renderLoginPage();
 
-    expect(screen.getByLabelText("邮箱或手机号")).toBeInTheDocument();
-    expect(screen.getByLabelText("密码")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "去注册" })).toHaveAttribute(
-      "href",
-      "/register"
-    );
-    expect(screen.getByRole("link", { name: "忘记密码？" })).toHaveAttribute(
-      "href",
-      "/forgot-password"
-    );
+    expect(screen.getByRole("tab", { name: "短信验证" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "密码登录" })).toHaveAttribute("aria-selected", "false");
+    expect(screen.getByText("+1")).toBeInTheDocument();
+    expect(screen.getByLabelText("手机号")).toHaveAttribute("type", "tel");
+    expect(screen.getByLabelText("验证码")).toBeInTheDocument();
+    expect(screen.getByText("无需注册，手机号验证即可登录")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "注册 / 登录" })).toBeInTheDocument();
   });
 
-  it("does not mention 用户协议 or 隐私政策 anywhere on the login page", () => {
+  it("has no link to a separate register page, and shows the agreement line", () => {
     renderLoginPage();
 
-    expect(screen.queryByText(/用户协议/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/隐私政策/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /注册/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "《用户协议》" })).toHaveAttribute("href", "/terms");
+    expect(screen.getByRole("link", { name: "《隐私政策》" })).toHaveAttribute("href", "/privacy");
   });
 
-  it("only shows 忘记密码 and 没有账号 as the two bottom links, in that order", () => {
+  it("rejects a phone number that is not a 10-digit US/Canada number before sending a code", async () => {
     renderLoginPage();
+    fillPhone("12345");
+    fireEvent.click(screen.getByRole("button", { name: "获取验证码" }));
 
-    const bottomLinks = screen.getAllByRole("link");
-    expect(bottomLinks.map((link) => link.textContent)).toEqual([
-      "华邻",
-      "忘记密码？",
-      "去注册"
-    ]);
+    expect(await screen.findByRole("alert")).toHaveTextContent("请输入正确的 10 位美国或加拿大手机号。");
+    expect(authMock.signInWithOtp).not.toHaveBeenCalled();
   });
 
-  it("toggles the password field between hidden and visible text", () => {
+  it("sends the code to the +1 E.164 number with a default nickname for new accounts, then counts down", async () => {
     renderLoginPage();
+    fillPhone();
+    await sendCode();
 
-    const passwordInput = screen.getByLabelText("密码");
-    expect(passwordInput).toHaveAttribute("type", "password");
-
-    fireEvent.click(screen.getByRole("button", { name: "显示密码" }));
-    expect(passwordInput).toHaveAttribute("type", "text");
-
-    fireEvent.click(screen.getByRole("button", { name: "隐藏密码" }));
-    expect(passwordInput).toHaveAttribute("type", "password");
+    expect(authMock.signInWithOtp).toHaveBeenCalledWith({
+      phone: "+18437481464",
+      options: { data: { display_name: expect.stringMatching(/^同城用户\d{4}$/) } }
+    });
+    expect(screen.getByRole("button", { name: `${OTP_RESEND_SECONDS} 秒后重发` })).toBeDisabled();
   });
 
-  it("blocks submission and shows a friendly message when fields are empty", async () => {
+  it("re-enables the code button as 重新获取 when the countdown ends", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     renderLoginPage();
+    fillPhone();
+    await sendCode();
 
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("请填写邮箱或手机号和密码。");
-    expect(authMock.signInWithPassword).not.toHaveBeenCalled();
-  });
-
-  it("disables the submit button and shows a loading label while signing in", async () => {
-    let resolveSignIn: (value: unknown) => void = () => {};
-    authMock.signInWithPassword.mockReturnValue(
-      new Promise((resolve) => {
-        resolveSignIn = resolve;
-      })
-    );
-
-    renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
-
-    const pendingButton = await screen.findByRole("button", { name: "登录中…" });
-    expect(pendingButton).toBeDisabled();
-
-    resolveSignIn({
-      data: { user: { id: "user-1" }, session: { access_token: "token" } },
-      error: null
-    });
-
-    await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
-    });
-  });
-
-  it("signs in and redirects home on success", async () => {
-    authMock.signInWithPassword.mockResolvedValue({
-      data: { user: { id: "user-1" }, session: { access_token: "token" } },
-      error: null
-    });
-
-    renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
-
-    await waitFor(() => {
-      expect(authMock.signInWithPassword).toHaveBeenCalledWith({
-        email: "user@example.com",
-        password: "password123"
+    // 倒计时每秒重渲染一次再排下一秒，所以一秒一秒地推进。
+    for (let second = 0; second < OTP_RESEND_SECONDS; second += 1) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1000);
       });
+    }
+    expect(screen.getByRole("button", { name: "重新获取" })).toBeEnabled();
+  });
+
+  it("shows a friendly message when sending the code fails", async () => {
+    authMock.signInWithOtp.mockResolvedValue({
+      data: {},
+      error: { message: "Error sending confirmation OTP", code: "sms_send_failed" }
+    });
+    renderLoginPage();
+    fillPhone();
+    fireEvent.click(screen.getByRole("button", { name: "获取验证码" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("验证码发送失败，请检查手机号后重试。");
+  });
+
+  it("asks for the code to be requested first", async () => {
+    renderLoginPage();
+    fillPhone();
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "注册 / 登录" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("请先获取验证码。");
+    expect(authMock.verifyOtp).not.toHaveBeenCalled();
+  });
+
+  it("verifies the code and redirects home", async () => {
+    authMock.verifyOtp.mockResolvedValue({
+      data: { user: OLD_USER, session: { access_token: "token" } },
+      error: null
+    });
+    renderLoginPage();
+    fillPhone();
+    await sendCode();
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "12a3456" } });
+    expect(screen.getByLabelText("验证码")).toHaveValue("123456");
+    fireEvent.click(screen.getByRole("button", { name: "注册 / 登录" }));
+
+    await waitFor(() => {
+      expect(authMock.verifyOtp).toHaveBeenCalledWith({ phone: "+18437481464", token: "123456", type: "sms" });
     });
     expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
   });
 
-  // 注册登录简化任务卡：从别的页面被带来登录（?redirect=），登录成功后
-  // 回到那个页面；去注册的链接也带上同一个 redirect。
-  it("returns to the page in ?redirect= after login and carries it to the register link", async () => {
-    authMock.signInWithPassword.mockResolvedValue({
-      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+  it("returns to the page in ?redirect= after logging in with a code", async () => {
+    authMock.verifyOtp.mockResolvedValue({
+      data: { user: OLD_USER, session: { access_token: "token" } },
       error: null
     });
-
     renderLoginPage("/login?redirect=%2Factivities%2Fact-1%3Fs%3D1");
-    expect(screen.getByRole("link", { name: "去注册" })).toHaveAttribute(
-      "href",
-      "/register?redirect=%2Factivities%2Fact-1%3Fs%3D1"
-    );
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    fillPhone();
+    await sendCode();
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "注册 / 登录" }));
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith("/activities/act-1?s=1", { replace: true });
     });
   });
 
-  // 从原页面点"去登录"进来的（authDepth=1）：登录成功直接 navigate(-1)
-  // 退回原页面那条历史，不再 replace 出一条重复的记录（否则用户在活动页点
-  // 返回还是同一个活动页，看起来像被困住）。
   it("steps back over the auth pages when the source page is behind it in history", async () => {
-    authMock.signInWithPassword.mockResolvedValue({
-      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+    authMock.verifyOtp.mockResolvedValue({
+      data: { user: OLD_USER, session: { access_token: "token" } },
       error: null
     });
-
-    renderLoginPage({
-      pathname: "/login",
-      search: "?redirect=%2Factivities%2Fact-1",
-      state: { authDepth: 1 }
-    });
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    renderLoginPage({ pathname: "/login", search: "?redirect=%2Factivities%2Fact-1", state: { authDepth: 1 } });
+    fillPhone();
+    await sendCode();
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "注册 / 登录" }));
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith(-1);
     });
   });
 
-  it("ignores an off-site redirect and goes home", async () => {
-    authMock.signInWithPassword.mockResolvedValue({
-      data: { user: { id: "user-1" }, session: { access_token: "token" } },
-      error: null
+  it("shows a friendly message for a wrong or expired code", async () => {
+    authMock.verifyOtp.mockResolvedValue({
+      data: { user: null, session: null },
+      error: { message: "Token has expired or is invalid", code: "otp_expired" }
     });
+    renderLoginPage();
+    fillPhone();
+    await sendCode();
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "注册 / 登录" }));
 
-    renderLoginPage("/login?redirect=https%3A%2F%2Fevil.com");
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
-
-    await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
-    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("验证码不正确或已过期，请重新获取。");
+    expect(navigateMock).not.toHaveBeenCalled();
   });
 
-  // 登录/注册支持手机号任务卡：输入手机号时，signInWithPassword 收到的
-  // email 参数是算出来的影子邮箱，不是用户输入的原始手机号字符串。
-  it("derives a shadow email and signs in when the identifier looks like a phone number", async () => {
+  it("logs in with phone + password on the 密码登录 tab", async () => {
     authMock.signInWithPassword.mockResolvedValue({
-      data: { user: { id: "user-1" }, session: { access_token: "token" } },
+      data: { user: OLD_USER, session: { access_token: "token" } },
       error: null
     });
-
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "703-555-0199" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
+    fireEvent.click(screen.getByRole("tab", { name: "密码登录" }));
+    expect(screen.queryByLabelText("验证码")).not.toBeInTheDocument();
+    fillPhone("8437481464");
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
     await waitFor(() => {
-      expect(authMock.signInWithPassword).toHaveBeenCalledWith({
-        email: "7035550199@phone.saminest.internal",
-        password: "password123"
-      });
+      expect(authMock.signInWithPassword).toHaveBeenCalledWith({ phone: "+18437481464", password: "password123" });
     });
     expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
   });
 
-  it("blocks submission and shows a friendly message when the identifier looks like neither an email nor a phone number", async () => {
-    renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "not-an-identifier" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent("请输入正确的邮箱或手机号。");
-    expect(authMock.signInWithPassword).not.toHaveBeenCalled();
-  });
-
-  it("shows a friendly message for invalid credentials instead of the raw Supabase error", async () => {
+  it("points users without a password to SMS login when phone + password fails", async () => {
     authMock.signInWithPassword.mockResolvedValue({
       data: { user: null, session: null },
       error: { message: "Invalid login credentials", code: "invalid_credentials" }
     });
-
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "wrong-password" }
-    });
+    fireEvent.click(screen.getByRole("tab", { name: "密码登录" }));
+    fillPhone();
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "wrong-password" } });
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("邮箱或密码不正确，请重新输入。");
-    expect(alert.textContent).not.toContain("Invalid login credentials");
+    expect(await screen.findByRole("alert")).toHaveTextContent("还没设置过密码？请用短信验证登录。");
   });
 
-  it("falls back to a generic message for an unmapped error code", async () => {
+  it("keeps email login for old accounts behind a small link, with 忘记密码", async () => {
     authMock.signInWithPassword.mockResolvedValue({
-      data: { user: null, session: null },
-      error: { message: "boom", code: "some_unmapped_code" }
+      data: { user: OLD_USER, session: { access_token: "token" } },
+      error: null
     });
-
     renderLoginPage();
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
+    fireEvent.click(screen.getByRole("button", { name: "以前用邮箱注册？邮箱登录" }));
+
+    expect(screen.getByRole("heading", { name: "邮箱登录" })).toBeInTheDocument();
+    expect(screen.queryByRole("tab")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "忘记密码？" })).toHaveAttribute("href", "/forgot-password");
+
+    fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "user@example.com" } });
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: "登录" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("登录失败，请稍后重试。");
+    await waitFor(() => {
+      expect(authMock.signInWithPassword).toHaveBeenCalledWith({ email: "user@example.com", password: "password123" });
+    });
+
+    cleanup();
+    renderLoginPage();
+    fireEvent.click(screen.getByRole("button", { name: "以前用邮箱注册？邮箱登录" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回手机号登录" }));
+    expect(screen.getByRole("tab", { name: "短信验证" })).toHaveAttribute("aria-selected", "true");
   });
 
-  it("updates the shared auth store session through the existing single auth listener after sign-in", async () => {
-    const session = { access_token: "token", user: { id: "user-1" } };
-    authMock.signInWithPassword.mockImplementation(async () => {
+  it("toggles the password field between hidden and visible text", () => {
+    renderLoginPage();
+    fireEvent.click(screen.getByRole("tab", { name: "密码登录" }));
+
+    const passwordInput = screen.getByLabelText("密码");
+    expect(passwordInput).toHaveAttribute("type", "password");
+    fireEvent.click(screen.getByRole("button", { name: "显示密码" }));
+    expect(passwordInput).toHaveAttribute("type", "text");
+  });
+
+  it("updates the shared auth store session through the existing single auth listener after login", async () => {
+    const session = { access_token: "token", user: OLD_USER };
+    authMock.signInWithOtp.mockResolvedValue({ data: {}, error: null });
+    authMock.verifyOtp.mockImplementation(async () => {
       triggerAuthEvent("SIGNED_IN", session);
       return { data: { user: session.user, session }, error: null };
     });
@@ -340,13 +312,10 @@ describe("LoginPage", () => {
       expect(useAuthStore.getState().isInitializing).toBe(false);
     });
 
-    fireEvent.change(screen.getByLabelText("邮箱或手机号"), {
-      target: { value: "user@example.com" }
-    });
-    fireEvent.change(screen.getByLabelText("密码"), {
-      target: { value: "password123" }
-    });
-    fireEvent.click(screen.getByRole("button", { name: "登录" }));
+    fillPhone();
+    await sendCode();
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "注册 / 登录" }));
 
     await waitFor(() => {
       expect(useAuthStore.getState().session).toEqual(session);

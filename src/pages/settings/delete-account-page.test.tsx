@@ -144,6 +144,23 @@ describe("DeleteAccountPage", () => {
     });
   });
 
+  // 短信验证码登录任务卡：手机号账号没有邮箱 / 密码，只要求输入"注销"确认。
+  it("skips the password step for phone accounts (no email) and requests deletion after the typed confirmation", async () => {
+    useAuthStore.getState().setSession({ user: { id: "user-1", phone: "18437481464" } } as never);
+    useAccountDeletionStatusQuery.mockReturnValue({ data: null, isPending: false, isError: false });
+    requestMutateAsyncMock.mockResolvedValue("2999-01-15T00:00:00.000Z");
+
+    renderPage();
+    expect(screen.queryByLabelText("输入当前密码确认身份")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/请输入"注销"确认操作/), { target: { value: "注销" } });
+    fireEvent.click(screen.getByRole("button", { name: "确认注销账号" }));
+
+    await vi.waitFor(() => {
+      expect(requestMutateAsyncMock).toHaveBeenCalled();
+    });
+    expect(verifyCurrentPasswordMock).not.toHaveBeenCalled();
+  });
+
   it("shows the AppError message when password verification fails", async () => {
     useAccountDeletionStatusQuery.mockReturnValue({ data: null, isPending: false, isError: false });
     verifyCurrentPasswordMock.mockRejectedValue(

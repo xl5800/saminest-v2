@@ -24,6 +24,14 @@ export function SettingsPage() {
       <div className="mx-auto max-w-md px-4 py-6">
         <section aria-label="账号与安全">
           <h2 className="mb-2 text-sm font-medium text-text-muted">账号与安全</h2>
+          {/* 短信验证码登录任务卡：设过登录密码之后，可以用手机号 + 密码登录。 */}
+          <Link
+            to="/settings/password"
+            className="mb-3 flex h-14 items-center justify-between rounded-2xl border border-border bg-card px-4 text-base font-medium text-text shadow-settings-item transition-opacity hover:opacity-90"
+          >
+            <span>登录密码</span>
+            <ChevronRight aria-hidden="true" size={18} className="text-chevron" />
+          </Link>
           <Link
             to="/settings/delete-account"
             className="flex h-14 items-center justify-between rounded-2xl border border-border bg-card px-4 text-base font-medium text-danger shadow-settings-item transition-opacity hover:opacity-90"

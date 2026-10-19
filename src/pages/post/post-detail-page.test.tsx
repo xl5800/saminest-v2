@@ -1,5 +1,17 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// 功能开关（config/feature-flags.ts）：这个文件的用例测的是功能打开时的行为，
+// 默认都按"打开"跑；个别用例把开关改成 false 测关闭时的样子。
+const featureFlags = vi.hoisted(() => ({ USER_PROFILE_PAGE_ENABLED: true, PHONE_REGISTRATION_ENABLED: true }));
+vi.mock("../../config/feature-flags", () => ({
+  get USER_PROFILE_PAGE_ENABLED() {
+    return featureFlags.USER_PROFILE_PAGE_ENABLED;
+  },
+  get PHONE_REGISTRATION_ENABLED() {
+    return featureFlags.PHONE_REGISTRATION_ENABLED;
+  }
+}));
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { Location } from "react-router-dom";
 

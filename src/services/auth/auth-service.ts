@@ -65,6 +65,51 @@ export const authService = {
     return { user: data.user, session: data.session };
   },
 
+  /**
+   * 短信验证码登录任务卡：给手机号发验证码（Supabase Auth → Twilio Verify）。
+   * 没注册过的号码会在验证通过时自动建账号，displayName 只对新账号生效
+   * （写进 user_metadata，useAuthBootstrap 补建 profile 时读它）。
+   * phone 必须是 E.164 格式（"+12025550123"），见 utils/phone-identity.ts。
+   */
+  async sendPhoneOtp(phone: string, displayName: string): Promise<void> {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.auth.signInWithOtp({
+      phone,
+      options: { data: { display_name: displayName } }
+    });
+
+    if (error) {
+      throw new AppError(error.message, error.code ?? "AUTH_SEND_OTP_FAILED", error);
+    }
+  },
+
+  /** 短信验证码登录任务卡：校验验证码，成功即登录（新号码同时完成注册）。 */
+  async verifyPhoneOtp(phone: string, token: string): Promise<AuthResult> {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.verifyOtp({ phone, token, type: "sms" });
+
+    if (error) {
+      throw new AppError(error.message, error.code ?? "AUTH_VERIFY_OTP_FAILED", error);
+    }
+
+    return { user: data.user, session: data.session };
+  },
+
+  /**
+   * 短信验证码登录任务卡：手机号 + 密码登录。只有在"设置 → 登录密码"里
+   * 设过密码的手机号账号才能用；短信注册的新账号默认没有密码。
+   */
+  async signInWithPhonePassword(phone: string, password: string): Promise<AuthResult> {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase.auth.signInWithPassword({ phone, password });
+
+    if (error) {
+      throw new AppError(error.message, error.code ?? "AUTH_SIGN_IN_FAILED", error);
+    }
+
+    return { user: data.user, session: data.session };
+  },
+
   async signOut(): Promise<void> {
     const supabase = getSupabaseClient();
     const { error } = await supabase.auth.signOut();

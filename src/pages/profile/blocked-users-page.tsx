@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
+import { USER_PROFILE_PAGE_ENABLED } from "../../config/feature-flags";
 import { useMyBlockedUsersQuery } from "../../features/blocks/use-my-blocked-users-query";
 import { useUnblockUserMutation } from "../../features/blocks/use-unblock-user-mutation";
 import type { BlockedUserListItem } from "../../repositories/user-blocks-repository";
@@ -29,6 +30,24 @@ interface BlockedUserRowProps {
  * user-profile-page.tsx，不新建页面），"取消屏蔽"按钮不在这个 Link 里面，
  * 是同一行内并列的另一个可点区域，点它不会触发导航。
  */
+function BlockedUserIdentity({ user, avatarInitial }: { user: BlockedUserListItem; avatarInitial: string }) {
+  return (
+    <>
+      {user.avatarUrl ? (
+        <img src={user.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+      ) : (
+        <span
+          aria-hidden="true"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
+        >
+          {avatarInitial}
+        </span>
+      )}
+      <span className="truncate text-sm font-medium text-text">{user.displayName}</span>
+    </>
+  );
+}
+
 function BlockedUserRow({ blockerId, user }: BlockedUserRowProps) {
   const unblockMutation = useUnblockUserMutation();
   const [error, setError] = useState<string | null>(null);
@@ -48,23 +67,16 @@ function BlockedUserRow({ blockerId, user }: BlockedUserRowProps) {
 
   return (
     <li className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
-      <Link to={`/users/${user.blockedUserId}`} className="flex min-w-0 items-center gap-3">
-        {user.avatarUrl ? (
-          <img
-            src={user.avatarUrl}
-            alt=""
-            className="h-10 w-10 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <span
-            aria-hidden="true"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg text-sm font-semibold text-text-muted"
-          >
-            {avatarInitial}
-          </span>
-        )}
-        <span className="truncate text-sm font-medium text-text">{user.displayName}</span>
-      </Link>
+      {/* 查看用户主页暂时关闭时只展示、不能点（见 config/feature-flags.ts）。 */}
+      {USER_PROFILE_PAGE_ENABLED ? (
+        <Link to={`/users/${user.blockedUserId}`} className="flex min-w-0 items-center gap-3">
+          <BlockedUserIdentity user={user} avatarInitial={avatarInitial} />
+        </Link>
+      ) : (
+        <div className="flex min-w-0 items-center gap-3">
+          <BlockedUserIdentity user={user} avatarInitial={avatarInitial} />
+        </div>
+      )}
       <div className="shrink-0 text-right">
         <button
           type="button"

@@ -2,6 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// 功能开关（config/feature-flags.ts）：这个文件的用例测的是功能打开时的行为，
+// 默认都按"打开"跑；个别用例把开关改成 false 测关闭时的样子。
+const featureFlags = vi.hoisted(() => ({ USER_PROFILE_PAGE_ENABLED: true, PHONE_REGISTRATION_ENABLED: true }));
+vi.mock("../../config/feature-flags", () => ({
+  get USER_PROFILE_PAGE_ENABLED() {
+    return featureFlags.USER_PROFILE_PAGE_ENABLED;
+  },
+  get PHONE_REGISTRATION_ENABLED() {
+    return featureFlags.PHONE_REGISTRATION_ENABLED;
+  }
+}));
+
 const { signUp, navigateMock } = vi.hoisted(() => ({
   signUp: vi.fn(),
   navigateMock: vi.fn()
@@ -197,6 +209,23 @@ describe("RegisterPage", () => {
       });
     });
     expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+  });
+
+  it("labels the field 邮箱 and refuses phone numbers when phone registration is turned off", async () => {
+    featureFlags.PHONE_REGISTRATION_ENABLED = false;
+    try {
+      renderRegisterPage();
+      const input = screen.getByLabelText("邮箱");
+      expect(input).toHaveAttribute("type", "email");
+      fireEvent.change(input, { target: { value: "703-555-0199" } });
+      fireEvent.change(screen.getByLabelText("密码"), { target: { value: "password123" } });
+      fireEvent.click(screen.getByRole("button", { name: "注册" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("请输入正确的邮箱地址。");
+      expect(signUp).not.toHaveBeenCalled();
+    } finally {
+      featureFlags.PHONE_REGISTRATION_ENABLED = true;
+    }
   });
 
   it("shows a friendly error when the identifier looks like neither an email nor a phone number", async () => {

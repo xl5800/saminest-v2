@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  toUsPhoneE164,
   isLikelyEmail,
   isLikelyPhone,
   normalizePhoneDigits,
@@ -56,5 +57,21 @@ describe("isLikelyEmail", () => {
 describe("phoneToShadowEmail", () => {
   it("appends the shadow-email domain to the normalized digits", () => {
     expect(phoneToShadowEmail("7035550199")).toBe("7035550199@phone.saminest.internal");
+  });
+});
+
+describe("toUsPhoneE164", () => {
+  it("turns a 10-digit number (any formatting) into +1 E.164", () => {
+    expect(toUsPhoneE164("(843) 748-1464")).toBe("+18437481464");
+  });
+
+  it("accepts an 11-digit number that already starts with the country code 1", () => {
+    expect(toUsPhoneE164("1 843 748 1464")).toBe("+18437481464");
+  });
+
+  it("rejects anything else", () => {
+    expect(toUsPhoneE164("12345")).toBeNull();
+    expect(toUsPhoneE164("28437481464")).toBeNull();
+    expect(toUsPhoneE164("")).toBeNull();
   });
 });

@@ -1,6 +1,7 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate, useLocation } from "react-router-dom";
 
 import { AppShell } from "../components/app-shell";
+import { USER_PROFILE_PAGE_ENABLED } from "../config/feature-flags";
 import { ActivityDetailPage } from "../pages/activities/activity-detail-page";
 import { ActivityListPage } from "../pages/activities/activity-list-page";
 import { ActivityNotifyPage } from "../pages/activities/activity-notify-page";
@@ -39,7 +40,6 @@ import { ProfilePage } from "../pages/profile/profile-page";
 import { UserProfilePage } from "../pages/profile/user-profile-page";
 import { PublishPage } from "../pages/publish/publish-page";
 import { RegionSelectPage } from "../pages/region-select/region-select-page";
-import { RegisterPage } from "../pages/register/register-page";
 import { ReportActivityPage } from "../pages/report/report-activity-page";
 import { ReportCommunityPostPage } from "../pages/report/report-community-post-page";
 import { SearchPage } from "../pages/search/search-page";
@@ -47,10 +47,17 @@ import { ReportPostPage } from "../pages/report/report-post-page";
 import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
 import { DeleteAccountPage } from "../pages/settings/delete-account-page";
+import { SetPasswordPage } from "../pages/settings/set-password-page";
 import { SettingsPage } from "../pages/settings/settings-page";
 import { TermsPage } from "../pages/terms/terms-page";
 import { RequireAdmin } from "./require-admin";
 import { RequireAuth } from "./require-auth";
+
+
+function RedirectToLogin() {
+  const { search } = useLocation();
+  return <Navigate to={`/login${search}`} replace />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -288,6 +295,15 @@ export const router = createBrowserRouter([
         )
       },
       {
+        // 短信验证码登录任务卡：设置 / 修改登录密码（设过之后可以用手机号 + 密码登录）。
+        path: "settings/password",
+        element: (
+          <RequireAuth>
+            <SetPasswordPage />
+          </RequireAuth>
+        )
+      },
+      {
         path: "settings/delete-account",
         element: (
           <RequireAuth>
@@ -308,7 +324,8 @@ export const router = createBrowserRouter([
       },
       {
         path: "users/:userId",
-        element: <UserProfilePage />
+        // 查看用户主页暂时关闭（见 config/feature-flags.ts）：直接打开链接回首页。
+        element: USER_PROFILE_PAGE_ENABLED ? <UserProfilePage /> : <Navigate to="/" replace />
       },
       {
         path: "users/:userId/report",
@@ -435,8 +452,10 @@ export const router = createBrowserRouter([
         element: <LoginPage />
       },
       {
+        // 短信验证码登录任务卡：不再有单独的注册页（手机号验证即注册，见
+        // login-page.tsx），旧的 /register 链接带着 ?redirect= 转到登录页。
         path: "register",
-        element: <RegisterPage />
+        element: <RedirectToLogin />
       },
       {
         path: "forgot-password",

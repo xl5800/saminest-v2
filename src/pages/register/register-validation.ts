@@ -1,3 +1,4 @@
+import { PHONE_REGISTRATION_ENABLED } from "../../config/feature-flags";
 import { generateDefaultDisplayName } from "../../utils/default-display-name";
 import { isLikelyEmail, isLikelyPhone, normalizePhoneDigits, phoneToShadowEmail } from "../../utils/phone-identity";
 
@@ -56,18 +57,26 @@ export function validateRegisterInput(
   const password = input.password;
 
   if (!identifier) {
-    return fail("REGISTER_IDENTIFIER_REQUIRED", "请填写邮箱或手机号。");
+    return fail(
+      "REGISTER_IDENTIFIER_REQUIRED",
+      PHONE_REGISTRATION_ENABLED ? "请填写邮箱或手机号。" : "请填写邮箱。"
+    );
   }
 
   let email: string;
   let phone: string | undefined;
+  // 手机号注册暂时关闭（BARRY 2026-10-18：先只用邮箱注册，用户多了再接短信
+  // 验证码）。PHONE_REGISTRATION_ENABLED 改回 true 就恢复"手机号 + 密码"注册。
   if (isLikelyEmail(identifier)) {
     email = identifier;
-  } else if (isLikelyPhone(identifier)) {
+  } else if (PHONE_REGISTRATION_ENABLED && isLikelyPhone(identifier)) {
     phone = normalizePhoneDigits(identifier);
     email = phoneToShadowEmail(phone);
   } else {
-    return fail("REGISTER_IDENTIFIER_INVALID", "请输入正确的邮箱或手机号。");
+    return fail(
+      "REGISTER_IDENTIFIER_INVALID",
+      PHONE_REGISTRATION_ENABLED ? "请输入正确的邮箱或手机号。" : "请输入正确的邮箱地址。"
+    );
   }
 
   if (!password) {

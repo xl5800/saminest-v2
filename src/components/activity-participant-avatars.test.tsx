@@ -2,6 +2,18 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+// 功能开关（config/feature-flags.ts）：这个文件的用例测的是功能打开时的行为，
+// 默认都按"打开"跑；个别用例把开关改成 false 测关闭时的样子。
+const featureFlags = vi.hoisted(() => ({ USER_PROFILE_PAGE_ENABLED: true, PHONE_REGISTRATION_ENABLED: true }));
+vi.mock("../config/feature-flags", () => ({
+  get USER_PROFILE_PAGE_ENABLED() {
+    return featureFlags.USER_PROFILE_PAGE_ENABLED;
+  },
+  get PHONE_REGISTRATION_ENABLED() {
+    return featureFlags.PHONE_REGISTRATION_ENABLED;
+  }
+}));
+
 import type { ActivityParticipant } from "../repositories/activities-repository";
 import { formatActivityParticipantSummary } from "../utils/format";
 import { ActivityParticipantAvatars } from "./activity-participant-avatars";
@@ -459,6 +471,22 @@ describe("ActivityParticipantAvatars", () => {
     const organizerAvatar = screen.getByText("A");
     expect(organizerAvatar.closest("a")).toBeNull();
     expect(container.querySelectorAll("a")).toHaveLength(2);
+  });
+
+  it("does not link participant avatars while viewing user profiles is turned off", () => {
+    featureFlags.USER_PROFILE_PAGE_ENABLED = false;
+    try {
+      renderAvatars({
+        organizerId: "org-1",
+        organizerDisplayName: "Alice",
+        organizerAvatarUrl: null,
+        participants: makeParticipants(2),
+        capacity: null
+      });
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    } finally {
+      featureFlags.USER_PROFILE_PAGE_ENABLED = true;
+    }
   });
 
   // 14 号卡（找搭子页改版：顶部栏 + 活动卡片头像展示）：shape="square" 是

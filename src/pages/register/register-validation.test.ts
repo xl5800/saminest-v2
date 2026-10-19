@@ -1,4 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+// 功能开关（config/feature-flags.ts）：这个文件的用例测的是功能打开时的行为，
+// 默认都按"打开"跑；个别用例把开关改成 false 测关闭时的样子。
+const featureFlags = vi.hoisted(() => ({ USER_PROFILE_PAGE_ENABLED: true, PHONE_REGISTRATION_ENABLED: true }));
+vi.mock("../../config/feature-flags", () => ({
+  get USER_PROFILE_PAGE_ENABLED() {
+    return featureFlags.USER_PROFILE_PAGE_ENABLED;
+  },
+  get PHONE_REGISTRATION_ENABLED() {
+    return featureFlags.PHONE_REGISTRATION_ENABLED;
+  }
+}));
 
 import { MIN_PASSWORD_LENGTH, validateRegisterInput } from "./register-validation";
 
@@ -50,6 +62,27 @@ describe("validateRegisterInput", () => {
       success: false,
       data: null,
       error: { code: "REGISTER_IDENTIFIER_REQUIRED", message: "请填写邮箱或手机号。" }
+    });
+  });
+
+  describe("手机号注册关闭时（PHONE_REGISTRATION_ENABLED = false）", () => {
+    beforeEach(() => {
+      featureFlags.PHONE_REGISTRATION_ENABLED = false;
+    });
+    afterEach(() => {
+      featureFlags.PHONE_REGISTRATION_ENABLED = true;
+    });
+
+    it("rejects a phone number and asks for an email", () => {
+      expect(run({ email: "703-555-0199" })).toEqual({
+        success: false,
+        data: null,
+        error: { code: "REGISTER_IDENTIFIER_INVALID", message: "请输入正确的邮箱地址。" }
+      });
+    });
+
+    it("asks for an email when the field is empty", () => {
+      expect(run({ email: "" }).error?.message).toBe("请填写邮箱。");
     });
   });
 

@@ -19,6 +19,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
 import { useNicknamePrompt } from "../../features/profile/use-nickname-prompt";
+import { USER_PROFILE_PAGE_ENABLED } from "../../config/feature-flags";
 
 const MESSAGE_MAX_LENGTH = 5000;
 const EMPTY_MESSAGE_ERROR = "请输入文字或选一张图片再发送。";
@@ -770,7 +771,8 @@ export function MessageConversationPage() {
         </button>
 
         <div className="flex min-w-0 items-center justify-center gap-2 px-2">
-          {conversation?.otherUserId ? (
+          {/* 查看用户主页暂时关闭时只展示头像和昵称，不能点（见 config/feature-flags.ts）。 */}
+          {conversation?.otherUserId && USER_PROFILE_PAGE_ENABLED ? (
             <Link to={`/users/${conversation.otherUserId}`} className="shrink-0">
               {headerAvatarElement}
             </Link>
@@ -779,7 +781,7 @@ export function MessageConversationPage() {
           )}
           <div className="min-w-0 text-left">
             <h1 className="truncate text-base font-semibold text-text">
-              {conversation?.otherUserId ? (
+              {conversation?.otherUserId && USER_PROFILE_PAGE_ENABLED ? (
                 <Link to={`/users/${conversation.otherUserId}`} className="hover:underline">
                   {otherPartyLabel}
                 </Link>

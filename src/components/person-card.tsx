@@ -1,6 +1,8 @@
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { USER_PROFILE_PAGE_ENABLED } from "../config/feature-flags";
+
 export interface PersonCardProps {
   userId: string;
   displayName: string;
@@ -27,11 +29,8 @@ export interface PersonCardProps {
  * 单独说明。
  */
 export function PersonCard({ userId, displayName, avatarUrl, subtitle }: PersonCardProps) {
-  return (
-    <Link
-      to={`/users/${userId}`}
-      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 hover:border-primary"
-    >
+  const content = (
+    <>
       <span className="flex min-w-0 items-center gap-3">
         {avatarUrl ? (
           <img
@@ -52,7 +51,28 @@ export function PersonCard({ userId, displayName, avatarUrl, subtitle }: PersonC
           <span className="block text-xs text-text-muted">{subtitle}</span>
         </span>
       </span>
-      <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-chevron" />
+      {USER_PROFILE_PAGE_ENABLED ? (
+        <ChevronRight size={18} aria-hidden="true" className="shrink-0 text-chevron" />
+      ) : null}
+    </>
+  );
+
+  // 查看用户主页暂时关闭时（见 config/feature-flags.ts），卡片只展示、不可点，
+  // 也不显示右侧箭头。
+  if (!USER_PROFILE_PAGE_ENABLED) {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link
+      to={`/users/${userId}`}
+      className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card p-3 hover:border-primary"
+    >
+      {content}
     </Link>
   );
 }

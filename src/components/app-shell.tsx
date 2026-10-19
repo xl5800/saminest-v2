@@ -168,6 +168,8 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/profile/edit",
   "/settings",
   "/settings/delete-account",
+  // 短信验证码登录任务卡新增：设置登录密码页自带 TopBar。
+  "/settings/password",
   "/blocked-users",
   "/my-posts",
   "/admin/posts",

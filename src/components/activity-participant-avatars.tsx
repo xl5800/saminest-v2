@@ -1,6 +1,7 @@
 import { Crown, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 
+import { USER_PROFILE_PAGE_ENABLED } from "../config/feature-flags";
 import type { ActivityParticipant } from "../repositories/activities-repository";
 import { formatActivityParticipantSummary } from "../utils/format";
 
@@ -420,7 +421,9 @@ export function ActivityParticipantAvatars({
               />
             );
 
-            if (!interactive) {
+            // 查看用户主页暂时关闭时（见 config/feature-flags.ts），参与者头像
+            // 只展示、不能点；空位"＋"照常可点（那是加入活动，不是看主页）。
+            if (!interactive || !USER_PROFILE_PAGE_ENABLED) {
               return <li key={participant.userId}>{avatar}</li>;
             }
 

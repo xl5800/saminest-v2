@@ -8,6 +8,7 @@ import {
   authSubmitButtonClassName
 } from "../../components/auth-layout";
 import { PasswordInput } from "../../components/password-input";
+import { PHONE_REGISTRATION_ENABLED } from "../../config/feature-flags";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
 import { carryRedirect } from "../../utils/auth-redirect";
@@ -84,10 +85,10 @@ export function RegisterPage() {
       <form onSubmit={handleSubmit} noValidate>
         <div className="space-y-4">
           <label className={authLabelClassName}>
-            邮箱或手机号
+            {PHONE_REGISTRATION_ENABLED ? "邮箱或手机号" : "邮箱"}
             <input
-              type="text"
-              autoComplete="username"
+              type={PHONE_REGISTRATION_ENABLED ? "text" : "email"}
+              autoComplete={PHONE_REGISTRATION_ENABLED ? "username" : "email"}
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               required

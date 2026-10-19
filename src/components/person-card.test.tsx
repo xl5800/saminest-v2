@@ -1,5 +1,17 @@
 import { cleanup, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// 功能开关（config/feature-flags.ts）：这个文件的用例测的是功能打开时的行为，
+// 默认都按"打开"跑；个别用例把开关改成 false 测关闭时的样子。
+const featureFlags = vi.hoisted(() => ({ USER_PROFILE_PAGE_ENABLED: true, PHONE_REGISTRATION_ENABLED: true }));
+vi.mock("../config/feature-flags", () => ({
+  get USER_PROFILE_PAGE_ENABLED() {
+    return featureFlags.USER_PROFILE_PAGE_ENABLED;
+  },
+  get PHONE_REGISTRATION_ENABLED() {
+    return featureFlags.PHONE_REGISTRATION_ENABLED;
+  }
+}));
 
 import { renderWithProviders } from "../test/render-with-providers";
 import { PersonCard } from "./person-card";
@@ -15,6 +27,20 @@ describe("PersonCard", () => {
     );
 
     expect(screen.getByRole("link", { name: /Bob/ })).toHaveAttribute("href", "/users/user-1");
+  });
+
+  it("is display-only (no link, no chevron) while viewing user profiles is turned off", () => {
+    featureFlags.USER_PROFILE_PAGE_ENABLED = false;
+    try {
+      const { container } = renderWithProviders(
+        <PersonCard userId="user-1" displayName="Bob" avatarUrl={null} subtitle="发起人" />
+      );
+      expect(screen.queryByRole("link")).not.toBeInTheDocument();
+      expect(screen.getByText("Bob")).toBeInTheDocument();
+      expect(container.querySelector("svg")).toBeNull();
+    } finally {
+      featureFlags.USER_PROFILE_PAGE_ENABLED = true;
+    }
   });
 
   it("renders the display name and the caller-provided subtitle", () => {

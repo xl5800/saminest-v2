@@ -22,6 +22,7 @@ import { useContactSupport } from "../../features/conversations/use-contact-supp
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import { authService } from "../../services/auth/auth-service";
 import { useAuthStore } from "../../store/auth-store";
+import { USER_PROFILE_PAGE_ENABLED } from "../../config/feature-flags";
 
 const LOGOUT_ERROR_MESSAGE = "退出登录失败，请稍后重试。";
 
@@ -294,7 +295,8 @@ export function ProfilePage() {
             <ProfileSummary
               displayName={profile?.displayName ?? null}
               avatarUrl={profile?.avatarUrl ?? null}
-              profileHref={currentUserId ? `/users/${currentUserId}` : undefined}
+              // 查看用户主页暂时关闭时身份卡不可点（见 config/feature-flags.ts）。
+              profileHref={currentUserId && USER_PROFILE_PAGE_ENABLED ? `/users/${currentUserId}` : undefined}
               bio={profile?.bio ?? null}
               age={profile?.age ?? null}
             />
