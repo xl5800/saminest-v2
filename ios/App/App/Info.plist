@@ -25,6 +25,10 @@
 	     不会弹提示，而是直接把 App 强制终止（表现为"一点拍照就崩溃"）。 -->
 	<key>NSCameraUsageDescription</key>
 	<string>用于拍照并上传图片到发布内容或头像</string>
+	<!-- 附近的二手任务卡：首页"用我现在的位置"调用定位（只有用户点这个按钮时才
+	     请求），iOS 要求有用途说明，否则不会弹授权框。只用大概位置，不保存到服务器。 -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>华邻用你的大概位置显示附近的二手物品，不会公开你的位置</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>

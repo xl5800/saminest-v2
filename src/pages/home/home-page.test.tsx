@@ -7,9 +7,12 @@ const { navigateMock, hideSplashScreen } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../app/splash-screen", () => ({ hideSplashScreen }));
-// 免费物品列表自己有测试（browse-pages.test.tsx），这里只确认首页放了它。
-vi.mock("../../features/posts/free-items-list", () => ({
-  FreeItemsList: () => <div data-testid="free-items-list" />
+// 附近的二手列表和选位置弹层自己有测试（features/nearby/），这里只确认首页放了它们。
+vi.mock("../../features/nearby/nearby-used-list", () => ({
+  NearbyUsedList: () => <div data-testid="nearby-used-list" />
+}));
+vi.mock("../../features/nearby/nearby-location-sheet", () => ({
+  NearbyLocationSheet: () => <div role="dialog" aria-label="选择位置" />
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -62,12 +65,23 @@ describe("HomePage (icon entries)", () => {
     ]);
   });
 
-  it("shows the free items feed below the icons, with a 更多 link to /free", () => {
+  it("shows nearby used items below the icons, with a 更多 link to /used", () => {
     renderWithProviders(<HomePage />);
 
-    expect(screen.getByRole("heading", { name: "免费物品" })).toBeInTheDocument();
-    expect(screen.getByTestId("free-items-list")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "更多" })).toHaveAttribute("href", "/free");
+    expect(screen.getByRole("heading", { name: "附近的二手" })).toBeInTheDocument();
+    expect(screen.getByTestId("nearby-used-list")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "更多" })).toHaveAttribute("href", "/used");
+  });
+
+  it("never opens the location sheet on its own; the location bar opens it", () => {
+    useSelectedRegionStore.setState({
+      selectedRegion: { stateCode: "VA", stateName: "Virginia", cityId: null, cityName: null }
+    });
+    renderWithProviders(<HomePage />);
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /显示附近的二手/ }));
+    expect(screen.getByRole("dialog", { name: "选择位置" })).toBeInTheDocument();
   });
 
   it("hides the splash screen right away (nothing to wait for)", () => {

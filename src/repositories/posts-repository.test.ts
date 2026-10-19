@@ -54,6 +54,7 @@ import {
   getPostDetail,
   listAllPosts,
   listApprovedPosts,
+  listApprovedPostsByIds,
   listMyPosts,
   listPendingPosts,
   resubmitPost,
@@ -476,6 +477,62 @@ describe("listApprovedPosts", () => {
     await expect(listApprovedPosts({ page: 0, pageSize: 20 })).rejects.toMatchObject({
       code: "POSTS_LIST_FAILED"
     });
+  });
+});
+
+// 首页"附近的二手"任务卡：按 id 取帖子，保持传入的顺序（按距离排好的）。
+describe("listApprovedPostsByIds", () => {
+  beforeEach(() => {
+    fromMock.mockClear();
+    for (const key of Object.keys(queryBuilder)) {
+      queryBuilder[key].mockClear();
+    }
+    overrideTypesMock.mockReset();
+  });
+
+  function feedRow(id: string) {
+    return {
+      id,
+      title: `title-${id}`,
+      price_amount: 10,
+      price_label: null,
+      currency_code: "USD",
+      created_at: "2026-10-19T00:00:00Z",
+      favorite_count: 0,
+      comment_count: 0,
+      poster_age: null,
+      poster_gender: null,
+      salary_unit: null,
+      employment_type: null,
+      job_perks: null,
+      location: null,
+      location_text: "Rockville, MD",
+      category: { name_zh: "二手", slug: "used" },
+      author: { display_name: "Amy", avatar_url: null },
+      post_images: []
+    };
+  }
+
+  it("does not query when there are no ids", async () => {
+    await expect(listApprovedPostsByIds([])).resolves.toEqual([]);
+    expect(fromMock).not.toHaveBeenCalled();
+  });
+
+  it("filters by the ids and returns posts in the same order as the ids", async () => {
+    overrideTypesMock.mockResolvedValue({ data: [feedRow("b"), feedRow("a")], error: null });
+
+    const posts = await listApprovedPostsByIds(["a", "missing", "b"]);
+
+    expect(queryBuilder.in).toHaveBeenCalledWith("id", ["a", "missing", "b"]);
+    expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
+    expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);
+    expect(posts.map((post) => post.id)).toEqual(["a", "b"]);
+    expect(posts[0]).toMatchObject({ title: "title-a", categorySlug: "used" });
+  });
+
+  it("throws an AppError when the query fails", async () => {
+    overrideTypesMock.mockResolvedValue({ data: null, error: { message: "boom" } });
+    await expect(listApprovedPostsByIds(["a"])).rejects.toMatchObject({ code: "POSTS_LIST_FAILED" });
   });
 });
 

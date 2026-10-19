@@ -52,6 +52,15 @@ describe("validatePublishInput", () => {
     expect(validatePublishInput({ ...validInput, zipCode: "2085" }).error?.message).toBe("邮编要是 5 位数字。");
   });
 
+  // 附近的二手任务卡
+  it("requires a zip code only when zipCodeRequired is set", () => {
+    expect(validatePublishInput({ ...validInput, zipCode: " ", zipCodeRequired: true }).error?.code).toBe(
+      "PUBLISH_ZIP_CODE_REQUIRED"
+    );
+    expect(validatePublishInput({ ...validInput, zipCode: "20850", zipCodeRequired: true }).data?.zipCode).toBe("20850");
+    expect(validatePublishInput({ ...validInput, zipCode: "" }).data?.zipCode).toBeNull();
+  });
+
   // 招聘求职任务卡
   it("requires an employment type for job posts", () => {
     const result = validatePublishInput({

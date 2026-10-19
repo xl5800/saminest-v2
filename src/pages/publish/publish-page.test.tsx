@@ -1077,12 +1077,53 @@ describe("PublishPage", () => {
       expect(screen.getByText(/免费送出，不需要填价格/)).toBeInTheDocument();
 
       fillTitle("送一张书桌");
+      lookupZipCode.mockResolvedValue({ zip: "20850", city: "Rockville", stateCode: "MD" });
+      fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "20850" } });
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
       await waitFor(() => {
         expect(createPost).toHaveBeenCalledWith(
-          expect.objectContaining({ categoryId: "cat-6", priceAmount: null, priceLabel: "免费" })
+          expect.objectContaining({ categoryId: "cat-6", priceAmount: null, priceLabel: "免费", zipCode: "20850" })
         );
+      });
+    });
+  });
+
+  // 附近的二手任务卡：二手和免费物品必须填邮编
+  describe("二手 / 免费物品邮编必填", () => {
+    beforeEach(() => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "used", nameZh: "二手" },
+        { id: "cat-2", slug: "rental", nameZh: "租房" },
+        { id: "cat-6", slug: "free", nameZh: "免费物品" }
+      ]);
+    });
+
+    it.each(["二手", "免费物品"])("blocks publishing a %s post without a zip code", async (categoryName) => {
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "二手" });
+
+      selectCategory(categoryName);
+      fillTitle(SAMPLE_TITLE);
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      expect(
+        await screen.findByText("请填写邮编（二手和免费物品需要邮编，方便附近的人看到）。")
+      ).toBeInTheDocument();
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    it("still lets other categories publish without a zip code", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "租房" });
+
+      selectCategory("租房");
+      fillTitle(SAMPLE_TITLE);
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(expect.objectContaining({ categoryId: "cat-2", zipCode: null }));
       });
     });
   });

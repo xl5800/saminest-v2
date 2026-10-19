@@ -1742,6 +1742,27 @@ export type Database = {
         Args: { body: string; target_activity_id: string }
         Returns: undefined
       }
+      list_nearby_posts: {
+        Args: {
+          p_category_slugs: string[]
+          p_latitude: number
+          p_limit?: number
+          p_longitude: number
+          p_offset?: number
+        }
+        Returns: {
+          distance_miles: number | null
+          post_id: string
+        }[]
+      }
+      nearest_zip_code: {
+        Args: { p_latitude: number; p_longitude: number }
+        Returns: {
+          city: string
+          state_code: string
+          zip: string
+        }[]
+      }
       notify_user: {
         Args: {
           link?: string

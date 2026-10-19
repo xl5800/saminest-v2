@@ -1,12 +1,14 @@
 import { Briefcase, ChevronRight, Gift, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { hideSplashScreen } from "../../app/splash-screen";
 
 import { TopBar } from "../../components/top-bar";
 import { formatShortRegionLabel } from "../../data/us-states";
-import { FreeItemsList } from "../../features/posts/free-items-list";
+import { NearbyLocationBar } from "../../features/nearby/nearby-location-bar";
+import { NearbyLocationSheet } from "../../features/nearby/nearby-location-sheet";
+import { NearbyUsedList } from "../../features/nearby/nearby-used-list";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 
 const REGION_SELECT_PATH = "/region-select";
@@ -31,12 +33,17 @@ export const HOME_ENTRIES: Array<{ to: string; label: string; Icon: LucideIcon }
  * - 免费物品任务卡：图标行多了"免费物品"（第 4 个，在找搭子前面）；图标
  *   下面是免费物品信息流（图片网格，按当前州筛选），右上"更多"进 /free。
  *   免费东西人人都想看，打开 App 就有东西刷。
+ * - 附近的二手任务卡：图标下面换成"附近的二手"（免费物品图标和 /free 页
+ *   保留）。标题下面是位置条，点了打开选位置的弹层（用现在的位置 / 输入
+ *   邮编 / 范围）；打开 App 时不主动请求定位。没设位置就按当前州显示二手。
  *
  * 发布入口在底部导航中间的"＋"。
  */
 export function HomePage() {
   const navigate = useNavigate();
   const selectedRegion = useSelectedRegionStore((s) => s.selectedRegion);
+  const regionLabel = selectedRegion ? formatShortRegionLabel(selectedRegion) : null;
+  const [locationSheetOpen, setLocationSheetOpen] = useState(false);
 
   // 首页没有要等的数据，挂载就收起启动图（hideSplashScreen 只有第一次生效）。
   useEffect(() => {
@@ -48,7 +55,7 @@ export function HomePage() {
       <TopBar
         variant="home"
         hideBrand
-        regionLabel={selectedRegion ? formatShortRegionLabel(selectedRegion) : null}
+        regionLabel={regionLabel}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onSearchClick={() => navigate(SEARCH_PATH)}
       />
@@ -64,18 +71,22 @@ export function HomePage() {
         ))}
       </nav>
 
-      <section aria-labelledby="home-free-heading" className="mt-4">
+      <section aria-labelledby="home-nearby-heading" className="mt-4">
         <div className="flex items-center justify-between px-4 pb-1">
-          <h2 id="home-free-heading" className="text-lg font-bold text-text">
-            免费物品
+          <h2 id="home-nearby-heading" className="text-lg font-bold text-text">
+            附近的二手
           </h2>
-          <Link to="/free" className="flex items-center text-sm text-primary">
+          <Link to="/used" className="flex items-center text-sm text-primary">
             更多
             <ChevronRight aria-hidden="true" size={16} />
           </Link>
         </div>
-        <FreeItemsList />
+        <NearbyLocationBar regionLabel={regionLabel} onClick={() => setLocationSheetOpen(true)} />
+        <div className="pt-2">
+          <NearbyUsedList />
+        </div>
       </section>
+      {locationSheetOpen ? <NearbyLocationSheet onClose={() => setLocationSheetOpen(false)} /> : null}
     </main>
   );
 }

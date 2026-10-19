@@ -301,29 +301,62 @@ export async function listApprovedPosts(
   const pageRows = hasNextPage ? rows.slice(0, pageSize) : rows;
 
   return {
-    posts: pageRows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      priceAmount: row.price_amount,
-      priceLabel: row.price_label,
-      currencyCode: row.currency_code,
-      locationName: resolveLocationName(row.location, row.location_text),
-      createdAt: row.created_at,
-      categoryName: row.category?.name_zh ?? "未知分类",
-      authorDisplayName: row.author?.display_name ?? "未知用户",
-      authorAvatarUrl: row.author?.avatar_url ?? null,
-      coverImageUrl: resolveCoverImageUrl(row.post_images),
-      favoriteCount: row.favorite_count,
-      commentCount: row.comment_count,
-      posterAge: row.poster_age,
-      posterGender: row.poster_gender,
-      categorySlug: row.category?.slug ?? null,
-      salaryUnit: row.salary_unit,
-      employmentType: row.employment_type,
-      jobPerks: normalizeJobPerks(row.job_perks)
-    })),
+    posts: pageRows.map(mapFeedRow),
     hasNextPage
   };
+}
+
+/** 列表行 → PostFeedItem。listApprovedPosts 和 listApprovedPostsByIds 共用。 */
+function mapFeedRow(row: PostFeedRow): PostFeedItem {
+  return {
+    id: row.id,
+    title: row.title,
+    priceAmount: row.price_amount,
+    priceLabel: row.price_label,
+    currencyCode: row.currency_code,
+    locationName: resolveLocationName(row.location, row.location_text),
+    createdAt: row.created_at,
+    categoryName: row.category?.name_zh ?? "未知分类",
+    authorDisplayName: row.author?.display_name ?? "未知用户",
+    authorAvatarUrl: row.author?.avatar_url ?? null,
+    coverImageUrl: resolveCoverImageUrl(row.post_images),
+    favoriteCount: row.favorite_count,
+    commentCount: row.comment_count,
+    posterAge: row.poster_age,
+    posterGender: row.poster_gender,
+    categorySlug: row.category?.slug ?? null,
+    salaryUnit: row.salary_unit,
+    employmentType: row.employment_type,
+    jobPerks: normalizeJobPerks(row.job_perks)
+  };
+}
+
+const FEED_SELECT =
+  "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)";
+
+/**
+ * 首页"附近的二手"任务卡：按 id 取一批审核通过的帖子，返回顺序跟传入的 ids
+ * 一致（ids 已经由 list_nearby_posts 按距离排好）。查不到的 id（刚好被删除 /
+ * 下架）直接跳过。卡片字段跟 listApprovedPosts 完全一样（共用 mapFeedRow）。
+ */
+export async function listApprovedPostsByIds(ids: string[]): Promise<PostFeedItem[]> {
+  if (ids.length === 0) return [];
+
+  const { data, error } = await getSupabaseClient()
+    .from("posts")
+    .select(FEED_SELECT)
+    .in("id", ids)
+    .eq("status", "approved")
+    .is("deleted_at", null)
+    .order("sort_order", { foreignTable: "post_images", ascending: true })
+    .overrideTypes<PostFeedRow[]>();
+
+  if (error) {
+    throw new AppError(error.message, "POSTS_LIST_FAILED", error);
+  }
+
+  const byId = new Map((data ?? []).map((row) => [row.id, mapFeedRow(row)]));
+  return ids.map((id) => byId.get(id)).filter((post): post is PostFeedItem => Boolean(post));
 }
 
 /**

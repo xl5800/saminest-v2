@@ -6,8 +6,8 @@ import { FREE_CATEGORY_SLUG } from "./free-items";
 import { PostList } from "./post-list";
 
 /**
- * 免费物品任务卡：免费物品的图片网格 + "还没有免费物品"空状态，首页下方和
- * 免费物品页（/free）共用。按当前选中的州筛选。分类还没建好（迁移没跑）时
+ * 免费物品任务卡：免费物品的图片网格 + "还没有免费物品"空状态，用在
+ * 免费物品页（/free）（首页下方已换成"附近的二手"）。按当前选中的州筛选。分类还没建好（迁移没跑）时
  * 直接显示空状态，不能不带分类条件去查。
  */
 export function FreeItemsList() {

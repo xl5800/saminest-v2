@@ -6,6 +6,10 @@ export interface ZipCodeLocation {
   zip: string;
   city: string;
   stateCode: string;
+  /** 首页"附近的二手"任务卡：邮编中心点坐标（用邮编代替定位时要用）。
+   *  nearest_zip_code 函数不返回坐标，那条路径下为 undefined。 */
+  latitude?: number;
+  longitude?: number;
 }
 
 export const ZIP_CODE_PATTERN = /^\d{5}$/;
@@ -20,7 +24,7 @@ export async function lookupZipCode(zip: string): Promise<ZipCodeLocation | null
 
   const { data, error } = await getSupabaseClient()
     .from("zip_codes")
-    .select("zip, city, state_code")
+    .select("zip, city, state_code, latitude, longitude")
     .eq("zip", zip)
     .maybeSingle();
 
@@ -29,5 +33,11 @@ export async function lookupZipCode(zip: string): Promise<ZipCodeLocation | null
   }
   if (!data) return null;
 
-  return { zip: data.zip, city: data.city, stateCode: data.state_code };
+  return {
+    zip: data.zip,
+    city: data.city,
+    stateCode: data.state_code,
+    latitude: data.latitude,
+    longitude: data.longitude
+  };
 }

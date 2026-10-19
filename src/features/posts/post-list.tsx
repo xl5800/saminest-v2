@@ -17,6 +17,7 @@ import {
   formatSalary,
   jobPerkLabels
 } from "./job-fields";
+import type { PostFeedItem } from "../../repositories/posts-repository";
 import { usePostsInfiniteQuery } from "./use-posts-query";
 
 // 高频页面骨架屏任务卡：占位卡片数量——网格 6 个（两列 x 3 行，铺满一屏
@@ -417,38 +418,49 @@ export function PostList({
   return (
     <div>
       <div className="grid grid-cols-2 gap-x-1 gap-y-3 px-1 pt-1">
-        {posts.map((post) => {
-          const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
-          return (
-            <Link key={post.id} to={`/post/${post.id}`} className="block min-w-0">
-              {/* Facebook Marketplace 风格：方图（小圆角），没有卡片底色/边框/
-                  投影，文字直接排在图片下面。封面图/分类色底占位仍然复用
-                  共享组件 PostThumbnail。 */}
-              <PostThumbnail
-                coverImageUrl={post.coverImageUrl}
-                categoryName={post.categoryName}
-                sizeClassName="aspect-square w-full rounded-[4px]"
-                alt={post.title}
-              />
-              <div className="mt-1 space-y-0.5 px-0.5">
-                {priceUnset ? null : (
-                  <p className="truncate text-base font-bold text-text">
-                    {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
-                  </p>
-                )}
-                <p className="truncate text-sm text-text">{post.title}</p>
-                {post.locationName ? (
-                  <p className="truncate text-xs text-text-muted">
-                    {formatLocationDisplayName(post.locationName)}
-                  </p>
-                ) : null}
-              </div>
-            </Link>
-          );
-        })}
+        {posts.map((post) => (
+          <PostGridCard key={post.id} post={post} />
+        ))}
       </div>
       {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
       {isFetchingNextPage ? <p role="status">加载更多…</p> : null}
     </div>
+  );
+}
+
+/**
+ * 图片网格里的一张帖子卡片（方图 + 价格 + 标题 + 地区）。原来直接写在
+ * PostList 的 grid 分支里；首页"附近的二手"任务卡要在同样的卡片上多显示一行
+ * 距离，所以抽成组件两边共用（distanceLabel 不传就跟原来一模一样）。
+ */
+export function PostGridCard({ post, distanceLabel }: { post: PostFeedItem; distanceLabel?: string }) {
+  const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
+  return (
+    <Link to={`/post/${post.id}`} className="block min-w-0">
+      {/* Facebook Marketplace 风格：方图（小圆角），没有卡片底色/边框/
+          投影，文字直接排在图片下面。封面图/分类色底占位仍然复用
+          共享组件 PostThumbnail。 */}
+      <PostThumbnail
+        coverImageUrl={post.coverImageUrl}
+        categoryName={post.categoryName}
+        sizeClassName="aspect-square w-full rounded-[4px]"
+        alt={post.title}
+      />
+      <div className="mt-1 space-y-0.5 px-0.5">
+        {priceUnset ? null : (
+          <p className="truncate text-base font-bold text-text">
+            {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
+          </p>
+        )}
+        <p className="truncate text-sm text-text">{post.title}</p>
+        {post.locationName || distanceLabel ? (
+          <p className="truncate text-xs text-text-muted">
+            {[post.locationName ? formatLocationDisplayName(post.locationName) : null, distanceLabel]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
+      </div>
+    </Link>
   );
 }

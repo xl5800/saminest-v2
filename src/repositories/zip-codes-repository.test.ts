@@ -26,13 +26,19 @@ describe("lookupZipCode", () => {
 
   it("looks the zip code up and maps the row", async () => {
     maybeSingleMock.mockResolvedValue({
-      data: { zip: "20850", city: "Rockville", state_code: "MD" },
+      data: { zip: "20850", city: "Rockville", state_code: "MD", latitude: 39.087, longitude: -77.168 },
       error: null
     });
 
-    await expect(lookupZipCode("20850")).resolves.toEqual({ zip: "20850", city: "Rockville", stateCode: "MD" });
+    await expect(lookupZipCode("20850")).resolves.toEqual({
+      zip: "20850",
+      city: "Rockville",
+      stateCode: "MD",
+      latitude: 39.087,
+      longitude: -77.168
+    });
     expect(fromMock).toHaveBeenCalledWith("zip_codes");
-    expect(builder.select).toHaveBeenCalledWith("zip, city, state_code");
+    expect(builder.select).toHaveBeenCalledWith("zip, city, state_code, latitude, longitude");
     expect(builder.eq).toHaveBeenCalledWith("zip", "20850");
   });
 
