@@ -431,6 +431,8 @@ export interface CreateActivityInput {
   contactMethod: string | null;
   contactValue: string | null;
   requiresApproval: boolean;
+  /** 找搭子发布页 ZIP 定位任务卡：用户填的邮编，没填传 null / 不传。 */
+  zipCode?: string | null;
 }
 
 export interface CreateActivityResult {
@@ -479,7 +481,8 @@ export async function createActivity(
     capacity: input.capacity,
     contact_method: input.contactMethod,
     contact_value: input.contactValue,
-    requires_approval: input.requiresApproval
+    requires_approval: input.requiresApproval,
+    zip_code: input.zipCode ?? null
   };
 
   const { data, error } = await getSupabaseClient()

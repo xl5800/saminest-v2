@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
-import { useCategoriesQuery } from "../../features/categories/use-categories-query";
+import { useCategoriesQuery } from "./use-categories-query";
 
 /**
- * 招聘求职 / 房屋租售 / 二手闲置三个列表页共用：帖子列表要先知道分类 id
+ * 招聘求职 / 房屋租售 / 二手闲置 / 免费物品列表共用：帖子列表要先知道分类 id
  * 才能查，分类还没查回来时显示占位，查失败显示错误；查到后把
  * "slug → id" 的对照表交给 children。
  */

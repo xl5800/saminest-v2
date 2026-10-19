@@ -44,6 +44,8 @@ export interface ActivityFormInput {
   // 是同一种输入方式），不需要 trim/长度校验这类字符串字段才有的处理，
   // 原样透传进 ActivityFormData。
   requiresApproval: boolean;
+  /** 找搭子发布页 ZIP 定位任务卡：邮编输入框原文（可选；线上活动不传）。 */
+  zipCode?: string;
 }
 
 export interface ActivityFormData {
@@ -59,6 +61,7 @@ export interface ActivityFormData {
   contactMethod: string | null;
   contactValue: string | null;
   requiresApproval: boolean;
+  zipCode: string | null;
 }
 
 export interface ActivityValidationError {
@@ -158,6 +161,13 @@ export function validateActivityInput(input: ActivityFormInput): ActivityValidat
     return fail("ACTIVITY_CONTACT_METHOD_INVALID", "联系方式类型不正确。");
   }
 
+  // 找搭子发布页 ZIP 定位任务卡：邮编可选；填了必须是 5 位数字（跟数据库
+  // activities_zip_code_format_check 一致）。
+  const zipCodeRaw = (input.zipCode ?? "").trim();
+  if (zipCodeRaw && !/^\d{5}$/.test(zipCodeRaw)) {
+    return fail("ACTIVITY_ZIP_CODE_INVALID", "邮编要是 5 位数字。");
+  }
+
   return {
     success: true,
     data: {
@@ -172,7 +182,8 @@ export function validateActivityInput(input: ActivityFormInput): ActivityValidat
       capacity,
       contactMethod: contactMethod || null,
       contactValue: contactValue || null,
-      requiresApproval: input.requiresApproval
+      requiresApproval: input.requiresApproval,
+      zipCode: zipCodeRaw || null
     },
     error: null
   };

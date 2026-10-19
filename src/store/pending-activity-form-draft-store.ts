@@ -7,6 +7,8 @@ export interface PendingActivityFormDraft {
   description: string;
   isOnline: boolean;
   landmarkText: string;
+  /** 找搭子发布页 ZIP 定位任务卡：邮编输入框原文，跳转选州前一起存下来。 */
+  zipCode?: string;
   startAt: string;
   capacity: string;
   contactMethod: string;

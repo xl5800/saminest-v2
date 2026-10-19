@@ -686,6 +686,9 @@ export interface CreatePostInput {
   job?: JobFieldsInput | null;
   /** 发布页 ZIP 定位任务卡：用户填的邮编（5 位数字），没填传 null / 不传。 */
   zipCode?: string | null;
+  /** 免费物品任务卡：价格文案（免费物品写"免费"）。不传 = 不改这一列；
+   *  招聘求职帖的"面议"由 job 字段决定，不走这里。 */
+  priceLabel?: string | null;
 }
 
 /**
@@ -704,6 +707,12 @@ function jobColumns(job: JobFieldsInput | null | undefined) {
     job_perks: normalizeJobPerks(job.perks),
     price_label: job.negotiable ? NEGOTIABLE_SALARY_LABEL : null
   };
+}
+
+/** 免费物品任务卡：priceLabel 没传就不碰 price_label（写在 jobColumns 前面，
+ *  工作帖的"面议"以 jobColumns 为准）。 */
+function priceLabelColumn(priceLabel: string | null | undefined) {
+  return priceLabel === undefined ? {} : { price_label: priceLabel };
 }
 
 export interface CreatePostResult {
@@ -735,6 +744,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     contact_value: input.contactValue,
     poster_age: input.posterAge,
     poster_gender: input.posterGender,
+    ...priceLabelColumn(input.priceLabel),
     ...jobColumns(input.job),
     zip_code: input.zipCode ?? null,
     status: "pending"
@@ -945,6 +955,8 @@ export interface UpdatePostInput {
   job?: JobFieldsInput | null;
   /** 发布页 ZIP 定位任务卡，见 CreatePostInput.zipCode。 */
   zipCode?: string | null;
+  /** 免费物品任务卡，见 CreatePostInput.priceLabel。 */
+  priceLabel?: string | null;
 }
 
 /**
@@ -973,6 +985,7 @@ export async function updatePost(input: UpdatePostInput): Promise<void> {
     contact_value: input.contactValue,
     poster_age: input.posterAge,
     poster_gender: input.posterGender,
+    ...priceLabelColumn(input.priceLabel),
     ...jobColumns(input.job),
     zip_code: input.zipCode ?? null
   };

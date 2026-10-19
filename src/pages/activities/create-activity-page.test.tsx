@@ -1,10 +1,16 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listActiveActivityRegions, createActivity, navigateMock } = vi.hoisted(() => ({
+const { listActiveActivityRegions, createActivity, lookupZipCode, navigateMock } = vi.hoisted(() => ({
   listActiveActivityRegions: vi.fn(),
   createActivity: vi.fn(),
+  lookupZipCode: vi.fn(),
   navigateMock: vi.fn()
+}));
+
+vi.mock("../../repositories/zip-codes-repository", () => ({
+  lookupZipCode,
+  ZIP_CODE_PATTERN: /^\d{5}$/
 }));
 
 vi.mock("../../repositories/locations-repository", () => ({
@@ -76,6 +82,8 @@ describe("CreateActivityPage", () => {
     usePendingActivityFormDraftStore.setState(initialPendingActivityDraftState, true);
     listActiveActivityRegions.mockReset();
     createActivity.mockReset();
+    lookupZipCode.mockReset();
+    window.localStorage.clear();
     navigateMock.mockReset();
 
     listActiveActivityRegions.mockResolvedValue([{ id: "loc-1", name: "VA", stateCode: "VA" }]);
@@ -251,7 +259,8 @@ describe("CreateActivityPage", () => {
         capacity: 4,
         contactMethod: "wechat",
         contactValue: "abc123",
-        requiresApproval: false
+        requiresApproval: false,
+        zipCode: null
       });
     });
 
@@ -320,5 +329,35 @@ describe("CreateActivityPage", () => {
       "您的账号当前处于限制状态，无法执行此操作，如有疑问请联系管理员。"
     );
     expect(navigateMock).not.toHaveBeenCalled();
+  });
+
+  // 找搭子发布页 ZIP 定位任务卡
+  it("picks the state and fills an empty landmark from the zip code, then submits the zip", async () => {
+    lookupZipCode.mockResolvedValue({ zip: "22030", city: "Fairfax", stateCode: "VA" });
+    createActivity.mockResolvedValue({ id: "act-9" });
+    renderWithProviders(<CreateActivityPage />);
+
+    fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "22030" } });
+    expect(await screen.findByText("VA 弗吉尼亚州")).toBeInTheDocument();
+    expect(screen.getByLabelText(/具体地标/)).toHaveValue("Fairfax, VA");
+
+    fireEvent.click(screen.getByRole("button", { name: /吃饭搭子/ }));
+    fireEvent.change(screen.getByLabelText(/标题/), { target: { value: "周末吃火锅" } });
+    fireEvent.change(screen.getByLabelText(/说明/), { target: { value: "一起吃火锅，AA制" } });
+    fireEvent.change(screen.getByLabelText(/开始时间/), { target: { value: "2099-01-01T10:00" } });
+    submit();
+
+    await waitFor(() => {
+      expect(createActivity).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: "loc-1", landmarkText: "Fairfax, VA", zipCode: "22030" })
+      );
+    });
+    expect(window.localStorage.getItem("saminest.last-zip-code")).toBe("22030");
+  });
+
+  it("hides the zip field for online activities and does not submit a zip", async () => {
+    renderWithProviders(<CreateActivityPage />);
+    fireEvent.click(screen.getByLabelText(/线上活动/));
+    expect(screen.queryByLabelText("邮编（ZIP）")).not.toBeInTheDocument();
   });
 });

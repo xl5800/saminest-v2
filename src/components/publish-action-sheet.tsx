@@ -1,4 +1,5 @@
 import {
+  Gift,
   Handshake,
   Home,
   type LucideIcon,
@@ -42,6 +43,8 @@ const OPTIONS: PublishOption[] = [
   { key: "rent", Icon: Home, label: "房屋出租", to: "/publish?category=rent" },
   { key: "wanted", Icon: Search, label: "求租", to: "/publish?category=wanted" },
   { key: "used", Icon: ShoppingBag, label: "二手闲置", to: "/publish?category=used" },
+  // 免费物品任务卡
+  { key: "free", Icon: Gift, label: "免费送", to: "/publish?category=free" },
   { key: "activity", Icon: Handshake, label: "找搭子", to: "/activities/new" }
 ];
 

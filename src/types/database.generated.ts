@@ -87,6 +87,7 @@ export type Database = {
           id: string
           is_online: boolean
           landmark_text: string | null
+          zip_code: string | null
           location_id: string | null
           organizer_id: string
           participant_count: number
@@ -109,6 +110,7 @@ export type Database = {
           id?: string
           is_online?: boolean
           landmark_text?: string | null
+          zip_code?: string | null
           location_id?: string | null
           organizer_id: string
           participant_count?: number
@@ -131,6 +133,7 @@ export type Database = {
           id?: string
           is_online?: boolean
           landmark_text?: string | null
+          zip_code?: string | null
           location_id?: string | null
           organizer_id?: string
           participant_count?: number

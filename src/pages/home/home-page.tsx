@@ -1,4 +1,4 @@
-import { Briefcase, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
+import { Briefcase, ChevronRight, Gift, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
 import { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -6,6 +6,7 @@ import { hideSplashScreen } from "../../app/splash-screen";
 
 import { TopBar } from "../../components/top-bar";
 import { formatShortRegionLabel } from "../../data/us-states";
+import { FreeItemsList } from "../../features/posts/free-items-list";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 
 const REGION_SELECT_PATH = "/region-select";
@@ -15,6 +16,7 @@ export const HOME_ENTRIES: Array<{ to: string; label: string; Icon: LucideIcon }
   { to: "/jobs", label: "招聘求职", Icon: Briefcase },
   { to: "/housing", label: "房屋租售", Icon: Home },
   { to: "/used", label: "二手闲置", Icon: ShoppingBag },
+  { to: "/free", label: "免费物品", Icon: Gift },
   { to: "/activities", label: "找搭子", Icon: Handshake }
 ];
 
@@ -26,8 +28,9 @@ export const HOME_ENTRIES: Array<{ to: string; label: string; Icon: LucideIcon }
  *   页面（/jobs、/housing、/used、/activities）。之前这四个是首页里切换的
  *   标签，列表内容原样搬到了 pages/browse/ 下的三个页面，找搭子用现有的
  *   找搭子页。
- * - 图标下面暂时留空（BARRY 2026-10-18：先只放图标；以后放"免费物品"
- *   信息流，免费物品功能还没做）。
+ * - 免费物品任务卡：图标行多了"免费物品"（第 4 个，在找搭子前面）；图标
+ *   下面是免费物品信息流（图片网格，按当前州筛选），右上"更多"进 /free。
+ *   免费东西人人都想看，打开 App 就有东西刷。
  *
  * 发布入口在底部导航中间的"＋"。
  */
@@ -50,16 +53,29 @@ export function HomePage() {
         onSearchClick={() => navigate(SEARCH_PATH)}
       />
 
-      <nav aria-label="分类入口" className="grid grid-cols-4 gap-2 px-4 pt-3">
+      <nav aria-label="分类入口" className="grid grid-cols-5 gap-1 px-3 pt-3">
         {HOME_ENTRIES.map(({ to, label, Icon }) => (
           <Link key={to} to={to} className="flex flex-col items-center gap-1.5 rounded-2xl py-2 active:bg-surface-pressed">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-light text-primary">
               <Icon aria-hidden="true" size={24} strokeWidth={2} />
             </span>
-            <span className="text-[13px] text-text">{label}</span>
+            <span className="whitespace-nowrap text-[13px] text-text">{label}</span>
           </Link>
         ))}
       </nav>
+
+      <section aria-labelledby="home-free-heading" className="mt-4">
+        <div className="flex items-center justify-between px-4 pb-1">
+          <h2 id="home-free-heading" className="text-lg font-bold text-text">
+            免费物品
+          </h2>
+          <Link to="/free" className="flex items-center text-sm text-primary">
+            更多
+            <ChevronRight aria-hidden="true" size={16} />
+          </Link>
+        </div>
+        <FreeItemsList />
+      </section>
     </main>
   );
 }

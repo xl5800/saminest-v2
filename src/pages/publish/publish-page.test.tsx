@@ -1054,6 +1054,39 @@ describe("PublishPage", () => {
       });
     });
   });
+  // 免费物品任务卡
+  describe("免费物品", () => {
+    beforeEach(() => {
+      listActiveCategories.mockResolvedValue([
+        { id: "cat-1", slug: "used", nameZh: "二手" },
+        { id: "cat-6", slug: "free", nameZh: "免费物品" }
+      ]);
+    });
+
+    it("hides the price field and submits price_label 免费 with no price", async () => {
+      createPost.mockResolvedValue({ id: "post-999" });
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: "二手" });
+
+      selectCategory("二手");
+      fireEvent.change(screen.getByText("价格（可选）").parentElement!.querySelector("input")!, {
+        target: { value: "40" }
+      });
+      selectCategory("免费物品");
+      expect(screen.queryByText("价格（可选）")).not.toBeInTheDocument();
+      expect(screen.getByText(/免费送出，不需要填价格/)).toBeInTheDocument();
+
+      fillTitle("送一张书桌");
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      await waitFor(() => {
+        expect(createPost).toHaveBeenCalledWith(
+          expect.objectContaining({ categoryId: "cat-6", priceAmount: null, priceLabel: "免费" })
+        );
+      });
+    });
+  });
+
   // 发布页 ZIP 定位任务卡
   describe("邮编定位", () => {
     beforeEach(() => {
@@ -1095,7 +1128,7 @@ describe("PublishPage", () => {
 
       fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "00001" } });
 
-      expect(await screen.findByText("没找到这个邮编，请在下面手动选择州和城市。")).toBeInTheDocument();
+      expect(await screen.findByText("没找到这个邮编，请在下面手动填写地区。")).toBeInTheDocument();
     });
 
     it("pre-fills the zip code used last time for a new post", async () => {

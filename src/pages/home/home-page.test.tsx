@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { navigateMock, hideSplashScreen } = vi.hoisted(() => ({
@@ -7,6 +7,10 @@ const { navigateMock, hideSplashScreen } = vi.hoisted(() => ({
 }));
 
 vi.mock("../../app/splash-screen", () => ({ hideSplashScreen }));
+// 免费物品列表自己有测试（browse-pages.test.tsx），这里只确认首页放了它。
+vi.mock("../../features/posts/free-items-list", () => ({
+  FreeItemsList: () => <div data-testid="free-items-list" />
+}));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
@@ -45,16 +49,25 @@ describe("HomePage (icon entries)", () => {
     expect(navigateMock).toHaveBeenCalledWith("/search");
   });
 
-  it("links the four icon entries to their own pages, in order", () => {
+  it("links the five icon entries to their own pages, in order", () => {
     renderWithProviders(<HomePage />);
 
-    const entries = screen.getAllByRole("link");
+    const entries = within(screen.getByRole("navigation", { name: "分类入口" })).getAllByRole("link");
     expect(entries.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
       ["招聘求职", "/jobs"],
       ["房屋租售", "/housing"],
       ["二手闲置", "/used"],
+      ["免费物品", "/free"],
       ["找搭子", "/activities"]
     ]);
+  });
+
+  it("shows the free items feed below the icons, with a 更多 link to /free", () => {
+    renderWithProviders(<HomePage />);
+
+    expect(screen.getByRole("heading", { name: "免费物品" })).toBeInTheDocument();
+    expect(screen.getByTestId("free-items-list")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "更多" })).toHaveAttribute("href", "/free");
   });
 
   it("hides the splash screen right away (nothing to wait for)", () => {

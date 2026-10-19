@@ -248,9 +248,9 @@ export function LoginPage() {
 
   return (
     <AuthLayout>
-      <h1 className="mb-5 text-xl font-bold text-text">
-        {mode === "email" ? "邮箱登录" : "登录华邻"}
-      </h1>
+      {/* 手机号登录不再显示"登录华邻"标题（顶部已经有"华邻"），直接是两个标签；
+          邮箱登录模式没有标签，保留"邮箱登录"标题说明当前在哪。 */}
+      {mode === "email" ? <h1 className="mb-5 text-xl font-bold text-text">邮箱登录</h1> : null}
 
       {mode !== "email" ? (
         <div role="tablist" aria-label="登录方式" className="mb-5 flex border-b border-border">

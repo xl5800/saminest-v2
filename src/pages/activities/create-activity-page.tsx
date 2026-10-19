@@ -5,6 +5,9 @@ import { useNavigate } from "react-router-dom";
 import { TopBar } from "../../components/top-bar";
 import { formatStateLabelByCode } from "../../data/us-states";
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
+import { useZipCodeQuery } from "../../features/locations/use-zip-code-query";
+import { ZipCodeField } from "../../components/zip-code-field";
+import { readLastZipCode, writeLastZipCode } from "../../utils/last-zip-code";
 import {
   ACTIVITY_CHANNEL_OPTIONS,
   createActivity
@@ -114,6 +117,12 @@ export function CreateActivityPage() {
   // 什么字）。
   const [regionLabel, setRegionLabel] = useState("");
   const [landmarkText, setLandmarkText] = useState(initialDraft?.landmarkText ?? "");
+  // 找搭子发布页 ZIP 定位任务卡：邮编输入框，默认带上次发帖 / 发起活动填的
+  // 邮编。查到后自动选好州；地标还空着的话顺手填上"城市, 州"（地标是公开
+  // 展示的位置，用户可以改成更具体的店名 / 地址）。同一个邮编只自动填一次，
+  // 恢复草稿时当作已经填过。
+  const [zipCode, setZipCode] = useState(() => initialDraft?.zipCode ?? readLastZipCode());
+  const appliedZipRef = useRef<string | null>(initialDraft ? (initialDraft.zipCode ?? "") : null);
   const [startAt, setStartAt] = useState(initialDraft?.startAt ?? "");
   const [capacity, setCapacity] = useState(initialDraft?.capacity ?? "");
   const [contactMethod, setContactMethod] = useState(initialDraft?.contactMethod ?? "");
@@ -146,6 +155,20 @@ export function CreateActivityPage() {
     }
     return map;
   }, [regions]);
+
+  const trimmedZipCode = zipCode.trim();
+  const { data: zipLocation } = useZipCodeQuery(trimmedZipCode);
+  useEffect(() => {
+    if (!zipLocation || zipLocation.zip !== trimmedZipCode) return;
+    if (appliedZipRef.current === zipLocation.zip) return;
+    const resolvedStateId = regionsByStateCode.get(zipLocation.stateCode);
+    // 州列表还没查回来时先不填，查回来后这个 effect 会重新跑。
+    if (!resolvedStateId) return;
+    appliedZipRef.current = zipLocation.zip;
+    setLocationId(resolvedStateId);
+    setRegionLabel(formatStateLabelByCode(zipLocation.stateCode));
+    setLandmarkText((current) => current.trim() ? current : `${zipLocation.city}, ${zipLocation.stateCode}`);
+  }, [zipLocation, trimmedZipCode, regionsByStateCode]);
 
   const pendingRegion = usePendingFormRegionStore((s) => s.pendingRegion);
   const clearPendingRegion = usePendingFormRegionStore((s) => s.clearPendingRegion);
@@ -188,6 +211,7 @@ export function CreateActivityPage() {
       description,
       isOnline,
       landmarkText,
+      zipCode,
       startAt,
       capacity,
       contactMethod,
@@ -232,7 +256,9 @@ export function CreateActivityPage() {
       capacity,
       contactMethod,
       contactValue,
-      requiresApproval
+      requiresApproval,
+      // 线上活动不需要地点，邮编也不提交。
+      zipCode: isOnline ? "" : zipCode
     });
     if (!validation.success) {
       setError(validation.error.message);
@@ -254,8 +280,12 @@ export function CreateActivityPage() {
         capacity: validation.data.capacity,
         contactMethod: validation.data.contactMethod,
         contactValue: validation.data.contactValue,
-        requiresApproval: validation.data.requiresApproval
+        requiresApproval: validation.data.requiresApproval,
+        zipCode: validation.data.zipCode
       });
+      if (validation.data.zipCode) {
+        writeLastZipCode(validation.data.zipCode);
+      }
       track("content_created", { type: "activity" });
       navigate(`/activities/${created.id}`, { replace: true });
     } catch (submitError) {
@@ -359,6 +389,18 @@ export function CreateActivityPage() {
               />
               线上活动（不需要选州）
             </label>
+
+            {isOnline ? null : (
+              <div className="mb-3">
+                <ZipCodeField
+                  id="activity-zip-code"
+                  value={zipCode}
+                  onChange={setZipCode}
+                  labelClassName="mb-1 block text-sm font-medium text-text"
+                  inputClassName="w-full rounded border border-border px-3 py-2 text-base text-text placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            )}
 
             <div className="mb-1">
               <span className="mb-1 block text-sm font-medium text-text">

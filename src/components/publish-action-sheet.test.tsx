@@ -29,7 +29,7 @@ describe("PublishActionSheet", () => {
   });
 
   // 首页图标入口改版：四列图标网格。
-  it("renders the seven publish options in a fixed order, with 社区帖子 first", () => {
+  it("renders the eight publish options in a fixed order, with 社区帖子 first", () => {
     renderWithProviders(<PublishActionSheet onClose={vi.fn()} />);
 
     expect(optionButtons().map((button) => button.textContent)).toEqual([
@@ -39,6 +39,7 @@ describe("PublishActionSheet", () => {
       "房屋出租",
       "求租",
       "二手闲置",
+      "免费送",
       "找搭子"
     ]);
   });
@@ -72,6 +73,7 @@ describe("PublishActionSheet", () => {
     ["房屋出租", "/publish?category=rent"],
     ["求租", "/publish?category=wanted"],
     ["二手闲置", "/publish?category=used"],
+    ["免费送", "/publish?category=free"],
     ["找搭子", "/activities/new"]
   ])("navigates to the right form when %s is chosen, and closes once", (label, to) => {
     const onClose = vi.fn();

@@ -36,8 +36,15 @@ describe("validateActivityInput", () => {
       capacity: 4,
       contactMethod: "wechat",
       contactValue: "abc123",
-      requiresApproval: false
+      requiresApproval: false,
+      zipCode: null
     });
+  });
+
+  // 找搭子发布页 ZIP 定位任务卡
+  it("accepts an empty or 5-digit zip code and rejects anything else", () => {
+    expect(validateActivityInput({ ...validInput, zipCode: "22030" }).data?.zipCode).toBe("22030");
+    expect(validateActivityInput({ ...validInput, zipCode: "220" }).error?.message).toBe("邮编要是 5 位数字。");
   });
 
   it("passes requiresApproval through unchanged when true", () => {

@@ -23,6 +23,7 @@ vi.mock("react-router-dom", async (importOriginal) => {
 
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { renderWithProviders } from "../../test/render-with-providers";
+import { FreePage } from "./free-page";
 import { HousingPage } from "./housing-page";
 import { JobsPage } from "./jobs-page";
 import { UsedPage } from "./used-page";
@@ -34,7 +35,8 @@ const CATEGORIES = [
   { id: "cat-wanted", slug: "wanted", nameZh: "求租" },
   { id: "cat-used", slug: "used", nameZh: "二手" },
   { id: "cat-hiring", slug: "hiring", nameZh: "招聘" },
-  { id: "cat-seeking", slug: "job-seeking", nameZh: "求职" }
+  { id: "cat-seeking", slug: "job-seeking", nameZh: "求职" },
+  { id: "cat-free", slug: "free", nameZh: "免费物品" }
 ];
 
 function lastPostListProps(): Record<string, unknown> {
@@ -131,6 +133,30 @@ describe("browse pages", () => {
 
       expect(screen.getByRole("heading", { name: "二手闲置" })).toBeInTheDocument();
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-used", variant: "grid" });
+    });
+  });
+
+  // 免费物品任务卡
+  describe("FreePage", () => {
+    it("shows free items as a grid with a free-publish empty state", () => {
+      renderWithProviders(<FreePage />);
+
+      expect(screen.getByRole("heading", { name: "免费物品" })).toBeInTheDocument();
+      expect(lastPostListProps()).toMatchObject({ categoryId: "cat-free", variant: "grid" });
+      fireEvent.click(screen.getByRole("button", { name: "免费发布" }));
+      expect(navigateMock).toHaveBeenCalledWith("/publish?category=free");
+    });
+
+    it("shows the empty state without querying when the free category doesn't exist yet", () => {
+      useCategoriesQuery.mockReturnValue({
+        data: CATEGORIES.filter((category) => category.slug !== "free"),
+        isPending: false,
+        isError: false
+      });
+      renderWithProviders(<FreePage />);
+
+      expect(postListMock).not.toHaveBeenCalled();
+      expect(screen.getByText("还没有免费物品，你有闲置想送人吗？")).toBeInTheDocument();
     });
   });
 });

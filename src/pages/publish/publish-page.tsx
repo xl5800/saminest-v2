@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, MapPin, X } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
@@ -15,12 +15,15 @@ import { useCategoriesQuery } from "../../features/categories/use-categories-que
 // 做同样的反查，没有必要另建一个几乎一样的 hook。
 import { useActivityRegionsQuery } from "../../features/locations/use-activity-regions-query";
 import { useZipCodeQuery } from "../../features/locations/use-zip-code-query";
+import { ZipCodeField } from "../../components/zip-code-field";
+import { readLastZipCode, writeLastZipCode } from "../../utils/last-zip-code";
 import { useRemovePostImageMutation } from "../../features/my-posts/use-remove-post-image-mutation";
 import { useUpdatePostMutation } from "../../features/my-posts/use-update-post-mutation";
 import {
   HIRING_CATEGORY_SLUG,
   isJobCategorySlug
 } from "../../features/posts/job-fields";
+import { FREE_CATEGORY_SLUG, FREE_PRICE_LABEL } from "../../features/posts/free-items";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import { useMyProfileQuery } from "../../features/profile/use-my-profile-query";
 import {
@@ -48,27 +51,9 @@ import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
 
-/**
- * 发布页 ZIP 定位任务卡：记住上次发帖填的邮编，下次新建帖子自动带上（大多数
- * 人一直在同一个地方发帖）。只是个人便利，读写失败（隐私模式等）就当没记过。
- */
-export const LAST_ZIP_CODE_STORAGE_KEY = "saminest.last-zip-code";
-
-function readLastZipCode(): string {
-  try {
-    return window.localStorage.getItem(LAST_ZIP_CODE_STORAGE_KEY) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function writeLastZipCode(zip: string): void {
-  try {
-    window.localStorage.setItem(LAST_ZIP_CODE_STORAGE_KEY, zip);
-  } catch {
-    // 存不了就算了。
-  }
-}
+// 发布页 ZIP 定位任务卡：上次填的邮编存取挪到了 utils/last-zip-code.ts（找搭子
+// 发起页也要用），这里重新导出存储键，给测试用。
+export { LAST_ZIP_CODE_STORAGE_KEY } from "../../utils/last-zip-code";
 const PUBLISH_SUCCESS_MESSAGE = "发布成功，等待审核";
 const PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE =
   "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。";
@@ -488,6 +473,8 @@ export function PublishPage() {
   // 招聘求职任务卡：同一种写法判断是不是工作帖（招聘 / 求职）。
   const isJobCategory = isJobCategorySlug(selectedCategorySlug);
   const isHiringCategory = selectedCategorySlug === HIRING_CATEGORY_SLUG;
+  // 免费物品任务卡：免费物品不填价格，帖子上显示"免费"。
+  const isFreeCategory = selectedCategorySlug === FREE_CATEGORY_SLUG;
 
   // 31 号卡：年龄自动填充——只在"新建 + 当前是求租分类 + profile 已经查到"
   // 时生效一次（ageAutoFilledRef 挡住之后的重复赋值，声明和理由见上面）。
@@ -661,7 +648,8 @@ export function PublishPage() {
       locationText,
       title,
       description,
-      price,
+      // 免费物品任务卡：免费物品不提交价格（切换分类前填过的价格也丢掉）。
+      price: isFreeCategory ? "" : price,
       posterAge: isWantedCategory ? posterAge : "",
       posterGender: isWantedCategory ? posterGender : "",
       // 招聘求职任务卡：跟上面同一个兜底思路——不是工作帖就不传，工作字段
@@ -679,6 +667,14 @@ export function PublishPage() {
       setError(validation.error.message);
       return;
     }
+
+    // 免费物品任务卡：免费物品写"免费"；编辑时把免费物品改成别的分类，要把
+    // 原来的"免费"清掉；其它情况不碰 price_label。
+    const priceLabel = isFreeCategory
+      ? FREE_PRICE_LABEL
+      : existingPost?.priceLabel === FREE_PRICE_LABEL
+        ? null
+        : undefined;
 
     setSubmitting(true);
     let resolvedPostId: string;
@@ -699,7 +695,8 @@ export function PublishPage() {
           posterAge: validation.data.posterAge,
           posterGender: validation.data.posterGender,
           job: validation.data.job,
-          zipCode: validation.data.zipCode
+          zipCode: validation.data.zipCode,
+          priceLabel
         });
       } catch (submitError) {
         setError(
@@ -724,7 +721,8 @@ export function PublishPage() {
           posterAge: validation.data.posterAge,
           posterGender: validation.data.posterGender,
           job: validation.data.job,
-          zipCode: validation.data.zipCode
+          zipCode: validation.data.zipCode,
+          priceLabel
         });
         resolvedPostId = created.id;
         track("content_created", { type: "classified" });
@@ -999,6 +997,10 @@ export function PublishPage() {
                 perks={jobPerks}
                 onPerksChange={setJobPerks}
               />
+            ) : isFreeCategory ? (
+              <p className="mb-4 rounded-xl bg-success-light px-3.5 py-3 text-sm text-success">
+                免费送出，不需要填价格。帖子上会显示"免费"。
+              </p>
             ) : (
               <label className="mb-4 block">
                 <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
@@ -1016,38 +1018,13 @@ export function PublishPage() {
             {/* 发布页 ZIP 定位任务卡：邮编放在"所在州"上面，填满 5 位自动带出
                 城市 / 州并填进下面两个字段（仍可手动改）。 */}
             <div className="mb-4">
-              <label htmlFor="publish-zip-code" className="mb-2 block text-xs font-semibold text-text">
-                邮编（ZIP）
-              </label>
-              <input
+              <ZipCodeField
                 id="publish-zip-code"
-                type="text"
-                inputMode="numeric"
-                autoComplete="postal-code"
-                maxLength={5}
                 value={zipCode}
-                onChange={(event) => setZipCode(event.target.value.replace(/\D/g, ""))}
-                placeholder="输入邮编，自动填写城市"
-                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
+                onChange={setZipCode}
+                labelClassName="mb-2 block text-xs font-semibold text-text"
+                inputClassName="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
               />
-              {trimmedZipCode.length === 5 ? (
-                <p role="status" className="mt-2 flex items-center gap-1 text-sm">
-                  {zipQuery.isPending ? (
-                    <span className="text-text-muted">查询中…</span>
-                  ) : zipQuery.isError ? (
-                    <span className="text-danger">邮编查询失败，请在下面手动选择州和城市。</span>
-                  ) : zipLocation ? (
-                    <>
-                      <MapPin aria-hidden="true" size={14} className="shrink-0 text-primary" />
-                      <span className="font-medium text-text">
-                        {zipLocation.city}, {zipLocation.stateCode}
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-danger">没找到这个邮编，请在下面手动选择州和城市。</span>
-                  )}
-                </p>
-              ) : null}
             </div>
 
             <div className="mb-4">

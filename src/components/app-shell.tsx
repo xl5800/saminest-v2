@@ -174,6 +174,8 @@ const TOPBAR_MIGRATED_PATTERNS = [
   "/jobs",
   "/housing",
   "/used",
+  // 免费物品任务卡
+  "/free",
   "/blocked-users",
   "/my-posts",
   "/admin/posts",

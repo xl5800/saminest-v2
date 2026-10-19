@@ -7,7 +7,7 @@ import { TopBar } from "../../components/top-bar";
 import { HIRING_CATEGORY_SLUG, JOB_SEEKING_CATEGORY_SLUG } from "../../features/posts/job-fields";
 import { PostList } from "../../features/posts/post-list";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
-import { CategoriesGate } from "./categories-gate";
+import { CategoriesGate } from "../../features/categories/categories-gate";
 
 type JobFilter = "all" | typeof HIRING_CATEGORY_SLUG | typeof JOB_SEEKING_CATEGORY_SLUG;
 

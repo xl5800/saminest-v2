@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { TopBar } from "../../components/top-bar";
 import { PostList } from "../../features/posts/post-list";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
-import { CategoriesGate, NoPostsYet } from "./categories-gate";
+import { CategoriesGate, NoPostsYet } from "../../features/categories/categories-gate";
 
 const USED_CATEGORY_SLUG = "used";
 

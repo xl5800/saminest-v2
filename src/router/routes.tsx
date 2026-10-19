@@ -46,6 +46,7 @@ import { SearchPage } from "../pages/search/search-page";
 import { ReportPostPage } from "../pages/report/report-post-page";
 import { ReportUserPage } from "../pages/report/report-user-page";
 import { ResetPasswordPage } from "../pages/reset-password/reset-password-page";
+import { FreePage } from "../pages/browse/free-page";
 import { HousingPage } from "../pages/browse/housing-page";
 import { JobsPage } from "../pages/browse/jobs-page";
 import { UsedPage } from "../pages/browse/used-page";
@@ -462,6 +463,11 @@ export const router = createBrowserRouter([
       {
         path: "used",
         element: <UsedPage />
+      },
+      {
+        // 免费物品任务卡
+        path: "free",
+        element: <FreePage />
       },
       {
         path: "login",

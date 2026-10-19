@@ -709,7 +709,7 @@ describe("app routes", () => {
     renderAt("/activities/new");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -729,7 +729,7 @@ describe("app routes", () => {
     renderAt("/activities/act-1/report");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -745,7 +745,7 @@ describe("app routes", () => {
     renderAt("/activities/act-1/notify");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -808,7 +808,7 @@ describe("app routes", () => {
   it("redirects /community/new to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/new");
 
-    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "短信验证" })).toBeInTheDocument();
   });
 
   it("renders the create-community-post page at /community/:slug/new when a session exists, with neither the global AppHeader nor BottomNav and no community picker", async () => {
@@ -825,7 +825,7 @@ describe("app routes", () => {
   it("redirects /community/:slug/new to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/dmv/new");
 
-    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "短信验证" })).toBeInTheDocument();
   });
 
   it("at the global /community/new, a user who joined nothing sees the join-a-community prompt instead of the form (still without AppHeader/BottomNav)", async () => {
@@ -870,7 +870,7 @@ describe("app routes", () => {
   it("redirects /community/post/:id/report to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/post/cp-1/report");
 
-    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "短信验证" })).toBeInTheDocument();
   });
 
   it("renders the report form at /community/post/:id/report when a session exists, without the global AppHeader", () => {
@@ -886,7 +886,7 @@ describe("app routes", () => {
   it("redirects /community/post/:id/edit to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/community/post/cp-1/edit");
 
-    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "短信验证" })).toBeInTheDocument();
   });
 
   it("renders the edit page at /community/post/:id/edit when a session exists (not-found state when the post doesn't resolve)", async () => {
@@ -900,7 +900,7 @@ describe("app routes", () => {
   it("redirects /my-community-posts to /login when there is no session (reuses RequireAuth)", () => {
     renderAt("/my-community-posts");
 
-    expect(screen.getByRole("heading", { name: "登录华邻" })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "短信验证" })).toBeInTheDocument();
   });
 
   it("renders the my-community-posts page at /my-community-posts when a session exists", async () => {
@@ -915,7 +915,7 @@ describe("app routes", () => {
     renderAt("/login");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "发布" })).not.toBeInTheDocument();
     expect(screen.queryByRole("navigation", { name: "底部导航" })).not.toBeInTheDocument();
@@ -980,7 +980,7 @@ describe("app routes", () => {
     renderAt("/publish");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1001,7 +1001,7 @@ describe("app routes", () => {
     renderAt("/post/post-1/report");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1017,7 +1017,7 @@ describe("app routes", () => {
     renderAt("/messages");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1034,7 +1034,7 @@ describe("app routes", () => {
     renderAt("/messages/conversation-1");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1095,7 +1095,7 @@ describe("app routes", () => {
     renderAt("/favorites");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1112,7 +1112,7 @@ describe("app routes", () => {
     renderAt("/blocked-users");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1128,7 +1128,7 @@ describe("app routes", () => {
     renderAt("/profile");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1147,7 +1147,7 @@ describe("app routes", () => {
     renderAt("/profile/edit");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1179,7 +1179,7 @@ describe("app routes", () => {
     renderAt("/users/user-2/report");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1195,7 +1195,7 @@ describe("app routes", () => {
     renderAt("/feedback");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1213,7 +1213,7 @@ describe("app routes", () => {
     renderAt("/my-posts");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1232,7 +1232,7 @@ describe("app routes", () => {
     renderAt("/my-activities");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1250,7 +1250,7 @@ describe("app routes", () => {
     renderAt("/admin/posts");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1280,7 +1280,7 @@ describe("app routes", () => {
     renderAt("/admin/posts/all");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1310,7 +1310,7 @@ describe("app routes", () => {
     renderAt("/admin/reports");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1340,7 +1340,7 @@ describe("app routes", () => {
     renderAt("/admin/feedback");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1370,7 +1370,7 @@ describe("app routes", () => {
     renderAt("/admin/users");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 
@@ -1400,7 +1400,7 @@ describe("app routes", () => {
     renderAt("/admin/categories");
 
     expect(
-      screen.getByRole("heading", { name: "登录华邻" })
+      screen.getByRole("tab", { name: "短信验证" })
     ).toBeInTheDocument();
   });
 

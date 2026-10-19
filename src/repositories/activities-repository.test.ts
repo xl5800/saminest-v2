@@ -486,7 +486,8 @@ describe("createActivity", () => {
       capacity: 4,
       contact_method: "wechat",
       contact_value: "abc123",
-      requires_approval: false
+      requires_approval: false,
+      zip_code: null
     });
     const insertedPayload = queryBuilder.insert.mock.calls[0][0];
     expect(insertedPayload).not.toHaveProperty("status");

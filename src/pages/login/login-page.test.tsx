@@ -87,6 +87,7 @@ describe("LoginPage", () => {
     expect(screen.getByLabelText("验证码")).toBeInTheDocument();
     expect(screen.getByText("无需注册，手机号验证即可登录")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "注册 / 登录" })).toBeInTheDocument();
+    expect(screen.queryByText("登录华邻")).not.toBeInTheDocument();
   });
 
   it("has no link to a separate register page, and shows the agreement line", () => {
