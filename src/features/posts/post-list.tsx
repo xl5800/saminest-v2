@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 
 import { PostThumbnail } from "../../components/post-thumbnail";
 import { Skeleton } from "../../components/skeleton";
+import { useBlockedUserIds } from "../blocks/use-blocked-user-ids";
 import { formatLocationDisplayName } from "../../data/us-states";
 import {
   formatPrice,
@@ -190,6 +191,7 @@ export function PostList({
     usePostsInfiniteQuery({ categoryId, searchQuery, stateCode, authorId, excludeCategoryId, categoryIds });
 
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  const blockedUserIds = useBlockedUserIds();
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -272,7 +274,8 @@ export function PostList({
     return <p role="alert">帖子加载失败，请稍后重试。</p>;
   }
 
-  const posts = data.pages.flatMap((page) => page.posts);
+  // 苹果审核 1.2 整改：被我屏蔽的用户发的帖子不显示。
+  const posts = data.pages.flatMap((page) => page.posts).filter((post) => !blockedUserIds.has(post.authorId));
 
   // 08 号卡 8.4：空状态优先级——正在搜索时，零结果永远是"没有找到相关
   // 帖子"（用户意图是找一个具体的东西，"去发布"跟这个意图不搭），跟有没有

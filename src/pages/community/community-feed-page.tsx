@@ -12,6 +12,7 @@ import { useCommunityPostsInfiniteQuery } from "../../features/community/use-com
 import { useSearchCommunityPostsQuery } from "../../features/community/use-search-community-posts-query";
 import { useJoinCommunityMutation } from "../../features/community/use-join-community-mutation";
 import { useLeaveCommunityMutation } from "../../features/community/use-leave-community-mutation";
+import { useBlockedUserIds } from "../../features/blocks/use-blocked-user-ids";
 import { useAuthStore } from "../../store/auth-store";
 import { AppError } from "../../utils/app-error";
 import { useDebouncedValue } from "../../utils/use-debounced-value";
@@ -70,6 +71,7 @@ const SEARCH_DEBOUNCE_MS = 400;
 export function CommunityFeedPage() {
   const navigate = useNavigate();
   const loginPath = useLoginPath();
+  const blockedUserIds = useBlockedUserIds();
   const session = useAuthStore((s) => s.session);
   const userId = session?.user.id;
 
@@ -126,7 +128,8 @@ export function CommunityFeedPage() {
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const posts = data?.pages.flatMap((page) => page.posts) ?? [];
+  // 苹果审核 1.2 整改：被我屏蔽的用户发的帖子不显示。
+  const posts = (data?.pages.flatMap((page) => page.posts) ?? []).filter((post) => !blockedUserIds.has(post.authorId));
 
   const isJoined = Boolean(userId) && membership.data === true;
 
@@ -242,7 +245,7 @@ export function CommunityFeedPage() {
         </div>
       );
     }
-    const results = searchResults.data ?? [];
+    const results = (searchResults.data ?? []).filter((post) => !blockedUserIds.has(post.authorId));
     if (results.length === 0) {
       return (
         <p role="status" className="py-10 text-center text-sm text-text-muted">

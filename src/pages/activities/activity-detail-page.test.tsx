@@ -660,7 +660,7 @@ describe("ActivityDetailPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "更多操作" }));
 
-    expect(screen.getByRole("link", { name: /举报/ })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "举报活动" })).toHaveAttribute(
       "href",
       "/activities/act-1/report"
     );

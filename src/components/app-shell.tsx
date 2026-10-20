@@ -4,6 +4,7 @@ import { useOnlineStatus } from "../utils/use-online-status";
 import { AppHeader } from "./app-header";
 import { BottomNav } from "./bottom-nav";
 import { NicknamePromptSheet } from "./nickname-prompt-sheet";
+import { TermsConsentGate } from "./terms-consent-gate";
 
 /**
  * 登录/注册/忘记密码/重置密码这四个认证页面用自己的 AuthLayout 渲染精简版
@@ -272,6 +273,8 @@ export function AppShell() {
       {showBottomNav ? <BottomNav /> : null}
       {/* 注册登录简化任务卡：首次报名/发私信时提示设置昵称，全站一个实例。 */}
       <NicknamePromptSheet />
+      {/* 苹果审核 1.2 整改：没同意过用户协议的已登录用户必须先同意。 */}
+      <TermsConsentGate />
     </>
   );
 }

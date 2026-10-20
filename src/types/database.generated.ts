@@ -1229,6 +1229,7 @@ export type Database = {
           location_id: string | null
           phone: string | null
           role: string
+          terms_accepted_at: string | null
           updated_at: string
         }
         Insert: {
@@ -1245,6 +1246,7 @@ export type Database = {
           location_id?: string | null
           phone?: string | null
           role?: string
+          terms_accepted_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -1261,6 +1263,7 @@ export type Database = {
           location_id?: string | null
           phone?: string | null
           role?: string
+          terms_accepted_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -1398,6 +1401,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_terms: { Args: never; Returns: string }
       admin_approve_community: {
         Args: { target_community_id: string }
         Returns: undefined

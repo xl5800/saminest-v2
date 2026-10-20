@@ -12,6 +12,9 @@ export interface PostShareActionSheetProps {
    *  帖子标题/价格这些跟分享内容相关的字段。 */
   onShareToWechat: () => void;
   onClose: () => void;
+  /** 苹果审核 1.2 整改：发布者相关的操作（举报用户 / 屏蔽此人），排在"举报帖子"
+   *  后面。不是自己的帖子、而且登录了才会传。 */
+  extraOptions?: Array<{ key: string; emoji: string; label: string; onSelect: () => void }>;
 }
 
 type ShareOptionKey = "copy" | "wechat" | "report";
@@ -25,7 +28,7 @@ interface ShareOption {
 const OPTIONS: ShareOption[] = [
   { key: "copy", emoji: "🔗", label: "复制链接" },
   { key: "wechat", emoji: "💬", label: "分享到微信" },
-  { key: "report", emoji: "🚩", label: "举报" }
+  { key: "report", emoji: "🚩", label: "举报帖子" }
 ];
 
 /**
@@ -52,7 +55,7 @@ const OPTIONS: ShareOption[] = [
  * - 举报：现有路由 /post/:id/report，逻辑没有变化，只是入口从原来内容区
  *   的图标链接搬到这个弹层里。
  */
-export function PostShareActionSheet({ postId, onShareToWechat, onClose }: PostShareActionSheetProps) {
+export function PostShareActionSheet({ postId, onShareToWechat, onClose, extraOptions }: PostShareActionSheetProps) {
   const navigate = useNavigate();
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
 
@@ -122,11 +125,20 @@ export function PostShareActionSheet({ postId, onShareToWechat, onClose }: PostS
           </p>
         ) : null}
         <ul className="flex flex-col gap-2">
-          {OPTIONS.map((option) => (
+          {[
+            ...OPTIONS.map((option) => ({ ...option, onSelect: () => handleSelect(option) })),
+            ...(extraOptions ?? []).map((option) => ({
+              ...option,
+              onSelect: () => {
+                onClose();
+                option.onSelect();
+              }
+            }))
+          ].map((option) => (
             <li key={option.key}>
               <button
                 type="button"
-                onClick={() => handleSelect(option)}
+                onClick={option.onSelect}
                 className="flex w-full items-center gap-3 rounded-xl bg-bg px-4 py-3 text-left text-base font-semibold text-text"
               >
                 <span aria-hidden="true" className="text-xl">

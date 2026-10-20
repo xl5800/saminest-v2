@@ -6,6 +6,7 @@ import { useUpdateProfileMutation } from "../features/profile/use-update-profile
 import { MAX_DISPLAY_NAME_LENGTH } from "../pages/profile/edit-profile-validation";
 import { useAuthStore } from "../store/auth-store";
 import { useNicknamePromptStore } from "../store/nickname-prompt-store";
+import { getModerationErrorMessage } from "../utils/app-error";
 
 const SAVE_ERROR_MESSAGE = "保存失败，请稍后重试，或者先跳过。";
 
@@ -85,7 +86,7 @@ export function NicknamePromptSheet() {
       },
       {
         onSuccess: () => finish(),
-        onError: () => setError(SAVE_ERROR_MESSAGE)
+        onError: (saveError) => setError(getModerationErrorMessage(saveError) ?? SAVE_ERROR_MESSAGE)
       }
     );
   }

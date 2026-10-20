@@ -15,7 +15,7 @@ import {
 import { usePendingActivityFormDraftStore } from "../../store/pending-activity-form-draft-store";
 import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { useAuthStore } from "../../store/auth-store";
-import { AppError } from "../../utils/app-error";
+import { AppError, getModerationErrorMessage } from "../../utils/app-error";
 import { CONTACT_METHOD_OPTIONS } from "../publish/publish-validation";
 import { validateActivityInput } from "./activity-validation";
 import { track } from "../../features/analytics/track";
@@ -295,7 +295,8 @@ export function CreateActivityPage() {
       if (submitError instanceof AppError && submitError.code === "ACCOUNT_RESTRICTED") {
         setError(submitError.message);
       } else {
-        setError(DEFAULT_ERROR_MESSAGE);
+        // 苹果审核 1.2 整改：命中敏感词时告诉用户改内容。
+        setError(getModerationErrorMessage(submitError) ?? DEFAULT_ERROR_MESSAGE);
       }
       setSubmitting(false);
     }

@@ -79,7 +79,7 @@ describe("listApprovedPosts", () => {
 
     expect(fromMock).toHaveBeenCalledWith("posts");
     expect(queryBuilder.select).toHaveBeenCalledWith(
-      "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)"
+      "id, author_id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)"
     );
     expect(queryBuilder.eq).toHaveBeenCalledWith("status", "approved");
     expect(queryBuilder.is).toHaveBeenCalledWith("deleted_at", null);

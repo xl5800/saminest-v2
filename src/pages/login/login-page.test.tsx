@@ -2,6 +2,11 @@ import { MemoryRouter } from "react-router-dom";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const { acceptTerms, ensureProfileExists } = vi.hoisted(() => ({
+  acceptTerms: vi.fn(),
+  ensureProfileExists: vi.fn()
+}));
+
 const { authMock, navigateMock, triggerAuthEvent } = vi.hoisted(() => {
   let capturedCallback: ((event: string, session: unknown) => void) | null = null;
   const onAuthStateChange = vi.fn((callback: (event: string, session: unknown) => void) => {
@@ -29,6 +34,9 @@ vi.mock("../../integrations/supabase/client", () => ({
   getSupabaseClient: () => ({ auth: authMock })
 }));
 
+// 苹果审核 1.2 整改：登录成功后记录"同意了用户协议"。
+vi.mock("../../repositories/profiles-repository", () => ({ acceptTerms, ensureProfileExists }));
+
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
@@ -42,13 +50,17 @@ const initialAuthState = useAuthStore.getState();
 const OLD_USER = { id: "user-1", created_at: "2026-01-01T00:00:00.000Z" };
 
 function renderLoginPage(
-  initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/login"
+  initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/login",
+  { agree = true }: { agree?: boolean } = {}
 ) {
-  return render(
+  const result = render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <LoginPage />
     </MemoryRouter>
   );
+  // 苹果审核 1.2 整改：不勾选同意框不能获取验证码 / 登录，大部分用例默认先勾上。
+  if (agree) fireEvent.click(screen.getByRole("checkbox"));
+  return result;
 }
 
 function fillPhone(value = "(843) 748-1464") {
@@ -74,7 +86,24 @@ describe("LoginPage", () => {
     authMock.onAuthStateChange.mockClear();
     authMock.getSession.mockClear();
     navigateMock.mockReset();
+    acceptTerms.mockReset();
+    acceptTerms.mockResolvedValue("2026-10-20T00:00:00Z");
+    ensureProfileExists.mockReset();
+    ensureProfileExists.mockResolvedValue(undefined);
     useAuthStore.setState(initialAuthState, true);
+  });
+
+  // 苹果审核 1.2 整改
+  it("requires ticking the terms checkbox before sending a code or logging in", () => {
+    renderLoginPage("/login", { agree: false });
+
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+    expect(screen.getByText(/平台对不良内容和滥用行为零容忍/)).toBeInTheDocument();
+    fillPhone();
+    fireEvent.click(screen.getByRole("button", { name: "获取验证码" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("请先阅读并勾选同意《用户协议》和《隐私政策》。");
+    expect(authMock.signInWithOtp).not.toHaveBeenCalled();
   });
 
   it("opens on 短信验证 with a fixed +1 prefix, a code field and the 无需注册 hint", () => {
@@ -171,7 +200,10 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(authMock.verifyOtp).toHaveBeenCalledWith({ phone: "+18437481464", token: "123456", type: "sms" });
     });
-    expect(navigateMock).toHaveBeenCalledWith("/", { replace: true });
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/", { replace: true }));
+    // 苹果审核 1.2 整改：登录成功后记录同意了用户协议。
+    expect(ensureProfileExists).toHaveBeenCalledWith(OLD_USER.id, expect.any(String));
+    expect(acceptTerms).toHaveBeenCalled();
   });
 
   it("returns to the page in ?redirect= after logging in with a code", async () => {
@@ -312,6 +344,7 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(useAuthStore.getState().isInitializing).toBe(false);
     });
+    fireEvent.click(screen.getByRole("checkbox"));
 
     fillPhone();
     await sendCode();

@@ -143,7 +143,11 @@ vi.mock("../repositories/profiles-repository", () => ({
   getMyProfile,
   updateMyProfile,
   updateMyAvatarUrl,
-  getPublicProfile
+  getPublicProfile,
+  // 苹果审核 1.2 整改：全站"同意用户协议"弹窗要查这个；路由测试里当成已经同意过。
+  getMyTermsAcceptedAt: vi.fn().mockResolvedValue("2026-10-20T00:00:00Z"),
+  acceptTerms: vi.fn(),
+  ensureProfileExists: vi.fn()
 }));
 // 社区功能阶段二：三个社区页面只在路由层面被验证（路径是否登记、是否被
 // RequireAuth 包裹、是否叠加旧 AppHeader），数据层用最小 mock 兜住。

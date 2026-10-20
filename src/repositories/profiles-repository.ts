@@ -373,3 +373,30 @@ export async function listProfilesForAdmin(
     createdAt: row.created_at
   }));
 }
+
+/**
+ * 苹果审核 1.2 整改：当前用户第一次同意用户协议的时间，没同意过返回 null。
+ * 单独一个查询，不塞进 getMyProfile——全站的"同意条款"弹窗只需要这一列。
+ */
+export async function getMyTermsAcceptedAt(userId: string): Promise<string | null> {
+  const { data, error } = await getSupabaseClient()
+    .from("profiles")
+    .select("terms_accepted_at")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "TERMS_ACCEPTANCE_FETCH_FAILED", error);
+  }
+  return data?.terms_accepted_at ?? null;
+}
+
+/** 记录当前用户同意了用户协议（只记第一次的时间），返回记下的时间。 */
+export async function acceptTerms(): Promise<string | null> {
+  const { data, error } = await getSupabaseClient().rpc("accept_terms");
+
+  if (error) {
+    throw new AppError(error.message, "ACCEPT_TERMS_FAILED", error);
+  }
+  return data ?? null;
+}

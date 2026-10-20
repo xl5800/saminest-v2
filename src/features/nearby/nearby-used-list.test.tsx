@@ -44,6 +44,7 @@ import { NearbyUsedList } from "./nearby-used-list";
 function post(id: string): PostFeedItem {
   return {
     id,
+    authorId: `author-${id}`,
     title: `二手 ${id}`,
     priceAmount: 20,
     priceLabel: null,

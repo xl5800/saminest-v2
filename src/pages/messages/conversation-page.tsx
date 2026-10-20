@@ -16,7 +16,7 @@ import { markConversationAsRead } from "../../repositories/conversations-reposit
 import type { NotificationPayload } from "../../repositories/messages-repository";
 import { messageImageStorageService } from "../../services/storage/message-image-storage-service";
 import { useAuthStore } from "../../store/auth-store";
-import { AppError } from "../../utils/app-error";
+import { AppError, getModerationErrorMessage } from "../../utils/app-error";
 import { formatMessageTimeDivider, shouldShowMessageTimeDivider } from "../../utils/format";
 import { useNicknamePrompt } from "../../features/profile/use-nickname-prompt";
 import { USER_PROFILE_PAGE_ENABLED } from "../../config/feature-flags";
@@ -678,7 +678,7 @@ export function MessageConversationPage() {
       if (error instanceof AppError && error.code === "MESSAGE_SEND_FORBIDDEN") {
         setSubmitError(error.message);
       } else {
-        setSubmitError(DEFAULT_ERROR_MESSAGE);
+        setSubmitError(getModerationErrorMessage(error) ?? DEFAULT_ERROR_MESSAGE);
       }
     }
   }

@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
+import { useContactSupport } from "../../features/conversations/use-contact-support";
 
 /**
  * "设置"页面（/settings），是"我的"页顶部右侧设置齿轮此前留的占位路径
@@ -18,6 +19,8 @@ import { TopBar } from "../../components/top-bar";
  * 品牌名+发布按钮一起去掉，只保留返回。
  */
 export function SettingsPage() {
+  const { contactSupport, error: contactSupportError } = useContactSupport();
+
   return (
     <main className="min-h-screen pb-20 md:pb-6">
       <TopBar variant="nav-only" title="设置" />
@@ -39,6 +42,28 @@ export function SettingsPage() {
             <span>注销账号</span>
             <ChevronRight aria-hidden="true" size={18} className="text-chevron" />
           </Link>
+        </section>
+
+        {/* 苹果审核 1.2 整改：App 内要有能举报不当行为的联系方式。复用"我的"页的
+            "帮助与客服"（站内客服对话），不另外放邮箱。 */}
+        <section aria-label="帮助与举报" className="mt-6">
+          <h2 className="mb-2 text-sm font-medium text-text-muted">帮助与举报</h2>
+          <button
+            type="button"
+            onClick={contactSupport}
+            className="flex min-h-14 w-full items-center justify-between rounded-2xl border border-border bg-card px-4 py-3 text-left text-base font-medium text-text shadow-settings-item transition-opacity hover:opacity-90"
+          >
+            <span>
+              帮助与客服
+              <span className="mt-0.5 block text-xs font-normal text-text-muted">举报不当内容或滥用行为，我们会在 24 小时内处理</span>
+            </span>
+            <ChevronRight aria-hidden="true" size={18} className="shrink-0 text-chevron" />
+          </button>
+          {contactSupportError ? (
+            <p role="alert" className="mt-2 text-sm text-danger">
+              {contactSupportError}
+            </p>
+          ) : null}
         </section>
       </div>
     </main>

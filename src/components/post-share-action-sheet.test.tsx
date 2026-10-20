@@ -38,7 +38,7 @@ describe("PostShareActionSheet", () => {
     expect(buttons.map((button) => button.textContent)).toEqual([
       "🔗复制链接",
       "💬分享到微信",
-      "🚩举报"
+      "🚩举报帖子"
     ]);
   });
 

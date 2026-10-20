@@ -25,6 +25,8 @@ export interface PostListItem {
 // （收藏列表目前不需要分类/作者/封面图/收藏数），拆成两个类型能让
 // listApprovedPosts 和 listFavoritedPosts 继续互不影响地演进。
 export interface PostFeedItem extends PostListItem {
+  /** 苹果审核 1.2 整改：发帖人 id，列表里过滤掉被我屏蔽的用户的帖子。 */
+  authorId: string;
   categoryName: string;
   authorDisplayName: string;
   /** 31 号卡（求租板块改版）新增：求租 Tab 的文字卡片要展示发帖人小头像，
@@ -115,6 +117,8 @@ interface PostFeedRow {
   // 31 号卡新增 avatar_url——求租 Tab 的文字卡片要展示发帖人小头像，取法
   // 照抄 getPostDetail() 的 author:profiles(display_name, avatar_url)。
   author: { display_name: string; avatar_url: string | null } | null;
+  /** 苹果审核 1.2 整改：列表里过滤掉被我屏蔽的用户发的帖子要用。 */
+  author_id: string;
   post_images: PostFeedImageRow[] | null;
 }
 
@@ -253,7 +257,7 @@ export async function listApprovedPosts(
   let query = getSupabaseClient()
     .from("posts")
     .select(
-      `id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, ${locationSelect}, location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)`
+      `id, author_id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, ${locationSelect}, location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)`
     )
     .eq("status", "approved")
     .is("deleted_at", null)
@@ -310,6 +314,7 @@ export async function listApprovedPosts(
 function mapFeedRow(row: PostFeedRow): PostFeedItem {
   return {
     id: row.id,
+    authorId: row.author_id,
     title: row.title,
     priceAmount: row.price_amount,
     priceLabel: row.price_label,
@@ -332,7 +337,7 @@ function mapFeedRow(row: PostFeedRow): PostFeedItem {
 }
 
 const FEED_SELECT =
-  "id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)";
+  "id, author_id, title, price_amount, price_label, currency_code, created_at, favorite_count, comment_count, poster_age, poster_gender, salary_unit, employment_type, job_perks, location:locations(name), location_text, category:categories(name_zh, slug), author:profiles(display_name, avatar_url), post_images(public_url, sort_order, deleted_at)";
 
 /**
  * 首页"附近的二手"任务卡：按 id 取一批审核通过的帖子，返回顺序跟传入的 ids

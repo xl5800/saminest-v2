@@ -22,6 +22,7 @@ import { useAuthStore } from "../../store/auth-store";
 import { usePendingEditProfileFormDraftStore } from "../../store/pending-edit-profile-form-draft-store";
 import { usePendingFormRegionStore } from "../../store/pending-form-region-store";
 import { validateEditProfileInput } from "./edit-profile-validation";
+import { getModerationErrorMessage } from "../../utils/app-error";
 
 const DEFAULT_ERROR_MESSAGE = "保存失败，请稍后重试。";
 const AVATAR_UPLOAD_ERROR_MESSAGE = "头像上传失败，请稍后重试。";
@@ -266,8 +267,9 @@ export function EditProfilePage() {
         age: validation.data.age
       });
       navigate("/profile");
-    } catch {
-      setSubmitError(DEFAULT_ERROR_MESSAGE);
+    } catch (error) {
+      // 苹果审核 1.2 整改：昵称 / 简介命中敏感词或保留昵称时，告诉用户换一个。
+      setSubmitError(getModerationErrorMessage(error) ?? DEFAULT_ERROR_MESSAGE);
     }
   }
 

@@ -21,6 +21,7 @@ import { PRODUCTION_ORIGIN } from "../../utils/constants";
 import { formatActivityParticipantSummary, formatActivityStartAt } from "../../utils/format";
 import { useGoBack } from "../../router/use-go-back";
 import { useShareLink } from "../../features/share/use-share-link";
+import { useUserSafetyActions } from "../../features/blocks/use-user-safety-actions";
 
 // 找搭子卡片+详情页视觉对齐设计稿任务卡：时间行的"星期几"次要文字——这个
 // 仓库里没有现成的星期格式化函数（format.ts 不在这张任务卡允许改动的文件
@@ -241,6 +242,8 @@ export function ActivityDetailPage() {
   const { data: participants } = useActivityParticipantsQuery(id ?? "");
 
   const isOrganizer = !!session && !!data && session.user.id === data.organizerId;
+  // 苹果审核 1.2 整改："…"菜单里除了举报活动，再加举报用户 / 屏蔽此人（针对发起人）。
+  const safety = useUserSafetyActions(data?.organizerId, data?.organizerDisplayName ?? "");
   // 审核入口红点任务卡：发起人打开自己的（需要审核的）活动时，顶部提示
   // "有 N 人申请加入"。复用"我的活动"页面审核面板同一个查询
   // （usePendingActivityParticipantsQuery），同意/拒绝之后那边 invalidate
@@ -296,13 +299,16 @@ export function ActivityDetailPage() {
             ? {
                 label: "更多操作",
                 content: (
-                  <Link
-                    to={`/activities/${data.id}/report`}
-                    className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
-                  >
-                    <Flag size={16} aria-hidden="true" />
-                    举报
-                  </Link>
+                  <>
+                    <Link
+                      to={`/activities/${data.id}/report`}
+                      className="flex w-full items-center gap-2 px-4 py-2 text-sm text-text hover:bg-bg hover:text-danger"
+                    >
+                      <Flag size={16} aria-hidden="true" />
+                      举报活动
+                    </Link>
+                    {safety.menuItems}
+                  </>
                 )
               }
             : undefined
@@ -316,6 +322,7 @@ export function ActivityDetailPage() {
           被顶栏挤出来的。只加这一个页面自己的内边距，不动 TopBar 组件本身
           （TopBar 的 detail 变体目前只有这一个页面在用，不会影响别处）。 */}
       <div className="mx-auto max-w-2xl px-4 pt-4 pb-20 md:pb-6">
+        {safety.statusMessage}
         {/* 高频页面骨架屏任务卡：这个页面没有帖子详情页那种大图轮播，占位
             按真实内容顺序给标题行 → 地点框（容器 class 照抄下面真实地点框
             的 rounded-lg border border-border bg-bg p-3）→ 时间行（较短）→
@@ -555,6 +562,7 @@ export function ActivityDetailPage() {
         </div>
       ) : null}
       {shareUi}
+      {safety.confirmSheet}
     </main>
   );
 }

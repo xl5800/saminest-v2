@@ -10,12 +10,32 @@ import {
 import { PasswordInput } from "../../components/password-input";
 import { track } from "../../features/analytics/track";
 import { useFinishAuth } from "../../router/use-finish-auth";
+import { acceptTerms, ensureProfileExists } from "../../repositories/profiles-repository";
 import { authService } from "../../services/auth/auth-service";
 import { AppError } from "../../utils/app-error";
 import { generateDefaultDisplayName } from "../../utils/default-display-name";
 import { isLikelyEmail, toUsPhoneE164 } from "../../utils/phone-identity";
 
 const DEFAULT_ERROR_MESSAGE = "登录失败，请稍后重试。";
+const TERMS_REQUIRED_MESSAGE = "请先阅读并勾选同意《用户协议》和《隐私政策》。";
+
+/**
+ * 登录成功后记录"同意了用户协议"。新号码的 profile 可能还没建好（平时由
+ * use-auth-bootstrap 补建），先确保它存在再记录。任何一步失败都不影响登录。
+ */
+async function recordTermsAcceptance(user: { id: string; user_metadata?: Record<string, unknown> } | null): Promise<void> {
+  if (!user) return;
+  try {
+    const metadataName = user.user_metadata?.display_name;
+    await ensureProfileExists(
+      user.id,
+      typeof metadataName === "string" && metadataName.trim() ? metadataName : generateDefaultDisplayName()
+    );
+    await acceptTerms();
+  } catch {
+    // 交给 TermsConsentGate 兜底。
+  }
+}
 
 /** 获取验证码之后多少秒内不能再点（Supabase 默认也限制 60 秒一条）。 */
 export const OTP_RESEND_SECONDS = 60;
@@ -76,8 +96,10 @@ const TABS: Array<{ key: Exclude<LoginMode, "email">; label: string }> = [
  * 为什么二手交易要手机号：见面交易需要账号对应一个真实、验证过的手机号，
  * 一个号码只能注册一个账号，邮箱太容易批量注册。
  *
- * 注册即同意协议：沿用原来注册页"按钮下方一行说明"的做法，不加必须勾选的
- * 复选框（少一步操作）。
+ * 同意协议（苹果审核 1.2 整改）：原来只有按钮下方一行"登录即表示同意"，
+ * 苹果不认。现在登录按钮上方是一个必须勾选的同意框，不勾不能获取验证码、
+ * 也不能登录；登录成功后马上记录同意时间（profiles.terms_accepted_at）。
+ * 记录失败不挡登录——AppShell 上的 TermsConsentGate 会再弹窗要求同意一次。
  */
 export function LoginPage() {
   const { finishAuth } = useFinishAuth();
@@ -93,6 +115,7 @@ export function LoginPage() {
   const [cooldown, setCooldown] = useState(0);
   /** 验证码发到了哪个号码——用户改了号码就得重新获取。 */
   const [codeSentTo, setCodeSentTo] = useState<string | null>(null);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -110,6 +133,10 @@ export function LoginPage() {
     if (sendingCode || cooldown > 0) return;
     setError(null);
     setNotice(null);
+    if (!agreedToTerms) {
+      setError(TERMS_REQUIRED_MESSAGE);
+      return;
+    }
 
     const e164 = toUsPhoneE164(phone);
     if (!e164) {
@@ -154,6 +181,7 @@ export function LoginPage() {
       } else {
         track("logged_in", { method: "phone" });
       }
+      await recordTermsAcceptance(user);
       finishAuth();
     } catch (cause) {
       setError(friendlyErrorMessage(cause));
@@ -174,8 +202,9 @@ export function LoginPage() {
 
     setSubmitting(true);
     try {
-      await authService.signInWithPhonePassword(e164, password);
+      const { user } = await authService.signInWithPhonePassword(e164, password);
       track("logged_in", { method: "phone" });
+      await recordTermsAcceptance(user);
       finishAuth();
     } catch (cause) {
       setError(
@@ -200,8 +229,9 @@ export function LoginPage() {
 
     setSubmitting(true);
     try {
-      await authService.signIn({ email: trimmed, password });
+      const { user } = await authService.signIn({ email: trimmed, password });
       track("logged_in", { method: "email" });
+      await recordTermsAcceptance(user);
       finishAuth();
     } catch (cause) {
       setError(friendlyErrorMessage(cause, { invalid_credentials: "邮箱或密码不正确，请重新输入。" }));
@@ -214,6 +244,10 @@ export function LoginPage() {
     if (submitting) return;
     setError(null);
     setNotice(null);
+    if (!agreedToTerms) {
+      setError(TERMS_REQUIRED_MESSAGE);
+      return;
+    }
 
     if (mode === "sms") await submitSms();
     else if (mode === "password") await submitPassword();
@@ -347,20 +381,29 @@ export function LoginPage() {
           )}
         </div>
 
-        <button type="submit" disabled={submitting} className={`mt-6 ${authSubmitButtonClassName}`}>
+        <label className="mt-5 flex items-start gap-2 text-xs leading-5 text-text-muted">
+          <input
+            type="checkbox"
+            checked={agreedToTerms}
+            onChange={(event) => setAgreedToTerms(event.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span>
+            我已阅读并同意
+            <Link to="/terms" className="text-primary underline">
+              《用户协议》
+            </Link>
+            和
+            <Link to="/privacy" className="text-primary underline">
+              《隐私政策》
+            </Link>
+            ，平台对不良内容和滥用行为零容忍
+          </span>
+        </label>
+
+        <button type="submit" disabled={submitting} className={`mt-4 ${authSubmitButtonClassName}`}>
           {submitting ? "登录中…" : mode === "sms" ? "注册 / 登录" : "登录"}
         </button>
-
-        <p className="mt-3 text-center text-xs text-text-muted">
-          登录即表示同意
-          <Link to="/terms" className="text-primary underline">
-            《用户协议》
-          </Link>
-          和
-          <Link to="/privacy" className="text-primary underline">
-            《隐私政策》
-          </Link>
-        </p>
       </form>
 
       <div className="mt-8 space-y-2 text-center text-sm text-text-muted">

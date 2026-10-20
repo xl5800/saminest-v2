@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -113,11 +114,13 @@ const initialAuthState = useAuthStore.getState();
 function renderAtWithState(path: string, state: unknown) {
   const entry: Partial<Location> = { pathname: path, state };
   return render(
-    <MemoryRouter initialEntries={[entry as never]}>
-      <Routes>
-        <Route path="/post/:id" element={<PostDetailPage />} />
-      </Routes>
-    </MemoryRouter>
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <MemoryRouter initialEntries={[entry as never]}>
+        <Routes>
+          <Route path="/post/:id" element={<PostDetailPage />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 

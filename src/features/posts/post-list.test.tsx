@@ -6,8 +6,14 @@ import {
   triggerLastIntersectionObserver
 } from "../../test/setup";
 
-const { listApprovedPosts } = vi.hoisted(() => ({
-  listApprovedPosts: vi.fn()
+const { listApprovedPosts, blockedIds } = vi.hoisted(() => ({
+  listApprovedPosts: vi.fn(),
+  blockedIds: { current: new Set<string>() }
+}));
+
+// 苹果审核 1.2 整改：被我屏蔽的用户的帖子不显示。
+vi.mock("../blocks/use-blocked-user-ids", () => ({
+  useBlockedUserIds: () => blockedIds.current
 }));
 
 vi.mock("../../repositories/posts-repository", () => ({
@@ -40,6 +46,23 @@ describe("PostList", () => {
   beforeEach(() => {
     listApprovedPosts.mockReset();
     resetIntersectionObserverMock();
+    blockedIds.current = new Set();
+  });
+
+  it("hides posts from users I blocked", async () => {
+    blockedIds.current = new Set(["blocked-author"]);
+    listApprovedPosts.mockResolvedValue({
+      posts: [
+        { ...samplePost, id: "p-ok", title: "正常帖子", authorId: "someone" },
+        { ...samplePost, id: "p-blocked", title: "被屏蔽的人的帖子", authorId: "blocked-author" }
+      ],
+      hasNextPage: false
+    });
+
+    renderWithProviders(<PostList />);
+
+    expect(await screen.findByText("正常帖子")).toBeInTheDocument();
+    expect(screen.queryByText("被屏蔽的人的帖子")).not.toBeInTheDocument();
   });
 
   it("shows a loading state before the query resolves", () => {

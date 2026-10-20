@@ -535,6 +535,19 @@ describe("PublishPage", () => {
     expect(navigateMock).not.toHaveBeenCalled();
   });
 
+  // 苹果审核 1.2 整改
+  it("tells the user to edit the content when the database rejects it for a blocked term", async () => {
+    createPost.mockRejectedValue(new AppError("blocked_term", "POST_CREATE_FAILED"));
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("内容含有不当词语，请修改。");
+    expect(navigateMock).not.toHaveBeenCalled();
+  });
+
   it("shows the account-restricted message and does not navigate when createPost rejects with ACCOUNT_RESTRICTED", async () => {
     createPost.mockRejectedValue(
       new AppError(

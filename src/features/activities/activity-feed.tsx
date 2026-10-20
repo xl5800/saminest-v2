@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { ActivityCard } from "../../components/activity-card";
 import { Skeleton } from "../../components/skeleton";
 import { ACTIVITY_CHANNEL_OPTIONS } from "../../repositories/activities-repository";
+import { useBlockedUserIds } from "../blocks/use-blocked-user-ids";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { useActivitiesQuery } from "./use-activities-query";
 import { useActivityParticipantPreviewsQuery } from "./use-activity-participant-previews-query";
@@ -32,14 +33,17 @@ export function ActivityFeed({ searchQuery = "" }: { searchQuery?: string }) {
   // 关键字筛选是纯客户端的一层再过滤，键还是用未过滤的 activities（不是
   // visibleActivities）——预览数据跟标题关键字无关，用完整列表查一次就
   // 够了，不需要每敲一个字就重新算一遍批量查询的参数。
+  const blockedUserIds = useBlockedUserIds();
   const { data: participantPreviews } = useActivityParticipantPreviewsQuery(
     (activities ?? []).map((activity) => activity.id)
   );
 
   const trimmedQuery = searchQuery.trim().toLowerCase();
+  // 苹果审核 1.2 整改：被我屏蔽的用户发起的活动不显示。
+  const unblockedActivities = activities?.filter((activity) => !blockedUserIds.has(activity.organizerId));
   const visibleActivities = trimmedQuery
-    ? (activities ?? []).filter((activity) => activity.title.toLowerCase().includes(trimmedQuery))
-    : activities;
+    ? (unblockedActivities ?? []).filter((activity) => activity.title.toLowerCase().includes(trimmedQuery))
+    : unblockedActivities;
 
   // 首页改版：频道筛选跟首页"全部 / 招聘 / 求职"那排小筛选用同一套样式
   // （高 32px、14px 字、选中浅蓝底蓝字、未选中浅灰底），原来是 44px 高的

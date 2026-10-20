@@ -7,12 +7,13 @@ import {
   useState
 } from "react";
 
+import { useUserSafetyActions } from "../features/blocks/use-user-safety-actions";
 import { useCreateCommentMutation } from "../features/comments/use-create-comment-mutation";
 import { useDeleteCommentMutation } from "../features/comments/use-delete-comment-mutation";
 import { useCreateReportMutation } from "../features/reports/use-create-report-mutation";
 import type { CommentTarget } from "../repositories/comments-repository";
 import { REPORT_REASON_OPTIONS } from "../repositories/reports-repository";
-import { AppError } from "../utils/app-error";
+import { AppError, getModerationErrorMessage } from "../utils/app-error";
 import type { CommentNode } from "../utils/build-comment-tree";
 import { validateCommentContent } from "../utils/comment-content-validation";
 import { formatListingDate } from "../utils/format";
@@ -192,6 +193,8 @@ export function CommentItem({ node, depth, currentUserId, ownerId }: CommentItem
 
   const canAct = currentUserId !== null;
   const isOwnComment = currentUserId !== null && node.userId === currentUserId;
+  // 苹果审核 1.2 整改：别人的评论下面直接显示"举报 · 屏蔽"，不再只靠长按。
+  const safety = useUserSafetyActions(node.userId, node.authorDisplayName, { skipStatusQuery: true });
   // 评论区样式对齐小红书任务卡：评论者是帖子作者/活动发起人时，昵称旁边
   // 加一个"作者"标签——跟 isOwnComment（"是不是当前登录用户自己"）是两个
   // 独立的判断，不能合并，一条评论完全可能同时符合"是我发的"和"我是
@@ -321,7 +324,7 @@ export function CommentItem({ node, depth, currentUserId, ownerId }: CommentItem
       setReplyError(
         error instanceof AppError && error.code === "COMMENT_CREATE_FORBIDDEN"
           ? error.message
-          : REPLY_DEFAULT_ERROR_MESSAGE
+          : (getModerationErrorMessage(error) ?? REPLY_DEFAULT_ERROR_MESSAGE)
       );
     }
   }
@@ -498,8 +501,31 @@ export function CommentItem({ node, depth, currentUserId, ownerId }: CommentItem
                   </button>
                 </>
               ) : null}
+              {canAct && !isOwnComment && safety.canAct ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    aria-label="举报这条留言"
+                    onClick={() => toggleAction("report")}
+                    className="hover:text-danger"
+                  >
+                    举报
+                  </button>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    aria-label="屏蔽此人"
+                    onClick={safety.requestBlockToggle}
+                    className="hover:text-danger"
+                  >
+                    屏蔽
+                  </button>
+                </>
+              ) : null}
             </div>
 
+            {safety.confirmSheet}
             {activeAction === "reply" ? (
               <form onSubmit={handleReplySubmit} className="mt-2">
                 {replyError ? (

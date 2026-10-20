@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Skeleton } from "../../components/skeleton";
 import { NEARBY_USED_ENABLED } from "../../config/feature-flags";
+import { useBlockedUserIds } from "../blocks/use-blocked-user-ids";
 import { CategoriesGate, NoPostsYet } from "../categories/categories-gate";
 import { useNearbyPostsInfiniteQuery } from "../posts/use-nearby-posts-query";
 import { PostGridCard, PostList } from "../posts/post-list";
@@ -63,6 +64,8 @@ function NearbyList({ location, radiusMiles }: { location: NearbyLocation; radiu
     categorySlugs: NEARBY_CATEGORY_SLUGS
   });
 
+  const blockedUserIds = useBlockedUserIds();
+
   // 无限滚动：跟 PostList 一样用"哨兵元素 + IntersectionObserver"。
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -104,7 +107,8 @@ function NearbyList({ location, radiusMiles }: { location: NearbyLocation; radiu
     );
   }
 
-  const items = data.pages.flatMap((page) => page.items);
+  // 苹果审核 1.2 整改：被我屏蔽的用户发的帖子不显示。
+  const items = data.pages.flatMap((page) => page.items).filter((item) => !blockedUserIds.has(item.post.authorId));
 
   if (items.length === 0) {
     return (

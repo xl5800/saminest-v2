@@ -11,9 +11,11 @@ import { usePostCommentsQuery } from "../features/comments/use-post-comments-que
 import { usePostDetailQuery } from "../features/posts/use-post-detail-query";
 import type { Comment } from "../repositories/comments-repository";
 import { useAuthStore } from "../store/auth-store";
-import { AppError } from "../utils/app-error";
+import { useBlockedUserIds } from "../features/blocks/use-blocked-user-ids";
+import { AppError, getModerationErrorMessage } from "../utils/app-error";
 import {
   buildCommentTree,
+  type CommentNode,
   type CommentSortMode,
   sortCommentTree
 } from "../utils/build-comment-tree";
@@ -92,6 +94,14 @@ const SORT_OPTIONS: { mode: CommentSortMode; label: string }[] = [
  * 一个诡异的空白大框，直到用户下次输入触发 handleContentChange 才会
  * 缩回去。
  */
+/** 去掉被屏蔽用户发的留言；它下面的回复一起去掉（只剩回复没有上下文）。 */
+function withoutBlockedAuthors(nodes: CommentNode[], blockedUserIds: ReadonlySet<string>): CommentNode[] {
+  if (blockedUserIds.size === 0) return nodes;
+  return nodes
+    .filter((node) => !blockedUserIds.has(node.userId))
+    .map((node) => ({ ...node, children: withoutBlockedAuthors(node.children, blockedUserIds) }));
+}
+
 export function CommentSection(props: CommentSectionProps) {
   if ("postId" in props) {
     return <PostCommentSection postId={props.postId} />;
@@ -230,6 +240,7 @@ function CommentSectionBody({
   const loginPath = useLoginPath();
   const userId = session?.user.id ?? null;
   const [sortMode, setSortMode] = useState<CommentSortMode>("latest");
+  const blockedUserIds = useBlockedUserIds();
 
   const [content, setContent] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -269,12 +280,13 @@ function CommentSectionBody({
       setSubmitError(
         error instanceof AppError && error.code === "COMMENT_CREATE_FORBIDDEN"
           ? error.message
-          : DEFAULT_ERROR_MESSAGE
+          : (getModerationErrorMessage(error) ?? DEFAULT_ERROR_MESSAGE)
       );
     }
   }
 
-  const baseTree = comments ? buildCommentTree(comments) : [];
+  // 苹果审核 1.2 整改：被我屏蔽的用户的留言（连同它下面的回复）不显示。
+  const baseTree = comments ? withoutBlockedAuthors(buildCommentTree(comments), blockedUserIds) : [];
   const tree = enableSort ? sortCommentTree(baseTree, sortMode) : baseTree;
 
   return (

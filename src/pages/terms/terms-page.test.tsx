@@ -46,7 +46,7 @@ describe("TermsPage", () => {
     renderWithProviders(<TermsPage />);
 
     expect(screen.getByRole("heading", { name: "用户协议", level: 1 })).toBeInTheDocument();
-    expect(screen.getByText("Last Updated / 最后更新：2026-07-09")).toBeInTheDocument();
+    expect(screen.getByText("Last Updated / 最后更新：2026-10-20")).toBeInTheDocument();
   });
 
   // 联系客服改成真聊天任务卡：这个入口从静态 <Link to="/feedback"> 换成了

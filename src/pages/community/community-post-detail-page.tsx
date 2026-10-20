@@ -19,6 +19,7 @@ import {
   COMMUNITY_POST_DETAIL_TITLE_CLASS_NAME
 } from "./community-post-type";
 import { CommunityPostLikeButton } from "../../components/community-post-like-button";
+import { useUserSafetyActions } from "../../features/blocks/use-user-safety-actions";
 
 interface CommunityPostDetailLocationState {
   publishSuccessMessage?: string;
@@ -56,6 +57,8 @@ export function CommunityPostDetailPage() {
   const publishSuccessMessage = locationState?.publishSuccessMessage;
   const publishBackTo = locationState?.publishBackTo;
   const { data: post, isPending, isError } = useCommunityPostDetailQuery(id);
+  // 苹果审核 1.2 整改："…"菜单里除了举报帖子，再加举报用户 / 屏蔽此人。
+  const safety = useUserSafetyActions(post?.authorId, post?.authorDisplayName ?? "");
   useTrackContentView("community_post", id, Boolean(post));
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const { data: community } = useCommunityBySlugQuery(post?.communitySlug);
@@ -170,12 +173,15 @@ export function CommunityPostDetailPage() {
         moreMenu={{
           label: "更多",
           content: (
-            <Link
-              to={`/community/post/${id}/report`}
-              className="block px-4 py-2 text-left text-sm text-text hover:bg-bg hover:text-primary"
-            >
-              举报
-            </Link>
+            <>
+              <Link
+                to={`/community/post/${id}/report`}
+                className="block px-4 py-2 text-left text-sm text-text hover:bg-bg hover:text-primary"
+              >
+                举报帖子
+              </Link>
+              {safety.menuItems}
+            </>
           )
         }}
       />
@@ -185,8 +191,10 @@ export function CommunityPostDetailPage() {
             {publishSuccessMessage}
           </p>
         ) : null}
+        {safety.statusMessage}
         {renderContent()}
       </div>
+      {safety.confirmSheet}
     </main>
   );
 }

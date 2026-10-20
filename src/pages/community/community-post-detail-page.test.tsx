@@ -261,10 +261,10 @@ describe("CommunityPostDetailPage", () => {
   it("puts a 举报 link to /community/post/:id/report in the top bar's … menu", () => {
     renderPage();
 
-    expect(screen.queryByRole("link", { name: "举报" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "举报帖子" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "更多" }));
 
-    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "举报帖子" })).toHaveAttribute(
       "href",
       "/community/post/cp-1/report"
     );
@@ -280,7 +280,7 @@ describe("CommunityPostDetailPage", () => {
     renderPage();
     fireEvent.click(screen.getByRole("button", { name: "更多" }));
 
-    expect(screen.getByRole("link", { name: "举报" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "举报帖子" })).toHaveAttribute(
       "href",
       "/community/post/cp-1/report"
     );

@@ -19,7 +19,7 @@ import {
 import type { CommunityPostType } from "../../repositories/community-repository";
 import { communityPostImageStorageService } from "../../services/storage/community-post-image-storage-service";
 import { useAuthStore } from "../../store/auth-store";
-import { AppError } from "../../utils/app-error";
+import { AppError, getModerationErrorMessage } from "../../utils/app-error";
 import {
   COMMUNITY_BODY_MAX_LENGTH,
   COMMUNITY_TITLE_MAX_LENGTH
@@ -349,7 +349,9 @@ export function CreateCommunityPostPage() {
       if (submitError instanceof AppError && submitError.code === "ACCOUNT_RESTRICTED") {
         setError(submitError.message);
       } else {
-        setError(isEditMode ? EDIT_DEFAULT_ERROR_MESSAGE : DEFAULT_ERROR_MESSAGE);
+        setError(
+          getModerationErrorMessage(submitError) ?? (isEditMode ? EDIT_DEFAULT_ERROR_MESSAGE : DEFAULT_ERROR_MESSAGE)
+        );
       }
       setSubmitting(false);
     }

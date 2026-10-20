@@ -8,8 +8,10 @@ const {
   useCreateReportMutation,
   createCommentMutateAsync,
   deleteCommentMutateAsync,
-  createReportMutateAsync
+  createReportMutateAsync,
+  requestBlockToggle
 } = vi.hoisted(() => ({
+  requestBlockToggle: vi.fn(),
   useCreateCommentMutation: vi.fn(),
   useDeleteCommentMutation: vi.fn(),
   useCreateReportMutation: vi.fn(),
@@ -26,6 +28,15 @@ vi.mock("../features/comments/use-delete-comment-mutation", () => ({
 }));
 vi.mock("../features/reports/use-create-report-mutation", () => ({
   useCreateReportMutation
+}));
+// 苹果审核 1.2 整改：举报用户 / 屏蔽此人的逻辑自己有测试（use-user-safety-actions），
+// 这里只确认留言下面有这两个入口。
+vi.mock("../features/blocks/use-user-safety-actions", () => ({
+  useUserSafetyActions: (targetUserId: string, _name: string) => ({
+    canAct: targetUserId !== "user-1",
+    requestBlockToggle,
+    confirmSheet: null
+  })
 }));
 
 import type { CommentNode } from "../utils/build-comment-tree";
@@ -681,5 +692,19 @@ describe("CommentItem", () => {
       expect(screen.queryByRole("dialog", { name: "留言操作" })).not.toBeInTheDocument();
       expect(screen.queryByText("举报原因")).not.toBeInTheDocument();
     });
+  });
+
+  // 苹果审核 1.2 整改
+  it("shows 举报 and 屏蔽 under someone else's comment, but not under your own", () => {
+    render(<CommentItem node={makeNode({ userId: "user-2" })} depth={0} currentUserId="user-1" ownerId={null} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "举报这条留言" }));
+    expect(screen.getByText("举报原因")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "屏蔽此人" }));
+    expect(requestBlockToggle).toHaveBeenCalled();
+    cleanup();
+
+    render(<CommentItem node={makeNode({ userId: "user-1" })} depth={0} currentUserId="user-1" ownerId={null} />);
+    expect(screen.queryByRole("button", { name: "屏蔽此人" })).not.toBeInTheDocument();
   });
 });

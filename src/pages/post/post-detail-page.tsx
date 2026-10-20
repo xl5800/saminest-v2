@@ -2,7 +2,7 @@ import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { Share2, X } from "lucide-react";
 import { type UIEvent, useEffect, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
@@ -27,6 +27,7 @@ import {
 import { useGoBack } from "../../router/use-go-back";
 import { useShareLink } from "../../features/share/use-share-link";
 import { useTrackContentView } from "../../features/analytics/use-track-content-view";
+import { useUserSafetyActions } from "../../features/blocks/use-user-safety-actions";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -188,6 +189,9 @@ export function PostDetailPage() {
   // 任务卡3：点击底部工具栏"分享"图标弹出的自定义弹层（复制链接/分享到
   // 微信/举报），见 post-share-action-sheet.tsx。
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+  // 苹果审核 1.2 整改：发布者卡片下面和分享弹层里都可以举报用户 / 屏蔽此人。
+  const safety = useUserSafetyActions(data?.authorId, data?.authorDisplayName ?? "");
+  const navigateToReport = useNavigate();
   // 大图轮播当前滚动到第几张，驱动底部"1 / 5"这种计数指示器。用原生
   // scroll-snap（横向 overflow-x-auto + snap-x snap-mandatory 容器、每张图
   // snap-center）实现滑动，不引入额外的手势/轮播库；这里只是监听容器的
@@ -474,6 +478,17 @@ export function PostDetailPage() {
                 avatarUrl={data.authorAvatarUrl}
                 subtitle={`发布于 ${formatRelativeTimeAgo(data.createdAt)}`}
               />
+              {safety.canAct ? (
+                <p className="-mt-1 flex justify-end gap-4 text-xs text-text-subtle">
+                  <Link to={safety.reportPath} className="hover:text-danger">
+                    举报用户
+                  </Link>
+                  <button type="button" onClick={safety.requestBlockToggle} className="hover:text-danger">
+                    {safety.blockLabel}
+                  </button>
+                </p>
+              ) : null}
+              {safety.statusMessage}
             </div>
           ) : null}
 
@@ -535,9 +550,18 @@ export function PostDetailPage() {
           postId={id}
           onShareToWechat={() => void handleShare(data)}
           onClose={() => setIsShareSheetOpen(false)}
+          extraOptions={
+            safety.canAct
+              ? [
+                  { key: "report-user", emoji: "👤", label: "举报用户", onSelect: () => navigateToReport(safety.reportPath) },
+                  { key: "block-user", emoji: "🚫", label: safety.blockLabel, onSelect: safety.requestBlockToggle }
+                ]
+              : undefined
+          }
         />
       ) : null}
       {shareUi}
+      {safety.confirmSheet}
     </main>
   );
 }

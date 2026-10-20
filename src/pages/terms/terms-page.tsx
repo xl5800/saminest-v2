@@ -39,7 +39,7 @@ export function TermsPage() {
     <main>
       <TopBar variant="nav-only" title="用户协议" />
       <div className="mx-auto max-w-2xl px-4 py-6 pb-20 md:pb-6">
-      <p className="mb-6 text-sm text-text-muted">Last Updated / 最后更新：2026-07-09</p>
+      <p className="mb-6 text-sm text-text-muted">Last Updated / 最后更新：2026-10-20</p>
 
       <p className={paragraphClassName}>
         欢迎使用华邻（Saminest，以下简称"本平台"、"华邻"、"我们"）。
@@ -66,7 +66,7 @@ export function TermsPage() {
       <h2 className={headingClassName}>二、用户资格</h2>
       <p className="mb-2 text-base text-text">使用本平台即表示您承诺：</p>
       <ol className={orderedListClassName}>
-        <li>您具有合法使用本平台的资格；</li>
+        <li>您已年满 18 周岁，并具有合法使用本平台的资格；</li>
         <li>您提供的信息真实、准确、完整；</li>
         <li>您不会冒充他人；</li>
         <li>您不会利用平台从事违法活动；</li>
@@ -155,6 +155,21 @@ export function TermsPage() {
       <p className={paragraphClassName}>
         平台有权审核帖子、修改分类、删除内容、下架帖子、屏蔽图片、限制账号功能或永久封禁账号。平台无需提前通知用户。
       </p>
+      <h3 className={subheadingClassName}>零容忍</h3>
+      <p className={paragraphClassName}>
+        平台对不良内容和滥用行为零容忍。严禁发布或发送色情、暴力、仇恨、歧视、骚扰、威胁、诈骗及其他违法或令人反感的内容，严禁辱骂、骚扰或恶意滋扰其他用户。违规内容会被删除，发布违规内容或滥用平台的用户会被封禁。
+      </p>
+      <p className={paragraphClassName}>
+        平台会自动过滤含有不当词语的内容，命中的内容无法发布。
+      </p>
+      <h3 className={subheadingClassName}>举报与屏蔽</h3>
+      <p className={paragraphClassName}>
+        用户可以在帖子、社区帖子、评论、活动和私信中举报不当内容或滥用用户，也可以屏蔽对方：屏蔽后不再看到对方发布的内容，对方也不能再给您发私信。用户可以随时删除自己发布的内容。
+      </p>
+      <h3 className={subheadingClassName}>处理时限</h3>
+      <p className={paragraphClassName}>
+        平台会在收到举报后 24 小时内处理：核实后删除违规内容，并封禁发布违规内容的用户。
+      </p>
 
       <h2 className={headingClassName}>七、交易风险</h2>
       <p className={paragraphClassName}>
@@ -228,7 +243,7 @@ export function TermsPage() {
 
       <h2 className={headingClassName}>十六、联系我们</h2>
       <p className={paragraphClassName}>
-        如果您对本协议有任何疑问，可通过网站内的
+        如果您对本协议有任何疑问，或需要举报不当内容、滥用行为，可通过 App 内"我的"或"设置"中的
         <button type="button" onClick={contactSupport} className="text-primary underline">
           联系客服（Feedback）
         </button>
