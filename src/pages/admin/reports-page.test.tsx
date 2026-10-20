@@ -10,9 +10,13 @@ const {
   adminCancelActivity,
   adminArchivePost,
   adminDeleteActivity,
-  setAccountStatus
+  setAccountStatus,
+  adminArchiveCommunityPost,
+  adminDeleteCommunityPost
 } = vi.hoisted(() => ({
   setAccountStatus: vi.fn(),
+  adminArchiveCommunityPost: vi.fn(),
+  adminDeleteCommunityPost: vi.fn(),
   listReportsForModeration: vi.fn(),
   resolveReport: vi.fn(),
   dismissReport: vi.fn(),
@@ -56,7 +60,9 @@ vi.mock("../../repositories/admin-repository", () => ({
   adminCancelActivity,
   adminArchivePost,
   adminDeleteActivity,
-  setAccountStatus
+  setAccountStatus,
+  adminArchiveCommunityPost,
+  adminDeleteCommunityPost
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -87,6 +93,8 @@ describe("AdminReportsPage", () => {
     adminArchivePost.mockReset();
     adminDeleteActivity.mockReset();
     setAccountStatus.mockReset();
+    adminArchiveCommunityPost.mockReset();
+    adminDeleteCommunityPost.mockReset();
   });
 
   it("shows an empty state when there are no reports", async () => {
@@ -196,28 +204,73 @@ describe("AdminReportsPage", () => {
     ).toHaveAttribute("href", "/community/post/cp-1");
   });
 
-  it("offers no delete/take-down checkbox or direct action for community_post reports, but resolve/dismiss still work", async () => {
-    listReportsForModeration.mockResolvedValue([
-      { ...sampleReport, id: "report-cp-1", targetType: "community_post", targetId: "cp-1" }
-    ]);
-    resolveReport.mockResolvedValue(undefined);
+  describe("community_post reports — 下架/删除社区帖子", () => {
+    const communityReport = {
+      ...sampleReport,
+      id: "report-cp-1",
+      targetType: "community_post",
+      targetId: "cp-1"
+    };
 
-    renderWithProviders(<AdminReportsPage />);
-    await screen.findByText("广告/垃圾信息");
+    it("shows 下架帖子/删除帖子 and calls adminDeleteCommunityPost directly, keeping the row", async () => {
+      adminDeleteCommunityPost.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([communityReport]);
 
-    expect(screen.queryByRole("button", { name: "下架帖子" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "删除帖子" })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "驳回举报" })).toBeInTheDocument();
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
 
-    fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
-    expect(screen.queryByText("同时删除该帖子")).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("处理说明"), { target: { value: "已核实" } });
-    fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
+      expect(screen.getByRole("button", { name: "下架帖子" })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole("button", { name: "删除帖子" }));
+      fireEvent.change(screen.getByLabelText("删除原因"), { target: { value: "广告" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认删除" }));
 
-    await waitFor(() => {
-      expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(adminDeleteCommunityPost).toHaveBeenCalledWith("cp-1", "广告");
+      });
+      expect(deletePost).not.toHaveBeenCalled();
+      expect(resolveReport).not.toHaveBeenCalled();
+      expect(await screen.findByText("帖子已删除")).toBeInTheDocument();
     });
-    expect(resolveReport).toHaveBeenCalledWith("report-cp-1", "已核实");
+
+    it("calls adminArchiveCommunityPost for 下架帖子", async () => {
+      adminArchiveCommunityPost.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([communityReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "下架帖子" }));
+      fireEvent.change(screen.getByLabelText("下架原因"), { target: { value: "广告" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认下架" }));
+
+      await waitFor(() => {
+        expect(adminArchiveCommunityPost).toHaveBeenCalledWith("cp-1", "广告");
+      });
+      expect(adminArchivePost).not.toHaveBeenCalled();
+      expect(await screen.findByText("帖子已下架")).toBeInTheDocument();
+    });
+
+    it("offers 同时删除该帖子 when resolving, and deletes via adminDeleteCommunityPost", async () => {
+      resolveReport.mockResolvedValue(undefined);
+      adminDeleteCommunityPost.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([communityReport]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "标记已处理" }));
+      fireEvent.change(screen.getByLabelText("处理说明"), { target: { value: "已核实" } });
+      fireEvent.click(screen.getByLabelText("同时删除该帖子"));
+      fireEvent.change(screen.getByLabelText("删除原因"), { target: { value: "广告" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认标记已处理" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText("广告/垃圾信息")).not.toBeInTheDocument();
+      });
+      expect(resolveReport).toHaveBeenCalledWith("report-cp-1", "已核实");
+      expect(adminDeleteCommunityPost).toHaveBeenCalledWith("cp-1", "广告");
+      expect(deletePost).not.toHaveBeenCalled();
+    });
   });
 
   it("renders the reported user's nickname plus a link to /admin/users when target_type is 'user'", async () => {

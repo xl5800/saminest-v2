@@ -4,9 +4,11 @@ import { Link } from "react-router-dom";
 import { AdminNav } from "../../components/admin-nav";
 import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
+import { useAdminArchiveCommunityPostMutation } from "../../features/admin/use-admin-archive-community-post-mutation";
 import { useAdminArchivePostMutation } from "../../features/admin/use-admin-archive-post-mutation";
 import { useAdminCancelActivityMutation } from "../../features/admin/use-admin-cancel-activity-mutation";
 import { useAdminDeleteActivityMutation } from "../../features/admin/use-admin-delete-activity-mutation";
+import { useAdminDeleteCommunityPostMutation } from "../../features/admin/use-admin-delete-community-post-mutation";
 import { useDeleteCommentMutation } from "../../features/admin/use-delete-comment-mutation";
 import { useDeletePostMutation } from "../../features/admin/use-delete-post-mutation";
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
@@ -80,8 +82,19 @@ const ACTIVITY_CANCEL_COPY: DeleteActionCopy = {
     "举报已处理，但下架活动失败，请稍后重试，或前往该活动详情页确认处理结果。"
 };
 
+// 社区帖子（"社区"里的帖子，不是分类信息）：跟分类信息帖子一样可以同时删除，
+// 调 admin_delete_community_post（记日志 + 通知发帖人）。「全部帖子」页面里
+// 也能删社区帖子，失败后可以去那边重试。
+const COMMUNITY_POST_DELETE_COPY: DeleteActionCopy = {
+  checkboxLabel: "同时删除该帖子",
+  reasonLabel: "删除原因",
+  reasonRequiredMessage: "请填写删除原因。",
+  partialFailureMessage: "举报已处理，但删除帖子失败，请稍后前往「全部帖子」页面重试删除。"
+};
+
 function getDeleteActionCopy(targetType: string): DeleteActionCopy | null {
   if (targetType === "post") return POST_DELETE_COPY;
+  if (targetType === "community_post") return COMMUNITY_POST_DELETE_COPY;
   if (targetType === "comment") return COMMENT_DELETE_COPY;
   if (targetType === "activity") return ACTIVITY_CANCEL_COPY;
   return null;
@@ -144,7 +157,9 @@ const ACTIVITY_DIRECT_ACTION_COPY: DirectActionCopy = {
 };
 
 function getDirectActionCopy(targetType: string): DirectActionCopy | null {
-  if (targetType === "post") return POST_DIRECT_ACTION_COPY;
+  // 社区帖子的下架 / 删除按钮文案跟分类信息帖子完全一样，只是底层调的函数不同
+  // （admin_archive_community_post / admin_delete_community_post）。
+  if (targetType === "post" || targetType === "community_post") return POST_DIRECT_ACTION_COPY;
   if (targetType === "activity") return ACTIVITY_DIRECT_ACTION_COPY;
   return null;
 }
@@ -257,6 +272,8 @@ export function AdminReportsPage() {
   // 在用）。
   const archivePostMutation = useAdminArchivePostMutation();
   const adminDeleteActivityMutation = useAdminDeleteActivityMutation();
+  const archiveCommunityPostMutation = useAdminArchiveCommunityPostMutation();
+  const deleteCommunityPostMutation = useAdminDeleteCommunityPostMutation();
   const setAccountStatusMutation = useSetAccountStatusMutation();
 
   const [reports, setReports] = useState<AdminReportListItem[] | null>(null);
@@ -458,6 +475,18 @@ export function AdminReportsPage() {
         } else {
           await deletePostMutation.mutateAsync({ postId: report.targetId, deleteReason: reason });
         }
+      } else if (report.targetType === "community_post") {
+        if (kind === "archive") {
+          await archiveCommunityPostMutation.mutateAsync({
+            communityPostId: report.targetId,
+            archiveNote: reason
+          });
+        } else {
+          await deleteCommunityPostMutation.mutateAsync({
+            communityPostId: report.targetId,
+            deleteReason: reason
+          });
+        }
       } else {
         if (kind === "archive") {
           await adminCancelActivityMutation.mutateAsync({
@@ -543,6 +572,11 @@ export function AdminReportsPage() {
             await adminCancelActivityMutation.mutateAsync({
               activityId: report.targetId,
               cancelReason: deleteReason
+            });
+          } else if (report.targetType === "community_post") {
+            await deleteCommunityPostMutation.mutateAsync({
+              communityPostId: report.targetId,
+              deleteReason
             });
           } else {
             await deletePostMutation.mutateAsync({
