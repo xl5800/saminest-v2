@@ -24,7 +24,9 @@ export const config = {
   // 社区分享卡片任务卡：加上社区帖子详情（/community/post/:id）和社区主页
   // （/community/:slug）。/community/:slug 也会匹配到 /community/new、
   // /community/create 这类固定页面，在 handleCommunityRequest 里跳过。
-  matcher: ["/post/:id", "/activities/:id", "/community/post/:id", "/community/:slug"]
+  // 首页和分类页分享卡片任务卡：加上首页和招聘求职 / 房屋租售 / 二手闲置三个
+  // 分类页，用固定的分享图（public/share/*.jpg），不查数据库。
+  matcher: ["/", "/jobs", "/housing", "/used", "/post/:id", "/activities/:id", "/community/post/:id", "/community/:slug"]
 };
 
 const DESCRIPTION_MAX_LENGTH = 200;
@@ -423,8 +425,44 @@ async function handleCommunityRequest(
 // 继续猜名单，不如干脆去掉这道判断——`/post/:id` 这一条路由现在的访问量
 // 不大，每次请求多查一次数据库这点开销完全可以接受，用"总是正确"换掉
 // "省一次查询但可能漏掉没见过的爬虫"。
+/**
+ * 首页和分类页分享卡片任务卡：这几个页面的分享信息是固定的（不跟某条帖子
+ * 走），图片是 public/share/ 下预先做好的方图（跟帖子 / 活动 / 社区分享图
+ * 同一个蓝色风格）。描述里不写具体的州——同一个链接会发给不同地方的人。
+ */
+const STATIC_PAGE_SHARE: Record<string, { title: string; description: string; image: string }> = {
+  "/": {
+    title: "华邻 · 北美华人本地生活",
+    description: "招聘求职、房屋租售、二手闲置、找搭子，身边的华人信息都在这儿。",
+    image: "/share/home.jpg"
+  },
+  "/jobs": {
+    title: "招聘求职 · 华邻",
+    description: "身边的华人招聘和求职信息，餐馆、美甲、装修、家政……",
+    image: "/share/jobs.jpg"
+  },
+  "/housing": {
+    title: "房屋租售 · 华邻",
+    description: "华人房东直租、合租、求租信息，看房前先看看。",
+    image: "/share/housing.jpg"
+  },
+  "/used": {
+    title: "二手闲置 · 华邻",
+    description: "身边华人的二手好物，家具、电器、母婴用品，自取更方便。",
+    image: "/share/used.jpg"
+  }
+};
+
 export default async function middleware(request: Request): Promise<Response> {
   const url = new URL(request.url);
+
+  const staticShare = STATIC_PAGE_SHARE[url.pathname.replace(/(.)\/$/, "$1")];
+  if (staticShare) {
+    return respondWithOgTags(request, {
+      ...staticShare,
+      image: new URL(staticShare.image, request.url).toString()
+    });
+  }
 
   // 找搭子活动分享卡片任务卡：`/activities/:id` 单独分支，跟 `/post/:id`
   // 走原有逻辑完全不变——这条分支只是插在最前面，post 那部分下面的代码

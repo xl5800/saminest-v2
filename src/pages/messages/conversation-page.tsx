@@ -1146,7 +1146,11 @@ export function MessageConversationPage() {
                 onChange={(event) => setBody(event.target.value)}
                 rows={1}
                 placeholder="输入消息"
-                className="h-12 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-bg px-4 py-3 text-base leading-6 text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                // 输入框小竖条任务卡：原来 py-3（上下各 12px）+ 1px 边框，留给文字的
+                // 高度只有 22px，比一行字的行高 24px 少 2px，Android 浏览器就画出了
+                // 滚动条（发送按钮旁边那条小竖条）。改成上下各 11px 正好放下一行，
+                // 同时隐藏滚动条样式——多行时照样能滚动。
+                className="h-12 w-full resize-none overflow-y-auto rounded-2xl border border-border bg-bg px-4 py-[11px] text-base leading-6 text-text [scrollbar-width:none] focus:outline-none focus:ring-4 focus:ring-primary-light [&::-webkit-scrollbar]:hidden"
               />
             </label>
             <button
