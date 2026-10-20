@@ -12,6 +12,7 @@ import { useDeletePostMutation } from "../../features/admin/use-delete-post-muta
 import { useDismissReportMutation } from "../../features/admin/use-dismiss-report-mutation";
 import { useReportsQuery } from "../../features/admin/use-reports-query";
 import { useResolveReportMutation } from "../../features/admin/use-resolve-report-mutation";
+import { useSetAccountStatusMutation } from "../../features/admin/use-set-account-status-mutation";
 import {
   type AdminReportListItem,
   REPORT_REASON_OPTIONS
@@ -20,6 +21,7 @@ import { formatPublishedAt } from "../../utils/format";
 
 const GENERIC_ERROR_MESSAGE = "操作失败，请稍后重试。";
 const NOTE_REQUIRED_MESSAGE = "请填写处理说明。";
+const BAN_REASON_REQUIRED_MESSAGE = "请填写封禁原因。";
 
 // 复用 reports-repository.ts 里已经定义好的中文文案，不在这里重复维护一份。
 const REASON_LABELS: Record<string, string> = Object.fromEntries(
@@ -255,6 +257,7 @@ export function AdminReportsPage() {
   // 在用）。
   const archivePostMutation = useAdminArchivePostMutation();
   const adminDeleteActivityMutation = useAdminDeleteActivityMutation();
+  const setAccountStatusMutation = useSetAccountStatusMutation();
 
   const [reports, setReports] = useState<AdminReportListItem[] | null>(null);
   const [actioningReportId, setActioningReportId] = useState<string | null>(null);
@@ -301,6 +304,14 @@ export function AdminReportsPage() {
     Record<string, string>
   >({});
 
+  // "封禁该用户"：直接在举报行上封禁被举报的人 / 内容发布者，复用账号管理页
+  // 同一个 set_account_status RPC（原因必填、写进 moderation_actions）。跟
+  // 下架/删除一样不改变举报本身的状态，这一行还留在列表里。
+  const [banFormRowId, setBanFormRowId] = useState<string | null>(null);
+  const [banReasons, setBanReasons] = useState<Record<string, string>>({});
+  const [banValidationErrors, setBanValidationErrors] = useState<Record<string, string>>({});
+  const [banningReportId, setBanningReportId] = useState<string | null>(null);
+
   useEffect(() => {
     if (data && reports === null) {
       setReports(data);
@@ -326,6 +337,57 @@ export function AdminReportsPage() {
     setDirectActionValidationErrors({});
     setDirectActionReasons({});
     setDirectActionResultTags({});
+    setBanFormRowId(null);
+    setBanReasons({});
+    setBanValidationErrors({});
+  }
+
+  function openBanForm(reportId: string): void {
+    setBanFormRowId(reportId);
+    setBanValidationErrors((prev) => withoutKey(prev, reportId));
+    setRowErrors((prev) => withoutKey(prev, reportId));
+    setOpenFormRowId((current) => (current === reportId ? null : current));
+    setOpenFormAction(null);
+    setOpenDirectActionRowId((current) => (current === reportId ? null : current));
+    setDirectActionKind(null);
+  }
+
+  function cancelBanForm(reportId: string): void {
+    setBanFormRowId((current) => (current === reportId ? null : current));
+  }
+
+  async function handleConfirmBan(report: AdminReportListItem): Promise<void> {
+    const author = report.targetAuthor;
+    if (!author) return;
+    const reason = (banReasons[report.id] ?? "").trim();
+    if (!reason) {
+      setBanValidationErrors((prev) => ({ ...prev, [report.id]: BAN_REASON_REQUIRED_MESSAGE }));
+      return;
+    }
+    setBanValidationErrors((prev) => withoutKey(prev, report.id));
+    setRowErrors((prev) => withoutKey(prev, report.id));
+    setBanningReportId(report.id);
+    try {
+      await setAccountStatusMutation.mutateAsync({
+        userId: author.id,
+        newStatus: "suspended",
+        reason
+      });
+      // 同一个人可能被举报了好几条，列表里所有跟这个人有关的行一起标成已封禁。
+      setReports((prev) =>
+        (prev ?? []).map((item) =>
+          item.targetAuthor?.id === author.id
+            ? { ...item, targetAuthor: { ...item.targetAuthor, accountStatus: "suspended" } }
+            : item
+        )
+      );
+      setBanFormRowId((current) => (current === report.id ? null : current));
+      setBanReasons((prev) => withoutKey(prev, report.id));
+    } catch {
+      setRowErrors((prev) => ({ ...prev, [report.id]: GENERIC_ERROR_MESSAGE }));
+    } finally {
+      setBanningReportId(null);
+    }
   }
 
   function removeReport(reportId: string): void {
@@ -596,6 +658,9 @@ export function AdminReportsPage() {
             const isActioning = actioningReportId === report.id;
             const isFormOpen = openFormRowId === report.id;
             const isDirectActionOpen = openDirectActionRowId === report.id;
+            const isBanFormOpen = banFormRowId === report.id;
+            const author = report.targetAuthor;
+            const isAuthorSuspended = author?.accountStatus === "suspended";
             // getDirectActionCopy 只对 post/activity 两种 targetType 返回
             // 非空值，见该函数顶部注释——user/comment 举报没有对应的"下架/
             // 删除"直接操作按钮。
@@ -666,6 +731,21 @@ export function AdminReportsPage() {
                 <p className="mt-2 whitespace-pre-wrap break-words text-sm text-text">
                   {report.description ? report.description : "（举报人未填写补充说明）"}
                 </p>
+                {author ? (
+                  <p className="mt-2 text-sm text-text-muted">
+                    {report.targetType === "user" ? "被举报用户" : "发布者"}：
+                    <span className="text-text">{author.displayName}</span>
+                    {isAuthorSuspended ? (
+                      <span className="ml-2 rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                        已封禁
+                      </span>
+                    ) : author.accountStatus === "restricted" ? (
+                      <span className="ml-2 rounded-full bg-warning/10 px-2 py-0.5 text-xs font-medium text-warning">
+                        已受限
+                      </span>
+                    ) : null}
+                  </p>
+                ) : null}
                 {rowErrors[report.id] ? (
                   <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
                     {rowErrors[report.id]}
@@ -676,7 +756,7 @@ export function AdminReportsPage() {
                     {directActionResultTags[report.id]}
                   </p>
                 ) : null}
-                {isFormOpen || isDirectActionOpen ? null : (
+                {isFormOpen || isDirectActionOpen || isBanFormOpen ? null : (
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -714,8 +794,35 @@ export function AdminReportsPage() {
                         </button>
                       </>
                     ) : null}
+                    {author && !isAuthorSuspended ? (
+                      <button
+                        type="button"
+                        disabled={isActioning}
+                        onClick={() => openBanForm(report.id)}
+                        className="rounded border border-danger px-3 py-1.5 text-sm font-medium text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        封禁该用户
+                      </button>
+                    ) : null}
                   </div>
                 )}
+                {isBanFormOpen && author ? (
+                  <ReasonSheet
+                    title="封禁该用户"
+                    targetLabel={`${author.displayName}（封禁后不能再发帖、发私信、举报和收藏，可在「账号管理」里恢复）`}
+                    reasonLabel="封禁原因"
+                    reasonValue={banReasons[report.id] ?? ""}
+                    onReasonChange={(value) =>
+                      setBanReasons((prev) => ({ ...prev, [report.id]: value }))
+                    }
+                    errorMessage={banValidationErrors[report.id] ?? null}
+                    confirmLabel="确认封禁"
+                    destructive
+                    pending={banningReportId === report.id}
+                    onConfirm={() => handleConfirmBan(report)}
+                    onClose={() => cancelBanForm(report.id)}
+                  />
+                ) : null}
                 {isFormOpen ? (
                   <ReasonSheet
                     title={openFormAction === "resolve" ? "标记已处理" : "驳回举报"}

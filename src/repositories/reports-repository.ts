@@ -143,7 +143,18 @@ export interface AdminReportListItem {
   /** target_type 为 "comment" 时的评论原文及上下文，其它 target_type
    *  恒为 null。见上面 CommentPreview 的注释。 */
   commentPreview: CommentPreview | null;
+  /** 封禁用：被举报内容的发布者（帖子 / 社区帖子 / 评论 / 活动），或者
+   *  target_type 为 "user" 时被举报的用户本人。查不到（内容已经找不到、
+   *  对方账号已注销、查询失败）时是 null，举报行就不显示"封禁该用户"按钮。 */
+  targetAuthor: ReportTargetAuthor | null;
   reporterName: string;
+}
+
+export interface ReportTargetAuthor {
+  id: string;
+  displayName: string;
+  /** profiles.account_status：active / restricted / suspended。 */
+  accountStatus: string;
 }
 
 interface AdminReportRow {
@@ -161,6 +172,7 @@ interface CommentPreviewRow {
   content: string;
   deleted_at: string | null;
   post_id: string;
+  user_id: string;
   author: { display_name: string } | null;
   post: { title: string } | null;
 }
@@ -185,6 +197,7 @@ function getCommunityPostTargetTitle(title: string | null, body: string): string
 interface FetchTargetTitlesResult {
   titles: Map<string, string>;
   commentPreviews: Map<string, CommentPreview>;
+  authors: Map<string, ReportTargetAuthor>;
 }
 
 /**
@@ -220,6 +233,10 @@ interface FetchTargetTitlesResult {
 async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTitlesResult> {
   const titles = new Map<string, string>();
   const commentPreviews = new Map<string, CommentPreview>();
+  const authors = new Map<string, ReportTargetAuthor>();
+  // 举报目标 → 发布者 id（举报用户时就是被举报的人自己），最后一次性查
+  // profiles 拿昵称和账号状态。
+  const authorIdByTarget = new Map<string, string>();
   const postIds = rows.filter((row) => row.target_type === "post").map((row) => row.target_id);
   const activityIds = rows
     .filter((row) => row.target_type === "activity")
@@ -239,49 +256,45 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTit
     communityPostIds.length === 0 &&
     commentIds.length === 0
   ) {
-    return { titles, commentPreviews };
+    return { titles, commentPreviews, authors };
+  }
+
+  for (const id of userIds) {
+    authorIdByTarget.set(`user:${id}`, id);
   }
 
   const client = getSupabaseClient();
 
   try {
     if (postIds.length > 0) {
-      const { data, error } = await client.from("posts").select("id, title").in("id", postIds);
+      const { data, error } = await client.from("posts").select("id, title, author_id").in("id", postIds);
       if (error) throw error;
       for (const post of data ?? []) {
         titles.set(`post:${post.id}`, post.title);
+        authorIdByTarget.set(`post:${post.id}`, post.author_id);
       }
     }
 
     if (activityIds.length > 0) {
       const { data, error } = await client
         .from("activities")
-        .select("id, title")
+        .select("id, title, organizer_id")
         .in("id", activityIds);
       if (error) throw error;
       for (const activity of data ?? []) {
         titles.set(`activity:${activity.id}`, activity.title);
-      }
-    }
-
-    if (userIds.length > 0) {
-      const { data, error } = await client
-        .from("profiles")
-        .select("id, display_name")
-        .in("id", userIds);
-      if (error) throw error;
-      for (const profile of data ?? []) {
-        titles.set(`user:${profile.id}`, profile.display_name);
+        authorIdByTarget.set(`activity:${activity.id}`, activity.organizer_id);
       }
     }
 
     if (communityPostIds.length > 0) {
       const { data, error } = await client
         .from("community_posts")
-        .select("id, title, body")
+        .select("id, title, body, author_id")
         .in("id", communityPostIds);
       if (error) throw error;
       for (const communityPost of data ?? []) {
+        authorIdByTarget.set(`community_post:${communityPost.id}`, communityPost.author_id);
         titles.set(
           `community_post:${communityPost.id}`,
           getCommunityPostTargetTitle(communityPost.title, communityPost.body)
@@ -298,11 +311,12 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTit
       // 是同一个结论。
       const { data, error } = await client
         .from("comments")
-        .select("id, content, deleted_at, post_id, author:profiles(display_name), post:posts(title)")
+        .select("id, content, deleted_at, post_id, user_id, author:profiles(display_name), post:posts(title)")
         .in("id", commentIds)
         .overrideTypes<CommentPreviewRow[]>();
       if (error) throw error;
       for (const comment of data ?? []) {
+        authorIdByTarget.set(`comment:${comment.id}`, comment.user_id);
         commentPreviews.set(`comment:${comment.id}`, {
           content: comment.content,
           isDeleted: comment.deleted_at !== null,
@@ -316,7 +330,36 @@ async function fetchTargetTitles(rows: AdminReportRow[]): Promise<FetchTargetTit
     console.error("举报目标标题/评论内容查询失败：", titleLookupError);
   }
 
-  return { titles, commentPreviews };
+  // 被举报用户的昵称（targetTitle）和所有发布者的昵称 / 账号状态，合成一次
+  // profiles 查询。单独 try：这里失败只是不显示"封禁该用户"按钮，不影响上面
+  // 已经查到的标题和评论内容。
+  const profileIds = [...new Set(authorIdByTarget.values())];
+  if (profileIds.length > 0) {
+    try {
+      const { data, error } = await client
+        .from("profiles")
+        .select("id, display_name, account_status")
+        .in("id", profileIds);
+      if (error) throw error;
+      const profileById = new Map((data ?? []).map((profile) => [profile.id, profile]));
+      for (const [targetKey, authorId] of authorIdByTarget) {
+        const profile = profileById.get(authorId);
+        if (!profile) continue;
+        authors.set(targetKey, {
+          id: profile.id,
+          displayName: profile.display_name,
+          accountStatus: profile.account_status
+        });
+        if (targetKey.startsWith("user:")) {
+          titles.set(targetKey, profile.display_name);
+        }
+      }
+    } catch (profileLookupError) {
+      console.error("举报对象发布者查询失败：", profileLookupError);
+    }
+  }
+
+  return { titles, commentPreviews, authors };
 }
 
 /**
@@ -353,7 +396,7 @@ export async function listReportsForModeration(
   }
 
   const rows = data ?? [];
-  const { titles, commentPreviews } = await fetchTargetTitles(rows);
+  const { titles, commentPreviews, authors } = await fetchTargetTitles(rows);
 
   return rows.map((row) => ({
     id: row.id,
@@ -364,6 +407,7 @@ export async function listReportsForModeration(
     targetId: row.target_id,
     targetTitle: titles.get(`${row.target_type}:${row.target_id}`) ?? null,
     commentPreview: commentPreviews.get(`${row.target_type}:${row.target_id}`) ?? null,
+    targetAuthor: authors.get(`${row.target_type}:${row.target_id}`) ?? null,
     reporterName: row.reporter?.display_name ?? "未知用户"
   }));
 }

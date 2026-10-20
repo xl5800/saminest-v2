@@ -261,6 +261,7 @@ describe("listReportsForModeration", () => {
         targetId: "post-1",
         targetTitle: null,
         commentPreview: null,
+        targetAuthor: null,
         reporterName: "Bob"
       }
     ]);
@@ -286,7 +287,7 @@ describe("listReportsForModeration", () => {
     const result = await listReportsForModeration();
 
     expect(fromMock).toHaveBeenCalledWith("posts");
-    expect(queryBuilder.select).toHaveBeenCalledWith("id, title");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, title, author_id");
     expect(inMock).toHaveBeenCalledWith("id", ["post-1"]);
     expect(result[0].targetTitle).toBe("全新沙发出售");
   });
@@ -314,7 +315,7 @@ describe("listReportsForModeration", () => {
       const result = await listReportsForModeration();
 
       expect(fromMock).toHaveBeenCalledWith("community_posts");
-      expect(queryBuilder.select).toHaveBeenCalledWith("id, title, body");
+      expect(queryBuilder.select).toHaveBeenCalledWith("id, title, body, author_id");
       expect(inMock).toHaveBeenCalledWith("id", ["cp-1"]);
       expect(result[0].targetType).toBe("community_post");
       expect(result[0].targetTitle).toBe("有人去过 Tysons 吗");
@@ -410,9 +411,63 @@ describe("listReportsForModeration", () => {
     const result = await listReportsForModeration();
 
     expect(fromMock).toHaveBeenCalledWith("profiles");
-    expect(queryBuilder.select).toHaveBeenCalledWith("id, display_name");
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, display_name, account_status");
     expect(inMock).toHaveBeenCalledWith("id", ["user-9"]);
     expect(result[0].targetTitle).toBe("Alice");
+  });
+
+  it("attaches the post author's nickname and account status as targetAuthor", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-1",
+          reason_code: "spam",
+          description: null,
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "post",
+          target_id: "post-1",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+    inMock
+      .mockResolvedValueOnce({ data: [{ id: "post-1", title: "全新沙发出售", author_id: "user-7" }], error: null })
+      .mockResolvedValueOnce({
+        data: [{ id: "user-7", display_name: "张三", account_status: "active" }],
+        error: null
+      });
+
+    const result = await listReportsForModeration();
+
+    expect(inMock).toHaveBeenLastCalledWith("id", ["user-7"]);
+    expect(result[0].targetTitle).toBe("全新沙发出售");
+    expect(result[0].targetAuthor).toEqual({ id: "user-7", displayName: "张三", accountStatus: "active" });
+  });
+
+  it("keeps the title but leaves targetAuthor null when the author profile lookup fails", async () => {
+    overrideTypesMock.mockResolvedValue({
+      data: [
+        {
+          id: "report-1",
+          reason_code: "spam",
+          description: null,
+          created_at: "2026-07-01T00:00:00.000Z",
+          target_type: "post",
+          target_id: "post-1",
+          reporter: { display_name: "Bob" }
+        }
+      ],
+      error: null
+    });
+    inMock
+      .mockResolvedValueOnce({ data: [{ id: "post-1", title: "全新沙发出售", author_id: "user-7" }], error: null })
+      .mockResolvedValueOnce({ data: null, error: { message: "network down", code: "500" } });
+
+    const result = await listReportsForModeration();
+
+    expect(result[0].targetTitle).toBe("全新沙发出售");
+    expect(result[0].targetAuthor).toBeNull();
   });
 
   // UGC 安全功能补齐任务卡 3（举报队列展示评论原文）。
@@ -450,7 +505,7 @@ describe("listReportsForModeration", () => {
 
       expect(fromMock).toHaveBeenCalledWith("comments");
       expect(commentQueryBuilder.select).toHaveBeenCalledWith(
-        "id, content, deleted_at, post_id, author:profiles(display_name), post:posts(title)"
+        "id, content, deleted_at, post_id, user_id, author:profiles(display_name), post:posts(title)"
       );
       expect(commentInMock).toHaveBeenCalledWith("id", ["comment-1"]);
       expect(result[0].targetTitle).toBeNull();

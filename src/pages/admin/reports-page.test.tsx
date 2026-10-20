@@ -9,8 +9,10 @@ const {
   deleteComment,
   adminCancelActivity,
   adminArchivePost,
-  adminDeleteActivity
+  adminDeleteActivity,
+  setAccountStatus
 } = vi.hoisted(() => ({
+  setAccountStatus: vi.fn(),
   listReportsForModeration: vi.fn(),
   resolveReport: vi.fn(),
   dismissReport: vi.fn(),
@@ -53,7 +55,8 @@ vi.mock("../../repositories/admin-repository", () => ({
   deleteComment,
   adminCancelActivity,
   adminArchivePost,
-  adminDeleteActivity
+  adminDeleteActivity,
+  setAccountStatus
 }));
 
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -83,6 +86,7 @@ describe("AdminReportsPage", () => {
     adminCancelActivity.mockReset();
     adminArchivePost.mockReset();
     adminDeleteActivity.mockReset();
+    setAccountStatus.mockReset();
   });
 
   it("shows an empty state when there are no reports", async () => {
@@ -906,6 +910,98 @@ describe("AdminReportsPage", () => {
       expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
       expect(screen.getByLabelText("下架原因")).toHaveValue("涉嫌虚假信息");
       expect(screen.getByText("广告/垃圾信息")).toBeInTheDocument();
+    });
+  });
+
+  describe("封禁该用户", () => {
+    const author = { id: "user-7", displayName: "张三", accountStatus: "active" };
+    const reportWithAuthor = { ...sampleReport, targetAuthor: author };
+
+    it("shows the publisher and a 封禁该用户 button when the author is known, and nothing when it isn't", async () => {
+      listReportsForModeration.mockResolvedValue([
+        reportWithAuthor,
+        { ...sampleReport, id: "report-2", targetId: "post-2", targetAuthor: null }
+      ]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findAllByText("广告/垃圾信息");
+
+      expect(screen.getByText("张三")).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "封禁该用户" })).toHaveLength(1);
+    });
+
+    it("labels the person 被举报用户 for user reports", async () => {
+      listReportsForModeration.mockResolvedValue([
+        { ...sampleReport, targetType: "user", targetId: "user-7", targetTitle: "张三", targetAuthor: author }
+      ]);
+
+      renderWithProviders(<AdminReportsPage />);
+
+      expect(await screen.findByText(/被举报用户：/)).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "封禁该用户" })).toBeInTheDocument();
+    });
+
+    it("requires a reason before calling setAccountStatus", async () => {
+      listReportsForModeration.mockResolvedValue([reportWithAuthor]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "封禁该用户" }));
+      fireEvent.click(screen.getByRole("button", { name: "确认封禁" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("请填写封禁原因。");
+      expect(setAccountStatus).not.toHaveBeenCalled();
+    });
+
+    it("suspends the author with the typed reason, keeps the row and marks every row by that author as 已封禁", async () => {
+      setAccountStatus.mockResolvedValue(undefined);
+      listReportsForModeration.mockResolvedValue([
+        reportWithAuthor,
+        { ...sampleReport, id: "report-2", targetId: "post-2", targetAuthor: author }
+      ]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findAllByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getAllByRole("button", { name: "封禁该用户" })[0]!);
+      fireEvent.change(screen.getByLabelText("封禁原因"), { target: { value: "多次发布诈骗信息" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认封禁" }));
+
+      await waitFor(() => {
+        expect(setAccountStatus).toHaveBeenCalledWith("user-7", "suspended", "多次发布诈骗信息");
+      });
+      expect(await screen.findAllByText("已封禁")).toHaveLength(2);
+      expect(screen.queryByRole("button", { name: "封禁该用户" })).not.toBeInTheDocument();
+      expect(resolveReport).not.toHaveBeenCalled();
+      expect(screen.getAllByText("广告/垃圾信息")).toHaveLength(2);
+    });
+
+    it("does not offer 封禁该用户 when the author is already suspended", async () => {
+      listReportsForModeration.mockResolvedValue([
+        { ...sampleReport, targetAuthor: { ...author, accountStatus: "suspended" } }
+      ]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      expect(screen.getByText("已封禁")).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "封禁该用户" })).not.toBeInTheDocument();
+    });
+
+    it("preserves the typed reason and shows a row error when setAccountStatus fails", async () => {
+      setAccountStatus.mockRejectedValue(new Error("boom"));
+      listReportsForModeration.mockResolvedValue([reportWithAuthor]);
+
+      renderWithProviders(<AdminReportsPage />);
+      await screen.findByText("广告/垃圾信息");
+
+      fireEvent.click(screen.getByRole("button", { name: "封禁该用户" }));
+      fireEvent.change(screen.getByLabelText("封禁原因"), { target: { value: "多次发布诈骗信息" } });
+      fireEvent.click(screen.getByRole("button", { name: "确认封禁" }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent("操作失败，请稍后重试。");
+      expect(screen.getByLabelText("封禁原因")).toHaveValue("多次发布诈骗信息");
     });
   });
 });
