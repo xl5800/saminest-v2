@@ -367,3 +367,31 @@ export async function setAccountStatus(
     throw new AppError(error.message, "ADMIN_SET_ACCOUNT_STATUS_FAILED", error);
   }
 }
+
+/**
+ * 分类信息帖子审核开关（后台「待审核」页顶部）。app_settings 只有管理员能读
+ * （RLS：is_admin()），普通用户读不到这一行——找不到时按"需要审核"处理，跟
+ * 数据库 post_review_enabled() 的默认值一致。见
+ * supabase/migrations/20261021180000_post_review_toggle.sql。
+ */
+export async function getPostReviewEnabled(): Promise<boolean> {
+  const { data, error } = await getSupabaseClient()
+    .from("app_settings")
+    .select("post_review_enabled")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_POST_REVIEW_SETTING_LOAD_FAILED", error);
+  }
+
+  return data?.post_review_enabled ?? true;
+}
+
+export async function setPostReviewEnabled(enabled: boolean): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("set_post_review_enabled", { enabled });
+
+  if (error) {
+    throw new AppError(error.message, "ADMIN_POST_REVIEW_SETTING_SAVE_FAILED", error);
+  }
+}

@@ -521,6 +521,22 @@ describe("PublishPage", () => {
     });
   });
 
+  it("says 发布成功 without 等待审核 when post review is turned off (createPost returns approved)", async () => {
+    createPost.mockResolvedValue({ id: "post-999", status: "approved" });
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "租房" });
+
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/post/post-999", {
+        replace: true,
+        state: { publishSuccessMessage: "发布成功" }
+      });
+    });
+  });
+
   it("shows a generic error message and does not navigate when createPost fails", async () => {
     createPost.mockRejectedValue(new Error("insert failed"));
     renderWithProviders(<PublishPage />);

@@ -5,6 +5,7 @@ import { AdminNav } from "../../components/admin-nav";
 import { ImageLightbox } from "../../components/image-lightbox";
 import { ReasonSheet } from "../../components/reason-sheet";
 import { TopBar } from "../../components/top-bar";
+import { PostReviewToggle } from "../../features/admin/post-review-toggle";
 import { useApprovePostMutation } from "../../features/admin/use-approve-post-mutation";
 import { usePendingPostsQuery } from "../../features/admin/use-pending-posts-query";
 import { useRejectPostMutation } from "../../features/admin/use-reject-post-mutation";
@@ -114,6 +115,7 @@ export function AdminPendingPostsPage() {
         <TopBar variant="nav-only" title="待审核帖子" />
         <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
           <AdminNav />
+          <PostReviewToggle />
           <p role="status" className="text-sm text-text-muted">加载中…</p>
         </div>
       </main>
@@ -126,6 +128,7 @@ export function AdminPendingPostsPage() {
         <TopBar variant="nav-only" title="待审核帖子" />
         <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
           <AdminNav />
+          <PostReviewToggle />
           <p role="alert" className="mb-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
             帖子加载失败，请稍后重试。
           </p>
@@ -142,6 +145,7 @@ export function AdminPendingPostsPage() {
         <TopBar variant="nav-only" title="待审核帖子" />
         <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
           <AdminNav />
+          <PostReviewToggle />
           <p role="status" className="text-sm text-text-muted">暂无待审核帖子</p>
         </div>
       </main>
@@ -153,6 +157,7 @@ export function AdminPendingPostsPage() {
       <TopBar variant="nav-only" title="待审核帖子" />
       <div className="mx-auto max-w-4xl px-4 py-6 pb-20 md:pb-6">
       <AdminNav />
+      <PostReviewToggle />
       <ul>
         {visiblePosts.map((post) => {
           const isActioning = actioningPostId === post.id;

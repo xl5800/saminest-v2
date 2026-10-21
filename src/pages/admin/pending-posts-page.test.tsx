@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { listPendingPosts, approvePost, rejectPost } = vi.hoisted(() => ({
+const { listPendingPosts, approvePost, rejectPost, getPostReviewEnabled, setPostReviewEnabled } = vi.hoisted(() => ({
+  getPostReviewEnabled: vi.fn(),
+  setPostReviewEnabled: vi.fn(),
   listPendingPosts: vi.fn(),
   approvePost: vi.fn(),
   rejectPost: vi.fn()
@@ -16,7 +18,9 @@ vi.mock("../../repositories/posts-repository", () => ({
 }));
 vi.mock("../../repositories/admin-repository", () => ({
   approvePost,
-  rejectPost
+  rejectPost,
+  getPostReviewEnabled,
+  setPostReviewEnabled
 }));
 // 同上，AdminNav 也会为"举报处理"角标调用 countPendingReports；这个页面
 // 本身不依赖举报数据，这里只提供最小 mock 避免真的打到 Supabase。
@@ -53,6 +57,9 @@ describe("AdminPendingPostsPage", () => {
     listPendingPosts.mockReset();
     approvePost.mockReset();
     rejectPost.mockReset();
+    getPostReviewEnabled.mockReset();
+    getPostReviewEnabled.mockResolvedValue(true);
+    setPostReviewEnabled.mockReset();
   });
 
   it("shows a loading state before the query resolves", () => {
@@ -244,5 +251,43 @@ describe("AdminPendingPostsPage", () => {
     // getByText 在有多个匹配时会直接抛错。用 getAllByText 只确认"这一行
     // 没有被误删掉"，不关心具体是哪一份 DOM 节点。
     expect(screen.getAllByText("Sunny room near metro").length).toBeGreaterThan(0);
+  });
+
+  describe("发帖审核开关", () => {
+    it("shows the switch as on when review is enabled, and turns it off on click", async () => {
+      listPendingPosts.mockResolvedValue([]);
+      setPostReviewEnabled.mockResolvedValue(undefined);
+
+      renderWithProviders(<AdminPendingPostsPage />);
+
+      const toggle = await screen.findByRole("switch", { name: "发帖审核" });
+      expect(toggle).toHaveAttribute("aria-checked", "true");
+      expect(screen.getByText(/已开启/)).toBeInTheDocument();
+
+      fireEvent.click(toggle);
+
+      await waitFor(() => {
+        expect(setPostReviewEnabled).toHaveBeenCalledWith(false);
+      });
+      await waitFor(() => {
+        expect(screen.getByRole("switch", { name: "发帖审核" })).toHaveAttribute("aria-checked", "false");
+      });
+      expect(screen.getByText(/已关闭/)).toBeInTheDocument();
+    });
+
+    it("shows an error and keeps the old value when saving fails", async () => {
+      listPendingPosts.mockResolvedValue([]);
+      getPostReviewEnabled.mockResolvedValue(false);
+      setPostReviewEnabled.mockRejectedValue(new Error("boom"));
+
+      renderWithProviders(<AdminPendingPostsPage />);
+
+      const toggle = await screen.findByRole("switch", { name: "发帖审核" });
+      expect(toggle).toHaveAttribute("aria-checked", "false");
+      fireEvent.click(toggle);
+
+      expect(await screen.findByText("切换失败，请稍后重试。")).toBeInTheDocument();
+      expect(screen.getByRole("switch", { name: "发帖审核" })).toHaveAttribute("aria-checked", "false");
+    });
   });
 });

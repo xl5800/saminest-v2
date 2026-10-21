@@ -755,6 +755,9 @@ function priceLabelColumn(priceLabel: string | null | undefined) {
 
 export interface CreatePostResult {
   id: string;
+  /** 保存后的实际状态：后台关掉了发帖审核时是 'approved'（直接显示），
+   *  否则是 'pending'。见 20261021180000_post_review_toggle.sql。 */
+  status: string;
 }
 
 // Postgres/PostgREST 的 insufficient_privilege 错误码，任何 RLS with check
@@ -791,7 +794,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
   const { data, error } = await getSupabaseClient()
     .from("posts")
     .insert(payload)
-    .select("id")
+    .select("id, status")
     .single();
 
   if (error) {
@@ -815,7 +818,7 @@ export async function createPost(input: CreatePostInput): Promise<CreatePostResu
     throw new AppError("创建帖子后无法读取帖子 ID。", "POST_CREATE_ID_MISSING");
   }
 
-  return { id: data.id };
+  return { id: data.id, status: data.status };
 }
 
 interface AdminAllPostRpcRow {

@@ -60,6 +60,10 @@ export { LAST_ZIP_CODE_STORAGE_KEY } from "../../utils/last-zip-code";
 const PUBLISH_SUCCESS_MESSAGE = "发布成功，等待审核";
 const PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE =
   "帖子已创建，等待审核，但部分图片上传失败，可以稍后重新上传。";
+// 后台关掉发帖审核时，帖子保存后直接是 approved，提示里不再说"等待审核"。
+const PUBLISH_LIVE_SUCCESS_MESSAGE = "发布成功";
+const PUBLISH_LIVE_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE =
+  "发布成功，但部分图片上传失败，可以稍后重新上传。";
 const EDIT_SUCCESS_MESSAGE = "修改已保存";
 const EDIT_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE =
   "修改已保存，但部分图片上传失败，可以稍后重新上传。";
@@ -698,6 +702,7 @@ export function PublishPage() {
 
     setSubmitting(true);
     let resolvedPostId: string;
+    let publishedLive = false;
 
     if (isEditMode && postId) {
       try {
@@ -745,6 +750,7 @@ export function PublishPage() {
           priceLabel
         });
         resolvedPostId = created.id;
+        publishedLive = created.status === "approved";
         track("content_created", { type: "classified" });
       } catch (submitError) {
         // 跟 report-post-page.tsx 的 REPORT_DUPLICATE 分支同一个模式：
@@ -770,10 +776,16 @@ export function PublishPage() {
     // 都只影响跳转时带的提示信息，不影响跳转本身。
     // uploadAndInsertPostImages 内部已经吞掉自己范围内的所有异常，这里额外
     // 包一层 try/catch 只是防御性的兜底，确保这个阶段绝不会阻止跳转。
-    let publishSuccessMessage = isEditMode ? EDIT_SUCCESS_MESSAGE : PUBLISH_SUCCESS_MESSAGE;
+    let publishSuccessMessage = isEditMode
+      ? EDIT_SUCCESS_MESSAGE
+      : publishedLive
+        ? PUBLISH_LIVE_SUCCESS_MESSAGE
+        : PUBLISH_SUCCESS_MESSAGE;
     const imageFailureMessage = isEditMode
       ? EDIT_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE
-      : PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE;
+      : publishedLive
+        ? PUBLISH_LIVE_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE
+        : PUBLISH_SUCCESS_WITH_IMAGE_FAILURE_MESSAGE;
     try {
       if (images.length > 0) {
         setUploadingImages(true);

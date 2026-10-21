@@ -74,6 +74,35 @@ export type Database = {
           },
         ]
       }
+      app_settings: {
+        Row: {
+          id: boolean
+          post_review_enabled: boolean
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: boolean
+          post_review_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: boolean
+          post_review_enabled?: boolean
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       activities: {
         Row: {
           capacity: number | null
@@ -1796,6 +1825,11 @@ export type Database = {
       }
       resolve_report: {
         Args: { resolution_note: string; target_report_id: string }
+        Returns: undefined
+      }
+      post_review_enabled: { Args: never; Returns: boolean }
+      set_post_review_enabled: {
+        Args: { enabled: boolean }
         Returns: undefined
       }
       set_account_status: {

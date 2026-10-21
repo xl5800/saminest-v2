@@ -548,7 +548,7 @@ describe("createPost", () => {
   });
 
   it("inserts a post with status hardcoded to pending and returns the new id", async () => {
-    singleMock.mockResolvedValue({ data: { id: "post-123" }, error: null });
+    singleMock.mockResolvedValue({ data: { id: "post-123", status: "pending" }, error: null });
 
     const result = await createPost({
       authorId: "user-1",
@@ -583,8 +583,8 @@ describe("createPost", () => {
       zip_code: null,
       status: "pending"
     });
-    expect(queryBuilder.select).toHaveBeenCalledWith("id");
-    expect(result).toEqual({ id: "post-123" });
+    expect(queryBuilder.select).toHaveBeenCalledWith("id, status");
+    expect(result).toEqual({ id: "post-123", status: "pending" });
   });
 
   it("hardcodes status to pending even conceptually if a caller tried to influence it", async () => {
