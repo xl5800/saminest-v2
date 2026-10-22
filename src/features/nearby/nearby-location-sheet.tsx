@@ -33,7 +33,19 @@ const FALLBACK_GPS_LABEL = "我的位置";
  * 底部弹层的写法；没有直接用 ReasonSheet，因为那个是"填原因 + 确认"的表单，
  * 内容和按钮都对不上。
  */
-export function NearbyLocationSheet({ onClose }: { onClose: () => void }) {
+export function NearbyLocationSheet({
+  onClose,
+  title = "看哪里附近的二手闲置",
+  zipPlaceholder = "比如 20850",
+  zipFirst = false
+}: {
+  onClose: () => void;
+  /** 房屋页距离筛选传"离哪里近？"。 */
+  title?: string;
+  zipPlaceholder?: string;
+  /** 房屋页：找房子的人关心离公司 / 学校近，邮编输入框放上面，定位放下面。 */
+  zipFirst?: boolean;
+}) {
   const radiusMiles = useNearbyLocationStore((s) => s.radiusMiles);
   const setRadiusMiles = useNearbyLocationStore((s) => s.setRadiusMiles);
   const setLocation = useNearbyLocationStore((s) => s.setLocation);
@@ -117,6 +129,59 @@ export function NearbyLocationSheet({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const locateButton = (
+    <>
+      <button
+        type="button"
+        onClick={() => void handleUseCurrentLocation()}
+        disabled={locating}
+        className={`flex w-full items-center justify-center gap-2 rounded-full py-3 text-base font-semibold disabled:opacity-60 ${
+          zipFirst
+            ? "border border-border bg-card text-text active:bg-surface-pressed"
+            : "bg-primary text-white hover:bg-primary-hover"
+        }`}
+      >
+        <LocateFixed aria-hidden="true" size={18} />
+        {locating ? "正在获取位置…" : "用我现在的位置"}
+      </button>
+      {locationError ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {locationError}
+        </p>
+      ) : null}
+    </>
+  );
+
+  const zipForm = (
+    <>
+      <form onSubmit={(event) => void handleZipSubmit(event)} noValidate className="flex gap-2">
+        <input
+          aria-label="邮编"
+          type="text"
+          inputMode="numeric"
+          autoComplete="postal-code"
+          maxLength={5}
+          value={zip}
+          onChange={(event) => setZip(event.target.value.replace(/\D/g, ""))}
+          placeholder={zipPlaceholder}
+          className="min-w-0 flex-1 rounded-full border border-border bg-field px-4 py-2.5 text-base text-text outline-none focus:border-primary"
+        />
+        <button
+          type="submit"
+          disabled={zipPending}
+          className="shrink-0 rounded-full border border-primary px-5 text-sm font-semibold text-primary disabled:opacity-60"
+        >
+          {zipPending ? "查询中…" : "确定"}
+        </button>
+      </form>
+      {zipError ? (
+        <p role="alert" className="mt-2 text-sm text-danger">
+          {zipError}
+        </p>
+      ) : null}
+    </>
+  );
+
   return (
     <div
       role="dialog"
@@ -130,54 +195,21 @@ export function NearbyLocationSheet({ onClose }: { onClose: () => void }) {
         onClick={(event) => event.stopPropagation()}
       >
         <div aria-hidden="true" className="mx-auto mb-3 h-1 w-10 rounded-full bg-border" />
-        <p className="text-lg font-semibold text-text">看哪里附近的二手闲置</p>
+        <p className="text-lg font-semibold text-text">{title}</p>
 
-        <button
-          type="button"
-          onClick={() => void handleUseCurrentLocation()}
-          disabled={locating}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3 text-base font-semibold text-white hover:bg-primary-hover disabled:opacity-60"
-        >
-          <LocateFixed aria-hidden="true" size={18} />
-          {locating ? "正在获取位置…" : "用我现在的位置"}
-        </button>
-        {locationError ? (
-          <p role="alert" className="mt-2 text-sm text-danger">
-            {locationError}
-          </p>
-        ) : null}
-
-        <div className="my-4 flex items-center gap-3 text-xs text-text-subtle">
-          <span className="h-px flex-1 bg-divider" />
-          或者输入邮编
-          <span className="h-px flex-1 bg-divider" />
-        </div>
-
-        <form onSubmit={(event) => void handleZipSubmit(event)} noValidate className="flex gap-2">
-          <input
-            aria-label="邮编"
-            type="text"
-            inputMode="numeric"
-            autoComplete="postal-code"
-            maxLength={5}
-            value={zip}
-            onChange={(event) => setZip(event.target.value.replace(/\D/g, ""))}
-            placeholder="比如 20850"
-            className="min-w-0 flex-1 rounded-full border border-border bg-field px-4 py-2.5 text-base text-text outline-none focus:border-primary"
-          />
-          <button
-            type="submit"
-            disabled={zipPending}
-            className="shrink-0 rounded-full border border-primary px-5 text-sm font-semibold text-primary disabled:opacity-60"
-          >
-            {zipPending ? "查询中…" : "确定"}
-          </button>
-        </form>
-        {zipError ? (
-          <p role="alert" className="mt-2 text-sm text-danger">
-            {zipError}
-          </p>
-        ) : null}
+        {zipFirst ? (
+          <>
+            <div className="mt-4">{zipForm}</div>
+            <OrDivider />
+            {locateButton}
+          </>
+        ) : (
+          <>
+            <div className="mt-4">{locateButton}</div>
+            <OrDivider label="或者输入邮编" />
+            {zipForm}
+          </>
+        )}
 
         <p className="mt-5 text-sm font-medium text-text">范围</p>
         <div role="radiogroup" aria-label="范围" className="mt-2 flex gap-2">
@@ -201,6 +233,16 @@ export function NearbyLocationSheet({ onClose }: { onClose: () => void }) {
         </div>
         <p className="mt-4 text-xs text-text-subtle">位置只保存在这台手机上，不会公开。</p>
       </div>
+    </div>
+  );
+}
+
+function OrDivider({ label = "或者" }: { label?: string }) {
+  return (
+    <div className="my-4 flex items-center gap-3 text-xs text-text-subtle">
+      <span className="h-px flex-1 bg-divider" />
+      {label}
+      <span className="h-px flex-1 bg-divider" />
     </div>
   );
 }

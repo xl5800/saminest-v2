@@ -35,7 +35,7 @@ vi.mock("../categories/use-categories-query", () => ({
 }));
 
 import type { PostFeedItem } from "../../repositories/posts-repository";
-import { DEFAULT_NEARBY_RADIUS, useNearbyLocationStore } from "../../store/nearby-location-store";
+import { useNearbyLocationStore } from "../../store/nearby-location-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { triggerLastIntersectionObserver } from "../../test/setup";
 import { renderWithProviders } from "../../test/render-with-providers";
@@ -78,7 +78,7 @@ describe("NearbyUsedList", () => {
     flags.NEARBY_USED_ENABLED = true;
     useNearbyLocationStore.setState({
       location: { latitude: 39.08, longitude: -77.15, label: "Rockville", source: "zip", zip: "20850" },
-      radiusMiles: DEFAULT_NEARBY_RADIUS
+      radiusMiles: 50
     });
   });
 

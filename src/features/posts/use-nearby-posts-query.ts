@@ -19,18 +19,24 @@ export function useNearbyPostsInfiniteQuery(input: {
   latitude: number;
   longitude: number;
   categorySlugs: string[];
+  /** 房屋页：范围内按发布时间从新到旧（见 listNearbyPostIds）。不传按距离排。 */
+  radiusMiles?: number;
+  searchQuery?: string;
 }) {
-  const { latitude, longitude, categorySlugs } = input;
+  const { latitude, longitude, categorySlugs, radiusMiles } = input;
+  const searchQuery = input.searchQuery?.trim() || undefined;
 
   return useInfiniteQuery({
-    queryKey: ["posts", "nearby", { latitude, longitude, categorySlugs }],
+    queryKey: ["posts", "nearby", { latitude, longitude, categorySlugs, radiusMiles, searchQuery }],
     queryFn: async ({ pageParam }) => {
       const refs = await listNearbyPostIds({
         latitude,
         longitude,
         categorySlugs,
         limit: NEARBY_PAGE_SIZE,
-        offset: pageParam
+        offset: pageParam,
+        ...(radiusMiles !== undefined ? { radiusMiles } : {}),
+        ...(searchQuery ? { searchQuery } : {})
       });
       const posts = await listApprovedPostsByIds(refs.map((ref) => ref.postId));
       const postById = new Map(posts.map((post) => [post.id, post]));

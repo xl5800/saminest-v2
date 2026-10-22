@@ -105,10 +105,18 @@ function fillDescription(value: string) {
   fireEvent.change(screen.getByLabelText("描述"), { target: { value } });
 }
 
+/** 出租帖子要填邮编（房屋页距离筛选）；这里的邮编查询默认查不到，不会自动改州。 */
+const SAMPLE_ZIP = "22102";
+
+function fillZip(zip = SAMPLE_ZIP) {
+  fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: zip } });
+}
+
 function fillRequiredFields() {
   selectCategory("租房");
   fillTitle(SAMPLE_TITLE);
   fillDescription(SAMPLE_DESCRIPTION);
+  fillZip();
 }
 
 function makeImageFile(name: string): File {
@@ -305,6 +313,7 @@ describe("PublishPage", () => {
     ]);
 
     selectCategory("求租");
+    fillZip();
     expect(screen.getByRole("radio", { name: "求租" })).toBeChecked();
     expect(screen.getByRole("radio", { name: "租房" })).not.toBeChecked();
 
@@ -323,6 +332,7 @@ describe("PublishPage", () => {
     await screen.findByRole("radio", { name: "租房" });
 
     selectCategory("租房");
+    fillZip();
 
     expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\bbg-primary\b/);
     expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\btext-white\b/);
@@ -382,6 +392,7 @@ describe("PublishPage", () => {
     renderWithProviders(<PublishPage />);
     await screen.findByRole("radio", { name: "租房" });
     selectCategory("求租");
+    fillZip();
 
     const description = screen.getByLabelText("描述");
     const gender = await screen.findByLabelText("性别（可选）");
@@ -399,6 +410,7 @@ describe("PublishPage", () => {
     await screen.findByRole("radio", { name: "租房" });
 
     selectCategory("租房");
+    fillZip();
     fillTitle("  两室一厅  ");
     fillDescription("第一行正文\n第二行");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -431,6 +443,7 @@ describe("PublishPage", () => {
     await screen.findByRole("radio", { name: "租房" });
 
     selectCategory("租房");
+    fillZip();
     fillTitle("只有标题");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
@@ -468,6 +481,7 @@ describe("PublishPage", () => {
     await screen.findByRole("radio", { name: "租房" });
 
     selectCategory("租房");
+    fillZip();
     fillTitle("   ");
     fillDescription("有正文");
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
@@ -511,7 +525,7 @@ describe("PublishPage", () => {
         posterAge: null,
         posterGender: null,
         job: null,
-        zipCode: null
+        zipCode: SAMPLE_ZIP
       });
     });
 
@@ -1026,6 +1040,7 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("租房");
+      fillZip();
 
       expect(screen.queryByLabelText("性别（可选）")).not.toBeInTheDocument();
       expect(screen.queryByLabelText("年龄（可选）")).not.toBeInTheDocument();
@@ -1036,6 +1051,7 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
+      fillZip();
 
       expect(screen.getByLabelText("性别（可选）")).toBeInTheDocument();
       expect(screen.getByLabelText("年龄（可选）")).toBeInTheDocument();
@@ -1047,6 +1063,7 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
+      fillZip();
 
       await waitFor(() => {
         expect(screen.getByLabelText("年龄（可选）")).toHaveValue(28);
@@ -1059,6 +1076,7 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
+      fillZip();
       await waitFor(() => {
         expect(screen.getByLabelText("年龄（可选）")).toHaveValue(28);
       });
@@ -1067,7 +1085,9 @@ describe("PublishPage", () => {
       // 切走求租分类再切回来，不应该把用户刚改的 35 冲回 profile 的 28——
       // ageAutoFilledRef 只允许自动填充生效一次。
       selectCategory("租房");
+      fillZip();
       selectCategory("求租");
+      fillZip();
 
       expect(screen.getByLabelText("年龄（可选）")).toHaveValue(35);
     });
@@ -1078,6 +1098,7 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
+      fillZip();
 
       await screen.findByLabelText("年龄（可选）");
       expect(screen.getByLabelText("年龄（可选）")).toHaveValue(null);
@@ -1089,6 +1110,7 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
+      fillZip();
       fillTitle("Looking for a room");
       fillDescription(SAMPLE_DESCRIPTION);
       fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
@@ -1109,11 +1131,13 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "租房" });
 
       selectCategory("求租");
+      fillZip();
       fireEvent.change(screen.getByLabelText("性别（可选）"), { target: { value: "男" } });
       fireEvent.change(screen.getByLabelText("年龄（可选）"), { target: { value: "30" } });
       // 切回非求租分类——性别/年龄输入框随之不再渲染，但底层 state 值仍然
       // 留着，提交时必须被当成没填。
       selectCategory("租房");
+      fillZip();
       fillTitle(SAMPLE_TITLE);
       fillDescription(SAMPLE_DESCRIPTION);
 
@@ -1180,8 +1204,25 @@ describe("PublishPage", () => {
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
       expect(
-        await screen.findByText("请填写邮编（二手和免费物品需要邮编，方便附近的人看到）。")
+        await screen.findByText("请填写邮编（方便附近的人看到）。")
       ).toBeInTheDocument();
+      expect(createPost).not.toHaveBeenCalled();
+    });
+
+    // 房屋页距离筛选：出租、求租也按邮编算距离，同样必填。
+    it.each([
+      ["出租", "rent"],
+      ["求租", "wanted"]
+    ])("blocks publishing a %s post without a zip code", async (categoryName, slug) => {
+      listActiveCategories.mockResolvedValue([{ id: "cat-h", slug, nameZh: categoryName }]);
+      renderWithProviders(<PublishPage />);
+      await screen.findByRole("radio", { name: categoryName });
+
+      selectCategory(categoryName);
+      fillTitle(SAMPLE_TITLE);
+      fireEvent.click(screen.getByRole("button", { name: "发布" }));
+
+      expect(await screen.findByText("请填写邮编（方便附近的人看到）。")).toBeInTheDocument();
       expect(createPost).not.toHaveBeenCalled();
     });
 
@@ -1290,6 +1331,8 @@ describe("PublishPage in edit mode", () => {
     // 下面的 posterAge/posterGender 测试覆盖，不复用这份默认 fixture。
     posterAge: null,
     posterGender: null,
+    // 房屋页距离筛选：出租帖子要求有邮编，编辑时也要。
+    zipCode: "22102",
     images: [{ id: "img-1", publicUrl: "https://cdn.example.com/img-1.png", sortOrder: 0 }]
   };
 

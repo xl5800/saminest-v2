@@ -115,7 +115,7 @@ export interface PublishFormInput {
   job?: { salaryUnit: string; employmentType: string; perks: string[] } | null;
   /** 发布页 ZIP 定位任务卡：邮编输入框原文（可选）。 */
   zipCode?: string;
-  /** 附近的二手任务卡：二手和免费物品必须填邮编（首页按邮编算距离）。 */
+  /** 二手、免费物品、出租、求租必须填邮编（按邮编算距离）。 */
   zipCodeRequired?: boolean;
 }
 
@@ -270,7 +270,7 @@ export function validatePublishInput(
   // 必填（zipCodeRequired）。
   const zipCodeRaw = (input.zipCode ?? "").trim();
   if (!zipCodeRaw && input.zipCodeRequired) {
-    return fail("PUBLISH_ZIP_CODE_REQUIRED", "请填写邮编（二手和免费物品需要邮编，方便附近的人看到）。");
+    return fail("PUBLISH_ZIP_CODE_REQUIRED", "请填写邮编（方便附近的人看到）。");
   }
   if (zipCodeRaw && !/^\d{5}$/.test(zipCodeRaw)) {
     return fail("PUBLISH_ZIP_CODE_INVALID", "邮编要是 5 位数字。");

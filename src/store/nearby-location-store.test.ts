@@ -7,9 +7,9 @@ describe("useNearbyLocationStore", () => {
     useNearbyLocationStore.setState({ location: null, radiusMiles: DEFAULT_NEARBY_RADIUS });
   });
 
-  it("starts with no location and a 50-mile radius", () => {
+  it("starts with no location and a 10-mile radius", () => {
     expect(useNearbyLocationStore.getState().location).toBeNull();
-    expect(useNearbyLocationStore.getState().radiusMiles).toBe(50);
+    expect(useNearbyLocationStore.getState().radiusMiles).toBe(10);
   });
 
   it("keeps only two decimals of the coordinates", () => {

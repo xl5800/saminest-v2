@@ -53,6 +53,8 @@ import { track } from "../../features/analytics/track";
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
 /** 附近的二手任务卡：二手分类的 slug（二手要求填邮编）。 */
 const USED_CATEGORY_SLUG = "used";
+/** 房屋页距离筛选：出租和求租也要求填邮编，房屋页按它算距离。 */
+const HOUSING_CATEGORY_SLUGS = new Set(["rent", "wanted"]);
 
 // 发布页 ZIP 定位任务卡：上次填的邮编存取挪到了 utils/last-zip-code.ts（找搭子
 // 发起页也要用），这里重新导出存储键，给测试用。
@@ -684,8 +686,11 @@ export function PublishPage() {
           }
         : null,
       zipCode,
-      // 附近的二手任务卡：二手和免费物品要邮编，首页"附近的二手"按它算距离。
-      zipCodeRequired: selectedCategorySlug === USED_CATEGORY_SLUG || isFreeCategory
+      // 二手、免费物品要邮编（首页"附近的二手"），出租、求租也要（房屋页距离筛选）。
+      zipCodeRequired:
+        selectedCategorySlug === USED_CATEGORY_SLUG ||
+        isFreeCategory ||
+        HOUSING_CATEGORY_SLUGS.has(selectedCategorySlug ?? "")
     });
     if (!validation.success) {
       setError(validation.error.message);

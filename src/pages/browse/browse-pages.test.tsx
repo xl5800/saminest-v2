@@ -1,7 +1,8 @@
 import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { useCategoriesQuery, postListMock, navigateMock } = vi.hoisted(() => ({
+const { useCategoriesQuery, postListMock, navigateMock, nearbyPostListMock } = vi.hoisted(() => ({
+  nearbyPostListMock: vi.fn(),
   useCategoriesQuery: vi.fn(),
   postListMock: vi.fn(),
   navigateMock: vi.fn()
@@ -16,11 +17,19 @@ vi.mock("../../features/posts/post-list", () => ({
     return <div data-testid="post-list">{props.emptyState as React.ReactNode}</div>;
   }
 }));
+// 房屋页距离筛选：按距离的列表有自己的测试（nearby-used-list.test.tsx），这里只看传了什么。
+vi.mock("../../features/nearby/nearby-post-list", () => ({
+  NearbyPostList: (props: Record<string, unknown>) => {
+    nearbyPostListMock(props);
+    return <div data-testid="nearby-post-list" />;
+  }
+}));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
   return { ...actual, useNavigate: () => navigateMock };
 });
 
+import { useNearbyLocationStore } from "../../store/nearby-location-store";
 import { useSelectedRegionStore } from "../../store/selected-region-store";
 import { renderWithProviders } from "../../test/render-with-providers";
 import { FreePage } from "./free-page";
@@ -54,6 +63,8 @@ describe("browse pages", () => {
     useCategoriesQuery.mockReturnValue({ data: CATEGORIES, isPending: false, isError: false });
     postListMock.mockReset();
     navigateMock.mockReset();
+    nearbyPostListMock.mockReset();
+    useNearbyLocationStore.setState({ location: null, radiusMiles: 10 });
   });
 
   // 分类页顶栏统一任务卡：四个页面顶栏都是"返回 + 地区 + 搜索 + 发布"，
@@ -153,6 +164,45 @@ describe("browse pages", () => {
       expect(lastPostListProps()).toMatchObject({ categoryId: "cat-wanted", variant: "wanted" });
       fireEvent.click(screen.getByRole("button", { name: "发布" }));
       expect(navigateMock).toHaveBeenCalledWith("/publish?category=wanted&only=rent,wanted");
+    });
+
+    it("opens the location sheet from the 距离 button, zip code first", () => {
+      renderWithProviders(<HousingPage />);
+
+      expect(nearbyPostListMock).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "距离" }));
+
+      const dialog = screen.getByRole("dialog", { name: "选择位置" });
+      expect(dialog).toHaveTextContent("离哪里近？");
+      expect(screen.getByLabelText("邮编")).toHaveAttribute("placeholder", "公司或学校邮编，如 22102");
+    });
+
+    it("lists by distance (newest first within the radius) once a location is set, ignoring the state", () => {
+      useSelectedRegionStore.setState({
+        selectedRegion: { stateCode: "MD", stateName: "Maryland", cityId: null, cityName: null }
+      });
+      useNearbyLocationStore.setState({
+        location: { latitude: 38.95, longitude: -77.23, label: "McLean", source: "zip", zip: "22102" },
+        radiusMiles: 10
+      });
+      renderWithProviders(<HousingPage />);
+
+      expect(postListMock).not.toHaveBeenCalled();
+      expect(nearbyPostListMock.mock.calls.at(-1)?.[0]).toMatchObject({
+        categorySlugs: ["rent"],
+        variant: "grid",
+        radiusMiles: 10,
+        newestFirstWithinRadius: true
+      });
+      expect(screen.getByRole("button", { name: "距离：McLean 10 英里内，点击修改" })).toHaveTextContent("McLean· 10mi");
+
+      fireEvent.click(screen.getByRole("button", { name: "求租" }));
+      expect(nearbyPostListMock.mock.calls.at(-1)?.[0]).toMatchObject({ categorySlugs: ["wanted"], variant: "wanted" });
+
+      fireEvent.click(screen.getByRole("button", { name: "取消距离筛选" }));
+      expect(useNearbyLocationStore.getState().location).toBeNull();
+      expect(lastPostListProps()).toMatchObject({ categoryId: "cat-wanted", stateCode: "MD" });
+      expect(screen.getByRole("button", { name: "距离" })).toBeInTheDocument();
     });
   });
 

@@ -1782,6 +1782,8 @@ export type Database = {
           p_limit?: number
           p_longitude: number
           p_offset?: number
+          p_radius_miles?: number
+          p_search?: string
         }
         Returns: {
           distance_miles: number | null

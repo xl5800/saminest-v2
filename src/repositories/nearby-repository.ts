@@ -20,16 +20,23 @@ export interface ListNearbyPostIdsInput {
   categorySlugs: string[];
   limit: number;
   offset: number;
+  /** 房屋页距离筛选：传了就"范围内按发布时间从新到旧、范围外按距离、没邮编的
+   *  最后"（20261022180000_nearby_posts_radius_and_search.sql）；不传按距离排。 */
+  radiusMiles?: number;
+  /** 标题 / 描述包含这段文字。 */
+  searchQuery?: string;
 }
 
-/** 按距离从近到远取帖子 id（不截断范围，见 migration 顶部说明）。 */
+/** 按距离取帖子 id（不截断范围，见 migration 顶部说明）。 */
 export async function listNearbyPostIds(input: ListNearbyPostIdsInput): Promise<NearbyPostRef[]> {
   const { data, error } = await getSupabaseClient().rpc("list_nearby_posts", {
     p_latitude: input.latitude,
     p_longitude: input.longitude,
     p_category_slugs: input.categorySlugs,
     p_limit: input.limit,
-    p_offset: input.offset
+    p_offset: input.offset,
+    ...(input.radiusMiles !== undefined ? { p_radius_miles: input.radiusMiles } : {}),
+    ...(input.searchQuery?.trim() ? { p_search: input.searchQuery.trim() } : {})
   });
 
   if (error) {

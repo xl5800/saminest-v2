@@ -365,52 +365,9 @@ export function PostList({
     return (
       <div>
         <div className="flex flex-col gap-3 px-4">
-          {posts.map((post) => {
-            const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
-            const posterMeta = formatWantedPosterMeta(post.posterGender, post.posterAge);
-            return (
-              <Link
-                key={post.id}
-                to={`/post/${post.id}`}
-                className="block rounded-card-lg border border-border bg-card-white p-4 shadow-card"
-              >
-                <p className="line-clamp-2 break-words text-base font-medium text-text">
-                  {post.title}
-                </p>
-                {priceUnset ? null : (
-                  <p className="mt-1 text-lg font-semibold text-text">
-                    {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
-                  </p>
-                )}
-                {post.locationName ? (
-                  <p className="mt-1 flex items-center gap-1 text-sm text-text-muted">
-                    <MapPin aria-hidden="true" size={14} className="shrink-0" />
-                    {formatLocationDisplayName(post.locationName)}
-                  </p>
-                ) : null}
-                <div className="mt-2 flex items-center gap-2">
-                  {post.authorAvatarUrl ? (
-                    <img
-                      src={post.authorAvatarUrl}
-                      alt=""
-                      className="h-6 w-6 shrink-0 rounded-full object-cover"
-                    />
-                  ) : (
-                    <span
-                      aria-hidden="true"
-                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
-                    >
-                      {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
-                    </span>
-                  )}
-                  <span className="text-sm text-text">{post.authorDisplayName}</span>
-                  {posterMeta ? (
-                    <span className="text-sm text-text-subtle">{posterMeta}</span>
-                  ) : null}
-                </div>
-              </Link>
-            );
-          })}
+          {posts.map((post) => (
+            <WantedPostCard key={post.id} post={post} />
+          ))}
         </div>
         {hasNextPage ? <div ref={sentinelRef} aria-hidden="true" /> : null}
         {isFetchingNextPage ? <p role="status">加载更多…</p> : null}
@@ -462,6 +419,59 @@ export function PostGridCard({ post, distanceLabel }: { post: PostFeedItem; dist
               .filter(Boolean)
               .join(" · ")}
           </p>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
+/**
+ * 求租的纯文字卡片。原来直接写在 PostList 的 wanted 分支里；房屋页距离筛选要
+ * 在同样的卡片上多显示距离，所以抽成组件两边共用（distanceLabel 不传就跟原来
+ * 一模一样）。
+ */
+export function WantedPostCard({ post, distanceLabel }: { post: PostFeedItem; distanceLabel?: string }) {
+  const priceUnset = isPriceUnset(post.priceAmount, post.priceLabel);
+  const posterMeta = formatWantedPosterMeta(post.posterGender, post.posterAge);
+  return (
+    <Link
+      to={`/post/${post.id}`}
+      className="block rounded-card-lg border border-border bg-card-white p-4 shadow-card"
+    >
+      <p className="line-clamp-2 break-words text-base font-medium text-text">
+        {post.title}
+      </p>
+      {priceUnset ? null : (
+        <p className="mt-1 text-lg font-semibold text-text">
+          {formatPrice(post.priceAmount, post.priceLabel, post.currencyCode)}
+        </p>
+      )}
+      {post.locationName || distanceLabel ? (
+        <p className="mt-1 flex items-center gap-1 text-sm text-text-muted">
+          <MapPin aria-hidden="true" size={14} className="shrink-0" />
+          {[post.locationName ? formatLocationDisplayName(post.locationName) : null, distanceLabel]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      ) : null}
+      <div className="mt-2 flex items-center gap-2">
+        {post.authorAvatarUrl ? (
+          <img
+            src={post.authorAvatarUrl}
+            alt=""
+            className="h-6 w-6 shrink-0 rounded-full object-cover"
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary"
+          >
+            {post.authorDisplayName.trim().charAt(0).toUpperCase() || "?"}
+          </span>
+        )}
+        <span className="text-sm text-text">{post.authorDisplayName}</span>
+        {posterMeta ? (
+          <span className="text-sm text-text-subtle">{posterMeta}</span>
         ) : null}
       </div>
     </Link>

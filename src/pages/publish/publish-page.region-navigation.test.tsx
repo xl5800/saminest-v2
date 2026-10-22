@@ -23,6 +23,11 @@ const {
   updatePost: vi.fn()
 }));
 
+// 出租帖子要填邮编（房屋页距离筛选）；邮编查询在这里查不到，不会自动改州。
+vi.mock("../../repositories/zip-codes-repository", () => ({
+  lookupZipCode: () => Promise.resolve(null),
+  ZIP_CODE_PATTERN: /^\d{5}$/
+}));
 vi.mock("../../repositories/categories-repository", () => ({
   listActiveCategories
 }));
@@ -199,6 +204,7 @@ describe("PublishPage — real navigation round-trip through /region-select (27 
     fireEvent.click(screen.getByText("不限地区"));
     await screen.findByText("VA 弗吉尼亚州");
 
+    fireEvent.change(screen.getByLabelText("邮编（ZIP）"), { target: { value: "22102" } });
     fireEvent.click(screen.getByRole("button", { name: "发布" }));
 
     await waitFor(() => {

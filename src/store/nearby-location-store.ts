@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-/** 首页"附近的二手"任务卡：范围选项（英里），默认 50。 */
+/** 范围选项（英里）。默认 10：房屋页距离筛选按通勤距离算，DMV 10 英里最常用。 */
 export const NEARBY_RADIUS_OPTIONS = [5, 10, 25, 50] as const;
 export type NearbyRadius = (typeof NEARBY_RADIUS_OPTIONS)[number];
-export const DEFAULT_NEARBY_RADIUS: NearbyRadius = 50;
+export const DEFAULT_NEARBY_RADIUS: NearbyRadius = 10;
 
 export interface NearbyLocation {
   /** 只保留两位小数（约 1 公里），不需要也不保存精确位置。 */

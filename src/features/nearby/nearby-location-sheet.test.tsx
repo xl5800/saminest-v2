@@ -104,12 +104,12 @@ describe("NearbyLocationSheet", () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("changes the radius right away, defaulting to 50 miles", () => {
+  it("changes the radius right away, defaulting to 10 miles", () => {
     renderWithProviders(<NearbyLocationSheet onClose={onClose} />);
 
-    expect(screen.getByRole("radio", { name: "50 英里" })).toHaveAttribute("aria-checked", "true");
-    fireEvent.click(screen.getByRole("radio", { name: "10 英里" }));
-    expect(useNearbyLocationStore.getState().radiusMiles).toBe(10);
     expect(screen.getByRole("radio", { name: "10 英里" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.click(screen.getByRole("radio", { name: "25 英里" }));
+    expect(useNearbyLocationStore.getState().radiusMiles).toBe(25);
+    expect(screen.getByRole("radio", { name: "25 英里" })).toHaveAttribute("aria-checked", "true");
   });
 });

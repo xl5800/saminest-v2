@@ -37,6 +37,30 @@ describe("nearby-repository", () => {
     });
   });
 
+  it("passes the radius and a trimmed search term when given (housing distance filter)", async () => {
+    rpcMock.mockResolvedValue({ data: [], error: null });
+
+    await listNearbyPostIds({
+      latitude: 38.95,
+      longitude: -77.23,
+      categorySlugs: ["rent"],
+      limit: 20,
+      offset: 0,
+      radiusMiles: 10,
+      searchQuery: " 单间 "
+    });
+
+    expect(rpcMock).toHaveBeenCalledWith("list_nearby_posts", {
+      p_latitude: 38.95,
+      p_longitude: -77.23,
+      p_category_slugs: ["rent"],
+      p_limit: 20,
+      p_offset: 0,
+      p_radius_miles: 10,
+      p_search: "单间"
+    });
+  });
+
   it("throws NEARBY_POSTS_FAILED when the query fails", async () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "boom" } });
     await expect(
