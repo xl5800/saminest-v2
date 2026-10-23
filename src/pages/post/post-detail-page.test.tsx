@@ -307,7 +307,7 @@ describe("PostDetailPage", () => {
         "A lovely room near the metro, walking distance to everything."
       )
     ).toBeInTheDocument();
-    expect(screen.getByText("USD 1,200")).toBeInTheDocument();
+    expect(screen.getByText("$1,200")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
@@ -378,7 +378,7 @@ describe("PostDetailPage", () => {
     });
 
     const title = screen.getByRole("heading", { name: "Sunny room near metro" });
-    const price = screen.getByText("USD 1,200");
+    const price = screen.getByText("$1,200");
 
     // Node.DOCUMENT_POSITION_FOLLOWING (4): price 在 title 之后。
     expect(title.compareDocumentPosition(price) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -681,7 +681,7 @@ describe("PostDetailPage", () => {
         // 数据分析任务卡：链接末尾带 ?s= 分享时间戳，跟活动/社区帖子一致。
         expect(shareMock).toHaveBeenCalledWith({
           title: "Sunny room near metro",
-          text: "USD 1,200",
+          text: "$1,200",
           url: expect.stringMatching(/^https:\/\/www\.saminest\.com\/post\/post-1\?s=\d+$/)
         });
       });

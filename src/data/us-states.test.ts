@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { formatSelectedRegionLabel, formatShortRegionLabel, formatStateLabel, formatStateLabelByCode, US_STATES } from "./us-states";
+import {
+  formatCityOnly,
+  formatLocationDisplayName,
+  formatSelectedRegionLabel,
+  formatShortRegionLabel,
+  formatStateLabel,
+  formatStateLabelByCode,
+  US_STATES
+} from "./us-states";
 
 describe("US_STATES", () => {
   it("has exactly 51 entries (50 states + DC)", () => {
@@ -128,5 +136,19 @@ describe("formatShortRegionLabel", () => {
   it("shows just the city name when a city is selected", () => {
     expect(formatShortRegionLabel({ stateCode: "VA", cityName: "Woodbridge" })).toBe("Woodbridge");
     expect(formatShortRegionLabel({ stateCode: "DC", cityName: "Washington, DC" })).toBe("Washington");
+  });
+});
+
+// 首页改版：图片网格卡片上只显示城市。
+describe("formatCityOnly", () => {
+  it("drops a trailing state code", () => {
+    expect(formatCityOnly("Centreville, VA")).toBe("Centreville");
+    expect(formatCityOnly("Silver Spring,MD")).toBe("Silver Spring");
+  });
+
+  it("keeps text that doesn't end in a real state code, and turns a bare state code into the state name", () => {
+    expect(formatCityOnly("Tysons Corner")).toBe("Tysons Corner");
+    expect(formatCityOnly("Fairfax, XX")).toBe("Fairfax, XX");
+    expect(formatCityOnly("VA")).toBe(formatLocationDisplayName("VA"));
   });
 });

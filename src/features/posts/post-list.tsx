@@ -5,7 +5,7 @@ import { Link } from "react-router-dom";
 import { PostThumbnail } from "../../components/post-thumbnail";
 import { Skeleton } from "../../components/skeleton";
 import { useBlockedUserIds } from "../blocks/use-blocked-user-ids";
-import { formatLocationDisplayName } from "../../data/us-states";
+import { formatCityOnly, formatLocationDisplayName } from "../../data/us-states";
 import {
   formatPrice,
   formatRelativeTimeAgo,
@@ -413,13 +413,17 @@ export function PostGridCard({ post, distanceLabel }: { post: PostFeedItem; dist
           </p>
         )}
         <p className="truncate text-sm text-text">{post.title}</p>
-        {post.locationName || distanceLabel ? (
-          <p className="truncate text-xs text-text-muted">
-            {[post.locationName ? formatLocationDisplayName(post.locationName) : null, distanceLabel]
-              .filter(Boolean)
-              .join(" · ")}
-          </p>
-        ) : null}
+        {/* 首页改版：只写城市（不写州）+ 发布时间（"Centreville · 2 天前"），
+            设了位置时再加距离。 */}
+        <p className="truncate text-xs text-text-muted">
+          {[
+            post.locationName ? formatCityOnly(post.locationName) : null,
+            formatRelativeTimeAgo(post.createdAt),
+            distanceLabel
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
       </div>
     </Link>
   );

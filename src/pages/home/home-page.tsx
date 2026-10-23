@@ -1,4 +1,4 @@
-import { Briefcase, Gift, Handshake, Home, type LucideIcon, ShoppingBag } from "lucide-react";
+import { Briefcase, Gift, Home, type LucideIcon, ShoppingBag, Users } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -15,12 +15,14 @@ import { useSelectedRegionStore } from "../../store/selected-region-store";
 const REGION_SELECT_PATH = "/region-select";
 const SEARCH_PATH = "/search";
 
-export const HOME_ENTRIES: Array<{ to: string; label: string; Icon: LucideIcon }> = [
-  { to: "/jobs", label: "招聘求职", Icon: Briefcase },
-  { to: "/housing", label: "房屋租售", Icon: Home },
-  { to: "/used", label: "二手闲置", Icon: ShoppingBag },
-  { to: "/free", label: "免费物品", Icon: Gift },
-  { to: "/activities", label: "找搭子", Icon: Handshake }
+// 首页改版（2026-10-23）：每个分类一个浅色底 + 同色图标，一眼分得清；颜色都很浅，
+// 不抢下面图片的风头。
+export const HOME_ENTRIES: Array<{ to: string; label: string; Icon: LucideIcon; tileClassName: string }> = [
+  { to: "/jobs", label: "招聘求职", Icon: Briefcase, tileClassName: "bg-blue-100 text-blue-600" },
+  { to: "/housing", label: "房屋租售", Icon: Home, tileClassName: "bg-orange-100 text-orange-600" },
+  { to: "/used", label: "二手闲置", Icon: ShoppingBag, tileClassName: "bg-green-100 text-green-600" },
+  { to: "/free", label: "免费物品", Icon: Gift, tileClassName: "bg-rose-100 text-rose-600" },
+  { to: "/activities", label: "找搭子", Icon: Users, tileClassName: "bg-violet-100 text-violet-600" }
 ];
 
 /**
@@ -64,12 +66,13 @@ export function HomePage() {
         regionLabel={regionLabel}
         onRegionClick={() => navigate(REGION_SELECT_PATH)}
         onSearchClick={() => navigate(SEARCH_PATH)}
+        searchPlaceholder="搜工作、房子、二手…"
       />
 
       <nav aria-label="分类入口" className="grid grid-cols-5 gap-1 px-3 pt-3">
-        {HOME_ENTRIES.map(({ to, label, Icon }) => (
+        {HOME_ENTRIES.map(({ to, label, Icon, tileClassName }) => (
           <Link key={to} to={to} className="flex flex-col items-center gap-1.5 rounded-2xl py-2 active:bg-surface-pressed">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-field text-text-body">
+            <span className={`flex h-12 w-12 items-center justify-center rounded-2xl ${tileClassName}`}>
               <Icon aria-hidden="true" size={24} strokeWidth={2} />
             </span>
             <span className="whitespace-nowrap text-[13px] text-text">{label}</span>

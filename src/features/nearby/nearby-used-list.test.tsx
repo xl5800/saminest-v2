@@ -124,9 +124,9 @@ describe("NearbyUsedList", () => {
       limit: 20,
       offset: 0
     });
-    expect(screen.getByText("1 英里内")).toBeInTheDocument();
-    expect(screen.getByText("约 12.3 英里")).toBeInTheDocument();
-    expect(screen.getByText("约 61.2 英里")).toBeInTheDocument();
+    expect(screen.getByText(/ · 1 英里内$/)).toBeInTheDocument();
+    expect(screen.getByText(/ · 约 12\.3 英里$/)).toBeInTheDocument();
+    expect(screen.getByText(/ · 约 61\.2 英里$/)).toBeInTheDocument();
 
     const text = document.body.textContent ?? "";
     const order = ["二手 mid", "以下距离超过 50 英里", "二手 far", "以下未标注位置", "二手 nozip"].map((part) =>

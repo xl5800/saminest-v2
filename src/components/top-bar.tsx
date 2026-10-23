@@ -239,6 +239,9 @@ interface TopBarHomeProps {
    *  这几个从首页图标点进去的页面，顶栏跟首页一样（地区 + 搜索 + ＋），最左边
    *  多一个返回按钮。首页不传。 */
   showBack?: boolean;
+  /** 首页改版：传了就把右边的搜索图标换成一个长搜索框（显示这段提示文字），
+   *  点了还是 onSearchClick。只有首页传。 */
+  searchPlaceholder?: string;
 }
 
 interface TopBarTabProps {
@@ -371,6 +374,17 @@ export function TopBar(props: TopBarProps) {
               </button>
             )}
           </div>
+          {props.searchPlaceholder ? (
+            <button
+              type="button"
+              aria-label="搜索"
+              onClick={props.onSearchClick}
+              className="ml-3 flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-full bg-field px-3.5 text-left text-sm text-text-muted active:bg-surface-pressed"
+            >
+              <Search size={16} aria-hidden="true" className="shrink-0" />
+              <span className="truncate">{props.searchPlaceholder}</span>
+            </button>
+          ) : (
           <div className="flex shrink-0 items-center gap-2">
             {/* 分类页顶栏统一任务卡：搜索在前、"＋"在最右边（"‹ 地区 …… 🔍 ＋"）。 */}
             <button
@@ -396,6 +410,7 @@ export function TopBar(props: TopBarProps) {
               </button>
             ) : null}
           </div>
+          )}
         </div>
         {props.bottomSlot}
       </header>

@@ -136,7 +136,7 @@ describe("FavoritesPage", () => {
     renderWithProviders(<FavoritesPage />);
 
     expect(await screen.findByText("Sunny room")).toBeInTheDocument();
-    expect(screen.getByText("USD 1,200")).toBeInTheDocument();
+    expect(screen.getByText("$1,200")).toBeInTheDocument();
     expect(screen.getByText("Rockville")).toBeInTheDocument();
     expect(screen.getByText("2000-07-01")).toBeInTheDocument();
   });

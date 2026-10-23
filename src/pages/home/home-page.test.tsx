@@ -87,12 +87,19 @@ describe("HomePage (icon entries)", () => {
     expect(screen.queryByRole("button", { name: /显示附近的二手/ })).not.toBeInTheDocument();
   });
 
-  it("uses grey icon tiles instead of blue ones", () => {
+  // 首页改版（2026-10-23）：每个分类一个浅色底 + 同色图标。
+  it("gives each entry its own light tile color", () => {
     renderWithProviders(<HomePage />);
 
-    const tile = screen.getByRole("link", { name: "招聘求职" }).querySelector("span");
-    expect(tile).toHaveClass("bg-field", "text-text-body");
-    expect(tile).not.toHaveClass("text-primary");
+    expect(screen.getByRole("link", { name: "招聘求职" }).querySelector("span")).toHaveClass("bg-blue-100", "text-blue-600");
+    expect(screen.getByRole("link", { name: "房屋租售" }).querySelector("span")).toHaveClass("bg-orange-100");
+    expect(screen.getByRole("link", { name: "找搭子" }).querySelector("span")).toHaveClass("bg-violet-100");
+  });
+
+  it("shows a search box with a hint that opens the search page", () => {
+    renderWithProviders(<HomePage />);
+
+    expect(screen.getByRole("button", { name: "搜索" })).toHaveTextContent("搜工作、房子、二手…");
   });
 
   it("with the nearby feature on: never opens the location sheet on its own; the location bar opens it", () => {

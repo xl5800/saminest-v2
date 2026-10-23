@@ -5,7 +5,9 @@ export function formatPrice(
 ): string {
   if (priceLabel) return priceLabel;
   if (priceAmount === null) return "价格未填写";
-  return `${currencyCode} ${priceAmount.toLocaleString("zh-CN")}`;
+  // 首页改版：美元写成"$15"（北美华人习惯，也更短），其它币种保留币种代码。
+  const amount = priceAmount.toLocaleString("zh-CN");
+  return currencyCode === "USD" ? `$${amount}` : `${currencyCode} ${amount}`;
 }
 
 /**

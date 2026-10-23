@@ -17,8 +17,9 @@ describe("formatPrice", () => {
     expect(formatPrice(1200, "面议", "USD")).toBe("面议");
   });
 
-  it("formats the amount with the currency code when there is no label", () => {
-    expect(formatPrice(1200, null, "USD")).toBe("USD 1,200");
+  it("writes US dollars as $ and keeps the code for other currencies", () => {
+    expect(formatPrice(1200, null, "USD")).toBe("$1,200");
+    expect(formatPrice(1200, null, "CAD")).toBe("CAD 1,200");
   });
 
   it("falls back to a placeholder when both amount and label are missing", () => {

@@ -117,7 +117,7 @@ describe("PostList", () => {
     const link = await screen.findByRole("link");
     expect(link).toHaveAttribute("href", "/post/post-1");
     expect(link).toHaveTextContent("Sunny room near metro");
-    expect(link).toHaveTextContent("USD 1,200");
+    expect(link).toHaveTextContent("$1,200");
   });
 
   // Facebook Marketplace 风格：分类标签 pill 不展示；地区以灰色小字放在标题
@@ -129,9 +129,10 @@ describe("PostList", () => {
 
     const link = await screen.findByRole("link");
     expect(link).not.toHaveTextContent("租房");
-    const price = screen.getByText("USD 1,200");
+    const price = screen.getByText("$1,200");
     const title = screen.getByText("Sunny room near metro");
-    const location = screen.getByText("Rockville");
+    // 首页改版：最后一行是"城市 · 发布时间"。
+    const location = screen.getByText(/^Rockville · /);
     expect(price).toHaveClass("font-bold", "text-text");
     expect(location).toHaveClass("text-xs", "text-text-muted");
     const following = Node.DOCUMENT_POSITION_FOLLOWING;
@@ -149,7 +150,10 @@ describe("PostList", () => {
 
     const link = await screen.findByRole("link");
     expect(link).not.toHaveTextContent("Rockville");
-    expect(link.querySelectorAll("p")).toHaveLength(2);
+    // 首页改版：没有地点时最后一行只有发布时间。
+    const rows = link.querySelectorAll("p");
+    expect(rows).toHaveLength(3);
+    expect(rows[2]).not.toHaveTextContent("·");
   });
 
   it("truncates a very long title to a single line with an ellipsis (no multi-line wrap)", async () => {
@@ -169,14 +173,13 @@ describe("PostList", () => {
   // 精简卡片改版（Facebook Marketplace 风格）之后，作者昵称、发布时间、
   // 收藏数/评论数、FavoriteButton 都从列表卡片上去掉了——这些信息只在
   // 详情页展示，不是这个组件漏渲染。
-  it("does not render author nickname, published date, favorite/comment counts, or a favorite button", async () => {
+  it("does not render author nickname, favorite/comment counts, or a favorite button", async () => {
     listApprovedPosts.mockResolvedValue({ posts: [samplePost], hasNextPage: false });
 
     renderWithProviders(<PostList />);
 
     const link = await screen.findByRole("link");
     expect(link).not.toHaveTextContent("Alice");
-    expect(link).not.toHaveTextContent("2000-07-01");
     expect(screen.queryByText("♥ 5")).not.toBeInTheDocument();
     expect(screen.queryByText("💬 2")).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
@@ -227,7 +230,7 @@ describe("PostList", () => {
 
     renderWithProviders(<PostList />);
 
-    expect(await screen.findByText("USD 1,200")).toBeInTheDocument();
+    expect(await screen.findByText("$1,200")).toBeInTheDocument();
   });
 
   it("renders an <img> with the cover image url when coverImageUrl is present", async () => {
@@ -551,7 +554,7 @@ describe("PostList variant='wanted'", () => {
       "shadow-card"
     );
     expect(link).toHaveTextContent("Looking for a quiet room near metro");
-    expect(link).toHaveTextContent("USD 1,200");
+    expect(link).toHaveTextContent("$1,200");
     expect(link).toHaveTextContent("Rockville");
     expect(link).toHaveTextContent("Alice");
     expect(link).toHaveTextContent("女 25岁");

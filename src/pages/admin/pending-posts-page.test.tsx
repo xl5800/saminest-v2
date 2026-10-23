@@ -110,7 +110,7 @@ describe("AdminPendingPostsPage", () => {
     const images = row.querySelectorAll("img");
     expect(images).toHaveLength(2);
     expect(images[0]).toHaveAttribute("src", "https://img.example.com/1.jpg");
-    expect(row).toHaveTextContent("USD 1,200");
+    expect(row).toHaveTextContent("$1,200");
     expect(row).toHaveTextContent("步行 5 分钟到地铁站");
     expect(row).toHaveTextContent("Rockville");
     expect(screen.getByRole("link", { name: "查看详情" })).toHaveAttribute("href", "/post/post-1");

@@ -120,6 +120,17 @@ export function formatLocationDisplayName(name: string): string {
   return isBareStateCode ? formatStateLabelByCode(name) : name;
 }
 
+/**
+ * 首页改版：图片网格卡片上只显示城市——"Centreville, VA" → "Centreville"
+ * （左上角已经选了州，再写州缩写是重复）。末尾不是", 州缩写"的原样交给
+ * formatLocationDisplayName（比如只填了州的老帖子还是显示州名）。
+ */
+export function formatCityOnly(name: string): string {
+  const match = /^(.+?),\s*([A-Z]{2})$/.exec(name.trim());
+  if (match && US_STATES.some((state) => state.code === match[2])) return match[1]!;
+  return formatLocationDisplayName(name);
+}
+
 /** 08 号卡起首页顶部胶囊按钮第二行的文案格式，14 号卡把找搭子列表页的
  *  顶部栏也换成同一个胶囊（见 TopBar home 变体），这里从 home-page.tsx
  *  挪出来变成共享函数——两个页面读的是同一个 useSelectedRegionStore，
