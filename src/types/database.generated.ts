@@ -1119,6 +1119,32 @@ export type Database = {
           },
         ]
       }
+      post_view_counts: {
+        Row: {
+          post_id: string
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          post_id: string
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          post_id?: string
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_view_counts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       posts: {
         Row: {
           archive_reason: string | null
@@ -1808,6 +1834,10 @@ export type Database = {
         Returns: string
       }
       purge_expired_account_deletions: { Args: never; Returns: undefined }
+      record_post_view: {
+        Args: { target_post_id: string }
+        Returns: undefined
+      }
       reject_activity_participant: {
         Args: { target_participant_id: string }
         Returns: undefined

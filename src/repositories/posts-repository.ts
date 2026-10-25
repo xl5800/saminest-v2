@@ -1143,3 +1143,32 @@ export async function deleteMyPost(postId: string): Promise<void> {
     throw new AppError(MY_POST_NOT_FOUND_MESSAGE, "MY_POST_DELETE_NOT_FOUND");
   }
 }
+
+/**
+ * 帖子浏览次数（20261025180000_salary_week_and_post_view_counts.sql）。
+ * 打开详情页时记一次：作者自己看、帖子没公开时数据库那边直接忽略。记失败
+ * 不影响看帖子，所以这里吞掉错误。
+ */
+export async function recordPostView(postId: string): Promise<void> {
+  const { error } = await getSupabaseClient().rpc("record_post_view", { target_post_id: postId });
+  if (error) {
+    console.error("记录浏览次数失败：", error);
+  }
+}
+
+/**
+ * 浏览次数，只有作者本人和管理员查得到（RLS）；还没人看过时没有这一行，返回 0。
+ */
+export async function getPostViewCount(postId: string): Promise<number> {
+  const { data, error } = await getSupabaseClient()
+    .from("post_view_counts")
+    .select("view_count")
+    .eq("post_id", postId)
+    .maybeSingle();
+
+  if (error) {
+    throw new AppError(error.message, "POST_VIEW_COUNT_FAILED", error);
+  }
+
+  return data?.view_count ?? 0;
+}

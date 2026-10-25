@@ -89,7 +89,7 @@ describe("validatePublishInput", () => {
       validatePublishInput({
         ...validInput,
         price: "20",
-        job: { salaryUnit: "week", employmentType: "full_time", perks: [] }
+        job: { salaryUnit: "fortnight", employmentType: "full_time", perks: [] }
       }).error?.code
     ).toBe("PUBLISH_SALARY_UNIT_REQUIRED");
     expect(

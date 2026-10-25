@@ -79,6 +79,16 @@ vi.mock("../../features/profile/use-nickname-prompt", () => ({
     ensureNickname: async () => {}
   })
 }));
+// 第二批：浏览次数。记浏览和查次数各自有测试（use-post-views.test.tsx），这里只看
+// 页面什么时候记、什么时候显示数字。
+const viewMocks = vi.hoisted(() => ({ useRecordPostView: vi.fn(), isAdmin: false }));
+vi.mock("../../features/posts/use-post-views", () => ({
+  useRecordPostView: viewMocks.useRecordPostView,
+  usePostViewCountQuery: (_id: string | undefined, enabled: boolean) => ({ data: enabled ? 5 : undefined })
+}));
+vi.mock("../../features/admin/use-is-admin-query", () => ({
+  useIsAdminQuery: () => ({ data: viewMocks.isAdmin })
+}));
 vi.mock("../../features/posts/use-post-detail-query", () => ({
   usePostDetailQuery
 }));
@@ -936,6 +946,42 @@ describe("PostDetailPage", () => {
 
       expect(screen.getByRole("heading", { name: "租房" })).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "更多" })).toBeInTheDocument();
+    });
+  });
+
+  describe("浏览次数", () => {
+    it("records a view and hides the count for someone else's post", () => {
+      viewMocks.isAdmin = false;
+      viewMocks.useRecordPostView.mockClear();
+      useAuthStore.getState().setSession({ user: { id: "user-9" } } as never);
+      usePostDetailQuery.mockReturnValue({ data: samplePostDetail, isPending: false, isError: false });
+
+      renderWithProviders(<PostDetailPage />, { initialEntries: ["/post/post-1"], route: "/post/:id" });
+
+      expect(viewMocks.useRecordPostView).toHaveBeenLastCalledWith("post-1", true);
+      expect(screen.queryByText(/次浏览/)).not.toBeInTheDocument();
+    });
+
+    it("shows the count to the author, without recording their own view", () => {
+      viewMocks.isAdmin = false;
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      usePostDetailQuery.mockReturnValue({ data: samplePostDetail, isPending: false, isError: false });
+
+      renderWithProviders(<PostDetailPage />, { initialEntries: ["/post/post-1"], route: "/post/:id" });
+
+      expect(viewMocks.useRecordPostView).toHaveBeenLastCalledWith("post-1", false);
+      expect(screen.getByText("Rockville · 2000-07-01 · 5 次浏览")).toBeInTheDocument();
+    });
+
+    it("shows the count to an admin on anyone's post", () => {
+      viewMocks.isAdmin = true;
+      useAuthStore.getState().setSession({ user: { id: "admin-1" } } as never);
+      usePostDetailQuery.mockReturnValue({ data: samplePostDetail, isPending: false, isError: false });
+
+      renderWithProviders(<PostDetailPage />, { initialEntries: ["/post/post-1"], route: "/post/:id" });
+
+      expect(screen.getByText("Rockville · 2000-07-01 · 5 次浏览")).toBeInTheDocument();
+      viewMocks.isAdmin = false;
     });
   });
 });

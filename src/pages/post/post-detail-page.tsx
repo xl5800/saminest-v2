@@ -30,6 +30,8 @@ import { useShareLink } from "../../features/share/use-share-link";
 import { useTrackContentView } from "../../features/analytics/use-track-content-view";
 import { useUserSafetyActions } from "../../features/blocks/use-user-safety-actions";
 import { useAuthStore } from "../../store/auth-store";
+import { useIsAdminQuery } from "../../features/admin/use-is-admin-query";
+import { usePostViewCountQuery, useRecordPostView } from "../../features/posts/use-post-views";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -195,6 +197,11 @@ export function PostDetailPage() {
   const safety = useUserSafetyActions(data?.authorId, data?.authorDisplayName ?? "");
   const currentUserId = useAuthStore((s) => s.session)?.user.id;
   const isOwnPost = Boolean(data && currentUserId && data.authorId === currentUserId);
+  // 浏览次数：打开就记一次（作者自己看不记）；数字只给作者本人和管理员看。
+  const { data: isAdmin } = useIsAdminQuery();
+  useRecordPostView(id, Boolean(data) && !isOwnPost);
+  const canSeeViewCount = Boolean(data) && (isOwnPost || isAdmin === true);
+  const { data: viewCount } = usePostViewCountQuery(id, canSeeViewCount);
   // 大图轮播当前滚动到第几张，驱动底部"1 / 5"这种计数指示器。用原生
   // scroll-snap（横向 overflow-x-auto + snap-x snap-mandatory 容器、每张图
   // snap-center）实现滑动，不引入额外的手势/轮播库；这里只是监听容器的
@@ -302,7 +309,11 @@ export function PostDetailPage() {
     </>
   );
   const metaLine = data
-    ? [data.locationName ? formatCityOnly(data.locationName) : null, formatRelativeTimeAgo(data.createdAt)]
+    ? [
+        data.locationName ? formatCityOnly(data.locationName) : null,
+        formatRelativeTimeAgo(data.createdAt),
+        canSeeViewCount && viewCount !== undefined ? `${viewCount} 次浏览` : null
+      ]
         .filter(Boolean)
         .join(" · ")
     : "";

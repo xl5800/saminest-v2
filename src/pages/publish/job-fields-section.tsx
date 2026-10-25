@@ -3,13 +3,13 @@ import { ChevronDown } from "lucide-react";
 import {
   EMPLOYMENT_TYPE_OPTIONS,
   JOB_PERK_OPTIONS,
-  SALARY_UNIT_OPTIONS
+  salaryUnitChoicesFor
 } from "../../features/posts/job-fields";
 
 /**
  * 招聘求职任务卡：发布页在招聘 / 求职分类下，用这一块替换原来的"价格（可选）"。
  *
- * - 薪资：数字 + 单位（时薪/日薪/月薪/年薪）。不填数字就是面议，所以不另设
+ * - 薪资：数字 + 单位（时薪/周薪/月薪）。不填数字就是面议，所以不另设
  *   "面议"开关——少一个控件，也不会出现"填了数字又勾了面议"的矛盾状态。
  *   求职帖叫"期望薪资"。
  * - 工作类型：全职 / 兼职 / 全职兼职都可，单选必填（publish-validation.ts 校验）。
@@ -83,7 +83,7 @@ export function JobFieldsSection({
               onChange={(event) => onSalaryUnitChange(event.target.value)}
               className="w-full appearance-none rounded-xl bg-field px-3.5 py-3 pr-9 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
             >
-              {SALARY_UNIT_OPTIONS.map((option) => (
+              {salaryUnitChoicesFor(salaryUnit).map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>

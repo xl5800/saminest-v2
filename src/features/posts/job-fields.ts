@@ -15,16 +15,30 @@ export function isJobCategorySlug(slug: string | null | undefined): boolean {
   return slug === HIRING_CATEGORY_SLUG || slug === JOB_SEEKING_CATEGORY_SLUG;
 }
 
-export type SalaryUnit = "hour" | "day" | "month" | "year";
+export type SalaryUnit = "hour" | "day" | "week" | "month" | "year";
 export type EmploymentType = "full_time" | "part_time" | "either";
 export type JobPerk = "meals" | "housing" | "training";
 
 export const SALARY_UNIT_OPTIONS: Array<{ value: SalaryUnit; label: string; suffix: string }> = [
   { value: "hour", label: "时薪", suffix: "/时" },
   { value: "day", label: "日薪", suffix: "/天" },
+  { value: "week", label: "周薪", suffix: "/周" },
   { value: "month", label: "月薪", suffix: "/月" },
   { value: "year", label: "年薪", suffix: "/年" }
 ];
+
+/**
+ * 发布页能选的薪资单位：时薪 / 周薪 / 月薪。日薪 / 年薪数据库里还允许（老帖子
+ * 显示照旧），但新帖子不再给这两个选项；编辑一条老帖子时，它自己的单位会补在
+ * 后面，不会被悄悄改掉。
+ */
+export const SALARY_UNIT_CHOICES: readonly SalaryUnit[] = ["hour", "week", "month"];
+
+export function salaryUnitChoicesFor(current: string | null | undefined): typeof SALARY_UNIT_OPTIONS {
+  return SALARY_UNIT_OPTIONS.filter(
+    (option) => SALARY_UNIT_CHOICES.includes(option.value) || option.value === current
+  );
+}
 
 export const EMPLOYMENT_TYPE_OPTIONS: Array<{ value: EmploymentType; label: string }> = [
   { value: "full_time", label: "全职" },
