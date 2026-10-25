@@ -75,7 +75,7 @@ export function SetPasswordPage() {
   }
 
   return (
-    <main className="min-h-screen pb-20 md:pb-6">
+    <main className="min-h-dvh pb-20 md:pb-6">
       <TopBar variant="nav-only" title="登录密码" />
       <div className="mx-auto max-w-md px-4 py-6">
         <p className="mb-5 text-sm text-text-muted">

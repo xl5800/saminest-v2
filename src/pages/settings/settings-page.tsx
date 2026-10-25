@@ -43,7 +43,7 @@ export function SettingsPage() {
   }
 
   return (
-    <main className="min-h-screen pb-20 md:pb-6">
+    <main className="min-h-dvh pb-20 md:pb-6">
       <TopBar variant="nav-only" title="设置" />
       <div className="mx-auto max-w-md px-4 py-6">
         <section aria-label="账号与安全">

@@ -41,7 +41,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
   const goBack = useGoBack();
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex min-h-dvh flex-col">
       <header className="flex h-14 shrink-0 items-center border-b border-border px-4">
         <button
           type="button"

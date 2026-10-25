@@ -361,3 +361,55 @@ body {
      background-color（--color-bg），不再是原生层的黑色。 */
   padding-top: env(safe-area-inset-top);
 }
+
+/* 原生感 A 批（2026-10-25）：去掉"网页"的痕迹。
+ * - 点击时不再闪一块灰色高亮（iOS/Android WebView 默认会有）。
+ * - 整页不再橡皮筋拖动（拖到顶 / 底时整个页面跟着弹），只有真正的列表区域滚动。
+ * - 按钮、链接、导航这些界面元素长按不会选中文字；帖子正文、评论、聊天这些
+ *   内容照样可以长按选中复制（输入框也不受影响）。
+ * - 图片长按不弹"存储图片 / 拷贝"菜单；大图查看器里保留（.allow-image-callout）。
+ */
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+button,
+a,
+[role="button"],
+[role="tab"],
+[role="radio"],
+[role="switch"],
+[role="menuitem"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* 输入框永远可以选中、编辑文字（iOS 上父元素 user-select:none 会让输入框打不了字）。 */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img {
+  -webkit-touch-callout: none;
+}
+
+.allow-image-callout img,
+img.allow-image-callout {
+  -webkit-touch-callout: default;
+}
+
+/* 按压反馈：手指按下时轻微变暗，松手恢复——网页里点了没反应的感觉主要来自这里。
+ * 已经自己写了 active: 样式的元素也叠加这一层，效果一样是"按下去了"。
+ * hover 样式 Tailwind v4 本来就只在有鼠标的设备上生效，手机上不会"粘住"。 */
+:where(button, a, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="menuitem"], summary) {
+  transition: opacity 120ms ease-out;
+}
+
+:where(button, a, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="menuitem"], summary):active:not(:disabled) {
+  opacity: 0.6;
+}

@@ -64,8 +64,17 @@ export async function initializeMobileShell(): Promise<void> {
   // 项目里所有用 sticky bottom-0 的输入框都生效，不用每个页面各写一次；
   // 跟 StatusBar/SplashScreen 一样，生命周期跟应用本身一样长，不需要在
   // 组件卸载时清理这个监听器。
+  //
+  // 原生感 A 批：原来一律 scrollTo(0, 0)，在长页面（比如帖子详情下面写留言）
+  // 里键盘一收起就跳回页面最顶上，正在看的位置丢了。改成键盘弹出前先记下
+  // 当时滚到哪，收起后滚回那个位置——同样会触发一次重新排版（sticky 输入框
+  // 照样贴回底部），聊天页本身不滚动（记下来的就是 0），效果跟原来一样。
+  let scrollYBeforeKeyboard = 0;
+  await Keyboard.addListener("keyboardWillShow", () => {
+    scrollYBeforeKeyboard = window.scrollY;
+  });
   await Keyboard.addListener("keyboardDidHide", () => {
-    window.scrollTo(0, 0);
+    window.scrollTo(0, scrollYBeforeKeyboard);
   });
 
   // 启动图不在这里收起：等首页第一屏数据返回（或登录状态恢复后打开的是别的

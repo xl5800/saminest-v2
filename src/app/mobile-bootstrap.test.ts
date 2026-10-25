@@ -78,21 +78,27 @@ describe("initializeMobileShell", () => {
 
     await initializeMobileShell();
 
-    expect(addListenerMock).toHaveBeenCalledTimes(1);
+    expect(addListenerMock).toHaveBeenCalledTimes(2);
+    expect(addListenerMock).toHaveBeenCalledWith("keyboardWillShow", expect.any(Function));
     expect(addListenerMock).toHaveBeenCalledWith("keyboardDidHide", expect.any(Function));
   });
 
-  it("scrolls back to the top-left of the viewport when the registered keyboardDidHide callback fires", async () => {
+  // 原生感 A 批：键盘收起后滚回键盘弹出前的位置（不再一律回到最顶上）。
+  it("scrolls back to where the page was before the keyboard opened when the keyboard hides", async () => {
     isNativePlatformMock.mockReturnValue(true);
     addListenerMock.mockResolvedValue({ remove: vi.fn() });
     const scrollToSpy = vi.spyOn(window, "scrollTo").mockImplementation(() => {});
 
     await initializeMobileShell();
 
-    const [, onKeyboardDidHide] = addListenerMock.mock.calls[0];
-    onKeyboardDidHide();
+    const callback = (name: string) =>
+      addListenerMock.mock.calls.find(([eventName]) => eventName === name)?.[1] as () => void;
+    Object.defineProperty(window, "scrollY", { value: 640, configurable: true });
+    callback("keyboardWillShow")();
+    Object.defineProperty(window, "scrollY", { value: 0, configurable: true });
+    callback("keyboardDidHide")();
 
-    expect(scrollToSpy).toHaveBeenCalledWith(0, 0);
+    expect(scrollToSpy).toHaveBeenCalledWith(0, 640);
 
     scrollToSpy.mockRestore();
   });

@@ -165,7 +165,7 @@ export function ImageLightbox({ images, initialIndex, onClose }: ImageLightboxPr
         <img
           src={images[currentIndex]}
           alt="帖子图片"
-          className="max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-w-[100vw] object-contain"
+          className="allow-image-callout max-h-[calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom))] max-w-[100vw] object-contain"
         />
 
         <button

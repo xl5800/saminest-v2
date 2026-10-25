@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { addFavorite, removeFavorite } from "../../repositories/favorites-repository";
 import { track } from "../analytics/track";
+import { toggleIdInCachedList } from "./optimistic-id-list";
 
 export interface ToggleFavoriteInput {
   userId: string;
@@ -28,8 +29,22 @@ export function useToggleFavoriteMutation() {
         await addFavorite({ userId: input.userId, postId: input.postId });
       }
     },
+    // 原生感 A 批：点了星星马上变，失败再变回去。
+    onMutate: async (variables) => ({
+      rollback: await toggleIdInCachedList(
+        queryClient,
+        ["favorites", variables.userId],
+        variables.postId,
+        !variables.isCurrentlyFavorited
+      )
+    }),
+    onError: (_error, _variables, context) => {
+      context?.rollback();
+    },
     onSuccess: (_result, variables) => {
       if (!variables.isCurrentlyFavorited) track("content_favorited", { type: "classified" });
+    },
+    onSettled: (_result, _error, variables) => {
       void queryClient.invalidateQueries({
         queryKey: ["favorites", variables.userId]
       });

@@ -83,7 +83,7 @@ export function CommunityPostFavoriteButton({
           aria-label={isFavorited ? "取消收藏" : "收藏"}
           disabled={toggleFavorite.isPending}
           onClick={handleClick}
-          className="flex items-center gap-1 py-1 text-sm text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex items-center gap-1 py-1 text-sm text-text-muted"
         >
           <Star
             size={20}
@@ -111,7 +111,7 @@ export function CommunityPostFavoriteButton({
           aria-label={isFavorited ? "取消收藏" : "收藏"}
           disabled={toggleFavorite.isPending}
           onClick={handleClick}
-          className="flex flex-col items-center gap-1 text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex flex-col items-center gap-1 text-text-muted"
         >
           <Star
             size={22}
@@ -134,7 +134,7 @@ export function CommunityPostFavoriteButton({
         aria-label={isFavorited ? "取消收藏" : "收藏"}
         disabled={toggleFavorite.isPending}
         onClick={handleClick}
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-text-muted"
       >
         <Star
           size={18}

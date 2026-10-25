@@ -170,7 +170,7 @@ export function ProfilePage() {
   ];
 
   return (
-    <main className="min-h-screen pb-20 md:pb-6">
+    <main className="min-h-dvh pb-20 md:pb-6">
       <h1 className="sr-only">我的</h1>
 
       <div className="mx-auto max-w-md px-4 pb-6 pt-6">

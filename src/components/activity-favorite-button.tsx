@@ -88,7 +88,7 @@ export function ActivityFavoriteButton({ activityId, variant = "menu" }: Activit
           aria-label={isFavorited ? "取消收藏" : "收藏"}
           disabled={toggleFavorite.isPending}
           onClick={handleClick}
-          className="flex flex-col items-center gap-1 text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex flex-col items-center gap-1 text-text-muted"
         >
           <Heart
             size={22}

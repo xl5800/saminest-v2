@@ -5,6 +5,7 @@ import {
   removeActivityFavorite
 } from "../../repositories/favorites-repository";
 import { track } from "../analytics/track";
+import { toggleIdInCachedList } from "../favorites/optimistic-id-list";
 
 export interface ToggleActivityFavoriteInput {
   userId: string;
@@ -30,8 +31,22 @@ export function useToggleActivityFavoriteMutation() {
         await addActivityFavorite({ userId: input.userId, activityId: input.activityId });
       }
     },
+    // 原生感 A 批：点了马上变，失败再变回去。
+    onMutate: async (variables) => ({
+      rollback: await toggleIdInCachedList(
+        queryClient,
+        ["activity-favorites", variables.userId],
+        variables.activityId,
+        !variables.isCurrentlyFavorited
+      )
+    }),
+    onError: (_error, _variables, context) => {
+      context?.rollback();
+    },
     onSuccess: (_result, variables) => {
       if (!variables.isCurrentlyFavorited) track("content_favorited", { type: "activity" });
+    },
+    onSettled: (_result, _error, variables) => {
       void queryClient.invalidateQueries({
         queryKey: ["activity-favorites", variables.userId]
       });
