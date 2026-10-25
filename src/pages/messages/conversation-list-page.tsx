@@ -1,6 +1,6 @@
-import { Bell } from "lucide-react";
+import { Bell, MessageCircle } from "lucide-react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 import { Skeleton } from "../../components/skeleton";
 import { TopBar } from "../../components/top-bar";
@@ -10,6 +10,7 @@ import { useConversationListPreferencesStore } from "../../store/conversation-li
 import { ConversationSwipeRow } from "./conversation-swipe-row";
 
 const EMPTY_LIST_MESSAGE = "暂无消息";
+const EMPTY_LIST_HINT = "看到喜欢的东西，点“私信咨询”就能直接联系发布的人";
 const LOAD_ERROR_MESSAGE = "会话加载失败，请稍后重试。";
 // 高频页面骨架屏任务卡：占位行数量，纯视觉估算（大致铺满一屏），不是
 // 任务卡强制的精确值。
@@ -131,8 +132,22 @@ export function ConversationListPage() {
             {LOAD_ERROR_MESSAGE}
           </p>
         ) : null}
+        {/* 消息页改版（2026-10-25）：空的时候不是左上角一行小字，而是居中的
+            图标 + 一句说明 + "去逛逛"。 */}
         {!isPending && !isError && conversations && visibleConversations.length === 0 ? (
-          <p role="status" className="px-4 text-sm text-text-muted">{EMPTY_LIST_MESSAGE}</p>
+          <div role="status" className="flex flex-col items-center px-10 pt-[22vh] text-center">
+            <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-light text-primary">
+              <MessageCircle size={38} aria-hidden="true" />
+            </span>
+            <p className="mt-4 text-[17px] font-bold text-text">{EMPTY_LIST_MESSAGE}</p>
+            <p className="mt-1.5 text-sm leading-relaxed text-text-muted">{EMPTY_LIST_HINT}</p>
+            <Link
+              to="/"
+              className="mt-5 flex h-10 items-center rounded-full bg-primary px-6 text-sm font-semibold text-white hover:bg-primary-hover"
+            >
+              去逛逛
+            </Link>
+          </div>
         ) : null}
         {!isPending && !isError && visibleConversations.length > 0 ? (
           // 全 App 视觉 Token 体系（第一批）：分割线从 divide-border（卡片

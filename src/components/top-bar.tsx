@@ -134,6 +134,8 @@ function BackButton({ onBack }: { onBack?: () => void }) {
 interface MoreMenuButtonProps {
   label: string;
   content: ReactNode;
+  /** 帖子详情页有大图时，"…"浮在图片上，用半透明黑底白图标；不传是普通顶栏样式。 */
+  buttonClassName?: string;
 }
 
 /**
@@ -146,7 +148,7 @@ interface MoreMenuButtonProps {
  * 的每一项（收藏/分享/举报…）自己的 onClick 会先于这个收起逻辑触发（React
  * 事件冒泡顺序），点完自动关闭菜单，不需要调用方自己记得关闭。
  */
-function MoreMenuButton({ label, content }: MoreMenuButtonProps) {
+export function MoreMenuButton({ label, content, buttonClassName }: MoreMenuButtonProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -179,7 +181,7 @@ function MoreMenuButton({ label, content }: MoreMenuButtonProps) {
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className={ICON_BUTTON_CLASS_NAME}
+        className={buttonClassName ?? ICON_BUTTON_CLASS_NAME}
       >
         <MoreHorizontal size={18} aria-hidden="true" />
       </button>

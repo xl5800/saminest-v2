@@ -1,9 +1,11 @@
-import { ChevronRight, MapPin, Search } from "lucide-react";
+import { MapPin, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 
 import { Skeleton } from "../../components/skeleton";
-import { formatSelectedRegionLabel } from "../../data/us-states";
+import { formatShortRegionLabel } from "../../data/us-states";
+import { useCommunityPostsInfiniteQuery } from "../../features/community/use-community-posts-query";
+import { formatRelativeTimeAgo } from "../../utils/format";
 import { useListCommunitiesQuery } from "../../features/community/use-list-communities-query";
 import { useMyCommunitiesQuery } from "../../features/community/use-my-communities-query";
 import type { Community } from "../../repositories/community-repository";
@@ -25,6 +27,7 @@ const MINE_GUEST_MESSAGE = "登录后可以看到你加入的社区";
 const LOAD_ERROR_MESSAGE = "社区加载失败，请稍后重试。";
 const SEARCH_EMPTY_MESSAGE = "没有找到相关社区";
 const REGION_PLACEHOLDER = "选择地区";
+const LATEST_POSTS_COUNT = 5;
 
 type BrowseTab = "nearby" | "mine" | "discover";
 
@@ -109,6 +112,11 @@ export function CommunityBrowsePage() {
   const nearbyCommunities = (communities ?? []).filter(
     (community) => !selectedRegion || community.stateCodes.includes(selectedRegion.stateCode)
   );
+  // 社区页改版：附近的社区下面接"最新讨论"，页面不会只有几行社区就空了。
+  const latestPosts = useCommunityPostsInfiniteQuery(
+    tab === "nearby" && !communitiesPending ? nearbyCommunities.map((community) => community.id) : undefined
+  );
+  const latestPostItems = (latestPosts.data?.pages ?? []).flatMap((page) => page.posts).slice(0, LATEST_POSTS_COUNT);
 
   function handleSearchClick(): void {
     setTab("discover");
@@ -132,7 +140,7 @@ export function CommunityBrowsePage() {
 
   function renderCardList(list: Community[]) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col divide-y divide-divider">
         {list.map((community) => (
           <BrowseCommunityCard key={community.id} community={community} />
         ))}
@@ -150,7 +158,37 @@ export function CommunityBrowsePage() {
         </p>
       );
     }
-    return renderCardList(nearbyCommunities);
+    return (
+      <>
+        {renderCardList(nearbyCommunities)}
+        {latestPostItems.length > 0 ? (
+          <section aria-label="最新讨论" className="-mx-4 mt-3 border-t-8 border-bg-secondary px-4">
+            <h2 className="pb-1 pt-4 text-[15px] font-bold text-text">最新讨论</h2>
+            <ul className="divide-y divide-divider">
+              {latestPostItems.map((post) => (
+                <li key={post.id}>
+                  <Link to={`/community/post/${post.id}`} className="block py-3">
+                    <p className="line-clamp-2 text-[15px] font-semibold leading-snug text-text">
+                      {post.title ?? post.body}
+                    </p>
+                    <p className="mt-1 truncate text-[12.5px] text-text-muted">
+                      {[
+                        post.communityName,
+                        post.authorDisplayName,
+                        formatRelativeTimeAgo(post.createdAt),
+                        post.commentCount > 0 ? `${post.commentCount} 条评论` : null
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+      </>
+    );
   }
 
   function renderMine() {
@@ -229,8 +267,10 @@ export function CommunityBrowsePage() {
 
   return (
     <main data-testid="community-browse-page" className="pb-24 md:pb-6">
+      {/* 社区页改版：标题改成黑色（跟其它页面一致）；地区从一整条大按钮改成
+          分类那一行最右边的小胶囊。 */}
       <header className="flex h-14 items-center justify-between px-4">
-        <h1 className="text-2xl font-semibold text-primary">社区</h1>
+        <h1 className="text-[22px] font-extrabold text-text">社区</h1>
         <button
           type="button"
           aria-label="搜索"
@@ -242,41 +282,37 @@ export function CommunityBrowsePage() {
       </header>
 
       <div className="mx-auto max-w-2xl px-4">
-        <button
-          type="button"
-          onClick={() => navigate(REGION_SELECT_PATH)}
-          className="flex w-full items-center gap-2 rounded-xl border border-border bg-card-white px-3 py-2.5 text-left text-sm text-text"
-        >
-          <MapPin aria-hidden="true" size={16} className="shrink-0 text-text-muted" />
-          <span className="min-w-0 flex-1 truncate">
-            {selectedRegion ? formatSelectedRegionLabel(selectedRegion) : REGION_PLACEHOLDER}
-          </span>
-          <ChevronRight aria-hidden="true" size={16} className="shrink-0 text-chevron" />
-        </button>
-
-        <div role="tablist" aria-label="社区分类" className="mt-3 flex gap-2">
-          {TAB_OPTIONS.map((option) => {
-            const active = tab === option.value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setTab(option.value)}
-                className={
-                  active
-                    ? "flex h-9 shrink-0 items-center justify-center rounded-full bg-primary px-4 text-sm font-semibold whitespace-nowrap text-white"
-                    : "flex h-9 shrink-0 items-center justify-center rounded-full border border-border bg-bg px-4 text-sm whitespace-nowrap text-text-muted"
-                }
-              >
-                {option.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2">
+          <div role="tablist" aria-label="社区分类" className="flex min-w-0 flex-1 gap-2">
+            {TAB_OPTIONS.map((option) => {
+              const active = tab === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setTab(option.value)}
+                  className={`flex h-8 shrink-0 items-center justify-center rounded-full px-3.5 text-[13.5px] whitespace-nowrap ${
+                    active ? "bg-text font-semibold text-white" : "bg-field text-text-body"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate(REGION_SELECT_PATH)}
+            className="flex h-8 max-w-[8.5rem] shrink-0 items-center gap-1 rounded-full border border-border px-2.5 text-[13px] text-text"
+          >
+            <MapPin aria-hidden="true" size={14} className="shrink-0 text-text-muted" />
+            <span className="truncate">{selectedRegion ? formatShortRegionLabel(selectedRegion) : REGION_PLACEHOLDER}</span>
+          </button>
         </div>
 
-        <div role="tabpanel" className="mt-4">
+        <div role="tabpanel" className="mt-2">
           {tab === "nearby" ? renderNearby() : null}
           {tab === "mine" ? renderMine() : null}
           {tab === "discover" ? renderDiscover() : null}

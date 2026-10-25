@@ -10,8 +10,10 @@ const {
   useLeaveCommunityMutation,
   navigateMock,
   mutateMock,
-  leaveMutateMock
+  leaveMutateMock,
+  useCommunityPostsInfiniteQuery
 } = vi.hoisted(() => ({
+  useCommunityPostsInfiniteQuery: vi.fn(),
   useListCommunitiesQuery: vi.fn(),
   useMyCommunitiesQuery: vi.fn(),
   useCommunityMembershipQuery: vi.fn(),
@@ -36,6 +38,9 @@ vi.mock("../../features/community/use-join-community-mutation", () => ({
 }));
 vi.mock("../../features/community/use-leave-community-mutation", () => ({
   useLeaveCommunityMutation
+}));
+vi.mock("../../features/community/use-community-posts-query", () => ({
+  useCommunityPostsInfiniteQuery
 }));
 vi.mock("react-router-dom", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-router-dom")>();
@@ -112,6 +117,7 @@ describe("CommunityBrowsePage", () => {
     mutateMock.mockReset();
     leaveMutateMock.mockReset();
     useLeaveCommunityMutation.mockReturnValue({ mutate: leaveMutateMock, isPending: false });
+    useCommunityPostsInfiniteQuery.mockReturnValue({ data: undefined });
     useListCommunitiesQuery.mockReturnValue({
       data: [dmvCommunity, petsCommunity, studentsCommunity],
       isPending: false,
@@ -135,12 +141,13 @@ describe("CommunityBrowsePage", () => {
       expect(screen.getByRole("button", { name: "搜索" })).toBeInTheDocument();
     });
 
-    it("shows the formatted selected region on the region row", () => {
+    // 社区页改版：地区是分类那一行右边的小胶囊，显示短名字。
+    it("shows the selected region on the region chip", () => {
       setRegion("VA");
 
       renderPage();
 
-      expect(screen.getByText("VA 弗吉尼亚州")).toBeInTheDocument();
+      expect(screen.getByText("弗吉尼亚")).toBeInTheDocument();
     });
 
     it("falls back to the 选择地区 placeholder when no region is selected", () => {
@@ -265,7 +272,7 @@ describe("CommunityBrowsePage", () => {
     it("renders member count and today's new post count on a card, and links each card to its own /community/:slug", () => {
       renderPage();
 
-      expect(screen.getAllByText("128 位成员 · 今日 3 个新帖子")).toHaveLength(1);
+      expect(screen.getAllByText(/^128 位成员 · 今日 3 个新帖子/)).toHaveLength(1);
       expect(screen.getByRole("link", { name: "DMV 华人社区" })).toHaveAttribute(
         "href",
         "/community/dmv"
@@ -283,8 +290,8 @@ describe("CommunityBrowsePage", () => {
     it("uses the community's own description when set, and a fallback line when it is null", () => {
       renderPage();
 
-      expect(screen.getByText("来自数据库的简介")).toBeInTheDocument();
-      expect(screen.getByText("暂无简介")).toBeInTheDocument();
+      expect(screen.getByText(/来自数据库的简介$/)).toBeInTheDocument();
+      expect(screen.getByText(/暂无简介$/)).toBeInTheDocument();
     });
 
     it("shows the verified icon only on official communities' cards", () => {
@@ -497,7 +504,7 @@ describe("CommunityBrowsePage", () => {
 
       renderPage();
 
-      expect(screen.getAllByRole("button", { name: "退出" })).toHaveLength(1);
+      expect(screen.getAllByRole("button", { name: "已加入，点击退出" })).toHaveLength(1);
       expect(joinButtons()).toHaveLength(2);
     });
 
@@ -510,7 +517,7 @@ describe("CommunityBrowsePage", () => {
       }));
 
       renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      fireEvent.click(screen.getByRole("button", { name: "已加入，点击退出" }));
 
       const dialog = screen.getByRole("dialog", { name: "确认退出社区" });
       expect(dialog).toHaveTextContent("DMV 宠物社区");
@@ -531,7 +538,7 @@ describe("CommunityBrowsePage", () => {
       }));
 
       renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      fireEvent.click(screen.getByRole("button", { name: "已加入，点击退出" }));
       fireEvent.click(screen.getByRole("button", { name: "确认退出" }));
 
       expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -561,7 +568,7 @@ describe("CommunityBrowsePage", () => {
       }));
 
       renderPage();
-      fireEvent.click(screen.getByRole("button", { name: "退出" }));
+      fireEvent.click(screen.getByRole("button", { name: "已加入，点击退出" }));
       fireEvent.click(screen.getByRole("button", { name: "确认退出" }));
       act(() => {
         leaveMutateMock.mock.calls[0][1].onError(new Error("network down"));
@@ -606,5 +613,30 @@ describe("CommunityBrowsePage", () => {
 
       expect(screen.getByRole("alert")).toHaveTextContent("加入失败，请稍后重试。");
     });
+  });
+
+  // 社区页改版：附近的社区下面接"最新讨论"。
+  it("lists the latest discussions from nearby communities under the community list", () => {
+    useCommunityPostsInfiniteQuery.mockReturnValue({
+      data: {
+        pages: [
+          {
+            posts: [
+              { id: "cp-1", title: "签租约之前要确认的 6 件事", body: "正文", communityName: "DMV 华人社区", authorDisplayName: "阿杰", createdAt: "2000-07-01T00:00:00.000Z", commentCount: 3 },
+              { id: "cp-2", title: null, body: "没有标题的帖子用正文", communityName: "DMV 宠物社区", authorDisplayName: "Amy", createdAt: "2000-07-01T00:00:00.000Z", commentCount: 0 }
+            ],
+            hasNextPage: false
+          }
+        ]
+      }
+    });
+
+    renderPage();
+
+    const section = screen.getByRole("region", { name: "最新讨论" });
+    expect(within(section).getByRole("link", { name: /签租约之前要确认的 6 件事/ })).toHaveAttribute("href", "/community/post/cp-1");
+    expect(within(section).getByText("DMV 华人社区 · 阿杰 · 2000-07-01 · 3 条评论")).toBeInTheDocument();
+    expect(within(section).getByText("没有标题的帖子用正文")).toBeInTheDocument();
+    expect(useCommunityPostsInfiniteQuery).toHaveBeenLastCalledWith(["c-1", "c-2", "c-3"]);
   });
 });

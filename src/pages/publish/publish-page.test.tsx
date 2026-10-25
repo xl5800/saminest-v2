@@ -323,7 +323,8 @@ describe("PublishPage", () => {
     expect(screen.getByRole("radio", { name: "求租" })).not.toBeChecked();
   });
 
-  it("styles the selected category tab with a primary background and the unselected ones with a light background", async () => {
+  // 发布页改版：分类是一排横滑胶囊，选中黑底白字，没选中浅灰底。
+  it("styles the selected category tab dark and the unselected ones light", async () => {
     listActiveCategories.mockResolvedValue([
       { id: "cat-1", slug: "rent", nameZh: "租房" },
       { id: "cat-2", slug: "wanted", nameZh: "求租" }
@@ -334,10 +335,27 @@ describe("PublishPage", () => {
     selectCategory("租房");
     fillZip();
 
-    expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\bbg-primary\b/);
+    expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\bbg-text\b/);
     expect(screen.getByRole("radio", { name: "租房" }).className).toMatch(/\btext-white\b/);
-    expect(screen.getByRole("radio", { name: "求租" }).className).not.toMatch(/\bbg-primary\b/);
-    expect(screen.getByRole("radio", { name: "求租" }).className).toMatch(/\btext-text-muted\b/);
+    expect(screen.getByRole("radio", { name: "求租" }).className).not.toMatch(/\bbg-text\b/);
+    expect(screen.getByRole("radio", { name: "求租" }).className).toMatch(/\bbg-field\b/);
+  });
+
+  // 发布页改版：标题 / 正文提示文字跟着分类变。
+  it("changes the title and description hints with the category", async () => {
+    listActiveCategories.mockResolvedValue([
+      { id: "cat-1", slug: "rent", nameZh: "租房" },
+      { id: "cat-3", slug: "used", nameZh: "二手" }
+    ]);
+    renderWithProviders(<PublishPage />);
+    await screen.findByRole("radio", { name: "二手" });
+
+    selectCategory("二手");
+    expect(screen.getByLabelText("标题")).toHaveAttribute("placeholder", "卖什么？");
+    expect(screen.getByLabelText("描述")).toHaveAttribute("placeholder", "描述一下：成色、用了多久、怎么交易…");
+
+    selectCategory("租房");
+    expect(screen.getByLabelText("标题")).toHaveAttribute("placeholder", "出租什么房子？");
   });
 
   it("renders the shared 标题 + 描述 editor with 添加标题 / 添加正文 placeholders, title first", async () => {
@@ -1165,11 +1183,11 @@ describe("PublishPage", () => {
       await screen.findByRole("radio", { name: "二手" });
 
       selectCategory("二手");
-      fireEvent.change(screen.getByText("价格（可选）").parentElement!.querySelector("input")!, {
+      fireEvent.change(screen.getByLabelText("价格（可选）"), {
         target: { value: "40" }
       });
       selectCategory("免费物品");
-      expect(screen.queryByText("价格（可选）")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("价格（可选）")).not.toBeInTheDocument();
       expect(screen.getByText(/免费送出，不需要填价格/)).toBeInTheDocument();
 
       fillTitle("送一张书桌");

@@ -9,6 +9,10 @@ export interface TitleBodyEditorProps {
   bodyMaxLength: number;
   titleAriaLabel: string;
   bodyAriaLabel: string;
+  /** 发布页改版：提示文字跟着分类变（二手"卖什么？"、招聘"招什么职位？"…）。
+   *  不传还是"添加标题 / 添加正文"。 */
+  titlePlaceholder?: string;
+  bodyPlaceholder?: string;
 }
 
 /**
@@ -33,7 +37,9 @@ export function TitleBodyEditor({
   titleMaxLength,
   bodyMaxLength,
   titleAriaLabel,
-  bodyAriaLabel
+  bodyAriaLabel,
+  titlePlaceholder = "添加标题",
+  bodyPlaceholder = "添加正文"
 }: TitleBodyEditorProps) {
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -59,7 +65,7 @@ export function TitleBodyEditor({
           }
         }}
         maxLength={titleMaxLength}
-        placeholder="添加标题"
+        placeholder={titlePlaceholder}
         className="w-full bg-transparent text-xl text-text placeholder:text-text-placeholder focus:outline-none"
       />
       <textarea
@@ -68,7 +74,7 @@ export function TitleBodyEditor({
         value={body}
         onChange={handleBodyChange}
         maxLength={bodyMaxLength}
-        placeholder="添加正文"
+        placeholder={bodyPlaceholder}
         className="mt-2 max-h-[60dvh] min-h-[160px] w-full resize-none overflow-y-auto bg-transparent text-base text-text placeholder:text-text-placeholder focus:outline-none"
       />
     </div>

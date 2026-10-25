@@ -28,8 +28,8 @@ describe("CommunityCard", () => {
     renderCard();
 
     expect(screen.getByRole("heading", { name: "DMV 华人社区" })).toBeInTheDocument();
-    expect(screen.getByText("128 位成员 · 今日 3 个新帖子")).toBeInTheDocument();
-    expect(screen.getByText("DC / MD / VA 华人交流")).toBeInTheDocument();
+    // 社区页改版：成员数、今日新帖和简介并成一行。
+    expect(screen.getByText("128 位成员 · 今日 3 个新帖子 · DC / MD / VA 华人交流")).toBeInTheDocument();
     expect(screen.queryByText("DMV")).not.toBeInTheDocument();
     expect(screen.queryByText("州社区")).not.toBeInTheDocument();
   });
@@ -46,14 +46,15 @@ describe("CommunityCard", () => {
   it("omits the '今日 N 个新帖子' segment (instead of showing a jumpy 0) while the count is still loading", () => {
     renderCard({ todayPostCount: undefined });
 
-    expect(screen.getByText("128 位成员")).toBeInTheDocument();
+    expect(screen.getByText("128 位成员 · DC / MD / VA 华人交流")).toBeInTheDocument();
     expect(screen.queryByText(/今日/)).not.toBeInTheDocument();
   });
 
-  it("shows 今日 0 个新帖子 when the count has loaded and is genuinely zero", () => {
+  // 社区页改版："今日 0 个新帖子"显得冷清，为 0 时不显示。
+  it("hides the 今日 segment when the count is zero", () => {
     renderCard({ todayPostCount: 0 });
 
-    expect(screen.getByText("128 位成员 · 今日 0 个新帖子")).toBeInTheDocument();
+    expect(screen.getByText("128 位成员 · DC / MD / VA 华人交流")).toBeInTheDocument();
   });
 
   it("links the whole card to the given path via a stretched link named after the community", () => {
@@ -86,11 +87,11 @@ describe("CommunityCard", () => {
     expect(screen.getByRole("button", { name: "加入中…" })).toBeDisabled();
   });
 
-  it("turns the button into 退出 once joined, calling onLeave (not onJoin) on click", () => {
+  it("turns the button into 已加入 once joined, calling onLeave (not onJoin) on click", () => {
     const { props } = renderCard({ joinState: "joined" });
 
     expect(screen.queryByRole("button", { name: "加入" })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "退出" }));
+    fireEvent.click(screen.getByRole("button", { name: "已加入，点击退出" }));
 
     expect(props.onLeave).toHaveBeenCalledTimes(1);
     expect(props.onJoin).not.toHaveBeenCalled();

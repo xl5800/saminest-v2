@@ -233,7 +233,8 @@ describe("PostDetailPage", () => {
   // 23 号卡：顶部栏整个换掉了——21 号卡的 TopBar nav-only（一条常规返回
   // 箭头顶栏）不再使用，改成页面自己渲染的悬浮"关闭"圆形按钮，不再有
   // TopBar 组件、不再有"返回"这个可访问名称的按钮。
-  it("renders a floating 关闭 button (no TopBar, no brand/publish text), even while the post detail query is pending", () => {
+  // 详情页改版（2026-10-25）：没有大图（包括还在加载）时用正常顶栏的返回按钮。
+  it("renders a normal 返回 button (no brand/publish text), even while the post detail query is pending", () => {
     usePostDetailQuery.mockReturnValue({ data: undefined, isPending: true, isError: false });
 
     renderWithProviders(<PostDetailPage />, {
@@ -241,13 +242,13 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    expect(screen.getByRole("button", { name: "关闭" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "返回" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "返回" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "关闭" })).not.toBeInTheDocument();
     expect(screen.queryByText("华邻")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "发布" })).not.toBeInTheDocument();
   });
 
-  it("navigates back (navigate(-1)) when the floating 关闭 button is clicked", () => {
+  it("navigates back (navigate(-1)) when the 返回 button floating on the photos is clicked", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -259,7 +260,7 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "关闭" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
 
     expect(navigateMock).toHaveBeenCalledWith(-1);
   });
@@ -308,7 +309,7 @@ describe("PostDetailPage", () => {
       )
     ).toBeInTheDocument();
     expect(screen.getByText("$1,200")).toBeInTheDocument();
-    expect(screen.getByText("Rockville")).toBeInTheDocument();
+    expect(screen.getByText("Rockville · 2000-07-01")).toBeInTheDocument();
     expect(screen.getByText("Alice")).toBeInTheDocument();
     expect(screen.getByText("alice@example.com")).toBeInTheDocument();
 
@@ -321,7 +322,8 @@ describe("PostDetailPage", () => {
   // 任务卡3：描述正文上方加"描述"小节标题，改版前这里没有任何标题文字，
   // 跟活动详情页"活动描述"同一个写法（<h2 className="mb-1 text-sm
   // font-semibold text-text">）。
-  it("renders a '描述' section heading directly above the description text", () => {
+  // 详情页改版：去掉"描述"小标题，发帖人卡片放在正文上面。
+  it("shows the description without a '描述' heading, below the poster card", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -333,20 +335,16 @@ describe("PostDetailPage", () => {
       route: "/post/:id"
     });
 
-    const heading = screen.getByRole("heading", { name: "描述" });
-    const description = screen.getByText(
-      "A lovely room near the metro, walking distance to everything."
-    );
-    expect(heading).toBeInTheDocument();
-    // Node.DOCUMENT_POSITION_FOLLOWING (4): description 在 heading 之后。
-    expect(
-      heading.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "描述" })).not.toBeInTheDocument();
+    const author = screen.getByText("Alice");
+    const description = screen.getByText("A lovely room near the metro, walking distance to everything.");
+    expect(author.compareDocumentPosition(description) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
 
   // 23 号卡：分类标签 pill 和发布时间这两项，新的信息顺序里没有列出来，
   // 这次一并从详情页拿掉了（见完工报告里对这条决定的说明）。
-  it("does not render the category tag pill or the listing date — dropped in the 23 号卡 layout, unlike location/author which are kept", () => {
+  it("does not render a category tag pill on a post with photos (the time now sits in the location line)", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -359,13 +357,10 @@ describe("PostDetailPage", () => {
     });
 
     expect(screen.queryByText("租房")).not.toBeInTheDocument();
-    expect(screen.queryByText("2000-07-01")).not.toBeInTheDocument();
   });
 
-  // 23 号卡：顺序从"价格在标题上方（放大突出）"改成"标题在价格上方"——用
-  // compareDocumentPosition 断言标题文本节点在价格之前，而不是只断言两者
-  // 都存在（存在性已经被上面那条测试覆盖了）。
-  it("renders the title above the price (23 号卡 layout reorder: image → title → price → location → icons → ...)", () => {
+  // 详情页改版：二手 / 房屋这类先价格后标题。
+  it("renders the price above the title for non-job posts", () => {
     usePostDetailQuery.mockReturnValue({
       data: samplePostDetail,
       isPending: false,
@@ -380,8 +375,8 @@ describe("PostDetailPage", () => {
     const title = screen.getByRole("heading", { name: "Sunny room near metro" });
     const price = screen.getByText("$1,200");
 
-    // Node.DOCUMENT_POSITION_FOLLOWING (4): price 在 title 之后。
-    expect(title.compareDocumentPosition(price) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // Node.DOCUMENT_POSITION_FOLLOWING (4): title 在 price 之后。
+    expect(price.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   // 23 号卡：价格为空时那一整行完全不渲染——不是留空、不是显示"价格未
@@ -578,7 +573,7 @@ describe("PostDetailPage", () => {
       });
 
       const button = screen.getByRole("button", { name: "私信咨询" });
-      expect(button).toHaveClass("h-[46px]", "rounded-lg", "text-[15px]", "w-full", "bg-primary", "text-white");
+      expect(button).toHaveClass("h-[46px]", "rounded-full", "text-[15px]", "w-full", "bg-primary", "text-white");
       expect(button.className).not.toContain("text-base");
       expect(button.className).not.toContain("shadow-fab");
     });
@@ -804,7 +799,9 @@ describe("PostDetailPage", () => {
       // samplePostDetail.createdAt 是 2000 年，早就超过相对时间的 30 天
       // 上限，会退化成 formatListingDate 的绝对日期格式，断言结果是
       // 确定性的，不用 mock Date.now()。
-      expect(screen.getByText("发布于 2000-07-01")).toBeInTheDocument();
+      // 详情页改版：发布时间挪到标题下面那一行，卡片副标题只写"发布者"。
+      expect(screen.getByText("发布者")).toBeInTheDocument();
+      expect(screen.getByText("Rockville · 2000-07-01")).toBeInTheDocument();
       expect(screen.queryByText(/活跃于/)).not.toBeInTheDocument();
     });
   });
@@ -899,5 +896,46 @@ describe("PostDetailPage", () => {
     expect(
       screen.getByRole("heading", { name: "Sunny room near metro" })
     ).toBeInTheDocument();
+  });
+
+  // 详情页改版：举报 / 屏蔽挪进右上角"…"；自己的帖子"…"里是"编辑"。
+  describe("右上角 … 菜单", () => {
+    it("offers 举报帖子 / 举报用户 / 屏蔽此人 on someone else's post", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-9" } } as never);
+      usePostDetailQuery.mockReturnValue({ data: samplePostDetail, isPending: false, isError: false });
+
+      renderWithProviders(<PostDetailPage />, { initialEntries: ["/post/post-1"], route: "/post/:id" });
+
+      fireEvent.click(screen.getByRole("button", { name: "更多" }));
+      const menu = screen.getByRole("menu");
+      expect(within(menu).getByRole("link", { name: "举报帖子" })).toHaveAttribute("href", "/post/post-1/report");
+      expect(within(menu).getByRole("link", { name: "举报用户" })).toBeInTheDocument();
+      expect(within(menu).getByRole("button", { name: "屏蔽此人" })).toBeInTheDocument();
+    });
+
+    it("offers 编辑 on your own post", () => {
+      useAuthStore.getState().setSession({ user: { id: "user-2" } } as never);
+      usePostDetailQuery.mockReturnValue({ data: samplePostDetail, isPending: false, isError: false });
+
+      renderWithProviders(<PostDetailPage />, { initialEntries: ["/post/post-1"], route: "/post/:id" });
+
+      fireEvent.click(screen.getByRole("button", { name: "更多" }));
+      const menu = screen.getByRole("menu");
+      expect(within(menu).getByRole("link", { name: "编辑" })).toHaveAttribute("href", "/publish/post-1");
+      expect(within(menu).queryByText("举报帖子")).not.toBeInTheDocument();
+    });
+
+    it("uses a normal top bar titled with the category when the post has no photos", () => {
+      usePostDetailQuery.mockReturnValue({
+        data: { ...samplePostDetail, images: [] },
+        isPending: false,
+        isError: false
+      });
+
+      renderWithProviders(<PostDetailPage />, { initialEntries: ["/post/post-1"], route: "/post/:id" });
+
+      expect(screen.getByRole("heading", { name: "租房" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "更多" })).toBeInTheDocument();
+    });
   });
 });

@@ -63,7 +63,9 @@ describe("PostImagePicker", () => {
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
     expect(container.querySelector("input[capture]")).toBeNull();
     expect(getFileInput()).toHaveAttribute("multiple");
-    expect(screen.getByText("拖拽图片到此处，或点击从相册选择")).toBeInTheDocument();
+    // 发布页改版：大虚线框换成"添加照片 0/9"小方块。
+    expect(screen.getByText("添加照片")).toBeInTheDocument();
+    expect(screen.getByText("0/9")).toBeInTheDocument();
   });
 
   it("shows no hint text above the upload area, but keeps 上传图片 as the input's accessible name", () => {
@@ -221,7 +223,7 @@ describe("PostImagePicker", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
 
-    await screen.findByText("拖拽图片到此处，或点击从相册选择");
+    await screen.findByText("0/9");
     expect(revokeObjectURLSpy).toHaveBeenCalled();
   });
 

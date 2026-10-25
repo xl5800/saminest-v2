@@ -1,3 +1,4 @@
+import { Camera, X } from "lucide-react";
 import {
   type ChangeEvent,
   type DragEvent,
@@ -161,36 +162,67 @@ export function PostImagePicker({
 
   const inputId = `${id}-input`;
 
+  // 发布页改版（2026-10-25）：已选的图片和"添加照片 n/9"方块排在同一行（手机
+  // 上没有"拖拽"这回事，原来"拖拽图片到此处"的大虚线框改成一个小方块）。
+  // 电脑上照样可以把图片拖到方块上。
   return (
     <div>
-      {/* BARRY 要求去掉上传区上方那行说明文字（"上传图片（最多 9 张，支持
-          JPEG/PNG/WEBP，单张不超过 20MB）"）——数量/格式/大小的限制本身不变，
-          超出时仍由下面的 errors 提示具体原因。输入框改用 aria-label 保留
-          "上传图片"这个可访问名称，读屏和测试按名称找它都不受影响。 */}
-      <label htmlFor={inputId} className="mb-2 block cursor-pointer text-sm font-medium text-text">
-        {/* 全 App 视觉 Token 体系（第二批）：占位底色从 bg-bg（通用页面
-            背景）换成 bg-surface-muted——这里是一个图片占位/上传区域，
-            语义上应该用第一批专门为"弱化表面/图片占位"建的 token，不是
-            借用泛用的页面背景色，跟 activity-participant-avatars.tsx 的
-            找搭子头像空位占位格是同一个处理模式。 */}
-        <div
-          data-testid="post-image-drop-zone"
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-          className="flex flex-col items-center justify-center gap-2 rounded border-2 border-dashed border-border bg-surface-muted px-4 py-8 text-center font-normal"
-        >
-          <input
-            id={inputId}
-            type="file"
-            accept={ACCEPTED_POST_IMAGE_MIME_TYPES.join(",")}
-            multiple
-            aria-label="上传图片"
-            onChange={handleInputChange}
-            className="sr-only"
-          />
-          <p className="text-sm text-text-muted">拖拽图片到此处，或点击从相册选择</p>
-        </div>
-      </label>
+      <ul className="flex flex-wrap gap-2">
+        {value.map((file, index) => (
+          <li key={`${file.name}-${file.size}-${index}`} className="relative h-[84px] w-[84px]">
+            {previewUrls[index] ? (
+              <img
+                src={previewUrls[index]}
+                alt={file.name}
+                width={84}
+                height={84}
+                className="h-full w-full rounded-xl object-cover"
+              />
+            ) : (
+              <span className="block h-full w-full rounded-xl bg-surface-muted" />
+            )}
+            <span className="sr-only">{file.name}</span>
+            <button
+              type="button"
+              aria-label="删除"
+              onClick={() => handleRemove(index)}
+              className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white"
+            >
+              <X size={14} aria-hidden="true" />
+            </button>
+          </li>
+        ))}
+        {/* 满 9 张时方块还在（显示 9/9），再选会提示"最多只能上传 9 张"，
+            不会悄悄丢掉用户选的图。 */}
+        {(
+          <li>
+            {/* 输入框用 aria-label 保留"上传图片"这个可访问名称。 */}
+            <label htmlFor={inputId} className="block cursor-pointer">
+              <div
+                data-testid="post-image-drop-zone"
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                className="flex h-[84px] w-[84px] flex-col items-center justify-center gap-0.5 rounded-xl border-[1.5px] border-dashed border-border text-text-muted"
+              >
+                <input
+                  id={inputId}
+                  type="file"
+                  accept={ACCEPTED_POST_IMAGE_MIME_TYPES.join(",")}
+                  multiple
+                  aria-label="上传图片"
+                  onChange={handleInputChange}
+                  className="sr-only"
+                />
+                <Camera size={24} aria-hidden="true" />
+                <span className="text-xs">添加照片</span>
+                <span className="text-[11px]">
+                  {value.length}/{MAX_POST_IMAGES}
+                </span>
+              </div>
+            </label>
+          </li>
+        )}
+      </ul>
       {errors.length > 0 ? (
         <div role="alert" className="mt-2 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
           {errors.map((message) => (
@@ -199,34 +231,6 @@ export function PostImagePicker({
             </p>
           ))}
         </div>
-      ) : null}
-      {value.length > 0 ? (
-        <ul className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-          {value.map((file, index) => (
-            <li
-              key={`${file.name}-${file.size}-${index}`}
-              className="relative rounded border border-border p-1"
-            >
-              {previewUrls[index] ? (
-                <img
-                  src={previewUrls[index]}
-                  alt={file.name}
-                  width={80}
-                  height={80}
-                  className="h-20 w-20 rounded object-cover"
-                />
-              ) : null}
-              <span className="mt-1 block truncate text-xs text-text-muted">{file.name}</span>
-              <button
-                type="button"
-                onClick={() => handleRemove(index)}
-                className="mt-1 w-full rounded border border-danger px-1 py-0.5 text-xs text-danger hover:bg-danger/10"
-              >
-                删除
-              </button>
-            </li>
-          ))}
-        </ul>
       ) : null}
     </div>
   );

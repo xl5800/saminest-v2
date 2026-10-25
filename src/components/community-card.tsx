@@ -50,45 +50,46 @@ export function CommunityCard({
   onLeave,
   isOfficial = true
 }: CommunityCardProps) {
-  const meta =
-    todayPostCount === undefined
-      ? `${memberCount} 位成员`
-      : `${memberCount} 位成员 · 今日 ${todayPostCount} 个新帖子`;
+  // 社区页改版（2026-10-25）：不再是一张张带边框的卡片，改成一行一个社区的
+  // 列表；"今日 0 个新帖子"这种为 0 的数字不显示；成员数和简介并成一行。
+  const meta = [
+    `${memberCount} 位成员`,
+    todayPostCount ? `今日 ${todayPostCount} 个新帖子` : null,
+    description
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
-    <div className="relative rounded-card-lg border border-border bg-card-white p-4 shadow-card">
-      <Link to={to} aria-label={name} className="absolute inset-0 rounded-card-lg" />
-      <div className="flex items-center gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <h2 className="truncate text-base font-semibold text-text">{name}</h2>
-            {isOfficial ? (
-              <BadgeCheck aria-hidden="true" size={16} className="shrink-0 text-primary" />
-            ) : null}
-          </div>
-          <p className="mt-0.5 text-xs text-text-muted">{meta}</p>
+    <div className="relative flex items-center gap-3 py-3">
+      <Link to={to} aria-label={name} className="absolute inset-0" />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1">
+          <h2 className="truncate text-[15.5px] font-semibold text-text">{name}</h2>
+          {isOfficial ? <BadgeCheck aria-hidden="true" size={16} className="shrink-0 text-primary" /> : null}
         </div>
-        {joinState === "joined" || joinState === "leaving" ? (
-          <button
-            type="button"
-            disabled={joinState === "leaving"}
-            onClick={onLeave}
-            className="relative z-10 shrink-0 rounded-full border border-border bg-card px-4 py-1.5 text-xs font-semibold text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {joinState === "leaving" ? "退出中…" : "退出"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            disabled={joinState === "joining"}
-            onClick={onJoin}
-            className="relative z-10 shrink-0 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {joinState === "joining" ? "加入中…" : "加入"}
-          </button>
-        )}
+        <p className="mt-0.5 truncate text-[12.5px] text-text-muted">{meta}</p>
       </div>
-      <p className="mt-3 line-clamp-2 break-words text-sm text-text-muted">{description}</p>
+      {joinState === "joined" || joinState === "leaving" ? (
+        <button
+          type="button"
+          disabled={joinState === "leaving"}
+          onClick={onLeave}
+          aria-label={joinState === "leaving" ? undefined : "已加入，点击退出"}
+          className="relative z-10 shrink-0 rounded-full border border-border px-3.5 py-1 text-[13px] font-medium text-text-muted disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {joinState === "leaving" ? "退出中…" : "已加入"}
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={joinState === "joining"}
+          onClick={onJoin}
+          className="relative z-10 shrink-0 rounded-full border border-primary px-3.5 py-1 text-[13px] font-semibold text-primary disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {joinState === "joining" ? "加入中…" : "加入"}
+        </button>
+      )}
     </div>
   );
 }

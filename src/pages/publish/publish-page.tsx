@@ -51,6 +51,22 @@ import { JobFieldsSection } from "./job-fields-section";
 import { track } from "../../features/analytics/track";
 
 const DEFAULT_ERROR_MESSAGE = "发布失败，请稍后重试。";
+// 发布页改版：价格 / 邮编 / 所在州 / 城市这几行的样式（标题在左、填写在右）。
+const ROW_CLASS_NAME = "flex h-[52px] items-center gap-3 border-b border-divider";
+const ROW_LABEL_CLASS_NAME = "shrink-0 text-[15px] text-text";
+const ROW_INPUT_CLASS_NAME =
+  "min-w-0 flex-1 bg-transparent text-right text-[15px] text-text placeholder:text-text-placeholder focus:outline-none";
+
+/** 发布页改版：标题 / 正文的提示文字跟着分类变。没列出来的分类用默认的"添加标题 / 添加正文"。 */
+const EDITOR_PLACEHOLDERS: Record<string, { title: string; body: string }> = {
+  used: { title: "卖什么？", body: "描述一下：成色、用了多久、怎么交易…" },
+  free: { title: "送什么？", body: "描述一下：成色、怎么取…" },
+  rent: { title: "出租什么房子？", body: "户型、租金包含什么、入住时间、交通…" },
+  wanted: { title: "想租什么样的房子？", body: "想要的区域、预算、入住时间…" },
+  hiring: { title: "招什么职位？", body: "工作内容、要求、工作时间…" },
+  "job-seeking": { title: "找什么工作？", body: "你的经验、技能、能工作的时间…" }
+};
+
 /** 附近的二手任务卡：二手分类的 slug（二手要求填邮编）。 */
 const USED_CATEGORY_SLUG = "used";
 /** 房屋页距离筛选：出租和求租也要求填邮编，房屋页按它算距离。 */
@@ -896,15 +912,17 @@ export function PublishPage() {
                 状态筛选 Chips 的 aria-pressed 开关语义不同，这里是表单里的
                 必选单选）。选中态 primary 蓝底白字，未选中态浅底灰字，样式
                 跟 category-nav.tsx 的 Chips 一致。 */}
+            {/* 发布页改版（2026-10-25）：分类改成一排可以横着滑的胶囊（不再换行
+                成长短不一的两排），"分类"两个字只留给读屏。 */}
             {singleCategory ? null : (
               <div className="mb-4">
-                <span id="publish-category-label" className="mb-2 block text-xs font-semibold text-text">
+                <span id="publish-category-label" className="sr-only">
                   分类
                 </span>
                 <div
                   role="radiogroup"
                   aria-labelledby="publish-category-label"
-                  className="flex flex-wrap gap-2"
+                  className="-mx-4 flex gap-2 overflow-x-auto px-4 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                 >
                   {categoryOptions.map((category) => {
                     const selected = category.id === categoryId;
@@ -915,11 +933,9 @@ export function PublishPage() {
                         role="radio"
                         aria-checked={selected}
                         onClick={() => setCategoryId(category.id)}
-                        className={
-                          selected
-                            ? "flex h-10 items-center justify-center rounded-full bg-primary px-5 text-sm font-semibold whitespace-nowrap text-white"
-                            : "flex h-10 items-center justify-center rounded-full border border-border bg-card px-5 text-sm whitespace-nowrap text-text-muted"
-                        }
+                        className={`flex h-8 shrink-0 items-center justify-center rounded-full px-3.5 text-sm whitespace-nowrap ${
+                          selected ? "bg-text font-semibold text-white" : "bg-field text-text-body"
+                        }`}
                       >
                         {category.nameZh}
                       </button>
@@ -979,6 +995,8 @@ export function PublishPage() {
               bodyMaxLength={DESCRIPTION_MAX_LENGTH}
               titleAriaLabel="标题"
               bodyAriaLabel="描述"
+              titlePlaceholder={EDITOR_PLACEHOLDERS[selectedCategorySlug ?? ""]?.title}
+              bodyPlaceholder={EDITOR_PLACEHOLDERS[selectedCategorySlug ?? ""]?.body}
             />
 
             {isWantedCategory ? (
@@ -1041,55 +1059,66 @@ export function PublishPage() {
               <p className="mb-4 rounded-xl bg-success-light px-3.5 py-3 text-sm text-success">
                 免费送出，不需要填价格。帖子上会显示"免费"。
               </p>
-            ) : (
-              <label className="mb-4 block">
-                <span className="mb-2 block text-xs font-semibold text-text">价格（可选）</span>
+            ) : null}
+
+            {/* 发布页改版（2026-10-25）：价格 / 邮编 / 所在州 / 城市改成一行一项的
+                列表（标题在左、填写在右），比原来四个大输入框紧凑。上面用一条
+                灰色粗线跟标题正文区隔开。 */}
+            <div aria-hidden="true" className="-mx-4 mb-1 h-2 bg-bg-secondary/60" />
+
+            {isJobCategory || isFreeCategory ? null : (
+              <label className={ROW_CLASS_NAME}>
+                <span className={ROW_LABEL_CLASS_NAME}>
+                  价格<span className="text-text-subtle">（可选）</span>
+                </span>
                 <input
                   type="number"
                   min={0}
                   step="0.01"
                   value={price}
                   onChange={(event) => setPrice(event.target.value)}
-                  className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text focus:outline-none focus:ring-4 focus:ring-primary-light"
+                  placeholder="$ 0"
+                  className={`${ROW_INPUT_CLASS_NAME} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
                 />
               </label>
             )}
 
             {/* 发布页 ZIP 定位任务卡：邮编放在"所在州"上面，填满 5 位自动带出
                 城市 / 州并填进下面两个字段（仍可手动改）。 */}
-            <div className="mb-4">
+            <div className="border-b border-divider pb-0.5">
               <ZipCodeField
                 id="publish-zip-code"
                 value={zipCode}
                 onChange={setZipCode}
-                labelClassName="mb-2 block text-xs font-semibold text-text"
-                inputClassName="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
+                rowClassName="flex h-[52px] items-center gap-3"
+                labelClassName={ROW_LABEL_CLASS_NAME}
+                inputClassName={ROW_INPUT_CLASS_NAME}
               />
             </div>
 
-            <div className="mb-4">
+            <div className="border-b border-divider">
               {/* design_handoff_saminest_ios 第 6 项（README「发布帖子：原
                   『城市』改为『所在州』」）：这个字段以前叫"地区"、点开的
                   弹层只有 14 个 DC/VA/MD 城市，现在改成跟找搭子一样的
                   51 州选择弹层，label 文案跟着改成"所在州"，避免用户以为
                   还是选城市。下方新增独立的"城市 / 具体位置"输入框承接
                   原来"城市"这一级的精度。 */}
-              <span className="mb-2 block text-xs font-semibold text-text">所在州</span>
               {/* 外层是普通 div，不是 button——"清除地区"和"跳转整页选择"
                   是两个独立的可交互控件（两个 <button> 平级放着），不把
                   "×"清除按钮嵌套进主按钮里，避免"<button> 嵌套 <button>"
                   这种非法 HTML 结构，跟 activity-card.tsx 顶部注释里
                   "<a> 嵌套可交互 <button>"是同一类问题、同一个规避方式。 */}
-              <div className="flex items-center gap-1 rounded-xl bg-field px-3.5 py-3">
+              <div className="flex h-[52px] items-center gap-1">
                 <button
                   type="button"
                   onClick={handleOpenRegionSelect}
-                  className="flex min-w-0 flex-1 items-center justify-between text-left text-base"
+                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
-                  <span className={`truncate ${regionLabel ? "text-text" : "text-text-muted"}`}>
+                  <span className={ROW_LABEL_CLASS_NAME}>所在州</span>
+                  <span className={`min-w-0 flex-1 truncate text-right text-[15px] ${regionLabel ? "text-text" : "text-text-placeholder"}`}>
                     {regionLabel || "不限地区"}
                   </span>
-                  <ChevronRight aria-hidden="true" size={16} className="ml-2 shrink-0 text-chevron" />
+                  <ChevronRight aria-hidden="true" size={16} className="shrink-0 text-chevron" />
                 </button>
                 {regionLabel ? (
                   // 12.4：帖子类表单的"不限地区"是这个字段自己的清空操作，
@@ -1116,15 +1145,17 @@ export function PublishPage() {
                 用户直接打字，不受上面那个字段的选择/清空影响——见
                 handleClearRegion 和消费 pendingRegion 的 effect 顶部注释、
                 resolveLocationName 展示时的合并规则。 */}
-            <label className="mb-4 block">
-              <span className="mb-2 block text-xs font-semibold text-text">城市 / 具体位置（可选）</span>
+            <label className={ROW_CLASS_NAME}>
+              <span className={ROW_LABEL_CLASS_NAME}>
+                城市 / 具体位置<span className="text-text-subtle">（可选）</span>
+              </span>
               <input
                 type="text"
                 value={locationText}
                 onChange={(event) => setLocationText(event.target.value)}
                 maxLength={LOCATION_TEXT_MAX_LENGTH}
-                className="w-full rounded-xl bg-field px-3.5 py-3 text-base text-text placeholder:text-text-muted focus:outline-none focus:ring-4 focus:ring-primary-light"
-                placeholder="比如：曼哈顿 / 近地铁站"
+                className={ROW_INPUT_CLASS_NAME}
+                placeholder="如 Centreville"
               />
             </label>
           </form>

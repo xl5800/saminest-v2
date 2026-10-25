@@ -1,8 +1,12 @@
 import { ChevronRight } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 
 import { TopBar } from "../../components/top-bar";
 import { useContactSupport } from "../../features/conversations/use-contact-support";
+import { authService } from "../../services/auth/auth-service";
+
+const LOGOUT_ERROR_MESSAGE = "退出登录失败，请稍后重试。";
 
 /**
  * "设置"页面（/settings），是"我的"页顶部右侧设置齿轮此前留的占位路径
@@ -20,6 +24,23 @@ import { useContactSupport } from "../../features/conversations/use-contact-supp
  */
 export function SettingsPage() {
   const { contactSupport, error: contactSupportError } = useContactSupport();
+  const navigate = useNavigate();
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  // 我的页改版：退出登录从"我的"页挪到这里（逻辑原样搬过来）。
+  async function handleLogout(): Promise<void> {
+    setLogoutError(null);
+    setIsLoggingOut(true);
+    try {
+      await authService.signOut();
+      navigate("/");
+    } catch {
+      setLogoutError(LOGOUT_ERROR_MESSAGE);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  }
 
   return (
     <main className="min-h-screen pb-20 md:pb-6">
@@ -64,6 +85,22 @@ export function SettingsPage() {
               {contactSupportError}
             </p>
           ) : null}
+        </section>
+
+        <section aria-label="退出登录" className="mt-8">
+          {logoutError ? (
+            <p role="alert" className="mb-3 rounded border border-danger bg-danger/10 px-3 py-2 text-sm text-danger">
+              {logoutError}
+            </p>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={isLoggingOut}
+            className="flex h-14 w-full items-center justify-center rounded-2xl border border-border bg-card text-base font-medium text-danger shadow-settings-item transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isLoggingOut ? "退出中…" : "退出登录"}
+          </button>
         </section>
       </div>
     </main>

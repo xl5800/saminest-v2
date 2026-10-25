@@ -1,8 +1,8 @@
 import { Capacitor } from "@capacitor/core";
 import { StatusBar, Style } from "@capacitor/status-bar";
-import { Share2, X } from "lucide-react";
+import { ChevronLeft, Flag, MapPin, Pencil, Share2 } from "lucide-react";
 import { type UIEvent, useEffect, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 
 import { CommentSection } from "../../components/comment-section";
 import { ContactSellerButton } from "../../components/contact-seller-button";
@@ -11,8 +11,9 @@ import { ImageLightbox } from "../../components/image-lightbox";
 import { PersonCard } from "../../components/person-card";
 import { PostShareActionSheet } from "../../components/post-share-action-sheet";
 import { Skeleton } from "../../components/skeleton";
+import { MoreMenuButton, TopBar } from "../../components/top-bar";
 import { WechatBrowserBanner } from "../../components/wechat-browser-banner";
-import { formatLocationDisplayName } from "../../data/us-states";
+import { formatCityOnly } from "../../data/us-states";
 import { usePostDetailQuery } from "../../features/posts/use-post-detail-query";
 import type { PostDetail } from "../../repositories/posts-repository";
 import { PRODUCTION_ORIGIN } from "../../utils/constants";
@@ -28,6 +29,7 @@ import { useGoBack } from "../../router/use-go-back";
 import { useShareLink } from "../../features/share/use-share-link";
 import { useTrackContentView } from "../../features/analytics/use-track-content-view";
 import { useUserSafetyActions } from "../../features/blocks/use-user-safety-actions";
+import { useAuthStore } from "../../store/auth-store";
 
 interface PostDetailLocationState {
   publishSuccessMessage?: string;
@@ -191,7 +193,8 @@ export function PostDetailPage() {
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
   // 苹果审核 1.2 整改：发布者卡片下面和分享弹层里都可以举报用户 / 屏蔽此人。
   const safety = useUserSafetyActions(data?.authorId, data?.authorDisplayName ?? "");
-  const navigateToReport = useNavigate();
+  const currentUserId = useAuthStore((s) => s.session)?.user.id;
+  const isOwnPost = Boolean(data && currentUserId && data.authorId === currentUserId);
   // 大图轮播当前滚动到第几张，驱动底部"1 / 5"这种计数指示器。用原生
   // scroll-snap（横向 overflow-x-auto + snap-x snap-mandatory 容器、每张图
   // snap-center）实现滑动，不引入额外的手势/轮播库；这里只是监听容器的
@@ -280,102 +283,121 @@ export function PostDetailPage() {
     };
   }, [hasImmersiveHeader]);
 
+  // 详情页改版（2026-10-25）：举报 / 屏蔽从发帖人卡片下面挪进右上角"…"；
+  // 自己的帖子"…"里是"编辑"。分享还在底部最右边。
+  const menuItemClassName =
+    "flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-text hover:bg-bg";
+  const moreMenuContent = !data ? null : isOwnPost ? (
+    <Link to={`/publish/${data.id}`} className={menuItemClassName}>
+      <Pencil size={16} aria-hidden="true" />
+      编辑
+    </Link>
+  ) : (
+    <>
+      <Link to={`/post/${data.id}/report`} className={menuItemClassName}>
+        <Flag size={16} aria-hidden="true" />
+        举报帖子
+      </Link>
+      {safety.menuItems}
+    </>
+  );
+  const metaLine = data
+    ? [data.locationName ? formatCityOnly(data.locationName) : null, formatRelativeTimeAgo(data.createdAt)]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
+  const salaryOrPrice = !data ? null : isJobPost ? (
+    <p className="text-[22px] font-bold text-text">
+      {data.categorySlug === JOB_SEEKING_CATEGORY_SLUG ? (
+        <span className="mr-1 text-base font-semibold text-text-muted">期望</span>
+      ) : null}
+      {formatSalary(data.priceAmount, data.priceLabel, data.salaryUnit)}
+    </p>
+  ) : priceUnset ? null : (
+    <p className="text-[26px] font-extrabold leading-tight text-text">
+      {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
+    </p>
+  );
+
   return (
     <main>
-      {/* 23 号卡：悬浮在图片上的关闭按钮，取代 21 号卡的 TopBar nav-only
-          返回箭头——半透明黑底圆形，固定在视口左上角（不是只叠在图片
-          容器内——没有图片的帖子也需要这个按钮，固定在视口上比"挂在图片
-          容器里、没图片时无处可挂"更稳妥），点击返回上一页，跟 TopBar
-          自己的 BackButton 默认行为（navigate(-1)）一致。 */}
-      <button
-        type="button"
-        aria-label="关闭"
-        onClick={goBack}
-        style={{ top: "calc(1rem + env(safe-area-inset-top))" }}
-        className="fixed left-4 z-20 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white"
-      >
-        <X size={20} aria-hidden="true" />
-      </button>
+      {/* 详情页改版：有大图时返回和"…"浮在图片上（半透明黑底）；没图时用正常顶栏，
+          标题是分类名，不再是一个浮在白底上的关闭按钮。 */}
+      {hasImmersiveHeader ? (
+        <div
+          style={{ top: "calc(0.75rem + env(safe-area-inset-top))" }}
+          className="pointer-events-none fixed inset-x-0 z-20 flex items-center justify-between px-3"
+        >
+          <button
+            type="button"
+            aria-label="返回"
+            onClick={goBack}
+            className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white"
+          >
+            <ChevronLeft size={22} aria-hidden="true" />
+          </button>
+          {moreMenuContent ? (
+            <span className="pointer-events-auto">
+              <MoreMenuButton
+                label="更多"
+                content={moreMenuContent}
+                buttonClassName="flex h-9 w-9 items-center justify-center rounded-full bg-black/45 text-white"
+              />
+            </span>
+          ) : null}
+        </div>
+      ) : (
+        <TopBar
+          variant="detail"
+          title={data?.categoryName ?? ""}
+          onBack={goBack}
+          moreMenu={moreMenuContent ? { label: "更多", content: moreMenuContent } : undefined}
+        />
+      )}
 
-      {/* 底部留出空间给下面 fixed 的分享/咨询/收藏工具栏（作者查看自己的
-          帖子时 ContactSellerButton 内部返回 null，工具栏只剩分享+收藏
-          两个图标，高度基本不变，这里统一留白，不为这一种情况单独算一次
-          留白高度）。任务卡2 把按钮从"贴边大色块"改成"容器 pt-3 + 48px
-          按钮高 + pb-[0.75rem+安全区]"这个更矮的浮动按钮之后，pb-24
-          （96px）在有底部安全区的机型上不够留（容器总高约 72px + 安全区，
-          安全区较大时会逼近/超过 96px），改成了 pb-28（112px）留出稳妥
-          余量；任务卡3 合并成三操作工具栏后容器高度基本没变（两侧图标
-          跟中间按钮高度相近），继续沿用 pb-28，不需要再调整。 */}
+      {/* 底部留出空间给下面 fixed 的收藏 / 私信咨询 / 分享工具栏。 */}
       <div className="pb-28">
         {data && data.images.length > 0 ? (
-          <div>
-            {/* 任务卡3：沉浸式头图——高度从 aspect-[4/3] 改成 h-[50dvh]（占满
-                上半屏，不是按图片比例决定高度），配合 index.html 的
-                viewport-fit=cover + 上面 useEffect 里的状态栏 overlay 设置，
-                让图片真正延伸到状态栏底下。relative 定位是给下面的渐变遮罩
-                用的。 */}
-            <div className="relative">
-              <div
-                data-testid="post-image-carousel"
-                onScroll={handleCarouselScroll}
-                className="flex h-[50dvh] snap-x snap-mandatory overflow-x-auto"
-              >
-                {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
-                  <button
-                    key={imageId}
-                    type="button"
-                    aria-label="查看大图"
-                    disabled={indexInLightbox === null}
-                    onClick={() => {
-                      if (indexInLightbox !== null) {
-                        setLightboxIndex(indexInLightbox);
-                      }
-                    }}
-                    className="block h-full w-full flex-none snap-center disabled:cursor-default"
-                  >
-                    <img
-                      src={publicUrl ?? undefined}
-                      alt={data.title}
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                ))}
-              </div>
-              {/* 渐变遮罩：不管照片本身明暗，状态栏区域始终有一层半透明黑
-                  打底，配合上面 useEffect 设的 Style.Dark（白色图标），保证
-                  时间/信号/电量图标在任何照片背景下都清晰可见——见任务卡3
-                  文档注释里"为什么不按图片明暗动态判断"的说明。 */}
-              <div
-                aria-hidden="true"
-                className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent"
-              />
+          <div className="relative">
+            <div
+              data-testid="post-image-carousel"
+              onScroll={handleCarouselScroll}
+              className="flex h-[42dvh] snap-x snap-mandatory overflow-x-auto"
+            >
+              {imagesWithLightboxIndex.map(({ id: imageId, publicUrl, lightboxIndex: indexInLightbox }) => (
+                <button
+                  key={imageId}
+                  type="button"
+                  aria-label="查看大图"
+                  disabled={indexInLightbox === null}
+                  onClick={() => {
+                    if (indexInLightbox !== null) {
+                      setLightboxIndex(indexInLightbox);
+                    }
+                  }}
+                  className="block h-full w-full flex-none snap-center disabled:cursor-default"
+                >
+                  <img src={publicUrl ?? undefined} alt={data.title} className="h-full w-full object-cover" />
+                </button>
+              ))}
             </div>
+            {/* 渐变遮罩：保证状态栏图标和浮在上面的按钮在任何照片上都看得清。 */}
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black/40 to-transparent"
+            />
             {data.images.length > 1 ? (
-              <p className="mt-2 text-center text-xs text-text-muted">
+              <p className="absolute bottom-2.5 right-3 rounded-full bg-black/50 px-2 py-0.5 text-xs text-white">
                 {currentImageIndex + 1} / {data.images.length}
               </p>
             ) : null}
           </div>
         ) : null}
 
-        {/* 高频页面骨架屏任务卡：头图占位——data 还没回来时不知道这条帖子
-            到底有没有图片（真实头图是 data && data.images.length > 0 才
-            渲染的），骨架屏没法在加载完成前预判这一点，统一先展示一块
-            h-[50dvh] 的占位（跟下面沉浸式头图同一个高度/同一个位置，紧贴
-            视口顶部、不带左右内边距），加载完成后如果这条帖子确实没有
-            图片，占位会被替换成没有头图的真实布局——这是骨架屏"形状不能
-            100% 预知真实内容"的固有局限，不是遗漏。剩下的标题/价格/地区/
-            "描述"/发帖人卡片占位在下面 role="status" 容器里，跟头图占位
-            共用同一个 sr-only 播报文字，不重复播报两次。 */}
-        {isPending ? <Skeleton className="h-[50dvh] w-full rounded-none" /> : null}
+        {/* 骨架屏：加载完成前不知道有没有图片，先统一给一块头图占位。 */}
+        {isPending ? <Skeleton className="h-[42dvh] w-full rounded-none" /> : null}
 
-        {/* 招聘求职任务卡：没有图片的帖子（工作帖基本都没图）正文会顶到最上面，
-            被左上角固定的关闭按钮压住标题——这种情况往下让出关闭按钮的高度。 */}
-        <div
-          className={`mx-auto max-w-2xl px-4 py-6 ${
-            hasImmersiveHeader ? "" : "pt-[calc(3.75rem+env(safe-area-inset-top))]"
-          }`}
-        >
+        <div className="mx-auto max-w-2xl px-4 pb-6 pt-4">
           <WechatBrowserBanner />
 
           {publishSuccessMessage ? (
@@ -384,28 +406,23 @@ export function PostDetailPage() {
             </p>
           ) : null}
 
-          {/* 按真实内容加载完成后的顺序给对应占位——标题/价格 → 地区 →
-              "描述"小节 → 发帖人卡片（头像尺寸照抄下面 PersonCard 实际
-              用的 h-10 w-10/40px）。sr-only 文字保留原来的无障碍播报，
-              骨架块本身是纯视觉装饰。 */}
           {isPending ? (
             <div role="status">
               <span className="sr-only">加载中…</span>
               <div className="space-y-4">
                 <div>
-                  <Skeleton className="h-5 w-4/5" />
-                  <Skeleton className="mt-2 h-7 w-1/3" />
+                  <Skeleton className="h-7 w-1/3" />
+                  <Skeleton className="mt-2 h-5 w-4/5" />
                 </div>
                 <Skeleton className="h-4 w-1/4" />
-                <div>
-                  <Skeleton className="h-4 w-16" />
-                  <Skeleton className="mt-2 h-4 w-full" />
-                  <Skeleton className="mt-1.5 h-4 w-full" />
-                  <Skeleton className="mt-1.5 h-4 w-2/3" />
-                </div>
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-card p-3">
+                <div className="flex items-center gap-3 py-3">
                   <Skeleton className="h-10 w-10 shrink-0 rounded-full" />
                   <Skeleton className="h-4 w-1/3" />
+                </div>
+                <div>
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="mt-1.5 h-4 w-full" />
+                  <Skeleton className="mt-1.5 h-4 w-2/3" />
                 </div>
               </div>
             </div>
@@ -421,74 +438,59 @@ export function PostDetailPage() {
           ) : null}
 
           {!isPending && !isError && data ? (
-            <div className="space-y-4">
-              <div>
-                <h1 className="text-lg font-semibold text-text">{data.title}</h1>
-                {isJobPost ? (
-                  <p className="mt-1 text-2xl font-bold text-text">
-                    {data.categorySlug === JOB_SEEKING_CATEGORY_SLUG ? (
-                      <span className="mr-1 text-base font-semibold text-text-muted">期望</span>
-                    ) : null}
-                    {formatSalary(data.priceAmount, data.priceLabel, data.salaryUnit)}
-                  </p>
-                ) : priceUnset ? null : (
-                  <p className="mt-1 text-2xl font-bold text-text">
-                    {formatPrice(data.priceAmount, data.priceLabel, data.currencyCode)}
-                  </p>
-                )}
-              </div>
+            <div>
+              {/* 顺序：二手 / 房屋等先价格后标题（价格最重要）；工作帖先职位后薪资。 */}
+              {isJobPost ? (
+                <>
+                  <h1 className="text-[21px] font-bold leading-snug text-text">{data.title}</h1>
+                  <div className="mt-2">{salaryOrPrice}</div>
+                </>
+              ) : (
+                <>
+                  {salaryOrPrice}
+                  <h1 className={`text-lg font-semibold leading-snug text-text ${salaryOrPrice ? "mt-1" : ""}`}>
+                    {data.title}
+                  </h1>
+                </>
+              )}
 
               {jobTags.length > 0 ? (
-                <ul aria-label="工作信息" className="flex flex-wrap gap-2">
+                <ul aria-label="工作信息" className="mt-3 flex flex-wrap gap-1.5">
                   {jobTags.map((tag) => (
-                    <li
-                      key={tag}
-                      className="rounded-full bg-primary-light px-3 py-1 text-sm font-medium text-primary"
-                    >
+                    <li key={tag} className="rounded-full bg-field px-2.5 py-0.5 text-xs text-text-body">
                       {tag}
                     </li>
                   ))}
                 </ul>
               ) : null}
 
-              <p className="text-sm text-text-muted">
-                {data.locationName ? formatLocationDisplayName(data.locationName) : "地区未填写"}
+              <p className="mt-2 flex items-center gap-1 text-[13px] text-text-muted">
+                <MapPin size={14} aria-hidden="true" className="shrink-0" />
+                {metaLine}
               </p>
 
               {data.contactMethod && data.contactValue ? (
-                <div className="rounded-lg border border-border bg-bg p-3 text-sm text-text">
+                <div className="mt-4 rounded-lg border border-border bg-bg p-3 text-sm text-text">
                   <p className="text-text-muted">联系方式（{data.contactMethod}）</p>
                   <p className="break-words font-medium">{data.contactValue}</p>
                 </div>
               ) : null}
 
-              {/* 任务卡3：正文上方加"描述"小节标题——跟活动详情页"活动描述"
-                  的写法（<h2 className="mb-1 text-sm font-semibold
-                  text-text">）完全一致，改版前这里没有任何标题文字。 */}
-              <div>
-                <h2 className="mb-1 text-sm font-semibold text-text">描述</h2>
-                <p className="whitespace-pre-wrap break-words text-sm text-text">
-                  {data.description}
-                </p>
+              {/* 发帖人放在正文上面。 */}
+              <div className="mt-4">
+                <PersonCard
+                  userId={data.authorId}
+                  displayName={data.authorDisplayName}
+                  avatarUrl={data.authorAvatarUrl}
+                  subtitle="发布者"
+                />
               </div>
+              {safety.statusMessage ? <div className="mt-3">{safety.statusMessage}</div> : null}
 
-              <PersonCard
-                userId={data.authorId}
-                displayName={data.authorDisplayName}
-                avatarUrl={data.authorAvatarUrl}
-                subtitle={`发布于 ${formatRelativeTimeAgo(data.createdAt)}`}
-              />
-              {safety.canAct ? (
-                <p className="-mt-1 flex justify-end gap-4 text-xs text-text-subtle">
-                  <Link to={safety.reportPath} className="hover:text-danger">
-                    举报用户
-                  </Link>
-                  <button type="button" onClick={safety.requestBlockToggle} className="hover:text-danger">
-                    {safety.blockLabel}
-                  </button>
-                </p>
-              ) : null}
-              {safety.statusMessage}
+              {/* 不再加"描述"小标题，直接是正文。 */}
+              <p className="mt-4 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-text">
+                {data.description}
+              </p>
             </div>
           ) : null}
 
@@ -504,22 +506,7 @@ export function PostDetailPage() {
         </div>
       </div>
 
-      {/* design_handoff_saminest_ios 第 4 项（详情页底部操作栏重排）：
-          原来的顺序是"分享｜咨询｜收藏"，设计稿（05-post-detail.png）要求
-          "收藏｜私信咨询｜分享"——收藏移到最左、分享移到最右，中间主按钮
-          文案从"咨询"改成"私信咨询"。容器本身的 fixed 定位、白底+顶部细
-          边框、安全区适配都不变，ContactSellerButton/FavoriteButton 两个
-          组件本身也没有改动，这里只是调整了三个子节点的书写顺序（对应
-          视觉上从左到右的顺序）和中间按钮的高度/圆角/文案。
-
-          中间"私信咨询"按钮的高度从 h-12（48px）改成设计稿标注的 46px
-          （h-[46px]，项目里没有现成的 h-[46px] 语义 token，直接用任意值
-          class，这个高度只有这一处用到，不值得为它新增一个 token），
-          圆角从 rounded-button（14px，--radius-button token）改成
-          rounded-lg（Tailwind 内置 8px，正好对应设计稿标注的 8px）——
-          故意不动 --radius-button 这个 token 本身，它是全 App 共用的主按钮
-          圆角，帖子详情页这个按钮的 8px 是这次设计稿给这一个按钮的专属
-          数值，不是要把全局主按钮圆角都改成 8px。 */}
+      {/* 底部工具栏：收藏 ｜ 私信咨询 ｜ 分享（分享按要求留在最右边）。 */}
       {id && data ? (
         <div
           data-testid="post-detail-contact-bar"
@@ -531,7 +518,7 @@ export function PostDetailPage() {
             <ContactSellerButton
               postId={id}
               label="私信咨询"
-              className="flex h-[46px] w-full items-center justify-center rounded-lg bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex h-[46px] w-full items-center justify-center rounded-full bg-primary text-[15px] font-semibold text-white hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
             />
           </div>
           <button
@@ -550,14 +537,6 @@ export function PostDetailPage() {
           postId={id}
           onShareToWechat={() => void handleShare(data)}
           onClose={() => setIsShareSheetOpen(false)}
-          extraOptions={
-            safety.canAct
-              ? [
-                  { key: "report-user", emoji: "👤", label: "举报用户", onSelect: () => navigateToReport(safety.reportPath) },
-                  { key: "block-user", emoji: "🚫", label: safety.blockLabel, onSelect: safety.requestBlockToggle }
-                ]
-              : undefined
-          }
         />
       ) : null}
       {shareUi}
